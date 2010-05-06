@@ -72,11 +72,9 @@ init([Port, CommType, SocketSup]) ->
 	
 	{Backend, Opts1} = case CommType of
 			plain -> {gen_tcp, Opts};
-			ssl -> {ssl, Opts ++
-					[{verify, 0},
-					{cacertfile, "/home/kerem/certs/cacert.pem"},
-					{certfile, "/home/kerem/certs/cert.pem"},
-					{keyfile, "/home/kerem/certs/privkey.pem"}]}
+			ssl -> 
+				{ok, SslFiles} = application:get_env(ssl_files),
+				{ssl, Opts ++ [{verify, 0}] ++ SslFiles}
 		end,
 
 	case Backend:listen(Port, Opts1) of

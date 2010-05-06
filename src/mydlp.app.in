@@ -34,12 +34,17 @@
    [
     {protocols, [
 	  {echo, {acceptor, {2222, plain, mydlp_echo_fsm} },
-       {workers, [{mydlp_echo_worker, start_cluster,[]}]}
+                 {workers, [{mydlp_echo_worker, start_cluster,[]}]}
 	  },
 	  {echo2, {acceptor, {2223, ssl, mydlp_echo_fsm} },
-       {workers, [{mydlp_echo_worker, start_cluster,[]}]}
+                  {workers, [{mydlp_echo_worker, start_cluster,[]}]}
 	  }
-	 ]}
+	 ]},
+    {ssl_files, [
+          {cacertfile, "/home/kerem/certs/cacert.pem"},
+          {certfile, "/home/kerem/certs/cert.pem"},
+          {keyfile, "/home/kerem/certs/privkey.pem"}
+         ]}
    ]}
  ]
 }.
