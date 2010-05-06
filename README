@@ -1,4 +1,4 @@
-network-app-example
+mydlp
 An example for distributed, clustered, error tolerant TCP network server application.
 
 References:

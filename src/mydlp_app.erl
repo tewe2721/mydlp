@@ -1,4 +1,4 @@
--module(netapp_app).
+-module(mydlp_app).
 
 -author('kerem@medratech.com').
 
@@ -8,7 +8,7 @@
 	init/1,
 	stop/1]).
 
--include("netapp.hrl").
+-include("mydlp.hrl").
 
 %%--------------------------------------------------------------------
 %% Function: start(Type, StartArgs) -> {ok, Pid} |
@@ -35,12 +35,12 @@ init([ProtoConf| Protocols], ChildSpecs) ->
 		[
 			{	SupName,								% Id	   = internal id
 				{supervisor, start_link, 
-					[{local, SupName}, netapp_sup, [protocol_supervisor, ProtoConf]]
+					[{local, SupName}, mydlp_sup, [protocol_supervisor, ProtoConf]]
 				},										% StartFun = {M, F, A}
 				permanent,								% Restart  = permanent | transient | temporary
 				infinity,								% Shutdown = brutal_kill | int() >= 0 | infinity
 				supervisor,								% Type	 = worker | supervisor
-				[netapp_sup]							% Modules  = [Module] | dynamic
+				[mydlp_sup]							% Modules  = [Module] | dynamic
 			}
 		|ChildSpecs]
 	);

@@ -1,4 +1,4 @@
--module(netapp_acceptor).
+-module(mydlp_acceptor).
 
 -author('kerem@medratech.com').
 -author('saleyn@gmail.com').
@@ -191,10 +191,10 @@ accept_loop(Acceptor,
 				ok	  -> 
 					%% New client connected - spawn a new process using the simple_one_for_one
 					%% supervisor.
-					{ok, Pid} = netapp_sup:start_client(SocketSup),
+					{ok, Pid} = mydlp_sup:start_client(SocketSup),
 					Backend:controlling_process(CliSocket, Pid),
 					%% Instruct the new FSM that it owns the socket.
-					netapp_fsm:set_socket(Pid, CliSocket, CommType),
+					mydlp_fsm:set_socket(Pid, CliSocket, CommType),
 					ok;
 				{error, Reason} -> {error, {set_sockopt, Reason}}
 			end;

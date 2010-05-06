@@ -1,4 +1,4 @@
--module(netapp).
+-module(mydlp).
 
 -author('kerem@medratech.com').
 
@@ -6,5 +6,5 @@
 
 start() ->
 	ssl:start(),
-	application:start(netapp).
+	application:start(mydlp).
 

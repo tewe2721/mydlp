@@ -1,4 +1,4 @@
--module(netapp_sup).
+-module(mydlp_sup).
 
 -author('kerem@medratech.com').
 -author('saleyn@gmail.com').
@@ -11,7 +11,7 @@
 %% Application and Supervisor callbacks
 -export([init/1]).
 
--include("netapp.hrl").
+-include("mydlp.hrl").
 
 %% A startup function for spawning new client connection handling FSM.
 %% To be called by the TCP listener process.
@@ -37,23 +37,23 @@ init([protocol_supervisor, ProtoConf]) ->
 			[
 				% TCP Listener
 			  {   AcceptorSupName,							% Id	   = internal id
-				  {netapp_acceptor, start_link,
+				  {mydlp_acceptor, start_link,
 				  	[AcceptorName, Port, CommType, SocketSupName]
 				  },										% StartFun = {M, F, A}
 				  permanent,								% Restart  = permanent | transient | temporary
 				  ?KILL_TIMEOUT,							% Shutdown = brutal_kill | int() >= 0 | infinity
 				  worker,									% Type	 = worker | supervisor
-				  [netapp_acceptor]							% Modules  = [Module] | dynamic
+				  [mydlp_acceptor]							% Modules  = [Module] | dynamic
 			  },
 				% Worker supervisor
 			  {   WorkerSupName,							% Id	   = internal id
 				  {supervisor, start_link,
-				  	[{local, WorkerSupName}, netapp_worker_sup, [Workers]]
+				  	[{local, WorkerSupName}, mydlp_worker_sup, [Workers]]
 				  },										% StartFun = {M, F, A}
 				  permanent,								% Restart  = permanent | transient | temporary
 				  infinity,									% Shutdown = brutal_kill | int() >= 0 | infinity
 				  supervisor,								% Type	 = worker | supervisor
-				  [netapp_worker_sup]						% Modules  = [Module] | dynamic
+				  [mydlp_worker_sup]						% Modules  = [Module] | dynamic
 			  },
 				% Client instance supervisor
 			  {   SocketSupName,							% Id       = internal id
@@ -73,7 +73,7 @@ init([socket, FsmModule]) ->
 			[
 				% TCP Client
 			  {   undefined,								% Id	   = internal id
-				  {netapp_fsm,start_link,[FsmModule]},		% StartFun = {M, F, A}
+				  {mydlp_fsm,start_link,[FsmModule]},		% StartFun = {M, F, A}
 				  temporary,								% Restart  = permanent | transient | temporary
 				  ?KILL_TIMEOUT,							% Shutdown = brutal_kill | int() >= 0 | infinity
 				  worker,									% Type	 = worker | supervisor

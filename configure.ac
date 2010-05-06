@@ -1,4 +1,4 @@
-AC_INIT([network-app-example], [1.0.0], [kerem@medratech.com])
+AC_INIT([mydlp], [1.0.0], [kerem@medratech.com])
 
 AC_PREREQ([2.64])
 AC_COPYRIGHT([Copyright (C) 2009 H. Kerem Cevahir])
@@ -13,8 +13,8 @@ AC_ERLANG_CHECK_LIB([kernel])
 AC_ERLANG_CHECK_LIB([stdlib])
 AC_ERLANG_CHECK_LIB([edoc])
 AC_ERLANG_CHECK_LIB([eunit])
-AC_ERLANG_SUBST_INSTALL_LIB_SUBDIR([netapp], [1.0.0])
+AC_ERLANG_SUBST_INSTALL_LIB_SUBDIR([mydlp], [1.0.0])
 
-AC_CONFIG_FILES([Makefile src/netapp.app src/netapp.rel src/overview.edoc
+AC_CONFIG_FILES([Makefile src/mydlp.app src/mydlp.rel src/overview.edoc
 	src/Makefile])
 AC_OUTPUT

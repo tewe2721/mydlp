@@ -1,4 +1,4 @@
--module(netapp_echo_fsm).
+-module(mydlp_echo_fsm).
 
 -author('kerem@medratech.com').
 
@@ -17,8 +17,8 @@ init() ->
 
 'WAIT_FOR_LINE'({data, Data}, State) ->
 	%% This request will be processed by clustered workers. 
-	%% ReplyData = netapp_echo_worker:echo_reply(Data),
-	ReplyData = netapp_echo_worker:async_echo_reply(Data),
+	%% ReplyData = mydlp_echo_worker:echo_reply(Data),
+	ReplyData = mydlp_echo_worker:async_echo_reply(Data),
 	Count=State#state.count,
 	io:format("fsm count id=~w~n", [Count]),
 	{next_state, 'WAIT_FOR_LINE', State#state{count=Count+1}, ReplyData}.

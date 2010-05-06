@@ -1,10 +1,10 @@
 %%%-------------------------------------------------------------------
 %%% @author H. Kerem Cevahir <kerem@medratech.com>
 %%% @copyright 2009, H. Kerem Cevahir
-%%% @doc Worker for netapp.
+%%% @doc Worker for mydlp.
 %%% @end
 %%%-------------------------------------------------------------------
--module(netapp_echo_worker).
+-module(mydlp_echo_worker).
 -author("kerem@medratech.com").
 -behaviour(gen_server).
 

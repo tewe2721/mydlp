@@ -1,4 +1,4 @@
--module(netapp_worker_sup).
+-module(mydlp_worker_sup).
 
 -author('kerem@medratech.com').
 -author('saleyn@gmail.com').
@@ -8,7 +8,7 @@
 %% Application and Supervisor callbacks
 -export([init/1]).
 
--include("netapp.hrl").
+-include("mydlp.hrl").
 
 %%----------------------------------------------------------------------
 %% Supervisor behaviour callbacks

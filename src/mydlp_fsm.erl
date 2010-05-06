@@ -1,4 +1,4 @@
--module(netapp_fsm).
+-module(mydlp_fsm).
 
 -author('kerem@medratech.com').
 -author('saleyn@gmail.com').

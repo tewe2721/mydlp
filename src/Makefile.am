@@ -1,27 +1,27 @@
 dist_erl_DATA = \
 	gen_server_cluster.erl \
-	netapp.erl \
-	netapp_app.erl \
-	netapp_acceptor.erl \
-	netapp_echo_worker.erl \
-	netapp_echo_fsm.erl \
-	netapp_fsm.erl \
-	netapp_sup.erl \
-	netapp_worker_sup.erl
+	mydlp.erl \
+	mydlp_app.erl \
+	mydlp_acceptor.erl \
+	mydlp_echo_worker.erl \
+	mydlp_echo_fsm.erl \
+	mydlp_fsm.erl \
+	mydlp_sup.erl \
+	mydlp_worker_sup.erl
 
 dist_hrl_DATA = \
-	netapp.hrl
+	mydlp.hrl
 
 beam_DATA = \
 	$(dist_erl_DATA:.erl=.beam) \
-	netapp.app
+	mydlp.app
 
 #dist_priv_DATA = \
-#	netapp.conf
+#	mydlp.conf
 
 boot_DATA = \
-	netapp.boot \
-	netapp.script
+	mydlp.boot \
+	mydlp.script
 
 dist_noinst_DATA = \
 	overview.edoc.in
@@ -36,13 +36,13 @@ html_DATA = \
 	modules-frame.html \
 	packages-frame.html
 
-erldir = $(ERLANG_INSTALL_LIB_DIR_netapp)/src
-hrldir = $(ERLANG_INSTALL_LIB_DIR_netapp)/include
-beamdir = $(ERLANG_INSTALL_LIB_DIR_netapp)/ebin
-privdir = $(ERLANG_INSTALL_LIB_DIR_netapp)/priv
-htmldir = $(ERLANG_INSTALL_LIB_DIR_netapp)/doc
+erldir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/src
+hrldir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/include
+beamdir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/ebin
+privdir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/priv
+htmldir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/doc
 bootdir = $(libdir)/erlang/bin
-CLEANFILES = $(beam_DATA) $(boot_DATA) $(html_DATA) netapp.rel overview.edoc
+CLEANFILES = $(beam_DATA) $(boot_DATA) $(html_DATA) mydlp.rel overview.edoc
 ERLCFLAGS += -W
 
 $(beam_DATA): $(dist_hrl_DATA)
@@ -62,11 +62,11 @@ $(boot_DATA): $(beam_DATA)
 
 $(html_DATA): $(dist_erl_DATA) overview.edoc 
 	@echo "Generating documentation..."
-	@$(ERL) -noshell -run edoc_run application netapp '"."' '[{dir,"."}]'
+	@$(ERL) -noshell -run edoc_run application mydlp '"."' '[{dir,"."}]'
 
 check:
 	@echo "Running unit tests..."
-	@$(ERL) -eval "eunit:test({application,netapp})" -noshell -s init stop
+	@$(ERL) -eval "eunit:test({application,mydlp})" -noshell -s init stop
 
 console:
 	@echo "Running application..."
