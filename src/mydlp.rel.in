@@ -1,3 +1,6 @@
+%%%
+%%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@medra.com.tr>
+%%%
 %%%--------------------------------------------------------------------------
 %%%    This file is part of MyDLP.
 %%%
