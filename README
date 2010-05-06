@@ -1,7 +1,5 @@
 mydlp
-An example for distributed, clustered, error tolerant TCP network server application.
+An open source data loss prevention solution.
 
 References:
-http://www.trapexit.org/Building_a_Non-blocking_TCP_server_using_OTP_principles
-http://www.trapexit.org/A_Framework_for_Clustering_Generic_Server_Instances
-http://blog.cevahir.org
+http://www.mydlp.org
