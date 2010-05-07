@@ -21,10 +21,10 @@
 dist_erl_DATA = \
 	gen_server_cluster.erl \
 	mydlp.erl \
+	mydlp_api.erl \
 	mydlp_app.erl \
 	mydlp_acceptor.erl \
-	mydlp_echo_worker.erl \
-	mydlp_echo_fsm.erl \
+	mydlp_http_fsm.erl \
 	mydlp_fsm.erl \
 	mydlp_sup.erl \
 	mydlp_worker_sup.erl
@@ -89,5 +89,9 @@ check:
 	@$(ERL) -eval "eunit:test({application,mydlp})" -noshell -s init stop
 
 console:
-	@echo "Running application..."
+	@echo "Spawning console..."
 	@$(ERL) -boot start_sasl -sname console-$$$$ 
+
+run:
+	@echo "Running application..."
+	@$(ERL) -boot start_sasl -sname console-$$$$ -run mydlp start

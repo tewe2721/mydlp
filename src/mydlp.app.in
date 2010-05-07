@@ -23,7 +23,7 @@
   {description, "An Example Distributed Network Application"},
   {vsn, "@VERSION@"},
   {id, "mydlp"},
-  {modules,      [mydlp_app, mydlp_acceptor, mydlp_echo_fsm, gen_server_cluster, mydlp_echo_worker]},
+  {modules,      [mydlp_app, mydlp_acceptor, mydlp_http_fsm, gen_server_cluster]},
   {registered,   []},
   {applications, [kernel, stdlib]},
   %%
@@ -33,11 +33,15 @@
   {env,
    [
     {protocols, [
-	  {echo, {acceptor, {2222, plain, mydlp_echo_fsm} },
-                 {workers, [{mydlp_echo_worker, start_cluster,[]}]}
+%	  {echo, {acceptor, {2222, plain, mydlp_echo_fsm} },
+%                 {workers, [{mydlp_echo_worker, start_cluster,[]}]}
+	  {http, {acceptor, {8080, plain, mydlp_http_fsm} },
+                 {workers, []}
 	  },
-	  {echo2, {acceptor, {2223, ssl, mydlp_echo_fsm} },
-                  {workers, [{mydlp_echo_worker, start_cluster,[]}]}
+%	  {echo2, {acceptor, {2223, ssl, mydlp_echo_fsm} },
+%                  {workers, [{mydlp_echo_worker, start_cluster,[]}]}
+	  {https, {acceptor, {8443, ssl, mydlp_http_fsm} },
+                 {workers, []}
 	  }
 	 ]},
     {ssl_files, [
