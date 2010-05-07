@@ -50,7 +50,8 @@
 				module_fsm_state, % FSM state of FSM module
 				socket,	% client socket
 				comm_type, % whether socket uses ssl
-				addr	   % client address
+				addr,	   % client address
+				buff
 			   }).
 
 -define(TIMEOUT, 120000).
@@ -98,7 +99,8 @@ init([TargetModule]) ->
 	{ok, 'WAIT_FOR_SOCKET', #state{
 			module=TargetModule, 
 			module_fsm_state=FirstState, 
-			module_state=StateObj}
+			module_state=StateObj,
+			buff=[]}
 		}.
 
 %%-------------------------------------------------------------------------
@@ -126,22 +128,8 @@ init([TargetModule]) ->
 	{next_state, 'WAIT_FOR_SOCKET', State}.
 
 %% Notification event coming from client
-'WAIT_FOR_DATA'({data, Data}, State) ->
-	Module = State#state.module,
-	ModuleFSMState = State#state.module_fsm_state,
-	ModuleState = State#state.module_state,
-
-	ModuleReply = Module:ModuleFSMState({data,Data}, ModuleState),
-	%% should refactor for other return options.
-	{next_state, ModuleFSMState1, ModuleState1, ReplyData} = ModuleReply,
-
-	ok = send(State, ReplyData),
-
-	{next_state, 'WAIT_FOR_DATA', 
-			State#state{
-				module_state=ModuleState1, 
-				module_fsm_state=ModuleFSMState1}, 
-			?TIMEOUT};
+'WAIT_FOR_DATA'({data, Data}, #state{buff=B} = State) ->
+	consume({data, Data}, State#state{buff = B ++ Data});
 
 'WAIT_FOR_DATA'(timeout, State) ->
 	error_logger:error_msg("~p Client connection timeout - closing.\n", [self()]),
@@ -150,6 +138,38 @@ init([TargetModule]) ->
 'WAIT_FOR_DATA'(Data, State) ->
 	io:format("~p Ignoring data: ~p\n", [self(), Data]),
 	{next_state, 'WAIT_FOR_DATA', State, ?TIMEOUT}.
+
+consume({data, []}, State) ->
+	{next_state, 'WAIT_FOR_DATA', State, ?TIMEOUT};
+
+consume({data, [Byte|Data]}, State) ->
+	Module = State#state.module,
+	ModuleFSMState = State#state.module_fsm_state,
+	ModuleState = State#state.module_state,
+
+	%%% Debug line
+	io:format("~c", [Byte]),
+	ModuleReply = Module:ModuleFSMState({byte,Byte}, ModuleState),
+	%% should refactor for other return options.
+	case ModuleReply of
+		{next_state, ModuleFSMState1, ModuleState1, Reply} ->
+			State1 = State#state{module_state=ModuleState1, module_fsm_state=ModuleFSMState1},
+			case Reply of
+				{send, ReplyData} -> 
+					ok = send(State, ReplyData),
+					consume({data, Data}, State1);
+				success -> 
+					erlang:display("success!!!"),
+					consume({data, Data}, State1);
+				none -> 
+					consume({data, Data}, State1);
+				pass -> 
+					%%%% here should send buff to remote and reset buff
+					consume({data, Data}, State1#state{buff=[]})
+			end;
+		{error, invalid_char} ->
+			{stop, {error, invalid_char}, State}
+	end.
 
 %%-------------------------------------------------------------------------
 %% Func: handle_event/3
