@@ -49,6 +49,7 @@
 				module_state, % state obj for FSM module
 				module_fsm_state, % FSM state of FSM module
 				socket,	% client socket
+				peer_sock,	% remote socket
 				comm_type, % whether socket uses ssl
 				addr,	   % client address
 				buff
@@ -158,8 +159,7 @@ consume({data, [Byte|Data]}, State) ->
 				{send, ReplyData} -> 
 					ok = send(State, ReplyData),
 					consume({data, Data}, State1);
-				success -> 
-					erlang:display("success!!!"),
+				{pass, Host, Port} -> 
 					consume({data, Data}, State1);
 				none -> 
 					consume({data, Data}, State1);
