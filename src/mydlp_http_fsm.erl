@@ -42,7 +42,10 @@
 	'WAIT_FOR_SOCKET'/2,
 	'HTTP_PACKET'/2,
 	'HTTP_HEADER'/2,
-	'HTTP_CONTENT'/2
+	'HTTP_CONTENT'/2,
+	'HTTP_CC_LINE'/2,
+	'HTTP_CC_CHUNK'/2,
+	'HTTP_CC_CRLF'/2
 ]).
 
 -record(state, {
@@ -190,7 +193,8 @@ get_http_content(#state{socket=Socket, http_headers=HttpHeaders} = State) ->
 	case HttpHeaders#http_headers.content_length of
 		undefined ->
 			case HttpHeaders#http_headers.transfer_encoding of
-				"chunked" -> implement_me; % get_chunked_client_data
+				"chunked" -> BackendOpts:setopts(Socket, [{packet, line}, binary, {active, once}]),
+					{next_state, 'HTTP_CC_LINE', State, ?TIMEOUT};
 				_ -> 'CONNECT_REMOTE'(connect, State#state{http_content = <<>>})
 			end;
 		Len ->
@@ -213,6 +217,30 @@ get_http_content(#state{socket=Socket, http_headers=HttpHeaders} = State) ->
 				State#state{http_content=lists:reverse(Content1), tmp=undefined})
 	end.
 
+'HTTP_CC_LINE'({data, Line}, #state{http_content=Content} = State) ->
+	CSize = mydlp_api:hex2int(Line),
+	Content1 = [Line|Content],
+	case CSize of
+		0 -> 'CONNECT_REMOTE'(connect, State#state{http_content=lists:reverse(Content1)});
+		_ -> {next_state, 'HTTP_CC_CHUNK', State#state{http_content=Content1, tmp=CSize}, ?TIMEOUT}
+	end.
+
+'HTTP_CC_CHUNK'({data, Line}, #state{http_content=Content, tmp=CSize} = State) ->
+	CSize1 = CSize - size(Line),
+	Content1 = [Line|Content],
+	if
+		CSize1 > 0 -> {next_state, 'HTTP_CC_CHUNK', 
+                                State#state{http_content=Content1, tmp=CSize1}, ?TIMEOUT};
+		CSize1 == 0 -> {next_state, 'HTTP_CC_CRLF',
+				State#state{http_content=Content1, tmp=undefined}, ?TIMEOUT};
+		CSize1 == -2 -> {next_state, 'HTTP_CC_LINE',
+				State#state{http_content=Content1, tmp=undefined}, ?TIMEOUT}
+	end.
+
+'HTTP_CC_CRLF'({data, <<"\r\n">> = CRLF}, #state{http_content=Content} = State) ->
+	Content1 = [CRLF|Content],
+	{next_state, 'HTTP_CC_LINE', State#state{http_content=Content1}, ?TIMEOUT}.
+
 'CONNECT_REMOTE'(connect, #state{socket=Socket, http_headers=HttpHeaders} = State) ->
 	BackendOpts = backend_opts(State),
 	BackendOpts:setopts(Socket, [{active, false}]),
@@ -226,7 +254,7 @@ get_http_content(#state{socket=Socket, http_headers=HttpHeaders} = State) ->
 		end,
 
 	Backend = backend(State),
-	{ok, PeerSock} = Backend:connect(Host, Port, [{active, false}, {packet, http}]),
+	{ok, PeerSock} = Backend:connect(Host, Port, [{active, false}]),
 	'SEND_REMOTE'(send_req, State#state{peer_sock=PeerSock}).
 
 'SEND_REMOTE'(send_req, #state{socket=Socket,
@@ -274,6 +302,12 @@ handle_sync_event(Event, _From, StateName, StateData) ->
 %%		  {stop, Reason, NewStateData}
 %% @private
 %%-------------------------------------------------------------------------
+%%%% TODO: this setopts active once s should be moved to states.
+handle_info({http, Socket, http_eoh}, StateName, 
+		#state{socket=Socket, comm_type=plain} = StateData) ->
+	% Flow control: enable forwarding of next TCP message
+	?MODULE:StateName({http, http_eoh}, StateData);
+
 handle_info({http, Socket, HttpData}, StateName, 
 		#state{socket=Socket, comm_type=plain} = StateData) ->
 	% Flow control: enable forwarding of next TCP message
@@ -289,16 +323,25 @@ handle_info({ssl, Socket, HttpData}, StateName,
 
 handle_info({ssl, Socket, HttpData}, StateName, 
 		#state{socket=Socket, comm_type=ssl} = StateData) 
-		when is_record(HttpData, http_header) ; HttpData == http_eoh ->
+		when is_record(HttpData, http_header) ->
 	% Flow control: enable forwarding of next TCP message
 	ssl:setopts(Socket, [{active, once}]),
 	?MODULE:StateName({http, HttpData}, StateData);
+
+handle_info({ssl, Socket, http_eoh}, StateName, 
+		#state{socket=Socket, comm_type=ssl} = StateData) ->
+	% Flow control: enable forwarding of next TCP message
+	?MODULE:StateName({http, http_eoh}, StateData);
+
+handle_info({_, Socket, {http_error, _}}, _StateName,
+			#state{socket=Socket, addr=Addr} = StateData) ->
+	error_logger:info_msg("~p HTTP error client ip: ~p .\n", [self(), Addr]),
+	{stop, normal, StateData};
 
 handle_info({_, Socket, http_error}, _StateName,
 			#state{socket=Socket, addr=Addr} = StateData) ->
 	error_logger:info_msg("~p HTTP error client ip: ~p .\n", [self(), Addr]),
 	{stop, normal, StateData};
-
 
 handle_info({tcp, Socket, Data}, StateName, 
 		#state{socket=Socket, comm_type=plain} = StateData) ->

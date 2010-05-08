@@ -89,3 +89,27 @@ is_ruri_char(_) -> false.
 %%----------------------------------------------------------------------
 is_uri_char(X) -> is_uuri_char(X) or is_ruri_char(X).
 
+%%--------------------------------------------------------------------
+%% @doc Truncates nl chars in a string.
+%% @end
+%%----------------------------------------------------------------------
+nonl(B) when is_binary(B) ->
+    nonl(binary_to_list(B));
+nonl([10|T]) ->
+    nonl(T);
+nonl([13|T]) ->
+    nonl(T);
+nonl([32|T]) ->
+    nonl(T);
+nonl([H|T]) ->
+    [H|nonl(T)];
+nonl([]) ->
+    [].
+
+%%--------------------------------------------------------------------
+%% @doc Converts hexadecimal to decimal integer
+%% @end
+%%----------------------------------------------------------------------
+hex2int(Line) ->
+    erlang:list_to_integer(nonl(Line),16).
+
