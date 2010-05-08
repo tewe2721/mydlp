@@ -67,7 +67,7 @@ start_link(AcceptorName, Port, CommType, SocketSup) when is_integer(Port) ->
 %%----------------------------------------------------------------------
 init([Port, CommType, SocketSup]) ->
 	process_flag(trap_exit, true),
-	Opts = [binary, {packet, 0}, {reuseaddr, true},
+	Opts = [binary, {packet, 0}, {reuseaddr, true}, {nodelay, true},
 			{keepalive, true}, {backlog, 30}, {active, false}],
 	
 	{Backend, Opts1} = case CommType of
@@ -166,7 +166,8 @@ set_sockopt(ListSock, CliSocket, CommType) ->
 
 	{Backend,BackendClose,Opts} = case CommType of
 			plain -> {prim_inet, gen_tcp,
-						[active, nodelay, keepalive, delay_send, priority, tos]};
+					[active, nodelay, keepalive, 
+					delay_send, priority, tos]};
 			ssl -> {ssl, ssl, [active]}
 		end,
 
