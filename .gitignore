@@ -13,6 +13,7 @@ erl_crash.dump
 *.script
 src/overview.edoc
 src/*.html
+src/example/*.html
 src/edoc-info
 src/erlang.png
 src/stylesheet.css
