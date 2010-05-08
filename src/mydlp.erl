@@ -25,6 +25,7 @@
 -export([start/0]).
 
 start() ->
-	ssl:start(),
+	application:start(ssl),
+	application:start(crypto),
 	application:start(mydlp).
 
