@@ -18,7 +18,7 @@
 %%%    along with MyDLP.  If not, see <http://www.gnu.org/licenses/>.
 %%%--------------------------------------------------------------------------
 
--module(mydlp_http_fsm).
+-module(mydlp_http_raw_fsm).
 
 -author('kerem@medra.com.tr').
 
@@ -234,7 +234,7 @@ init() ->
 'URI'({byte, Byte}, #state{tmp=T} = State) -> 
 	case mydlp_api:is_uri_char(Byte) of
 		true -> {next_state, 'URI', State#state{tmp=[Byte|T]}, none};
-		false -> {error, invalid_char}
+		false -> invalid_char()
 	end.
 
 % HTTP Protocol Version
@@ -279,7 +279,7 @@ init() ->
 	case ((not mydlp_api:is_char(Byte)) 
 			or mydlp_api:is_ctl(Byte) 
 			or mydlp_api:is_tspecial(Byte)) of
-		true -> {error, invalid_char};
+		true -> invalid_char();
 		false -> {next_state, 'H_KEY', State#state{tmp=[Byte|T]}, none}
 	end.
 
@@ -304,7 +304,7 @@ init() ->
 	{next_state, 'H_CR', State#state{headers=H1, tmp=[], tmp2=[]}, none};
 'H_VAL'({byte, Byte}, #state{tmp2=T2} = State) ->
 	case mydlp_api:is_ctl(Byte) of
-		true -> {error, invalid_char};
+		true -> invalid_char();
 		false -> {next_state, 'H_VAL', State#state{tmp2=[Byte|T2]}, none}
 	end.
 
@@ -324,7 +324,9 @@ init() ->
 		other=lists:reverse(Others), 
 		cookie=lists:reverse(Cookies)},
 	
-	NoBodyM = {next_state, '', State#state{headers=H1}, success},
+	NoBodyM = {next_state, '', State#state{headers=H1}, 
+			pass_to_host(H#headers.host)},
+
 	BodyM = {next_state, 'CONTENT', State#state{headers=H1}, none},
 
 	case R#request.method of
@@ -347,9 +349,13 @@ init() ->
 
 
 
+%%%%%%%%%%%%% Internal functions %%%%%%%%%%%%%%%
 
+invalid_char() -> {error, invalid_char}.
 
-
+pass_to_host(HostStr) -> 
+	[Host, Port] = string:tokens(HostStr, ":"),
+	{pass, Host, Port}.
 
 
 
