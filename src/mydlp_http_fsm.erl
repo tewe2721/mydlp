@@ -85,6 +85,8 @@
 	}).
 
 -define(TIMEOUT, 120000).
+%%% Keep-alive timeout (Apache web server default)
+-define(KA_TIMEOUT, 15000).
 
 behaviour_info(callbacks) ->
 	[{init, 0}];
@@ -215,7 +217,11 @@ get_http_content(#state{socket=Socket, http_headers=HttpHeaders} = State) ->
 				State#state{http_content=Content1, tmp=Count1}, ?TIMEOUT};
 		false -> 'CONNECT_REMOTE'(connect, 
 				State#state{http_content=lists:reverse(Content1), tmp=undefined})
-	end.
+	end;
+
+'HTTP_CONTENT'(timeout, State) ->
+	error_logger:error_msg("~p Client connection timeout - closing.\n", [self()]),
+	{stop, normal, State}.
 
 'HTTP_CC_LINE'({data, Line}, #state{http_content=Content} = State) ->
 	CSize = mydlp_api:hex2int(Line),
@@ -223,7 +229,11 @@ get_http_content(#state{socket=Socket, http_headers=HttpHeaders} = State) ->
 	case CSize of
 		0 -> 'CONNECT_REMOTE'(connect, State#state{http_content=lists:reverse(Content1)});
 		_ -> {next_state, 'HTTP_CC_CHUNK', State#state{http_content=Content1, tmp=CSize}, ?TIMEOUT}
-	end.
+	end;
+
+'HTTP_CC_LINE'(timeout, State) ->
+	error_logger:error_msg("~p Client connection timeout - closing.\n", [self()]),
+	{stop, normal, State}.
 
 'HTTP_CC_CHUNK'({data, Line}, #state{http_content=Content, tmp=CSize} = State) ->
 	CSize1 = CSize - size(Line),
@@ -235,11 +245,19 @@ get_http_content(#state{socket=Socket, http_headers=HttpHeaders} = State) ->
 				State#state{http_content=Content1, tmp=undefined}, ?TIMEOUT};
 		CSize1 == -2 -> {next_state, 'HTTP_CC_LINE',
 				State#state{http_content=Content1, tmp=undefined}, ?TIMEOUT}
-	end.
+	end;
+
+'HTTP_CC_CHUNK'(timeout, State) ->
+	error_logger:error_msg("~p Client connection timeout - closing.\n", [self()]),
+	{stop, normal, State}.
 
 'HTTP_CC_CRLF'({data, <<"\r\n">> = CRLF}, #state{http_content=Content} = State) ->
 	Content1 = [CRLF|Content],
-	{next_state, 'HTTP_CC_LINE', State#state{http_content=Content1}, ?TIMEOUT}.
+	{next_state, 'HTTP_CC_LINE', State#state{http_content=Content1}, ?TIMEOUT};
+
+'HTTP_CC_CRLF'(timeout, State) ->
+	error_logger:error_msg("~p Client connection timeout - closing.\n", [self()]),
+	{stop, normal, State}.
 
 'CONNECT_REMOTE'(connect, #state{socket=Socket, http_headers=HttpHeaders} = State) ->
 	BackendOpts = backend_opts(State),
@@ -269,7 +287,7 @@ get_http_content(#state{socket=Socket, http_headers=HttpHeaders} = State) ->
 	{next_state, 'HTTP_PACKET', 
 		State#state{http_packet=undefined, 
 				http_headers=#http_headers{},
-				http_content=[]}, ?TIMEOUT}.
+				http_content=[]}, ?KA_TIMEOUT}.
 
 
 %%-------------------------------------------------------------------------
