@@ -56,6 +56,7 @@
 		http_packet,
 		http_headers=[],
 		http_content=[],
+		files=[],
 		tmp
 	}).
 
@@ -165,7 +166,7 @@ init([]) ->
 
 	case has_body(State) of
 		true -> get_http_content(State1);
-		false -> 'CONNECT_REMOTE'(connect, State1)
+		false -> 'REQ_OK'(State1)
 	end;
 
 'HTTP_HEADER'({http, HttpHeader}, #state{http_headers=HttpHeaders} = State) 
@@ -197,12 +198,12 @@ get_http_content(#state{socket=Socket, http_headers=HttpHeaders} = State) ->
 			case HttpHeaders#http_headers.transfer_encoding of
 				"chunked" -> BackendOpts:setopts(Socket, [{packet, line}, binary, {active, once}]),
 					{next_state, 'HTTP_CC_LINE', State, ?TIMEOUT};
-				_ -> 'CONNECT_REMOTE'(connect, State#state{http_content = <<>>})
+				_ -> 'REQ_OK'(State#state{http_content = <<>>})
 			end;
 		Len ->
 			LenI = list_to_integer(Len),
 			case LenI of
-				0 -> 'CONNECT_REMOTE'(connect, State#state{http_content = <<>>});
+				0 -> 'REQ_OK'(State#state{http_content = <<>>});
 				_ -> BackendOpts:setopts(Socket, [{packet, 0}, binary, {active, once}]),
 					{next_state, 'HTTP_CONTENT', State#state{tmp=LenI}, ?TIMEOUT}
 			end
@@ -215,8 +216,7 @@ get_http_content(#state{socket=Socket, http_headers=HttpHeaders} = State) ->
 	case Count1 > 0 of
 		true -> {next_state, 'HTTP_CONTENT', 
 				State#state{http_content=Content1, tmp=Count1}, ?TIMEOUT};
-		false -> 'CONNECT_REMOTE'(connect, 
-				State#state{http_content=lists:reverse(Content1), tmp=undefined})
+		false -> 'REQ_OK'(State#state{http_content=lists:reverse(Content1), tmp=undefined})
 	end;
 
 'HTTP_CONTENT'(timeout, State) ->
@@ -227,7 +227,7 @@ get_http_content(#state{socket=Socket, http_headers=HttpHeaders} = State) ->
 	CSize = mydlp_api:hex2int(Line),
 	Content1 = [Line|Content],
 	case CSize of
-		0 -> 'CONNECT_REMOTE'(connect, State#state{http_content=lists:reverse(Content1)});
+		0 -> 'REQ_OK'(State#state{http_content=lists:reverse(Content1)});
 		_ -> {next_state, 'HTTP_CC_CHUNK', State#state{http_content=Content1, tmp=CSize}, ?TIMEOUT}
 	end;
 
@@ -258,6 +258,9 @@ get_http_content(#state{socket=Socket, http_headers=HttpHeaders} = State) ->
 'HTTP_CC_CRLF'(timeout, State) ->
 	error_logger:error_msg("~p Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
+
+'REQ_OK'(State) ->
+	'CONNECT_REMOTE'(connect, State).
 
 'CONNECT_REMOTE'(connect, #state{socket=Socket, http_headers=HttpHeaders} = State) ->
 	BackendOpts = backend_opts(State),
