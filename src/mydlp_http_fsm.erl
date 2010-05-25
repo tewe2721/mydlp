@@ -260,7 +260,8 @@ get_http_content(#state{socket=Socket, http_headers=HttpHeaders} = State) ->
 	{stop, normal, State}.
 
 'REQ_OK'(State) ->
-	'CONNECT_REMOTE'(connect, State).
+	State1 = parse_into_files(State),
+	'CONNECT_REMOTE'(connect, State1).
 
 'CONNECT_REMOTE'(connect, #state{socket=Socket, http_headers=HttpHeaders} = State) ->
 	BackendOpts = backend_opts(State),
@@ -290,8 +291,8 @@ get_http_content(#state{socket=Socket, http_headers=HttpHeaders} = State) ->
 	{next_state, 'HTTP_PACKET', 
 		State#state{http_packet=undefined, 
 				http_headers=#http_headers{},
-				http_content=[]}, ?KA_TIMEOUT}.
-
+				http_content=[], 
+				files=[]}, ?KA_TIMEOUT}.
 
 %%-------------------------------------------------------------------------
 %% Func: handle_event/3
