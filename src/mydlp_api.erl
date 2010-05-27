@@ -113,3 +113,57 @@ nonl([]) ->
 hex2int(Line) ->
     erlang:list_to_integer(nonl(Line),16).
 
+%%--------------------------------------------------------------------
+%% @doc Checks a string whether starts with given string
+%% @end
+%%----------------------------------------------------------------------
+starts_with(_Str, []) ->
+        false;
+
+starts_with([Char|_Str], [Char|[]]) ->
+        true;
+
+starts_with([Char|Str], [Char|StrCnk]) ->
+        starts_with(Str, StrCnk);
+
+starts_with(_, _) ->
+        false.
+
+%%--------------------------------------------------------------------
+%% @doc Computes md5 sum of given object.
+%% @end
+%%----------------------------------------------------------------------
+md5_hex(S) ->
+	Md5_bin =  erlang:md5(S),
+	Md5_list = binary_to_list(Md5_bin),
+	lists:flatten(list_to_hex(Md5_list)).
+ 
+list_to_hex(L) ->
+	lists:map(fun(X) -> int_to_hex(X) end, L).
+ 
+%%--------------------------------------------------------------------
+%% @doc Converts decimal integer ot hexadecimal
+%% @end
+%%----------------------------------------------------------------------
+int_to_hex(N) when N < 256 ->
+	[hex(N div 16), hex(N rem 16)].
+ 
+hex(N) when N < 10 ->
+	$0+N;
+hex(N) when N >= 10, N < 16 ->
+	$a + (N-10).
+
+%%%% imported from yaws api
+funreverse(List, Fun) ->
+    funreverse(List, Fun, []).
+
+funreverse([H|T], Fun, Ack) ->
+    funreverse(T, Fun, [Fun(H)|Ack]);
+funreverse([], _Fun, Ack) ->
+    Ack.
+
+to_lowerchar(C) when C >= $A, C =< $Z ->
+    C+($a-$A);
+to_lowerchar(C) ->
+    C.
+
