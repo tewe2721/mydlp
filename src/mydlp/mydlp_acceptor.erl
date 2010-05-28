@@ -139,8 +139,12 @@ handle_info(_Info, State) ->
 %% @end
 %% @private
 %%-------------------------------------------------------------------------
-terminate(_Reason, State) ->
-	gen_tcp:close(State#state.listener),
+terminate(_Reason, #state{comm_type=CommType} = State) ->
+	Backend = case CommType of
+		plain -> gen_tcp;
+		ssl -> ssl
+	end,
+	Backend:close(State#state.listener),
 	ok.
 
 %%-------------------------------------------------------------------------

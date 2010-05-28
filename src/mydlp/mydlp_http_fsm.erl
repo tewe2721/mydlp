@@ -280,7 +280,20 @@ get_http_content(#state{socket=Socket, http_headers=HttpHeaders} = State) ->
 		false -> []
 	end,
 
+	show_file_mimes(Files),
+
 	'REQ_OK'(State#state{files=Files}).
+
+show_file_mimes([File|Files]) ->
+	B = list_to_binary([File#file.data]),
+	case size(B) > 1025 of
+		true -> 
+			<<C:1024/binary,_Rest/binary>> = B,
+			erlang:display(binary_to_list(mydlp_tc:get_mime(C)));
+		false -> ok
+	end,
+	show_file_mimes(Files);
+show_file_mimes([]) -> ok.
 
 parse_multipart(State) ->
 	result_to_files(parse_multipart_post(State)).
@@ -555,8 +568,6 @@ un_partial({partial, Bin}) ->
 un_partial(Bin) ->
     Bin.
 
-
-
 parse_arg_line(Line) ->
     parse_arg_line(Line, []).
 
@@ -611,16 +622,12 @@ make_parse_line_reply(Key, Value, Rest) ->
     X = {{list_to_atom(mydlp_api:funreverse(Key, {mydlp_api, to_lowerchar})),
           lists:reverse(Value)}, Rest},
     X.
-
-
-
 %%
 
 isolate_arg(Str) -> isolate_arg(Str, []).
 
 isolate_arg([$:,$ |T], L) -> {mydlp_api:funreverse(L, {mydlp_api, to_lowerchar}), T};
 isolate_arg([H|T], L)     -> isolate_arg(T, [H|L]).
-
 
 %%
 %%% Stateful parser of multipart data - allows easy re-entry

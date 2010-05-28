@@ -18,33 +18,36 @@
 ###    along with MyDLP.  If not, see <http://www.gnu.org/licenses/>.
 ###--------------------------------------------------------------------------
 
-AC_INIT([mydlp], [1.0.0], [kerem@medratech.com])
+dist_erl_DATA = \
+	gen-erl/mydlp_thrift.erl \
+	gen-erl/mydlp_types.erl
 
-AC_PREREQ([2.64])
-AC_COPYRIGHT([Copyright (C) 2009 H. Kerem Cevahir])
-AM_INIT_AUTOMAKE
+dist_hrl_DATA = \
+	gen-erl/mydlp_thrift.hrl \
+	gen-erl/mydlp_constants.hrl \
+	gen-erl/mydlp_types.hrl
 
-AC_ERLANG_NEED_ERLC
-AC_PREFIX_PROGRAM(erl)
-AC_ERLANG_SUBST_ROOT_DIR
-AC_ERLANG_SUBST_ERTS_VER
-AC_ERLANG_SUBST_LIB_DIR
-AC_ERLANG_CHECK_LIB([kernel])
-AC_ERLANG_CHECK_LIB([stdlib])
-AC_ERLANG_CHECK_LIB([edoc])
-AC_ERLANG_CHECK_LIB([eunit])
-AC_ERLANG_SUBST_INSTALL_LIB_SUBDIR([mydlp], [1.0.0])
+beam_DATA = \
+	$(dist_erl_DATA:.erl=.beam)
 
-AC_PATH_PROG(THRIFT, thrift, thrift, $PATH:/usr/local/bin:/usr/bin)
+erldir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/src
+hrldir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/include
+beamdir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/ebin
+privdir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/priv
+htmldir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/doc
+bootdir = $(libdir)/erlang/bin
+#CLEANFILES = gen-erl/* gen-py/*
+ERLCFLAGS += -W -o gen-erl
 
-AC_CONFIG_FILES([
-		Makefile 
-		src/Makefile
-		src/mydlp/Makefile
-		src/mydlp/mydlp.app
-		src/mydlp/mydlp.rel
-		src/mydlp/overview.edoc
-		src/thrift/Makefile
-		src/backend/Makefile
-	])
-AC_OUTPUT
+$(beam_DATA): $(dist_erl_DATA) 
+$(boot_DATA): $(beam_DATA)
+
+gen-erl/mydlp_thrift.erl: mydlp.thrift
+	$(THRIFT) --gen erl --gen py $<
+
+.erl.beam:
+	@echo "Compiling $<..."
+	@$(ERLC) $(ERLCFLAGS) $<
+
+clean-local:
+	rm -rf gen-erl gen-py

@@ -3,3 +3,6 @@ An open source data loss prevention solution.
 
 References:
 http://www.mydlp.org
+
+Dependencies:
+Thrift, Python 2.6, python-magic
