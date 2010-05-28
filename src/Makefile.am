@@ -1,1 +1,1 @@
-SUBDIRS = mydlp thrift
+SUBDIRS = thrift mydlp backend
