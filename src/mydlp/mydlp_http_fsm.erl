@@ -285,13 +285,7 @@ get_http_content(#state{socket=Socket, http_headers=HttpHeaders} = State) ->
 	'REQ_OK'(State#state{files=Files}).
 
 show_file_mimes([File|Files]) ->
-	B = list_to_binary([File#file.data]),
-	case size(B) > 1025 of
-		true -> 
-			<<C:1024/binary,_Rest/binary>> = B,
-			erlang:display(binary_to_list(mydlp_tc:get_mime(C)));
-		false -> ok
-	end,
+	erlang:display(binary_to_list(mydlp_tc:get_mime(File#file.data))),
 	show_file_mimes(Files);
 show_file_mimes([]) -> ok.
 
