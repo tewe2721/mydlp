@@ -36,12 +36,12 @@
 %	  {echo, {acceptor, {2222, plain, mydlp_echo_fsm} },
 %                 {workers, [{mydlp_echo_worker, start_cluster,[]}]}
 	  {http, {acceptor, {8080, plain, http} },
-                 {workers, [{mydlp_tc, start_link,[]}]}
+                 {workers, [{mydlp_tc, start_link,[]}, {mydlp_acl, start_link,[]}]}
 	  },
 %	  {echo2, {acceptor, {2223, ssl, mydlp_echo_fsm} },
 %                  {workers, [{mydlp_echo_worker, start_cluster,[]}]}
 	  {https, {acceptor, {8443, ssl, http} },
-                 {workers, [{mydlp_tc, start_link,[]}]}
+                 {workers, [{mydlp_tc, start_link,[]}, {mydlp_acl, start_link,[]}]}
 	  }
 	 ]},
     {ssl_files, [

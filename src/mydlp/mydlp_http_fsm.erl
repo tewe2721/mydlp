@@ -86,8 +86,9 @@
 	}).
 
 -record(file, {
-		post_name,
+		name,
 		filename,
+		mime_type,
 		given_type,
 		data = []
 	}).
@@ -280,22 +281,14 @@ get_http_content(#state{socket=Socket, http_headers=HttpHeaders} = State) ->
 		false -> []
 	end,
 
-	show_file_mimes(Files),
+	mydlp_acl:q(from, dest, data, Files),
 
 	'REQ_OK'(State#state{files=Files}).
 
-show_file_mimes([File|Files]) ->
-	erlang:display(binary_to_list(mydlp_tc:get_mime(File#file.data))),
-	show_file_mimes(Files);
-show_file_mimes([]) -> ok.
-
-parse_multipart(State) ->
-	result_to_files(parse_multipart_post(State)).
-
 %%% imported from yaws (may be refactored for binary operation)
-parse_multipart_post(#state{http_content=HttpContent, http_headers=H, http_packet=Req}) ->
+parse_multipart(#state{http_content=HttpContent, http_headers=H, http_packet=Req}) ->
 	CT = H#http_headers.content_type,
-	case Req#http_request.method of
+	Res = case Req#http_request.method of
 		'POST' ->
 			case CT of
 				undefined ->
@@ -311,7 +304,8 @@ parse_multipart_post(#state{http_content=HttpContent, http_headers=H, http_packe
 			end;
 		Other ->
 			error_logger:error_msg("Can't parse multipart if get a ~p", [Other]), []
-	end.
+	end,
+	result_to_files(Res).
 
 'CONNECT_REMOTE'(connect, #state{socket=Socket, http_headers=HttpHeaders} = State) ->
 	BackendOpts = backend_opts(State),
@@ -742,14 +736,14 @@ result_to_files([{head,Head}|Rest], Files, File) ->
 	{_, Heads} = Head,
 	result_to_files(Rest, Files1, heads_to_file(Heads));
 result_to_files([{body,Data}|Rest], Files, File) ->
-	result_to_files(Rest, Files, File#file{data=Data}).
+	result_to_files(Rest, Files, File#file{data=list_to_binary(Data)}).
 
 heads_to_file(Heads) ->
 	heads_to_file(Heads, #file{}).
 heads_to_file([{filename,FileName}|Heads], File) ->
 	heads_to_file(Heads, File#file{filename=FileName});
 heads_to_file([{name,PostName}|Heads], File) ->
-	heads_to_file(Heads, File#file{post_name=PostName});
+	heads_to_file(Heads, File#file{name=PostName});
 heads_to_file([_|Heads], File) ->
 	ignore,
 	heads_to_file(Heads, File);

@@ -20,11 +20,11 @@
 
 %%%-------------------------------------------------------------------
 %%% @author H. Kerem Cevahir <kerem@medratech.com>
-%%% @copyright 2009, H. Kerem Cevahir
-%%% @doc Worker for mydlp.
+%%% @copyright 2010, H. Kerem Cevahir
+%%% @doc ACL for mydlp.
 %%% @end
 %%%-------------------------------------------------------------------
--module(mydlp_tc).
+-module(mydlp_acl).
 -author("kerem@medra.com.tr").
 -behaviour(gen_server).
 
@@ -32,8 +32,7 @@
 
 %% API
 -export([start_link/0,
-	get_mime/1,
-	get_text/1,
+	q/4,
 	stop/0]).
 
 %% gen_server callbacks
@@ -46,72 +45,36 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
--record(state, {thrift_server}).
+-record(state, {}).
 
-%%%%%%%%%%%%% MyDLP Thrift RPC API
+%%%%%%%%%%%%% MyDLP ACL API
 
--define(MMLEN, 128).
-
-get_mime(Data) when is_list(Data) ->
-	L = length(Data),
-	Data1 = case L > ?MMLEN of
-		true -> lists:sublist(Data, ?MMLEN);
-		false -> Data
-	end,
-	gen_server:call(?MODULE, {get_mime, Data1});
-
-get_mime(Data) when is_binary(Data) ->
-	S = size(Data),
-	Data1 = case S > ?MMLEN of
-		true -> <<D:?MMLEN/binary, _/binary>> = Data, D;
-		false -> Data
-	end,
-	gen_server:call(?MODULE, {get_mime, Data1}).
-
-get_text(#file{mime_type=undefined, data=Data}) ->
-	Data;
-
-get_text(#file{mime_type= <<"application/x-empty">>, data=Data}) ->
-	Data;
-
-get_text(#file{mime_type= <<"text/plain">>, data=Data}) ->
-	Data;
-
-get_text(#file{mime_type= <<"application/pdf">>, data=Data}) ->
-	gen_server:call(?MODULE, {get_pdf_text, Data}).
-	
+q(_From, _Dest, _Data, Files) ->
+	gen_server:call(?MODULE, {acl_q, {Files}}).
 
 %%%%%%%%%%%%%% gen_server handles
 
-handle_call({get_mime, Data}, From, #state{thrift_server=TS} = State) ->
+handle_call({acl_q, {Files}}, From, State) ->
 	Worker = self(),
 	spawn_link(fun() ->
-			{ok, Mime} = thrift_client:call(TS, getMagicMime, [Data]),
-			Worker ! {async_get_mime, Mime, From}
-		end),
-	{noreply, State, 5000};
+		F = fun(File) -> MT = mydlp_tc:get_mime(File#file.data), 
+			mydlp_tc:get_text(File#file{mime_type=MT}) end,
+		Texts = lists:map(F, Files),
 
-handle_call({get_pdf_text, Data}, From, #state{thrift_server=TS} = State) ->
-	Worker = self(),
-	spawn_link(fun() ->
-			{ok, Text} = thrift_client:call(TS, getPdfText, [Data]),
-			Worker ! {async_get_pdf_text, Text, From}
-		end),
-	{noreply, State, 15000};
+		erlang:display(Texts),
+		Result = pass,
+		Worker ! {async_acl_q, Result, From}
+	end),
+	{noreply, State, 60000};
 
-handle_call(stop, _From, #state{thrift_server=TS} = State) ->
-	thrift_client:close(TS),
-	{stop, normalStop, State#state{thrift_server=undefined}};
+handle_call(stop, _From, State) ->
+	{stop, normalStop, State};
 
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-handle_info({async_get_mime, Mime, From}, State) ->
-	gen_server:reply(From, Mime),
-	{noreply, State};
-
-handle_info({async_get_pdf_text, Text, From}, State) ->
-	gen_server:reply(From, Text),
+handle_info({async_acl_q, Res, From}, State) ->
+	gen_server:reply(From, Res),
 	{noreply, State};
 
 handle_info(_Info, State) ->
@@ -129,8 +92,7 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
-	{ok, TS} = thrift_client:start_link("localhost",9090, mydlp_thrift),
-	{ok, #state{thrift_server=TS}}.
+	{ok, #state{}}.
 
 handle_cast(_Msg, State) ->
 	{noreply, State}.

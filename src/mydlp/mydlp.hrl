@@ -18,11 +18,19 @@
 %%%    along with MyDLP.  If not, see <http://www.gnu.org/licenses/>.
 %%%--------------------------------------------------------------------------
 
--ifndef(_EXAMPLE_HRL).
--define(_EXAMPLE_HRL, true).
+-ifndef(_MYDLP_HRL).
+-define(_MYDLP_HRL, true).
 
 -define(MAX_RESTART,		5).
 -define(MAX_TIME,	  		60).
 -define(KILL_TIMEOUT,		2000).
+
+-record(file, {
+                name,
+                filename,
+                mime_type,
+                given_type,
+                data = []
+        }).
 
 -endif.

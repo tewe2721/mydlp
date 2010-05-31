@@ -21,6 +21,7 @@
 dist_erl_DATA = \
 	gen_server_cluster.erl \
 	mydlp.erl \
+	mydlp_acl.erl \
 	mydlp_api.erl \
 	mydlp_app.erl \
 	mydlp_acceptor.erl \

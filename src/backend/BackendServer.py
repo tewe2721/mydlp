@@ -32,13 +32,43 @@ from thrift.server import TServer
 
 import magic
 
+from pdfminer.pdfinterp import PDFResourceManager, process_pdf 
+from pdfminer.pdfdevice import PDFDevice 
+from pdfminer.converter import TextConverter 
+from pdfminer.layout import LAParams 
+
+import StringIO 
+
 class MydlpHandler:
 	def __init__(self):
 		self.mime = magic.open(magic.MAGIC_MIME)
 		self.mime.load()
 
+		self.rsrcmgr = PDFResourceManager()
+
 	def getMagicMime(self, data):
-		return self.mime.buffer(data)
+		mtype = self.mime.buffer(data)
+		sc = mtype.find(';')
+		if sc == -1:
+			return mtype
+		else:
+			return mtype[0:sc]
+
+	def getPdfText(self, data):
+		fp = StringIO.StringIO() 
+		fp.write(data) 
+		fp.seek(0) 
+		outfp = StringIO.StringIO() 
+
+		rsrcmgr = PDFResourceManager() 
+		device = TextConverter(rsrcmgr, outfp, laparams=LAParams()) 
+		process_pdf(rsrcmgr, device, fp) 
+		device.close() 
+
+		t = outfp.getvalue() 
+		outfp.close() 
+		fp.close() 
+		return t
 
 handler = MydlpHandler()
 
