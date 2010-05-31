@@ -45,14 +45,33 @@
 
 -record(state, {thrift_server}).
 
+%%%%%%%%%%%%% MyDLP Thrift RPC API
+
+-define(MMLEN, 64).
+
+get_mime(Data) when is_list(Data) ->
+	L = length(Data),
+	Data1 = case L > ?MMLEN of
+		true -> lists:sublist(Data, ?MMLEN);
+		false -> Data
+	end,
+	gen_server:call(?MODULE, {get_mime, Data1});
+
+get_mime(Data) when is_binary(Data) ->
+	S = size(Data),
+	Data1 = case S > ?MMLEN of
+		true -> <<D:?MMLEN/binary, _/binary>> = Data, D;
+		false -> Data
+	end,
+	gen_server:call(?MODULE, {get_mime, Data1}).
+
+%%%%%%%%%%%%%%%% Implicit functions
+
 start_link() ->
 	case gen_server:start_link({local, ?MODULE}, ?MODULE, [], []) of
 		{ok, Pid} -> {ok, Pid};
 		{error, {already_started, Pid}} -> {ok, Pid}
 	end.
-
-get_mime(Data) ->
-	gen_server:call(?MODULE, {get_mime, Data}).
 
 stop() ->
 	gen_server:call(?MODULE, stop).
