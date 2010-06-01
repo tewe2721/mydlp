@@ -22,4 +22,5 @@ service Mydlp {
     // returns mimetype of binary
     string getMagicMime(1 : binary Data)
     binary getPdfText(1 : binary Data)
+    binary getOOoText(1 : binary Data)
 }

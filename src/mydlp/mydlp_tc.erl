@@ -50,7 +50,7 @@
 
 %%%%%%%%%%%%% MyDLP Thrift RPC API
 
--define(MMLEN, 128).
+-define(MMLEN, 9300).
 
 get_mime(Data) when is_list(Data) ->
 	L = length(Data),
@@ -58,7 +58,7 @@ get_mime(Data) when is_list(Data) ->
 		true -> lists:sublist(Data, ?MMLEN);
 		false -> Data
 	end,
-	gen_server:call(?MODULE, {get_mime, Data1});
+	gen_server:call(?MODULE, {thrift, getMagicMime, [Data1]});
 
 get_mime(Data) when is_binary(Data) ->
 	S = size(Data),
@@ -66,7 +66,7 @@ get_mime(Data) when is_binary(Data) ->
 		true -> <<D:?MMLEN/binary, _/binary>> = Data, D;
 		false -> Data
 	end,
-	gen_server:call(?MODULE, {get_mime, Data1}).
+	gen_server:call(?MODULE, {thrift, getMagicMime, [Data1]}).
 
 get_text(#file{mime_type=undefined, data=Data}) ->
 	Data;
@@ -78,24 +78,24 @@ get_text(#file{mime_type= <<"text/plain">>, data=Data}) ->
 	Data;
 
 get_text(#file{mime_type= <<"application/pdf">>, data=Data}) ->
-	gen_server:call(?MODULE, {get_pdf_text, Data}).
-	
+	gen_server:call(?MODULE, {thrift, getPdfText, [Data]});
+
+get_text(#file{mime_type= <<"application/postscript">>, data=Data}) ->
+	gen_server:call(?MODULE, {thrift, getPdfText, [Data]});
+
+get_text(#file{mime_type= <<"application/vnd.ms-office">>, data=Data}) ->
+	gen_server:call(?MODULE, {thrift, getOOoText, [Data]});
+
+get_text(#file{data=Data}) ->
+	Data.
 
 %%%%%%%%%%%%%% gen_server handles
 
-handle_call({get_mime, Data}, From, #state{thrift_server=TS} = State) ->
+handle_call({thrift, Func, Params}, From, #state{thrift_server=TS} = State) ->
 	Worker = self(),
 	spawn_link(fun() ->
-			{ok, Mime} = thrift_client:call(TS, getMagicMime, [Data]),
-			Worker ! {async_get_mime, Mime, From}
-		end),
-	{noreply, State, 5000};
-
-handle_call({get_pdf_text, Data}, From, #state{thrift_server=TS} = State) ->
-	Worker = self(),
-	spawn_link(fun() ->
-			{ok, Text} = thrift_client:call(TS, getPdfText, [Data]),
-			Worker ! {async_get_pdf_text, Text, From}
+			{ok, Reply} = thrift_client:call(TS, Func, Params),
+			Worker ! {async_thrift, Reply, From}
 		end),
 	{noreply, State, 15000};
 
@@ -106,12 +106,8 @@ handle_call(stop, _From, #state{thrift_server=TS} = State) ->
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-handle_info({async_get_mime, Mime, From}, State) ->
-	gen_server:reply(From, Mime),
-	{noreply, State};
-
-handle_info({async_get_pdf_text, Text, From}, State) ->
-	gen_server:reply(From, Text),
+handle_info({async_thrift, Reply, From}, State) ->
+	gen_server:reply(From, Reply),
 	{noreply, State};
 
 handle_info(_Info, State) ->

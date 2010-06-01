@@ -20,4 +20,5 @@
 
 run:
 	@echo "Running application..."
+	soffice "-accept=socket,host=localhost,port=9091;urp;StarOffice.ServiceManager" -nologo -headless -nodefault -norestore -nofirststartwizard &
 	PYTHONPATH="/usr/lib/python2.6/site-packages:../thrift/gen-py" python BackendServer.py

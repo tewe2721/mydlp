@@ -58,7 +58,8 @@ handle_call({acl_q, {Files}}, From, State) ->
 	Worker = self(),
 	spawn_link(fun() ->
 		F = fun(File) -> MT = mydlp_tc:get_mime(File#file.data), 
-			mydlp_tc:get_text(File#file{mime_type=MT}) end,
+			erlang:display(binary_to_list(MT)),
+			binary_to_list(mydlp_tc:get_text(File#file{mime_type=MT})) end,
 		Texts = lists:map(F, Files),
 
 		erlang:display(Texts),
