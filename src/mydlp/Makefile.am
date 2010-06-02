@@ -94,6 +94,6 @@ console:
 	@echo "Spawning console..."
 	@$(ERL) -pa ../thrift/gen-erl -boot start_sasl -sname console-$$$$ 
 
-run: $(beam_DATA)
+run: $(beam_DATA) $(boot_DATA)
 	@echo "Running application..."
 	@$(ERL) -pa ../thrift/gen-erl -boot start_sasl -sname console-$$$$ -run mydlp start
