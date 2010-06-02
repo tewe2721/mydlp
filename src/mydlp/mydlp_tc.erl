@@ -50,7 +50,7 @@
 
 %%%%%%%%%%%%% MyDLP Thrift RPC API
 
--define(MMLEN, 9300).
+-define(MMLEN, 512000).
 
 get_mime(Data) when is_list(Data) ->
 	L = length(Data),
@@ -68,26 +68,18 @@ get_mime(Data) when is_binary(Data) ->
 	end,
 	gen_server:call(?MODULE, {thrift, getMagicMime, [Data1]}).
 
-get_text(#file{mime_type=undefined, data=Data}) ->
-	Data;
-
-get_text(#file{mime_type= <<"application/x-empty">>, data=Data}) ->
-	Data;
-
-get_text(#file{mime_type= <<"text/plain">>, data=Data}) ->
-	Data;
-
+get_text(#file{mime_type=undefined, data=Data}) -> Data;
+get_text(#file{mime_type= <<"application/x-empty">>, data=Data}) -> Data;
+get_text(#file{mime_type= <<"text/plain">>, data=Data}) -> Data;
 get_text(#file{mime_type= <<"application/pdf">>, data=Data}) ->
 	gen_server:call(?MODULE, {thrift, getPdfText, [Data]});
-
 get_text(#file{mime_type= <<"application/postscript">>, data=Data}) ->
 	gen_server:call(?MODULE, {thrift, getPdfText, [Data]});
-
+get_text(#file{mime_type= <<"application/msword">>, data=Data}) ->
+	gen_server:call(?MODULE, {thrift, getOOoText, [Data]});
 get_text(#file{mime_type= <<"application/vnd.ms-office">>, data=Data}) ->
 	gen_server:call(?MODULE, {thrift, getOOoText, [Data]});
-
-get_text(#file{data=Data}) ->
-	Data.
+get_text(#file{data=Data}) -> Data.
 
 %%%%%%%%%%%%%% gen_server handles
 
