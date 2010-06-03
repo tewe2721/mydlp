@@ -215,6 +215,7 @@ accept_loop(Acceptor,
 					%% New client connected - spawn a new process using the simple_one_for_one
 					%% supervisor.
 					{ok, Pid} = mydlp_sup:start_client(SocketSup),
+					%fprof:trace([start, {procs, Pid}]),
 					Backend:controlling_process(CliSocket, Pid),
 					%% Instruct the new FSM that it owns the socket.
 					mydlp_fsm:set_socket(Pid, CliSocket, CommType),

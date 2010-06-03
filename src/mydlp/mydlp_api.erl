@@ -166,4 +166,3 @@ to_lowerchar(C) when C >= $A, C =< $Z ->
     C+($a-$A);
 to_lowerchar(C) ->
     C.
-

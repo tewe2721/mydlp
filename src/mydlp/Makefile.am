@@ -25,14 +25,17 @@ dist_erl_DATA = \
 	mydlp_api.erl \
 	mydlp_app.erl \
 	mydlp_acceptor.erl \
-	mydlp_http_fsm.erl \
 	mydlp_fsm.erl \
+	mydlp_http_fsm.erl \
+	mydlp_matchers.erl \
+	mydlp_mnesia.erl \
 	mydlp_sup.erl \
 	mydlp_tc.erl \
 	mydlp_worker_sup.erl
 
 dist_hrl_DATA = \
-	mydlp.hrl
+	mydlp.hrl \
+	mydlp_schema.hrl
 
 beam_DATA = \
 	$(dist_erl_DATA:.erl=.beam) \
@@ -64,7 +67,6 @@ beamdir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/ebin
 privdir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/priv
 htmldir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/doc
 bootdir = $(libdir)/erlang/bin
-CLEANFILES = $(beam_DATA) $(boot_DATA) $(html_DATA) mydlp.rel overview.edoc
 ERLCFLAGS += -W
 
 $(beam_DATA): $(dist_hrl_DATA)
@@ -90,10 +92,13 @@ check:
 	@echo "Running unit tests..."
 	@$(ERL) -eval "eunit:test({application,mydlp})" -noshell -s init stop
 
-console:
+uniq-console:
 	@echo "Spawning console..."
 	@$(ERL) -pa ../thrift/gen-erl -boot start_sasl -sname console-$$$$ 
 
 run: $(beam_DATA) $(boot_DATA)
 	@echo "Running application..."
-	@$(ERL) -pa ../thrift/gen-erl -boot start_sasl -sname console-$$$$ -run mydlp start
+	@$(ERL) -pa ../thrift/gen-erl -boot start_sasl -sname console -run mydlp start
+
+clean-local:
+	rm -rf $(beam_DATA) $(boot_DATA) $(html_DATA) mydlp.rel overview.edoc Mnesia.*

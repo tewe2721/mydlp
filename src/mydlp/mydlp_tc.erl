@@ -50,7 +50,7 @@
 
 %%%%%%%%%%%%% MyDLP Thrift RPC API
 
--define(MMLEN, 512000).
+-define(MMLEN, 4096).
 
 get_mime(Data) when is_list(Data) ->
 	L = length(Data),

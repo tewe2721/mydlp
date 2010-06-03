@@ -271,8 +271,11 @@ get_http_content(#state{socket=Socket, http_headers=HttpHeaders} = State) ->
 	error_logger:error_msg("~p Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
-'REQ_OK'(State) ->
-	'CONNECT_REMOTE'(connect, State).
+'REQ_OK'(#state{files=Files,http_content=HttpContent, addr=Addr} = State) ->
+	case mydlp_acl:q(Addr, dest, list_to_binary(HttpContent), Files) of
+		pass ->	'CONNECT_REMOTE'(connect, State);
+		block -> 'BLOCK_REQ'(block, State)
+	end.
 
 'READ_FILES'(#state{http_headers=HttpHeaders} = State) ->
 %	when HttpHeaders#http_headers.content_type == ''->
@@ -280,8 +283,6 @@ get_http_content(#state{socket=Socket, http_headers=HttpHeaders} = State) ->
 		true ->	parse_multipart(State);
 		false -> []
 	end,
-
-	mydlp_acl:q(from, dest, data, Files),
 
 	'REQ_OK'(State#state{files=Files}).
 
@@ -330,6 +331,19 @@ parse_multipart(#state{http_content=HttpContent, http_headers=H, http_packet=Req
 
 	BackendOpts = backend_opts(State),
 	BackendOpts:setopts(PeerSock, [{packet, 0}, {active, once}]),
+	BackendOpts:setopts(Socket, [{packet, http}, {active, once}, list]),
+
+	{next_state, 'HTTP_PACKET', 
+		State#state{http_packet=undefined, 
+				http_headers=#http_headers{},
+				http_content=[], 
+				files=[]}, ?KA_TIMEOUT}.
+
+'BLOCK_REQ'(block, #state{socket=Socket} = State) ->
+	Backend = backend(State),
+	Backend:send(Socket, gen_deny_page(State)),
+
+	BackendOpts = backend_opts(State),
 	BackendOpts:setopts(Socket, [{packet, http}, {active, once}, list]),
 
 	{next_state, 'HTTP_PACKET', 
@@ -749,4 +763,21 @@ heads_to_file([_|Heads], File) ->
 	heads_to_file(Heads, File);
 heads_to_file([], File) ->
 	File.
+
+gen_deny_page(#state{http_packet=HttpReq}) -> 
+	{http_request, _, {_, _}, {Majorv, Minorv}} = HttpReq,
+	Body = <<
+	"<html>",
+	"<head><title>Blocked by MyDLP</title></head>",
+	"<body><center><strong>DENIED !!!</strong></center></body>",
+	"</html>"
+	>>,
+	[
+	"HTTP/", integer_to_list(Majorv), ".", integer_to_list(Minorv), " 403 Forbidden\r\n",
+	"Connection : keep-alive\r\n"
+	"Content-Type: text/html; charset=UTF-8\r\n",
+	"Content-Length: ", integer_to_list(size(Body)), "\r\n",
+	"\r\n",
+	Body
+	].
 

@@ -49,21 +49,40 @@
 
 %%%%%%%%%%%%% MyDLP ACL API
 
-q(_From, _Dest, _Data, Files) ->
-	gen_server:call(?MODULE, {acl_q, {Files}}).
+q(Addr, _Dest, Data, Files) ->
+	gen_server:call(?MODULE, {acl_q, {Addr, Data, Files}}).
 
 %%%%%%%%%%%%%% gen_server handles
 
-handle_call({acl_q, {Files}}, From, State) ->
+apply_rules([{_Id, Action, Matchers}|Rules], Params) ->
+	case execute_matchers(Matchers, Params) of
+		pos -> Action;
+		neg -> apply_rules(Rules, Params)
+	end;
+apply_rules([], _Params) -> pass.
+
+execute_matchers([{Func, FuncParams}|Matchers], Params) ->
+	case apply(mydlp_matchers, Func, [FuncParams, Params]) of
+		pos -> execute_matchers(Matchers, Params);
+		neg -> neg
+	end;
+execute_matchers([], _Params) -> pos.
+
+handle_call({acl_q, {Addr, _, _} = Param}, From, State) ->
 	Worker = self(),
 	spawn_link(fun() ->
-		F = fun(File) -> MT = mydlp_tc:get_mime(File#file.data), 
-			erlang:display(binary_to_list(MT)),
-			binary_to_list(mydlp_tc:get_text(File#file{mime_type=MT})) end,
-		Texts = lists:map(F, Files),
+%		F = fun(File) -> MT = mydlp_tc:get_mime(File#file.data), 
+%			erlang:display(binary_to_list(MT)),
+%			binary_to_list(mydlp_tc:get_text(File#file{mime_type=MT})) end,
+%		Texts = lists:map(F, Files),
 
-		erlang:display(Texts),
-		Result = pass,
+%		erlang:display(Texts),
+		Rules = mydlp_mnesia:get_rules(Addr),
+		erlang:display(Rules),
+		
+		Result = apply_rules(Rules, Param),
+
+		erlang:display(Result),
 		Worker ! {async_acl_q, Result, From}
 	end),
 	{noreply, State, 60000};
