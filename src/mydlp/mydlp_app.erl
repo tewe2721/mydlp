@@ -45,7 +45,17 @@ start(_Type, _Args) ->
 	supervisor:start_link({local, ?MODULE}, ?MODULE, [Protocols]).
 
 init([Protocols]) ->
-	init(Protocols, []).
+	{ok, SWorkers} = application:get_env(shared_workers),
+	SWSpec = { shared_worker_sup,                                                    % Id       = internal id
+		{supervisor, start_link,
+			[{local, shared_worker_sup}, mydlp_worker_sup, [SWorkers]]
+		},                                                                            % StartFun = {M, F, A}
+		permanent,                                                            % Restart  = permanent | transient | temporary
+		infinity,                                                                     % Shutdown = brutal_kill | int() >= 0 | infinity
+		supervisor,                                                           % Type   = worker | supervisor
+		[mydlp_worker_sup]                                            % Modules  = [Module] | dynamic
+	},
+	init(Protocols, [SWSpec]).
 
 init([ProtoConf| Protocols], ChildSpecs) ->
 	{Proto, _, _} = ProtoConf,
