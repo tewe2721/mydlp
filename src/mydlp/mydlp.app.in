@@ -38,13 +38,9 @@
           {mydlp_mnesia, start_link,[]}
          ]},
     {protocols, [
-%	  {echo, {acceptor, {2222, plain, mydlp_echo_fsm} },
-%                 {workers, [{mydlp_echo_worker, start_cluster,[]}]}
 	  {http, {acceptor, {8080, plain, http} },
                  {workers, []}
 	  },
-%	  {echo2, {acceptor, {2223, ssl, mydlp_echo_fsm} },
-%                  {workers, [{mydlp_echo_worker, start_cluster,[]}]}
 	  {https, {acceptor, {8443, ssl, http} },
                  {workers, []}
 	  }
