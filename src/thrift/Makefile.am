@@ -19,10 +19,15 @@
 ###--------------------------------------------------------------------------
 
 dist_erl_DATA = \
+	gen-erl/mydlp_ui_thrift.erl \
+	gen-erl/mydlp_ui_types.erl \
 	gen-erl/mydlp_thrift.erl \
 	gen-erl/mydlp_types.erl
 
 dist_hrl_DATA = \
+	gen-erl/mydlp_ui_thrift.hrl \
+	gen-erl/mydlp_ui_constants.hrl \
+	gen-erl/mydlp_ui_types.hrl \
 	gen-erl/mydlp_thrift.hrl \
 	gen-erl/mydlp_constants.hrl \
 	gen-erl/mydlp_types.hrl
@@ -45,9 +50,12 @@ $(boot_DATA): $(beam_DATA)
 gen-erl/mydlp_thrift.erl: mydlp.thrift
 	$(THRIFT) --gen erl --gen py $<
 
+gen-erl/mydlp_ui_thrift.erl: mydlp_ui.thrift
+	$(THRIFT) --gen erl --gen php $<
+
 .erl.beam:
 	@echo "Compiling $<..."
 	@$(ERLC) $(ERLCFLAGS) $<
 
 clean-local:
-	rm -rf gen-erl gen-py
+	rm -rf gen-erl gen-py gen-php

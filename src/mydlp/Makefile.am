@@ -31,6 +31,7 @@ dist_erl_DATA = \
 	mydlp_mnesia.erl \
 	mydlp_sup.erl \
 	mydlp_tc.erl \
+	mydlp_ui.erl \
 	mydlp_worker_sup.erl
 
 dist_hrl_DATA = \
@@ -67,7 +68,7 @@ beamdir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/ebin
 privdir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/priv
 htmldir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/doc
 bootdir = $(libdir)/erlang/bin
-ERLCFLAGS += -W
+ERLCFLAGS += -W -I ../thrift/gen-erl
 
 $(beam_DATA): $(dist_hrl_DATA)
 $(boot_DATA): $(beam_DATA)

@@ -115,7 +115,7 @@ class MydlpHandler:
 
 		localContext = uno.getComponentContext()
 		resolver = localContext.ServiceManager.createInstanceWithContext("com.sun.star.bridge.UnoUrlResolver", localContext)
-		ctx = resolver.resolve( "uno:socket,host=localhost,port=9091;urp;StarOffice.ComponentContext" )
+		ctx = resolver.resolve( "uno:socket,host=127.0.0.1,port=9091;urp;StarOffice.ComponentContext" )
 		smgr = ctx.ServiceManager
 		self.ooo = smgr.createInstanceWithContext( "com.sun.star.frame.Desktop",ctx)
 

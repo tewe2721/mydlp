@@ -27,5 +27,6 @@
 start() ->
 	application:start(ssl),
 	application:start(crypto),
+	application:load(thrift),
 	application:start(mydlp).
 

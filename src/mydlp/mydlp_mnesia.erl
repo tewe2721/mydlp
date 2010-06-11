@@ -1,4 +1,4 @@
-%%%
+%%
 %%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@medra.com.tr>
 %%%
 %%%--------------------------------------------------------------------------
@@ -34,6 +34,8 @@
 %% API
 -export([start_link/0,
 	get_rules/1,
+	dyn_query/2,
+	get_record_fields/1,
 	stop/0]).
 
 %% gen_server callbacks
@@ -69,7 +71,40 @@ get_record_fields(Record) ->
 get_rules(Who) ->
 	gen_server:call(?MODULE, {get_rules, Who}).
 
+dyn_query(Def, Args) ->
+	gen_server:call(?MODULE, {dyn_query, Def, Args}).
+
+dyn_query1({_, Table, _} = Def, Args) ->
+	{QS, BS} = dyn_query2(Def,Args),
+	erlang:display(QS),
+	erlang:display(BS),
+	Q = qlc:string_to_handle(QS, [], BS),
+	qlc:e(Q).
+
+dyn_query2({list, Table, Ands}, Args) ->
+	QS = "[ I || I <- L ",
+	BS = erl_eval:add_binding('L', mnesia:table(Table), erl_eval:new_bindings()),
+	{QS1,BS1} = dyn_query3(QS, BS, Table, Ands, Args),
+	{QS1 ++ " ].", BS1}.
+
+dyn_query3(QS, BS, Table, [And|Ands], [Arg|Args]) ->
+	QS1 = QS ++ ", I#" ++ atom_to_list(Table) ++ "." ++ atom_to_list(And) ++ " == A" ++ atom_to_list(And) ++ " ",
+	BS1 = erl_eval:add_binding(list_to_atom("A"++atom_to_list(And)), Arg, BS),
+	dyn_query3(QS1, BS1, Table, Ands, Args);
+dyn_query3(QS, BS, _Table, [], []) -> {QS, BS}.
+
 %%%%%%%%%%%%%% gen_server handles
+
+handle_call({dyn_query, Def, Args}, From, State) ->
+	Worker = self(),
+	spawn_link(fun() ->
+		F = fun() ->
+			dyn_query1(Def, Args)
+		end,
+		{atomic, Objects} = transaction(F),
+		Worker ! {async_reply, Objects, From}
+	end),
+	{noreply, State, 5000};
 
 handle_call({get_rules, Who}, From, State) ->
 	Worker = self(),
