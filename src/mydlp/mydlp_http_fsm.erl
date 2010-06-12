@@ -272,7 +272,7 @@ get_http_content(#state{socket=Socket, http_headers=HttpHeaders} = State) ->
 	{stop, normal, State}.
 
 'REQ_OK'(#state{files=Files,http_content=HttpContent, addr=Addr} = State) ->
-	case mydlp_acl:q(Addr, dest, list_to_binary(HttpContent), Files) of
+	case mydlp_acl:q(Addr, dest, df_to_files(list_to_binary(HttpContent), Files)) of
 		pass ->	'CONNECT_REMOTE'(connect, State);
 		block -> 'BLOCK_REQ'(block, State)
 	end.
@@ -780,4 +780,11 @@ gen_deny_page(#state{http_packet=HttpReq}) ->
 	"\r\n",
 	Body
 	].
+
+df_to_files(Data, Files) ->
+        case length(Files) of
+                0 ->    DFile = #file{name= <<"post-data">>, data=Data},
+                        [DFile];
+                _ ->    Files
+        end.
 

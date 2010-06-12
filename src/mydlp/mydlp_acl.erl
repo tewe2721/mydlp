@@ -32,7 +32,7 @@
 
 %% API
 -export([start_link/0,
-	q/4,
+	q/3,
 	stop/0]).
 
 %% gen_server callbacks
@@ -49,16 +49,16 @@
 
 %%%%%%%%%%%%% MyDLP ACL API
 
-q(Addr, _Dest, Data, Files) ->
-	gen_server:call(?MODULE, {acl_q, {Addr, Data, Files}}, 60000).
+q(Addr, _Dest, Files) ->
+	gen_server:call(?MODULE, {acl_q, {Addr, Files}}, 60000).
 
 %%%%%%%%%%%%%% gen_server handles
 
-handle_call({acl_q, {Addr, Data, Files}}, From, State) ->
+handle_call({acl_q, {Addr, Files}}, From, State) ->
 	Worker = self(),
 	spawn_link(fun() ->
 		Rules = mydlp_mnesia:get_rules(Addr),
-		Param = {Addr, df_to_files(Data, Files)},
+		Param = {Addr, df_to_files(Files)},
 
 		Result = apply_rules(Rules, Param),
 		Worker ! {async_acl_q, Result, From}
@@ -120,13 +120,6 @@ df_to_files(Files) ->
 	Files1 = df_to_files1(Files, []),
 	Files2 =comp_to_files(Files1),
 	lists:flatten(Files2).
-
-df_to_files(Data, Files) ->
-	case length(Files) of
-		0 -> 	DFile = #file{name= <<"post-data">>, data=Data},
-			df_to_files([DFile]);
-		_ ->	df_to_files(Files)
-	end.
 
 df_to_files1([#file{mime_type=undefined} = File|Files], Returns) -> 
 	MT = mydlp_tc:get_mime(File#file.data),
