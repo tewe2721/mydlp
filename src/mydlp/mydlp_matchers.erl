@@ -36,16 +36,16 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
-mime_match(MimeTypes, {_Addr, Data, Files}) ->
-	case length(Files) of
-		0 -> mime_match1(MimeTypes, [Data]);
-		_ -> mime_match1(MimeTypes, [F#file.data||F <- Files])
-	end.
-mime_match1(MimeTypes, [Data|Rest]) ->
-	MT = mydlp_tc:get_mime(Data),
+mime_match(MimeTypes, {_Addr, Files}) -> mime_match(MimeTypes, Files);
+mime_match(MimeTypes, [File|Files]) ->
+	MT = case File#file.mime_type of 
+		undefined -> mydlp_tc:get_mime(File#file.data);
+		Else -> Else
+	end,
+
 	case lists:member(MT, MimeTypes) of
 		true -> pos;
-		false -> mime_match1(MimeTypes, Rest)
+		false -> mime_match(MimeTypes, Files)
 	end;
-mime_match1(_MimeTypes, []) -> neg.
+mime_match(_MimeTypes, []) -> neg.
 

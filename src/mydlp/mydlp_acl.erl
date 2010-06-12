@@ -50,39 +50,17 @@
 %%%%%%%%%%%%% MyDLP ACL API
 
 q(Addr, _Dest, Data, Files) ->
-	gen_server:call(?MODULE, {acl_q, {Addr, Data, Files}}).
+	gen_server:call(?MODULE, {acl_q, {Addr, Data, Files}}, 60000).
 
 %%%%%%%%%%%%%% gen_server handles
 
-apply_rules([{_Id, Action, Matchers}|Rules], Params) ->
-	case execute_matchers(Matchers, Params) of
-		pos -> Action;
-		neg -> apply_rules(Rules, Params)
-	end;
-apply_rules([], _Params) -> pass.
-
-execute_matchers([{Func, FuncParams}|Matchers], Params) ->
-	case apply(mydlp_matchers, Func, [FuncParams, Params]) of
-		pos -> execute_matchers(Matchers, Params);
-		neg -> neg
-	end;
-execute_matchers([], _Params) -> pos.
-
-handle_call({acl_q, {Addr, _, _} = Param}, From, State) ->
+handle_call({acl_q, {Addr, Data, Files}}, From, State) ->
 	Worker = self(),
 	spawn_link(fun() ->
-%		F = fun(File) -> MT = mydlp_tc:get_mime(File#file.data), 
-%			erlang:display(binary_to_list(MT)),
-%			binary_to_list(mydlp_tc:get_text(File#file{mime_type=MT})) end,
-%		Texts = lists:map(F, Files),
-
-%		erlang:display(Texts),
 		Rules = mydlp_mnesia:get_rules(Addr),
-		erlang:display(Rules),
-		
-		Result = apply_rules(Rules, Param),
+		Param = {Addr, df_to_files(Data, Files)},
 
-		erlang:display(Result),
+		Result = apply_rules(Rules, Param),
 		Worker ! {async_acl_q, Result, From}
 	end),
 	{noreply, State, 60000};
@@ -122,4 +100,66 @@ terminate(_Reason, _State) ->
 
 code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
+
+%%%%%%%%%%%%%%% helper func
+apply_rules([{_Id, Action, Matchers}|Rules], Params) ->
+	case execute_matchers(Matchers, Params) of
+		pos -> Action;
+		neg -> apply_rules(Rules, Params)
+	end;
+apply_rules([], _Params) -> pass.
+
+execute_matchers([{Func, FuncParams}|Matchers], Params) ->
+	case apply(mydlp_matchers, Func, [FuncParams, Params]) of
+		pos -> execute_matchers(Matchers, Params);
+		neg -> neg
+	end;
+execute_matchers([], _Params) -> pos.
+
+df_to_files(Files) ->
+	Files1 = df_to_files1(Files, []),
+	Files2 =comp_to_files(Files1),
+	lists:flatten(Files2).
+
+df_to_files(Data, Files) ->
+	case length(Files) of
+		0 -> 	DFile = #file{name= <<"post-data">>, data=Data},
+			df_to_files([DFile]);
+		_ ->	df_to_files(Files)
+	end.
+
+df_to_files1([#file{mime_type=undefined} = File|Files], Returns) -> 
+	MT = mydlp_tc:get_mime(File#file.data),
+	df_to_files1(Files, [File#file{mime_type=MT}|Returns]);
+df_to_files1([File|Files], Returns) -> 
+	df_to_files1(Files, [File|Returns]);
+df_to_files1([], Returns) -> lists:reverse(Returns).
+
+comp_to_files(Files) -> comp_to_files(Files, []).
+comp_to_files([#file{mime_type= <<"application/zip">>} = File|Files], Returns) -> 
+	ExtFiles = extract_file(File),
+	comp_to_files(Files, [df_to_files(ExtFiles)|Returns]);
+comp_to_files([#file{mime_type= <<"application/octet-stream">>} = File|Files], Returns) -> 
+	case extract_file2(File) of
+		{ok, ExtFiles} -> comp_to_files(Files, [df_to_files(ExtFiles)|Returns]);
+		failed -> comp_to_files(Files, [File|Returns])
+	end;
+comp_to_files([File|Files], Returns) -> comp_to_files(Files, [File|Returns]);
+comp_to_files([], Returns) -> lists:reverse(Returns).
+
+ext_to_file(Ext) ->
+	[#file{name= <<"extracted file">>, 
+		filename=Filename, 
+		data=Data} 
+		|| {Filename,Data} <- Ext].
+
+extract_file(File) ->
+	{ok, Ext} = zip:extract(File#file.data, [memory]),
+	ext_to_file(Ext).
+
+extract_file2(File) ->
+	case zip:extract(File#file.data, [memory]) of
+		{ok, Ext} -> {ok, ext_to_file(Ext)};
+		_ -> failed
+	end.
 
