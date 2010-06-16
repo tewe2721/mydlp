@@ -24,6 +24,9 @@
 
 -compile(export_all).
 
+-include("mydlp.hrl").
+-include_lib("xmerl/include/xmerl.hrl").
+
 %%--------------------------------------------------------------------
 %% @doc Check if a byte is an HTTP character
 %% @end
@@ -166,3 +169,44 @@ to_lowerchar(C) when C >= $A, C =< $Z ->
     C+($a-$A);
 to_lowerchar(C) ->
     C.
+
+%%--------------------------------------------------------------------
+%% @doc Extracts Text from File records
+%% @end
+%%----------------------------------------------------------------------
+get_text(#file{mime_type=undefined, data=Data}) -> Data;
+get_text(#file{mime_type= <<"application/x-empty">>, data=Data}) -> Data;
+get_text(#file{mime_type= <<"text/plain">>, data=Data}) -> Data;
+get_text(#file{mime_type= <<"application/xml">>, data=Data}) ->
+	xml_to_txt(Data);
+get_text(#file{mime_type= <<"application/pdf">>, data=Data}) ->
+	mydlp_tc:get_pdf_text(Data);
+get_text(#file{mime_type= <<"application/postscript">>, data=Data}) ->
+	mydlp_tc:get_pdf_text(Data);
+get_text(#file{mime_type= <<"application/msword">>, data=Data}) ->
+	mydlp_tc:get_ooo_text(Data);
+get_text(#file{mime_type= <<"application/vnd.ms-office">>, data=Data}) ->
+	mydlp_tc:get_ooo_text(Data);
+get_text(#file{data=Data}) -> Data.
+
+
+%%--------------------------------------------------------------------
+%% @doc Extracts Text from XML string
+%% @end
+%%----------------------------------------------------------------------
+xml_to_txt(Data) -> xml_to_txt1(xmerl_scan:string(Data)).
+
+xml_to_txt1(List) when is_list(List) -> xml_to_txt1(List, []);
+xml_to_txt1(#xmlElement{attributes=Attrs, content=Conts}) ->
+	string:join([xml_to_txt1(Attrs), xml_to_txt1(Conts)], " ");
+xml_to_txt1(#xmlAttribute{value=Val}) -> Val;
+xml_to_txt1(#xmlText{value=Val}) -> Val;
+xml_to_txt1({XmlElement, _}) -> xml_to_txt1(XmlElement).
+
+xml_to_txt1([Comp|Rest], Ret) -> 
+	case string:strip(xml_to_txt1(Comp)) of
+		[] -> xml_to_txt1(Rest, Ret);
+		Else -> xml_to_txt1(Rest, [Else|Ret])
+	end;
+xml_to_txt1([], Ret) -> string:join(lists:reverse(Ret), " ").
+

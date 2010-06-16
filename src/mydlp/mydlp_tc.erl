@@ -33,7 +33,8 @@
 %% API
 -export([start_link/0,
 	get_mime/1,
-	get_text/1,
+	get_pdf_text/1,
+	get_ooo_text/1,
 	stop/0]).
 
 %% gen_server callbacks
@@ -68,18 +69,11 @@ get_mime(Data) when is_binary(Data) ->
 	end,
 	gen_server:call(?MODULE, {thrift, getMagicMime, [Data1]}).
 
-get_text(#file{mime_type=undefined, data=Data}) -> Data;
-get_text(#file{mime_type= <<"application/x-empty">>, data=Data}) -> Data;
-get_text(#file{mime_type= <<"text/plain">>, data=Data}) -> Data;
-get_text(#file{mime_type= <<"application/pdf">>, data=Data}) ->
-	gen_server:call(?MODULE, {thrift, getPdfText, [Data]});
-get_text(#file{mime_type= <<"application/postscript">>, data=Data}) ->
-	gen_server:call(?MODULE, {thrift, getPdfText, [Data]});
-get_text(#file{mime_type= <<"application/msword">>, data=Data}) ->
-	gen_server:call(?MODULE, {thrift, getOOoText, [Data]});
-get_text(#file{mime_type= <<"application/vnd.ms-office">>, data=Data}) ->
-	gen_server:call(?MODULE, {thrift, getOOoText, [Data]});
-get_text(#file{data=Data}) -> Data.
+get_pdf_text(Data) ->
+	gen_server:call(?MODULE, {thrift, getPdfText, [Data]}).
+
+get_ooo_text(Data) ->
+	gen_server:call(?MODULE, {thrift, getOOoText, [Data]}).
 
 %%%%%%%%%%%%%% gen_server handles
 
