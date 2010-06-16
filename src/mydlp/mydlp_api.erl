@@ -195,7 +195,7 @@ get_text(#file{data=Data}) -> Data.
 %% @end
 %%----------------------------------------------------------------------
 xml_to_txt(Data) when is_binary(Data)-> xml_to_txt(binary_to_list(Data));
-xml_to_txt(Data) when is_list(Data) -> xml_to_txt1(xmerl_scan:string(Data)).
+xml_to_txt(Data) when is_list(Data) -> list_to_binary(xml_to_txt1(xmerl_scan:string(Data))).
 
 xml_to_txt1(List) when is_list(List) -> xml_to_txt1(List, []);
 %xml_to_txt1(#xmlElement{attributes=Attrs, content=Conts}) ->
