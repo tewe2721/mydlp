@@ -194,12 +194,14 @@ get_text(#file{data=Data}) -> Data.
 %% @doc Extracts Text from XML string
 %% @end
 %%----------------------------------------------------------------------
-xml_to_txt(Data) -> xml_to_txt1(xmerl_scan:string(Data)).
+xml_to_txt(Data) when is_binary(Data)-> xml_to_txt(binary_to_list(Data));
+xml_to_txt(Data) when is_list(Data) -> xml_to_txt1(xmerl_scan:string(Data)).
 
 xml_to_txt1(List) when is_list(List) -> xml_to_txt1(List, []);
-xml_to_txt1(#xmlElement{attributes=Attrs, content=Conts}) ->
-	string:join([xml_to_txt1(Attrs), xml_to_txt1(Conts)], " ");
-xml_to_txt1(#xmlAttribute{value=Val}) -> Val;
+%xml_to_txt1(#xmlElement{attributes=Attrs, content=Conts}) ->
+	%string:join([xml_to_txt1(Attrs), xml_to_txt1(Conts)], " ");
+xml_to_txt1(#xmlElement{content=Conts}) -> xml_to_txt1(Conts);
+%xml_to_txt1(#xmlAttribute{value=Val}) -> Val;
 xml_to_txt1(#xmlText{value=Val}) -> Val;
 xml_to_txt1({XmlElement, _}) -> xml_to_txt1(XmlElement).
 
