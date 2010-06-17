@@ -48,6 +48,8 @@
 	'HTTP_CC_CRLF'/2
 ]).
 
+-include("mydlp.hrl").
+
 -record(state, {
 		socket,	% client socket
 		peer_sock,	% remote socket
@@ -83,14 +85,6 @@
 		key,
 		reserved,
 		value
-	}).
-
--record(file, {
-		name,
-		filename,
-		mime_type,
-		given_type,
-		data = []
 	}).
 
 -define(TIMEOUT, 120000).

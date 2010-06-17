@@ -45,6 +45,8 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
+-define(NOTEXT, [mime_match]).
+
 -record(state, {}).
 
 %%%%%%%%%%%%% MyDLP ACL API
@@ -109,12 +111,30 @@ apply_rules([{_Id, Action, Matchers}|Rules], Params) ->
 	end;
 apply_rules([], _Params) -> pass.
 
-execute_matchers([{Func, FuncParams}|Matchers], Params) ->
+execute_matchers(Matchers, Params) -> execute_matchers(Matchers, Params, false).
+
+execute_matchers([{Func, FuncParams}|Matchers], Params, true) ->
 	case apply(mydlp_matchers, Func, [FuncParams, Params]) of
-		pos -> execute_matchers(Matchers, Params);
+		pos -> execute_matchers(Matchers, Params, true);
 		neg -> neg
 	end;
-execute_matchers([], _Params) -> pos.
+execute_matchers([{Func, FuncParams}|Matchers], {Addr, Files} = Params, false) ->
+	{PLT, Params1} = case lists:member(Func, ?NOTEXT) of
+		true -> {false, Params};
+		false -> {true, {Addr, pl_text(Files)}}
+	end,
+
+	case apply(mydlp_matchers, Func, [FuncParams, Params1]) of
+		pos -> execute_matchers(Matchers, Params1, PLT);
+		neg -> neg
+	end;
+execute_matchers([], _Params, _PLTexted) -> pos.
+
+pl_text(Files) -> pl_text(Files, []).
+pl_text([#file{text=undefined, data=Data} = File|Files], Rets) -> 
+	pl_text(Files, [ File#file{text = mydlp_api:get_text(Data)} |Rets]);
+pl_text([File|Files], Rets) -> pl_text(Files, [File|Rets]);
+pl_text([], Rets) -> lists:reverse(Rets).
 
 df_to_files(Files) ->
 	Files1 = df_to_files1(Files, []),
