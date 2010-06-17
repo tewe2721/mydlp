@@ -56,6 +56,12 @@
 	name
 }).
 
+-record(file_hash, {
+	id,
+	group_id,
+	md5
+}).
+
 -record(regex, {
 	id,
 	group_id,

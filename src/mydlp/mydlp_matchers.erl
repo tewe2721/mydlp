@@ -32,6 +32,7 @@
 %% API
 -export([
 	mime_match/2,
+	md5_match/2,
 	regex_match/2
 ]).
 
@@ -57,3 +58,12 @@ regex_match(RGIs, [File|Files]) ->
 		false -> regex_match(RGIs, Files)
 	end;
 regex_match(_RGIs, []) -> neg.
+
+md5_match(HGIs, {_Addr, Files}) -> md5_match(HGIs, Files);
+md5_match(HGIs, [File|Files]) ->
+	Hash = erlang:md5(File#file.data),
+	case mydlp_mnesia:is_hash_of_gid(Hash, HGIs) of
+		true -> pos;
+		false -> md5_match(HGIs, Files)
+	end;
+md5_match(_HGIs, []) -> neg.

@@ -30,7 +30,7 @@
                 filename,
                 mime_type,
                 given_type,
-                data = [],
+                data,
 		text
         }).
 
