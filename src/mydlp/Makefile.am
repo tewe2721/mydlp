@@ -29,6 +29,7 @@ dist_erl_DATA = \
 	mydlp_http_fsm.erl \
 	mydlp_matchers.erl \
 	mydlp_mnesia.erl \
+	mydlp_regex.erl \
 	mydlp_sup.erl \
 	mydlp_tc.erl \
 	mydlp_ui.erl \

@@ -131,8 +131,8 @@ execute_matchers([{Func, FuncParams}|Matchers], {Addr, Files} = Params, false) -
 execute_matchers([], _Params, _PLTexted) -> pos.
 
 pl_text(Files) -> pl_text(Files, []).
-pl_text([#file{text=undefined, data=Data} = File|Files], Rets) -> 
-	pl_text(Files, [ File#file{text = mydlp_api:get_text(Data)} |Rets]);
+pl_text([#file{text=undefined} = File|Files], Rets) -> 
+	pl_text(Files, [ File#file{text = mydlp_api:get_text(File)} |Rets]);
 pl_text([File|Files], Rets) -> pl_text(Files, [File|Rets]);
 pl_text([], Rets) -> lists:reverse(Rets).
 

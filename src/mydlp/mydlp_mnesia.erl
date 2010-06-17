@@ -34,6 +34,7 @@
 %% API
 -export([start_link/0,
 	get_rules/1,
+	get_regexes/1,
 	dyn_query/2,
 	get_record_fields/1,
 	stop/0]).
@@ -53,7 +54,7 @@
 
 %%%%%%%%%%%%%%%% Table definitions
 
--define(TABLES, [filter, rule, ipr, match, match_group]).
+-define(TABLES, [filter, rule, ipr, match, match_group, regex]).
 
 
 get_record_fields(Record) -> 
@@ -63,13 +64,17 @@ get_record_fields(Record) ->
 		rule -> record_info(fields, rule);
 		ipr -> record_info(fields, ipr);
 		match -> record_info(fields, match);
-		match_group -> record_info(fields, match_group)
+		match_group -> record_info(fields, match_group);
+		regex -> record_info(fields, regex)
 	end.
 
 %%%%%%%%%%%%% MyDLP Mnesia API
 
 get_rules(Who) ->
 	gen_server:call(?MODULE, {get_rules, Who}).
+
+get_regexes(GroupId) ->
+	gen_server:call(?MODULE, {get_regexes, GroupId}).
 
 dyn_query(Def, Args) ->
 	gen_server:call(?MODULE, {dyn_query, Def, Args}).
@@ -122,6 +127,21 @@ handle_call({get_rules, Who}, From, State) ->
 	end),
 	{noreply, State, 5000};
 
+handle_call({get_regexes, GroupId}, From, State) ->
+	Worker = self(),
+	spawn_link(fun() ->
+		F = fun() ->
+			Q = qlc:q([R#regex.compiled ||
+				R <- mnesia:table(regex),
+				R#regex.group_id == GroupId
+				]),
+			qlc:e(Q)
+		end,
+		{atomic, Objects} = transaction(F),
+		Worker ! {async_reply, Objects, From}
+	end),
+	{noreply, State, 5000};
+
 handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
 
@@ -152,6 +172,8 @@ init([]) ->
 
 	start_table({unique_ids, set}),
 	start_tables(?TABLES),
+
+	consistency_chk(),
 
 	{ok, #state{}}.
 
@@ -245,3 +267,28 @@ find_funcs(ParentId) ->
 			MG#match_group.parent == ParentId
 		]),
 	lists:flatten([qlc:e(QM), find_funcss(qlc:e(QMG))]).
+
+consistency_chk() -> 
+	compile_regex().
+
+compile_regex() ->
+	mnesia:wait_for_tables([regex], 5000),
+	RegexC = fun() ->
+		Q = qlc:q([R || R <- mnesia:table(regex),
+			R#regex.plain /= undefined,
+			R#regex.compiled == undefined,
+			R#regex.error == undefined
+			]),
+		[mnesia:write(R) || R <- compile_regex(qlc:e(Q))]
+	end,
+	transaction(RegexC).
+
+compile_regex(Regexs) -> compile_regex(Regexs, []).
+
+compile_regex([R|RS], Ret) -> 
+	R1 = case re:compile(R#regex.plain) of
+		{ok, C} -> R#regex{compiled=C};
+		{error, Err} -> R#regex{error=Err}
+	end,
+	compile_regex(RS, [R1|Ret]);
+compile_regex([], Ret) -> lists:reverse(Ret).

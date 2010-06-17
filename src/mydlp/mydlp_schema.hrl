@@ -56,4 +56,12 @@
 	name
 }).
 
+-record(regex, {
+	id,
+	group_id,
+	plain,
+	compiled,
+	error
+}).
+
 -endif.

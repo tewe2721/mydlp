@@ -31,7 +31,8 @@
 
 %% API
 -export([
-	mime_match/2
+	mime_match/2,
+	regex_match/2
 ]).
 
 -include_lib("eunit/include/eunit.hrl").
@@ -49,3 +50,10 @@ mime_match(MimeTypes, [File|Files]) ->
 	end;
 mime_match(_MimeTypes, []) -> neg.
 
+regex_match(RGIs, {_Addr, Files}) -> regex_match(RGIs, Files);
+regex_match(RGIs, [File|Files]) ->
+	case mydlp_regex:match(RGIs, File#file.text) of
+		true -> pos;
+		false -> regex_match(RGIs, Files)
+	end;
+regex_match(_RGIs, []) -> neg.
