@@ -286,7 +286,7 @@ compile_regex() ->
 compile_regex(Regexs) -> compile_regex(Regexs, []).
 
 compile_regex([R|RS], Ret) -> 
-	R1 = case re:compile(R#regex.plain) of
+	R1 = case re:compile(R#regex.plain, [unicode, caseless]) of
 		{ok, C} -> R#regex{compiled=C};
 		{error, Err} -> R#regex{error=Err}
 	end,
