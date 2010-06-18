@@ -35,6 +35,7 @@
 	md5_match/2,
 	regex_match/2,
 	iban_match/2,
+	trid_match/2,
 	cc_match/2
 ]).
 
@@ -89,8 +90,6 @@ iban_match([File|Files]) ->
 	Res = mydlp_regex:match_bin(
 	 	iban, 
 		File#file.text),
-
-	erlang:display(Res),
 	
 	case lists:any(fun(I) -> mydlp_api:is_valid_iban(I) end, Res) of
 		true -> pos;
@@ -98,3 +97,15 @@ iban_match([File|Files]) ->
 	end;
 iban_match([]) -> neg.
 
+trid_match(_, {_Addr, Files}) -> trid_match(Files).
+
+trid_match([File|Files]) ->
+	Res = mydlp_regex:match_bin(
+	 	trid, 
+		File#file.text),
+	
+	case lists:any(fun(I) -> mydlp_api:is_valid_trid(I) end, Res) of
+		true -> pos;
+		false -> trid_match(Files)
+	end;
+trid_match([]) -> neg.
