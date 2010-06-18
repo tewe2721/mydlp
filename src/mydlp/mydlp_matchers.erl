@@ -33,7 +33,8 @@
 -export([
 	mime_match/2,
 	md5_match/2,
-	regex_match/2
+	regex_match/2,
+	cc_match/2
 ]).
 
 -include_lib("eunit/include/eunit.hrl").
@@ -67,3 +68,19 @@ md5_match(HGIs, [File|Files]) ->
 		false -> md5_match(HGIs, Files)
 	end;
 md5_match(_HGIs, []) -> neg.
+
+cc_match(_, {_Addr, Files}) -> cc_match(Files).
+
+cc_match([File|Files]) ->
+	Res = mydlp_regex:match_bin(
+	 	credit_card, 
+		File#file.text),
+	
+	case lists:any(fun(I) -> mydlp_api:is_valid_cc(I) end, Res) of
+		true -> pos;
+		false -> cc_match(Files)
+	end;
+cc_match([]) -> neg.
+
+
+

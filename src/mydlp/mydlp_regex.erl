@@ -32,6 +32,7 @@
 
 %% API
 -export([start_link/0,
+	match_bin/2,
 	match/2,
 %	clean/1,
 %	clean/0,
@@ -47,9 +48,11 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
--record(state, {regex_tree}).
+-record(state, {cache_tree, builtin_tree}).
 
 %%%%%%%%%%%%% MyDLP Thrift RPC API
+
+match_bin(BInKey, Data) -> gen_server:call(?MODULE, {mbin, BInKey, Data}).
 
 match([GI|GIs], Data) -> 
 	case match1(GI, Data) of
@@ -66,7 +69,7 @@ match1(GroupId, Data) ->
 
 %%%%%%%%%%%%%% gen_server handles
 
-handle_call({match, GroupId, Data}, From, #state{regex_tree=RT} = State) ->
+handle_call({match, GroupId, Data}, From, #state{cache_tree=RT} = State) ->
 	Worker = self(),
 	spawn_link(fun() ->
 			{CID, Regexes} = case gb_trees:lookup(GroupId, RT) of
@@ -81,17 +84,32 @@ handle_call({match, GroupId, Data}, From, #state{regex_tree=RT} = State) ->
 		end),
 	{noreply, State, 15000};
 
+handle_call({mbin, BInKey, Data}, From, #state{builtin_tree=BT} = State) ->
+	Worker = self(),
+	spawn_link(fun() ->
+			RE = gb_trees:get(BInKey, BT),
+			case re:run(Data, RE, [global, {capture, all, list}]) of
+				nomatch -> Worker ! {async_reply, [], From};
+				{match, Captured} -> Worker ! {async_reply, lists:append(Captured), From}
+			end
+		end),
+	{noreply, State, 15000};
+
 handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
 
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-handle_info({async_match, {Result, CID}, From}, #state{regex_tree=RT} = State) ->
+handle_info({async_reply, Reply, From}, State) ->
+	gen_server:reply(From, Reply),
+	{noreply, State};
+
+handle_info({async_match, {Result, CID}, From}, #state{cache_tree=RT} = State) ->
 	gen_server:reply(From, Result),
 	case CID of
 		nochange -> {noreply, State};
-		{add, GroupId, Rs} -> {noreply, #state{regex_tree=gb_trees:enter(GroupId, Rs, RT)}}
+		{add, GroupId, Rs} -> {noreply, #state{cache_tree=gb_trees:enter(GroupId, Rs, RT)}}
 	end;
 
 handle_info(_Info, State) ->
@@ -109,7 +127,12 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
-	{ok, #state{regex_tree=gb_trees:empty()}}.
+	BInREs = [
+		%{credit_card, rec("\\b(?:\\d[ -]{0,4}?){13,16}\\b")}
+		{credit_card, rec("(?:\\d[ -]{0,4}){13,16}")}
+	],
+	BT = insert_all(BInREs, gb_trees:empty()),
+	{ok, #state{cache_tree=gb_trees:empty(), builtin_tree=BT}}.
 
 handle_cast(_Msg, State) ->
 	{noreply, State}.
@@ -127,3 +150,7 @@ matches_any([R|RS], Data) ->
 	end;
 matches_any([], _Data) -> false.
 
+insert_all([{Key, Val}|Rest], Tree) -> insert_all(Rest, gb_trees:enter(Key, Val, Tree));
+insert_all([], Tree) -> Tree.
+
+rec(Regex) -> {ok, Ret} = re:compile(Regex, [unicode]), Ret.

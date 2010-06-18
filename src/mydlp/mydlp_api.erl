@@ -212,3 +212,81 @@ xml_to_txt1([Comp|Rest], Ret) ->
 	end;
 xml_to_txt1([], Ret) -> string:join(lists:reverse(Ret), " ").
 
+%%--------------------------------------------------------------------
+%% @doc Removes specified chars from string
+%% @end
+%%----------------------------------------------------------------------
+remove_chars(Str, Chars) -> remove_chars(Str, Chars, []).
+
+remove_chars([S|Str], Chars, Ret) ->
+	case lists:member(S, Chars) of
+		true -> remove_chars(Str, Chars, Ret);
+		false -> remove_chars(Str, Chars, [S|Ret])
+	end;
+remove_chars([], _Chars, Ret) -> lists:reverse(Ret).
+
+%%--------------------------------------------------------------------
+%% @doc Check for Luhn algorithm.
+%% @end
+%%----------------------------------------------------------------------
+check_luhn(IntegerStr) ->
+	L = lists:map(fun(I) -> I - $0 end, IntegerStr),
+	check_luhn(lists:reverse(L), false, 0).
+
+check_luhn([I|IntList], false, Tot) -> check_luhn(IntList, true, Tot + I );
+check_luhn([I|IntList], true, Tot) -> 
+	I2 = I*2,
+	case I2 > 9 of
+		true -> check_luhn(IntList, false, Tot + I2 - 9 );
+		false -> check_luhn(IntList, false, Tot + I2 )
+	end;
+check_luhn([], _, Tot) -> 0 == (Tot rem 10).
+
+%%--------------------------------------------------------------------
+%% @doc Checks whether string is a valid credit card
+%% @end
+%%----------------------------------------------------------------------
+is_valid_cc(CCStr) ->
+	Clean = remove_chars(CCStr, " -"),
+	case check_luhn(Clean) of
+		false -> false;
+		true -> is_valid_cc(Clean, length(Clean))
+	end.
+
+is_valid_cc([$4|_Rest], 13) -> true; % VISA
+is_valid_cc([$3,$6|_Rest], 14) -> true; % Diners Club
+is_valid_cc([$3,$0,$0|_Rest], 14) -> true; % Diners Club
+is_valid_cc([$3,$0,$1|_Rest], 14) -> true; % Diners Club
+is_valid_cc([$3,$0,$2|_Rest], 14) -> true; % Diners Club
+is_valid_cc([$3,$0,$3|_Rest], 14) -> true; % Diners Club
+is_valid_cc([$3,$0,$4|_Rest], 14) -> true; % Diners Club
+is_valid_cc([$3,$0,$5|_Rest], 14) -> true; % Diners Club
+is_valid_cc([$3,$4|_Rest], 15) -> true; % AMEX
+is_valid_cc([$3,$7|_Rest], 15) -> true; % AMEX
+is_valid_cc([$2,$1,$3,$1|_Rest], 15) -> true; % JCB
+is_valid_cc([$1,$8,$0,$0|_Rest], 15) -> true; % JCB
+is_valid_cc([$3|_Rest], 16) -> true; % JCB
+is_valid_cc([$4|_Rest], 16) -> true; % VISA
+is_valid_cc([$5,$1|_Rest], 16) -> true; % MASTERCARD
+is_valid_cc([$5,$2|_Rest], 16) -> true; % MASTERCARD
+is_valid_cc([$5,$3|_Rest], 16) -> true; % MASTERCARD
+is_valid_cc([$5,$4|_Rest], 16) -> true; % MASTERCARD
+is_valid_cc([$5,$5|_Rest], 16) -> true; % MASTERCARD
+is_valid_cc([$6,$0,$1,$1|_Rest], 16) -> true; % Discover
+is_valid_cc(_,_) -> false.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
