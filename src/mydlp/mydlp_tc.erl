@@ -35,6 +35,7 @@
 	get_mime/1,
 	get_pdf_text/1,
 	get_ooo_text/1,
+	is_valid_iban/1,
 	stop/0]).
 
 %% gen_server callbacks
@@ -74,6 +75,9 @@ get_pdf_text(Data) ->
 
 get_ooo_text(Data) ->
 	gen_server:call(?MODULE, {thrift, getOOoText, [Data]}).
+
+is_valid_iban(IbanStr) ->
+	gen_server:call(?MODULE, {thrift, isValidIban, [IbanStr]}).
 
 %%%%%%%%%%%%%% gen_server handles
 

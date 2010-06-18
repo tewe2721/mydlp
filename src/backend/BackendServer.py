@@ -48,6 +48,8 @@ from com.sun.star.beans import PropertyValue
 from com.sun.star.io import XSeekable, XInputStream, XOutputStream
 from com.sun.star.beans import PropertyValue
 
+import iban
+
 class SequenceOutputStream( unohelper.Base, XOutputStream ):
       def __init__( self ):
           self.s = uno.ByteSequence("")
@@ -160,7 +162,10 @@ class MydlpHandler:
 		document.storeToURL("private:stream", outputprops)
 		document.dispose()
 		return outstream.getSequence().value
-		
+
+	def isValidIban(self, iban_str):
+		myIBAN = iban.IBAN(iban_str)
+		return myIBAN.is_valid()
 
 handler = MydlpHandler()
 

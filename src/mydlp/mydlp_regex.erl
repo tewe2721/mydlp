@@ -129,7 +129,8 @@ stop() ->
 init([]) ->
 	BInREs = [
 		%{credit_card, rec("\\b(?:\\d[ -]{0,4}?){13,16}\\b")}
-		{credit_card, rec("(?:\\d[ -]{0,4}){13,16}")}
+		{credit_card, rec("(?:\\d[ -]{0,4}){13,16}")},
+		{iban, rec("(?:[a-zA-Z][ -]{0,4}){2}(?:[0-9][ -]{0,4}){2}(?:[a-zA-Z0-9][ -]{0,4}){4}(?:[0-9][ -]{0,4}){7}(?:[a-zA-Z0-9][ -]{0,4}){0,16}")}
 	],
 	BT = insert_all(BInREs, gb_trees:empty()),
 	{ok, #state{cache_tree=gb_trees:empty(), builtin_tree=BT}}.

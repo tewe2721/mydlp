@@ -23,4 +23,5 @@ service Mydlp {
     string getMagicMime(1 : binary Data)
     binary getPdfText(1 : binary Data)
     binary getOOoText(1 : binary Data)
+    bool isValidIban(1 : string IbanStr)
 }

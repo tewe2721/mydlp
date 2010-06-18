@@ -275,18 +275,11 @@ is_valid_cc([$5,$5|_Rest], 16) -> true; % MASTERCARD
 is_valid_cc([$6,$0,$1,$1|_Rest], 16) -> true; % Discover
 is_valid_cc(_,_) -> false.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+%%--------------------------------------------------------------------
+%% @doc Checks whether string is a valid IBAN accoun number
+%% @end
+%%----------------------------------------------------------------------
+is_valid_iban(IbanStr) ->
+	Clean = remove_chars(IbanStr, " -"),
+	mydlp_tc:is_valid_iban(Clean).
 

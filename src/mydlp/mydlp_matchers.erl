@@ -34,6 +34,7 @@
 	mime_match/2,
 	md5_match/2,
 	regex_match/2,
+	iban_match/2,
 	cc_match/2
 ]).
 
@@ -82,5 +83,18 @@ cc_match([File|Files]) ->
 	end;
 cc_match([]) -> neg.
 
+iban_match(_, {_Addr, Files}) -> iban_match(Files).
 
+iban_match([File|Files]) ->
+	Res = mydlp_regex:match_bin(
+	 	iban, 
+		File#file.text),
+
+	erlang:display(Res),
+	
+	case lists:any(fun(I) -> mydlp_api:is_valid_iban(I) end, Res) of
+		true -> pos;
+		false -> iban_match(Files)
+	end;
+iban_match([]) -> neg.
 
