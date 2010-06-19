@@ -152,6 +152,10 @@ comp_to_files(Files) -> comp_to_files(Files, []).
 comp_to_files([#file{mime_type= <<"application/zip">>} = File|Files], Returns) -> 
 	ExtFiles = extract_file(File),
 	comp_to_files(Files, [df_to_files(ExtFiles)|Returns]);
+comp_to_files([#file{mime_type= <<"application/x-rar">>} = File|Files], Returns) -> 
+	{ok, Ext} = mydlp_api:unrar(File#file.data),
+	ExtFiles = ext_to_file(Ext),
+	comp_to_files(Files, [df_to_files(ExtFiles)|Returns]);
 comp_to_files([#file{mime_type= <<"application/octet-stream">>} = File|Files], Returns) -> 
 	case extract_file2(File) of
 		{ok, ExtFiles} -> comp_to_files(Files, [df_to_files(ExtFiles)|Returns]);

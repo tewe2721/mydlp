@@ -295,3 +295,95 @@ is_valid_trid(TrIdStr) ->
 	S2 = ((I0 + I1 + I2 + I3 + I4 + I5 + I6 + I7 + I8 + I9) rem 10),
 	(S1 == I9) and (S2 == I10).
 
+%%% imported from tsuraan tempfile module http://www.erlang.org/cgi-bin/ezmlm-cgi/4/41649
+
+%%--------------------------------------------------------------------
+%% @doc Creates safe temporary files.
+%% @end
+%%----------------------------------------------------------------------
+
+mktempfile() -> mktemp([]).
+mktempdir() -> mktemp([directory]).
+
+mktemp(Args) ->
+	Args1 = Args ++ [{tmpdir, "/var/tmp"}, {template, "mydlp.XXXXXXXXXX"}],
+	CmdArgs = mt_process_args(Args1, []),
+	Port = open_port({spawn_executable, "/bin/mktemp"}, [{args, CmdArgs},
+					{line, 1000},
+					use_stdio,
+					exit_status,
+					stderr_to_stdout]),
+	mt_get_resp(Port, nil).
+
+mt_process_args([], Cmd) -> lists:reverse(Cmd);
+mt_process_args([directory| Rest], Cmd) -> mt_process_args(Rest, ["-d"|Cmd] );
+mt_process_args([{Flag, Value} | Rest], Cmd) ->
+	case Flag of
+		tmpdir -> mt_process_args(Rest, ["--tmpdir=" ++ Value|Cmd]);
+		template -> mt_process_args(Rest, [Value|Cmd])
+	end.
+
+mt_get_resp(Port, Resp) ->
+	case Resp of
+	nil ->
+		receive
+			{ Port, {data, {_, Line}}} -> mt_get_resp(Port, Line);
+			{ Port, {exit_status, _ }} -> { error, "No response from mktemp" }
+		after 1000 -> { error, timeout }
+		end;
+	Resp ->
+		receive
+			{ Port, {data, _}} -> mt_get_resp(Port, Resp);
+			{ Port, {exit_status, 0}} -> { ok, Resp };
+			{ Port, {exit_status, _}} -> { error, Resp }
+		after 1000 -> { error, timeout }
+		end
+	end.
+
+%%--------------------------------------------------------------------
+%% @doc Unrars an Erlang binary 
+%% @end
+%%----------------------------------------------------------------------
+
+unrar(Bin) when is_binary(Bin) -> 
+	{ok, RarFN} = mktempfile(),
+	ok = file:write_file(RarFN, Bin),
+	{ok, WorkDir} = mktempdir(),
+	WorkDir1 = WorkDir ++ "/",
+	Port = open_port({spawn_executable, "/usr/bin/unrar"}, 
+			[{args, ["e","-y","-inul",RarFN]},
+			{cd, WorkDir1},
+			use_stdio,
+			exit_status,
+			stderr_to_stdout]),
+	ok = ur_get_resp(Port),
+
+	{ok, rr_files(WorkDir1)}.
+	
+ur_get_resp(Port) ->
+	receive
+		{ Port, {data, _}} -> ur_get_resp(Port);
+		{ Port, {exit_status, 0}} -> ok;
+		{ Port, {exit_status, ErrCode}} -> { error, ErrCode }
+	after 15000 -> { error, timeout }
+	end.
+
+%%--------------------------------------------------------------------
+%% @doc Reads and removes files in WorkDir. Files will be returned as binaries.
+%% @end
+%%----------------------------------------------------------------------
+
+rr_files(WorkDir) when is_list(WorkDir) ->
+	{ok, FileNames} = file:list_dir(WorkDir),
+	Return = rr_files(FileNames, WorkDir, []),
+	ok = file:del_dir(WorkDir),
+	Return.
+
+rr_files([FN|FNs], WorkDir, Ret) -> 
+	AbsPath = WorkDir ++ FN,
+	{ok, Bin}  = file:read_file(AbsPath),
+	ok = file:delete(AbsPath),
+	rr_files(FNs, WorkDir, [{FN, Bin}|Ret]);
+rr_files([], _WorkDir, Ret) -> lists:reverse(Ret).
+
+	
