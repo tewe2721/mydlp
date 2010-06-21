@@ -36,6 +36,7 @@
 	regex_match/2,
 	iban_match/2,
 	trid_match/2,
+	e_archive_match/2,
 	cc_match/2
 ]).
 
@@ -109,3 +110,10 @@ trid_match([File|Files]) ->
 		false -> trid_match(Files)
 	end;
 trid_match([]) -> neg.
+
+e_archive_match(_, {_Addr, Files}) -> e_archive_match(Files).
+
+e_archive_match([#file{mime_type= <<"application/zip">>, is_encrypted=true}|_Files]) -> pos;
+e_archive_match([#file{mime_type= <<"application/x-rar">>, is_encrypted=true}|_Files]) -> pos;
+e_archive_match([_File|Files]) -> e_archive_match(Files);
+e_archive_match([]) -> neg.
