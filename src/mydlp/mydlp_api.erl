@@ -351,20 +351,22 @@ unrar(Bin) when is_binary(Bin) ->
 	{ok, WorkDir} = mktempdir(),
 	WorkDir1 = WorkDir ++ "/",
 	Port = open_port({spawn_executable, "/usr/bin/unrar"}, 
-			[{args, ["e","-y","-inul",RarFN]},
+			[{args, ["e","-y","-p-","-inul","--",RarFN]},
 			{cd, WorkDir1},
 			use_stdio,
 			exit_status,
 			stderr_to_stdout]),
-	ok = ur_get_resp(Port),
 
-	{ok, rr_files(WorkDir1)}.
+	case ur_get_resp(Port) of
+		ok -> {ok, rr_files(WorkDir1)};
+		Else -> Else
+	end.
 	
 ur_get_resp(Port) ->
 	receive
 		{ Port, {data, _}} -> ur_get_resp(Port);
 		{ Port, {exit_status, 0}} -> ok;
-		{ Port, {exit_status, ErrCode}} -> { error, ErrCode }
+		{ Port, {exit_status, RetCode}} -> { error, {retcode, RetCode} }
 	after 15000 -> { error, timeout }
 	end.
 
