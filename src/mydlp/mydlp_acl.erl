@@ -45,7 +45,7 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
--define(NOTEXT, [mime_match]).
+-define(NOTEXT, [mime_match, md5_match, e_archive_match]).
 
 -record(state, {}).
 
