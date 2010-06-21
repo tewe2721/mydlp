@@ -1,4 +1,4 @@
-%%%
+%%
 %%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@medra.com.tr>
 %%%
 %%%--------------------------------------------------------------------------
@@ -149,17 +149,28 @@ df_to_files1([File|Files], Returns) ->
 df_to_files1([], Returns) -> lists:reverse(Returns).
 
 comp_to_files(Files) -> comp_to_files(Files, []).
-comp_to_files([#file{mime_type= <<"application/zip">>} = File|Files], Returns) -> 
-	ExtFiles = extract_file(File),
-	comp_to_files(Files, [df_to_files(ExtFiles)|Returns]);
-comp_to_files([#file{mime_type= <<"application/x-rar">>} = File|Files], Returns) -> 
-	{ok, Ext} = mydlp_api:unrar(File#file.data),
-	ExtFiles = ext_to_file(Ext),
-	comp_to_files(Files, [df_to_files(ExtFiles)|Returns]);
-comp_to_files([#file{mime_type= <<"application/octet-stream">>} = File|Files], Returns) -> 
-	case extract_file2(File) of
-		{ok, ExtFiles} -> comp_to_files(Files, [df_to_files(ExtFiles)|Returns]);
-		failed -> comp_to_files(Files, [File|Returns])
+comp_to_files([#file{mime_type= <<"application/zip">>, is_encrypted=false} = File|Files], Returns) -> 
+	case zip:extract(File#file.data, [memory]) of
+		{ok, Ext} -> 
+			ExtFiles = ext_to_file(Ext),
+			comp_to_files(Files, [df_to_files(ExtFiles)|Returns]);
+		{error, _ShouldBeLogged} -> 
+			comp_to_files(Files, [File#file{is_encrypted=true}|Returns])
+	end;
+comp_to_files([#file{mime_type= <<"application/x-rar">>, is_encrypted=false} = File|Files], Returns) -> 
+	case mydlp_api:unrar(File#file.data) of
+		{ok, Ext} -> 
+			ExtFiles = ext_to_file(Ext),
+			comp_to_files(Files, [df_to_files(ExtFiles)|Returns]);
+		{error, _ShouldBeLogged} -> 
+			comp_to_files(Files, [File#file{is_encrypted=true}|Returns])
+	end;
+comp_to_files([#file{mime_type= <<"application/octet-stream">>} = File|Files], Returns) -> % Needs refinement for better ODF handling
+	case zip:extract(File#file.data, [memory]) of
+		{ok, Ext} -> 
+			ExtFiles = ext_to_file(Ext),
+			comp_to_files(Files, [df_to_files(ExtFiles)|Returns]);
+		{error, _ShouldBeLogged} -> comp_to_files(Files, [File|Returns])
 	end;
 comp_to_files([File|Files], Returns) -> comp_to_files(Files, [File|Returns]);
 comp_to_files([], Returns) -> lists:reverse(Returns).
@@ -169,14 +180,4 @@ ext_to_file(Ext) ->
 		filename=Filename, 
 		data=Data} 
 		|| {Filename,Data} <- Ext].
-
-extract_file(File) ->
-	{ok, Ext} = zip:extract(File#file.data, [memory]),
-	ext_to_file(Ext).
-
-extract_file2(File) ->
-	case zip:extract(File#file.data, [memory]) of
-		{ok, Ext} -> {ok, ext_to_file(Ext)};
-		_ -> failed
-	end.
 

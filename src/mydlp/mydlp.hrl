@@ -31,7 +31,8 @@
                 mime_type,
                 given_type,
                 data,
-		text
+		text,
+		is_encrypted = false
         }).
 
 -endif.
