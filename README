@@ -5,4 +5,4 @@ References:
 http://www.mydlp.org
 
 Dependencies:
-Thrift, Python 2.6, python-magic, pdfminer, unrar, catdoc
+Thrift, Python 2.6, python-magic, pdfminer, unrar, catdoc, pstotext, poppler-utils

@@ -210,16 +210,10 @@ office_to_text(Data, [Prog|Progs]) ->
 	Ret = case ott_get_resp(Port, []) of
 		{ok, Text} -> Text;
 		{error, {retcode, _}} -> office_to_text(Data, Progs);
-		{error, timeout} -> timeout
+		{error, timeout} -> {error, timeout}
 	end,
-
-	ok = file:delete(FN),
-	
-	case Ret of
-		timeout -> throw({otterr, timeout});
-		Else -> Else
-	end;
-office_to_text(_Data, []) -> throw({otterr, corrupted}).
+	ok = file:delete(FN), Ret;
+office_to_text(_Data, []) -> {error, corrupted}.
 
 ott_get_resp(Port, Ret) ->
 	receive
@@ -239,9 +233,9 @@ get_text(#file{mime_type= <<"text/plain">>, data=Data}) -> Data;
 get_text(#file{mime_type= <<"application/xml">>, data=Data}) ->
 	xml_to_txt(Data);
 get_text(#file{mime_type= <<"application/pdf">>, data=Data}) ->
-	mydlp_tc:get_pdf_text(Data);
+	pdf_to_text(Data);
 get_text(#file{mime_type= <<"application/postscript">>, data=Data}) ->
-	mydlp_tc:get_pdf_text(Data);
+	ps_to_text(Data);
 get_text(#file{mime_type= <<"application/vnd.ms-excel">>, data=Data}) ->
 	office_to_text(Data, [?XLS, ?DOC, ?PPT]);
 get_text(#file{mime_type= <<"CDF V2 Document", _/binary>>} = File) ->  %%% TODO: should be refined
@@ -450,4 +444,57 @@ rr_files([FN|FNs], WorkDir, Ret) ->
 	rr_files(FNs, WorkDir, [{FN, Bin}|Ret]);
 rr_files([], _WorkDir, Ret) -> lists:reverse(Ret).
 
+%%--------------------------------------------------------------------
+%% @doc Extracts Text from PostScript files
+%% @end
+%%----------------------------------------------------------------------
+ps_to_text(Bin) when is_binary(Bin) -> 
+	{ok, Ps} = mktempfile(),
+	ok = file:write_file(Ps, Bin),
+	Port = open_port({spawn_executable, "/usr/bin/pstotext"}, 
+			[{args, [Ps]},
+			use_stdio,
+			exit_status,
+			stderr_to_stdout]),
+
+	Ret = case pstt_get_resp(Port, []) of
+		{ok, Text} -> Text;
+		Else -> Else
+	end,
+	ok = file:delete(Ps), Ret.
 	
+pstt_get_resp(Port, Ret) ->
+	receive
+		{ Port, {data, Data}} -> pstt_get_resp(Port, [Data|Ret]);
+		{ Port, {exit_status, 0}} -> {ok, list_to_binary(lists:reverse(Ret))};
+		{ Port, {exit_status, RetCode}} -> { error, {retcode, RetCode} }
+	after 15000 -> { error, timeout }
+	end.
+
+%%--------------------------------------------------------------------
+%% @doc Extracts Text from PDF files
+%% @end
+%%----------------------------------------------------------------------
+pdf_to_text(Bin) when is_binary(Bin) -> 
+	{ok, Pdf} = mktempfile(),
+	ok = file:write_file(Pdf, Bin, [raw]),
+	{ok, TextFN} = mktempfile(),
+	Port = open_port({spawn_executable, "/usr/bin/pdftotext"}, 
+			[{args, ["-q","-eol","unix",Pdf,TextFN]},
+			use_stdio,
+			exit_status,
+			stderr_to_stdout]),
+
+	Ret = case pdftt_get_resp(Port) of
+		ok -> {ok, Text} = file:read_file(TextFN), Text;
+		Else -> Else
+	end,
+	ok = file:delete(Pdf), ok = file:delete(TextFN), Ret.
+	
+pdftt_get_resp(Port) ->
+	receive
+		{ Port, {data, _}} -> pdftt_get_resp(Port);
+		{ Port, {exit_status, 0}} -> ok;
+		{ Port, {exit_status, RetCode}} -> { error, {retcode, RetCode} }
+	after 15000 -> { error, timeout }
+	end.
