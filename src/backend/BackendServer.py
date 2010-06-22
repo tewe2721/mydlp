@@ -21,7 +21,6 @@
 ###    along with MyDLP.  If not, see <http://www.gnu.org/licenses/>.
 ###--------------------------------------------------------------------------
 
-
 from mydlp import Mydlp
 from mydlp.ttypes import *
 
@@ -39,17 +38,6 @@ from pdfminer.layout import LAParams
 
 import StringIO 
 
-from seqstream import *
-
-import uno
-
-from com.sun.star.connection import NoConnectException
-from com.sun.star.uno  import RuntimeException
-from com.sun.star.lang import IllegalArgumentException
-#
-from com.sun.star.beans import PropertyValue
-from com.sun.star.beans import PropertyValue
-
 import iban
 
 class MydlpHandler:
@@ -58,12 +46,6 @@ class MydlpHandler:
 		self.mime.load()
 
 		self.rsrcmgr = PDFResourceManager()
-
-		localContext = uno.getComponentContext()
-		resolver = localContext.ServiceManager.createInstanceWithContext("com.sun.star.bridge.UnoUrlResolver", localContext)
-		ctx = resolver.resolve( "uno:socket,host=127.0.0.1,port=9091;urp;StarOffice.ComponentContext" )
-		smgr = ctx.ServiceManager
-		self.ooo = smgr.createInstanceWithContext( "com.sun.star.frame.Desktop",ctx)
 
 	def getMagicMime(self, data):
 		mtype = self.mime.buffer(data)
@@ -88,24 +70,6 @@ class MydlpHandler:
 		outfp.close() 
 		fp.close() 
 		return t
-
-	def getOOoText(self, data):
-		instream = SequenceInputStream(uno.ByteSequence(data))
-		inputprops = (
-		#                    PropertyValue( "Size", 0, "A3", 0 ),
-				    PropertyValue( "InputStream", 0, instream, 0 ),
-				   )
-		document = self.ooo.loadComponentFromURL("private:stream", "_blank", 0, inputprops)
-		outstream = SequenceOutputStream()
-		outputprops = (
-				    PropertyValue( "FilterName", 0, "Text", 0),
-				    PropertyValue( "Overwrite", 0, True, 0 ),
-		#                    PropertyValue( "Size", 0, "A3", 0 ),
-				    PropertyValue( "OutputStream", 0, outstream, 0 ),
-				   )
-		document.storeToURL("private:stream", outputprops)
-		document.dispose()
-		return outstream.getSequence().value
 
 	def isValidIban(self, iban_str):
 		myIBAN = iban.IBAN(iban_str)
