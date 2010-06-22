@@ -207,7 +207,7 @@ office_to_text(Data, [Prog|Progs]) ->
 %%	port_command(Port, Data),
 %%	port_command(Port, <<-1>>),
 
-	Ret = case ott_get_resp(Port, []) of
+	Ret = case get_port_resp(Port, []) of
 		{ok, Text} -> Text;
 		{error, {retcode, _}} -> office_to_text(Data, Progs);
 		{error, timeout} -> {error, timeout}
@@ -215,10 +215,22 @@ office_to_text(Data, [Prog|Progs]) ->
 	ok = file:delete(FN), Ret;
 office_to_text(_Data, []) -> {error, corrupted}.
 
-ott_get_resp(Port, Ret) ->
+%%--------------------------------------------------------------------
+%% @doc Gets response from ports
+%% @end
+%%----------------------------------------------------------------------
+get_port_resp(Port, Ret) ->
 	receive
-		{ Port, {data, Data}} -> ott_get_resp(Port, [Data|Ret]);
+		{ Port, {data, Data}} -> get_port_resp(Port, [Data|Ret]);
 		{ Port, {exit_status, 0}} -> {ok, list_to_binary(lists:reverse(Ret))};
+		{ Port, {exit_status, RetCode}} -> { error, {retcode, RetCode} }
+	after 15000 -> { error, timeout }
+	end.
+
+get_port_resp(Port) ->
+	receive
+		{ Port, {data, _}} -> get_port_resp(Port);
+		{ Port, {exit_status, 0}} -> ok;
 		{ Port, {exit_status, RetCode}} -> { error, {retcode, RetCode} }
 	after 15000 -> { error, timeout }
 	end.
@@ -413,17 +425,11 @@ unrar(Bin) when is_binary(Bin) ->
 			exit_status,
 			stderr_to_stdout]),
 
-	case ur_get_resp(Port) of
+	ok = file:delete(RarFN),
+
+	case get_port_resp(Port) of
 		ok -> {ok, rr_files(WorkDir1)};
 		Else -> Else
-	end.
-	
-ur_get_resp(Port) ->
-	receive
-		{ Port, {data, _}} -> ur_get_resp(Port);
-		{ Port, {exit_status, 0}} -> ok;
-		{ Port, {exit_status, RetCode}} -> { error, {retcode, RetCode} }
-	after 15000 -> { error, timeout }
 	end.
 
 %%--------------------------------------------------------------------
@@ -457,20 +463,12 @@ ps_to_text(Bin) when is_binary(Bin) ->
 			exit_status,
 			stderr_to_stdout]),
 
-	Ret = case pstt_get_resp(Port, []) of
+	Ret = case get_port_resp(Port, []) of
 		{ok, Text} -> Text;
 		Else -> Else
 	end,
 	ok = file:delete(Ps), Ret.
 	
-pstt_get_resp(Port, Ret) ->
-	receive
-		{ Port, {data, Data}} -> pstt_get_resp(Port, [Data|Ret]);
-		{ Port, {exit_status, 0}} -> {ok, list_to_binary(lists:reverse(Ret))};
-		{ Port, {exit_status, RetCode}} -> { error, {retcode, RetCode} }
-	after 15000 -> { error, timeout }
-	end.
-
 %%--------------------------------------------------------------------
 %% @doc Extracts Text from PDF files
 %% @end
@@ -485,16 +483,8 @@ pdf_to_text(Bin) when is_binary(Bin) ->
 			exit_status,
 			stderr_to_stdout]),
 
-	Ret = case pdftt_get_resp(Port) of
+	Ret = case get_port_resp(Port) of
 		ok -> {ok, Text} = file:read_file(TextFN), Text;
 		Else -> Else
 	end,
 	ok = file:delete(Pdf), ok = file:delete(TextFN), Ret.
-	
-pdftt_get_resp(Port) ->
-	receive
-		{ Port, {data, _}} -> pdftt_get_resp(Port);
-		{ Port, {exit_status, 0}} -> ok;
-		{ Port, {exit_status, RetCode}} -> { error, {retcode, RetCode} }
-	after 15000 -> { error, timeout }
-	end.
