@@ -195,7 +195,7 @@ office_to_text(#file{filename = Filename, data = Data}) ->
 office_to_text(Data, [Prog|Progs]) ->
 	{Exec, Args} = Prog,
 	{ok, FN} = mktempfile(),
-	ok = file:write_file(FN, Data),
+	ok = file:write_file(FN, Data, [raw]),
 	Port = open_port({spawn_executable, Exec}, 
 			[{args, Args ++ [FN]},
 %			[{args, Args},
@@ -415,7 +415,7 @@ mt_get_resp(Port, Resp) ->
 
 unrar(Bin) when is_binary(Bin) -> 
 	{ok, RarFN} = mktempfile(),
-	ok = file:write_file(RarFN, Bin),
+	ok = file:write_file(RarFN, Bin, [raw]),
 	{ok, WorkDir} = mktempdir(),
 	WorkDir1 = WorkDir ++ "/",
 	Port = open_port({spawn_executable, "/usr/bin/unrar"}, 
@@ -456,7 +456,7 @@ rr_files([], _WorkDir, Ret) -> lists:reverse(Ret).
 %%----------------------------------------------------------------------
 ps_to_text(Bin) when is_binary(Bin) -> 
 	{ok, Ps} = mktempfile(),
-	ok = file:write_file(Ps, Bin),
+	ok = file:write_file(Ps, Bin, [raw]),
 	Port = open_port({spawn_executable, "/usr/bin/pstotext"}, 
 			[{args, [Ps]},
 			use_stdio,
