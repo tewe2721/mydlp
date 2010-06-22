@@ -171,6 +171,65 @@ to_lowerchar(C) ->
     C.
 
 %%--------------------------------------------------------------------
+%% @doc Extracts Texts from MS Office 97 - 2003 Files 
+%% @end
+%%----------------------------------------------------------------------
+-define(DOC, {"/usr/bin/catdoc", ["-wx"]}).
+-define(PPT, {"/usr/bin/catppt", []}).
+-define(XLS, {"/usr/bin/xls2csv", ["-x"]}).
+
+office_to_text(#file{filename = Filename, data = Data}) ->
+	StrLen = string:len(Filename),
+	case StrLen >= 4 of
+		true ->
+			Ext = string:sub_string(Filename, StrLen - 3, StrLen),
+			case Ext of
+				".doc" -> office_to_text(Data, [?DOC, ?XLS, ?PPT]);
+				".xls" -> office_to_text(Data, [?XLS, ?DOC, ?PPT]);
+				".ppt" -> office_to_text(Data, [?PPT, ?DOC, ?XLS]);
+				_ -> office_to_text(Data, [?DOC, ?XLS, ?PPT])
+			end;
+		false -> office_to_text(Data, [?DOC, ?XLS, ?PPT])
+	end.
+
+office_to_text(Data, [Prog|Progs]) ->
+	{Exec, Args} = Prog,
+	{ok, FN} = mktempfile(),
+	ok = file:write_file(FN, Data),
+	Port = open_port({spawn_executable, Exec}, 
+			[{args, Args ++ [FN]},
+%			[{args, Args},
+			binary,
+			use_stdio,
+			exit_status,
+			stderr_to_stdout]),
+
+%%	port_command(Port, Data),
+%%	port_command(Port, <<-1>>),
+
+	Ret = case ott_get_resp(Port, []) of
+		{ok, Text} -> Text;
+		{error, {retcode, _}} -> office_to_text(Data, Progs);
+		{error, timeout} -> timeout
+	end,
+
+	ok = file:delete(FN),
+	
+	case Ret of
+		timeout -> throw({otterr, timeout});
+		Else -> Else
+	end;
+office_to_text(_Data, []) -> throw({otterr, corrupted}).
+
+ott_get_resp(Port, Ret) ->
+	receive
+		{ Port, {data, Data}} -> ott_get_resp(Port, [Data|Ret]);
+		{ Port, {exit_status, 0}} -> {ok, list_to_binary(lists:reverse(Ret))};
+		{ Port, {exit_status, RetCode}} -> { error, {retcode, RetCode} }
+	after 15000 -> { error, timeout }
+	end.
+
+%%--------------------------------------------------------------------
 %% @doc Extracts Text from File records
 %% @end
 %%----------------------------------------------------------------------
@@ -183,12 +242,15 @@ get_text(#file{mime_type= <<"application/pdf">>, data=Data}) ->
 	mydlp_tc:get_pdf_text(Data);
 get_text(#file{mime_type= <<"application/postscript">>, data=Data}) ->
 	mydlp_tc:get_pdf_text(Data);
-get_text(#file{mime_type= <<"application/msword">>, data=Data}) ->
-	mydlp_tc:get_ooo_text(Data);
-get_text(#file{mime_type= <<"application/vnd.ms-office">>, data=Data}) ->
-	mydlp_tc:get_ooo_text(Data);
+get_text(#file{mime_type= <<"application/vnd.ms-excel">>, data=Data}) ->
+	office_to_text(Data, [?XLS, ?DOC, ?PPT]);
+get_text(#file{mime_type= <<"CDF V2 Document", _/binary>>} = File) ->  %%% TODO: should be refined
+	office_to_text(File);
+get_text(#file{mime_type= <<"application/msword">>} = File) ->
+	office_to_text(File);
+get_text(#file{mime_type= <<"application/vnd.ms-office">>} = File) ->
+	office_to_text(File);
 get_text(#file{data=Data}) -> Data.
-
 
 %%--------------------------------------------------------------------
 %% @doc Extracts Text from XML string
