@@ -35,7 +35,8 @@
 -export([start_link/0,
 	get_rules/1,
 	get_regexes/1,
-	is_hash_of_gid/2,
+	is_fhash_of_gid/2,
+	is_shash_of_gid/2,
 	dyn_query/2,
 	get_record_fields/1,
 	stop/0]).
@@ -63,6 +64,8 @@
 	match_group, 
 	{file_hash, ordered_set, 
 		fun() -> mnesia:add_table_index(file_hash, md5) end},
+	{sentence_hash, ordered_set, 
+		fun() -> mnesia:add_table_index(sentence_hash, phash2) end},
 	regex
 ]).
 
@@ -76,6 +79,7 @@ get_record_fields(Record) ->
 		match -> record_info(fields, match);
 		match_group -> record_info(fields, match_group);
 		file_hash -> record_info(fields, file_hash);
+		sentence_hash -> record_info(fields, file_hash);
 		regex -> record_info(fields, regex)
 	end.
 
@@ -87,8 +91,11 @@ get_rules(Who) ->
 get_regexes(GroupId) ->
 	gen_server:call(?MODULE, {get_regexes, GroupId}).
 
-is_hash_of_gid(Hash, GroupIds) ->
-	gen_server:call(?MODULE, {is_hash_of_gid, Hash, GroupIds}).
+is_fhash_of_gid(Hash, GroupIds) ->
+	gen_server:call(?MODULE, {is_fhash_of_gid, Hash, GroupIds}).
+
+is_shash_of_gid(Hash, GroupIds) ->
+	gen_server:call(?MODULE, {is_shash_of_gid, Hash, GroupIds}).
 
 dyn_query(Def, Args) ->
 	gen_server:call(?MODULE, {dyn_query, Def, Args}).
@@ -156,13 +163,29 @@ handle_call({get_regexes, GroupId}, From, State) ->
 	end),
 	{noreply, State, 5000};
 
-handle_call({is_hash_of_gid, Hash, HGIs}, From, State) ->
+handle_call({is_fhash_of_gid, Hash, HGIs}, From, State) ->
 	Worker = self(),
 	spawn_link(fun() ->
 		F = fun() ->
 			Q = qlc:q([H#file_hash.group_id ||
 				H <- mnesia:table(file_hash),
 				H#file_hash.md5 == Hash
+				]),
+			qlc:e(Q)
+		end,
+		{atomic, GIs} = transaction(F),
+		Res = lists:any(fun(I) -> lists:member(I, HGIs) end,GIs),
+		Worker ! {async_reply, Res, From}
+	end),
+	{noreply, State, 5000};
+
+handle_call({is_shash_of_gid, Hash, HGIs}, From, State) ->
+	Worker = self(),
+	spawn_link(fun() ->
+		F = fun() ->
+			Q = qlc:q([H#sentence_hash.group_id ||
+				H <- mnesia:table(sentence_hash),
+				H#sentence_hash.phash2 == Hash
 				]),
 			qlc:e(Q)
 		end,

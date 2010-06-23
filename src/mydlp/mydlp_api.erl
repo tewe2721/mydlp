@@ -488,3 +488,23 @@ pdf_to_text(Bin) when is_binary(Bin) ->
 		Else -> Else
 	end,
 	ok = file:delete(Pdf), ok = file:delete(TextFN), Ret.
+
+%%--------------------------------------------------------------------
+%% @doc Normalizes strings
+%% @end
+%%----------------------------------------------------------------------
+norm_str(Str) -> norm_str(Str, []).
+
+norm_str([S|Str], Ret) when S >= 48 , S =< 57 -> norm_str(Str, [S|Ret]);
+norm_str([S|Str], Ret) when S >= 65 , S =< 90 -> norm_str(Str, [S+32|Ret]);
+norm_str([S|Str], Ret) when S >= 97 , S =< 122 -> norm_str(Str, [S|Ret]);
+norm_str([_S|Str], Ret) -> norm_str(Str, Ret);
+norm_str([], Ret) -> lists:reverse(Ret).
+
+%%--------------------------------------------------------------------
+%% @doc Takes Erlang phash2 of a string
+%% @end
+%%----------------------------------------------------------------------
+
+strhash(S) when is_list(S) -> strhash(list_to_binary(S));
+strhash(S) when is_binary(S) -> erlang:phash2(S).

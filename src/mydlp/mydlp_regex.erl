@@ -32,6 +32,8 @@
 
 %% API
 -export([start_link/0,
+	replace_bin/3,
+	split_bin/2,
 	match_bin/2,
 	match/2,
 %	clean/1,
@@ -52,7 +54,11 @@
 
 %%%%%%%%%%%%% MyDLP Thrift RPC API
 
+replace_bin(BInKey, Data, Replace) -> gen_server:call(?MODULE, {rbin, BInKey, Data, Replace}).
+
 match_bin(BInKey, Data) -> gen_server:call(?MODULE, {mbin, BInKey, Data}).
+
+split_bin(BInKey, Data) -> gen_server:call(?MODULE, {sbin, BInKey, Data}).
 
 match([GI|GIs], Data) -> 
 	case match1(GI, Data) of
@@ -95,6 +101,24 @@ handle_call({mbin, BInKey, Data}, From, #state{builtin_tree=BT} = State) ->
 		end),
 	{noreply, State, 15000};
 
+handle_call({sbin, BInKey, Data}, From, #state{builtin_tree=BT} = State) ->
+	Worker = self(),
+	spawn_link(fun() ->
+			RE = gb_trees:get(BInKey, BT),
+			Ret = re:split(Data, RE, [{return, list}, trim]),
+			Worker ! {async_reply, Ret, From}
+		end),
+	{noreply, State, 15000};
+
+handle_call({rbin, BInKey, Data, Replace}, From, #state{builtin_tree=BT} = State) ->
+	Worker = self(),
+	spawn_link(fun() ->
+			RE = gb_trees:get(BInKey, BT),
+			Ret = re:replace(Data, RE, Replace, [global, {return, list}]),
+			Worker ! {async_reply, Ret, From}
+		end),
+	{noreply, State, 15000};
+
 handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
 
@@ -131,7 +155,9 @@ init([]) ->
 		%{credit_card, rec("\\b(?:\\d[ -]{0,4}?){13,16}\\b")}
 		{credit_card, rec("(?:\\d[ -]{0,4}){13,16}")},
 		{iban, rec("(?:[a-zA-Z][ -]{0,4}){2}(?:[0-9][ -]{0,4}){2}(?:[a-zA-Z0-9][ -]{0,4}){4}(?:[0-9][ -]{0,4}){7}(?:[a-zA-Z0-9][ -]{0,4}){0,16}")},
-		{trid, rec("(?:\\d[ -]{0,2}){11}")}
+		{trid, rec("(?:\\d[ -]{0,2}){11}")},
+		{nonwc, rec("[^A-Za-z0-9]+")},
+		{sentence, rec("[\\n\\r\\t\\.!?]+\\s{0,1}\\){0,1}\\s+")}
 	],
 	BT = insert_all(BInREs, gb_trees:empty()),
 	{ok, #state{cache_tree=gb_trees:empty(), builtin_tree=BT}}.

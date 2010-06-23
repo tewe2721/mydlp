@@ -70,4 +70,10 @@
 	error
 }).
 
+-record(sentence_hash, {
+	id,
+	group_id,
+	phash2
+}).
+
 -endif.

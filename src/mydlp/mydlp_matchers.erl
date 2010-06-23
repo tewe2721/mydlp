@@ -37,6 +37,7 @@
 	iban_match/2,
 	trid_match/2,
 	e_archive_match/2,
+	shash_match/2,
 	cc_match/2
 ]).
 
@@ -66,7 +67,7 @@ regex_match(_RGIs, []) -> neg.
 md5_match(HGIs, {_Addr, Files}) -> md5_match(HGIs, Files);
 md5_match(HGIs, [File|Files]) ->
 	Hash = erlang:md5(File#file.data),
-	case mydlp_mnesia:is_hash_of_gid(Hash, HGIs) of
+	case mydlp_mnesia:is_fhash_of_gid(Hash, HGIs) of
 		true -> pos;
 		false -> md5_match(HGIs, Files)
 	end;
@@ -117,3 +118,37 @@ e_archive_match([#file{mime_type= <<"application/zip">>, is_encrypted=true}|_Fil
 e_archive_match([#file{mime_type= <<"application/x-rar">>, is_encrypted=true}|_Files]) -> pos;
 e_archive_match([_File|Files]) -> e_archive_match(Files);
 e_archive_match([]) -> neg.
+
+shash_match(Conf, {_Addr, Files}) when is_list(Conf) -> 
+	Perc = case lists:keyfind(percentage, 1, Conf) of
+		{percentage, P} -> P;
+		false -> undefined
+	end,
+	Count = case lists:keyfind(count, 1, Conf) of
+		{count, C} -> C;
+		false -> undefined
+	end,
+	HGIs = case lists:keyfind(group_ids, 1, Conf) of
+		{group_ids, G} -> G;
+		false -> undefined
+	end,
+	shash_match(HGIs, Perc, Count, Files).
+
+shash_match(HGIs, Perc, Count, [File|Files]) ->
+	Res = mydlp_regex:split_bin(
+	 	sentence, 
+		File#file.text),
+	Res1 = lists:filter(fun(I) -> string:len(I) > 10 end, Res), %%% 10 as string length threshold, shorter strings will be neglacted.
+	Res2 = lists:map(fun(I) -> 
+			mydlp_api:strhash(
+			mydlp_api:norm_str(I)
+			) end, Res1),
+	Res3 = lists:filter(fun(I) -> mydlp_mnesia:is_shash_of_gid(I, HGIs) end, Res2),
+	TotalLen = length(Res2), MatchLen = length(Res3),
+
+	case ((Perc /= undefined) and (Perc < (MatchLen/TotalLen))) or
+		((Count /= undefined) and ( Count < MatchLen)) of
+		true -> pos;
+		false -> shash_match(HGIs, Perc, Count, Files)
+	end;
+shash_match(_HGIs, _Perc, _Count, []) -> neg.
