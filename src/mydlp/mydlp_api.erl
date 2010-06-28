@@ -508,3 +508,18 @@ norm_str([], Ret) -> lists:reverse(Ret).
 
 strhash(S) when is_list(S) -> strhash(list_to_binary(S));
 strhash(S) when is_binary(S) -> erlang:phash2(S).
+
+
+%%--------------------------------------------------------------------
+%% @doc Logs acl messages
+%% @end
+%%----------------------------------------------------------------------
+acl_msg({Ip1,Ip2,Ip3,Ip4}, To, Files, Action) ->
+	mydlp_logger:notify(acl_msg,
+		"FROM: ~w.~w.~w.~w , TO: ~s , FILES: ~s , ACTION: ~w ~n",
+		[Ip1,Ip2,Ip3,Ip4,To,
+			"\"" ++ string:join([F#file.filename || F <- Files], "\",\"") ++ "\"",
+			Action]
+	);
+acl_msg(_,_,_,_) -> ok.
+

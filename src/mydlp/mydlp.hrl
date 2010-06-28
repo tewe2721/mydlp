@@ -21,9 +21,26 @@
 -ifndef(_MYDLP_HRL).
 -define(_MYDLP_HRL, true).
 
--define(MAX_RESTART,		5).
--define(MAX_TIME,	  		60).
--define(KILL_TIMEOUT,		2000).
+-define(MAX_RESTART, 5).
+-define(MAX_TIME, 60).
+-define(KILL_TIMEOUT, 2000).
+
+%% ---------------------------------
+%% Logging mechanism
+
+%% imported from http://github.com/processone/ejabberd/blob/master/src/ejabberd.hrl
+-define(LOG_PATH, "mydlp.log").
+
+-define(ACL_LOG(From, To, Files, Action), 
+	mydlp_api:acl_msg(From, To, Files, Action)).
+
+-define(DEBUG(Format, Args),
+	mydlp_logger:debug_msg(?MODULE,?LINE,Format, Args)).
+
+-define(INFO_MSG(Format, Args),
+	mydlp_logger:info_msg(?MODULE,?LINE,Format, Args)).
+
+%% end of import
 
 -record(file, {
                 name,

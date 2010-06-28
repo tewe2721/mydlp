@@ -153,7 +153,7 @@ init([]) ->
 		?TIMEOUT};
 
 'WAIT_FOR_SOCKET'(Other, State) ->
-	error_logger:error_msg("State: 'WAIT_FOR_SOCKET'. Unexpected message: ~p\n", [Other]),
+	?DEBUG("State: 'WAIT_FOR_SOCKET'. Unexpected message: ~p\n", [Other]),
 	%% Allow to receive async messages
 	{next_state, 'WAIT_FOR_SOCKET', State}.
 
@@ -161,7 +161,7 @@ init([]) ->
 	{next_state, 'HTTP_HEADER', State#state{http_packet=HttpReq}, ?TIMEOUT};
 
 'HTTP_PACKET'(timeout, State) ->
-	error_logger:error_msg("~p Client connection timeout - closing.\n", [self()]),
+	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
 'HTTP_HEADER'({http, http_eoh}, #state{http_headers=HttpHeaders} = State) ->
@@ -193,7 +193,7 @@ init([]) ->
 	{next_state, 'HTTP_HEADER', State#state{http_headers=HttpHeaders1}, ?TIMEOUT};
 
 'HTTP_HEADER'(timeout, State) ->
-	error_logger:error_msg("~p Client connection timeout - closing.\n", [self()]),
+	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
 get_http_content(#state{socket=Socket, http_headers=HttpHeaders} = State) ->
@@ -226,7 +226,7 @@ get_http_content(#state{socket=Socket, http_headers=HttpHeaders} = State) ->
 	end;
 
 'HTTP_CONTENT'(timeout, State) ->
-	error_logger:error_msg("~p Client connection timeout - closing.\n", [self()]),
+	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
 'HTTP_CC_LINE'({data, Line}, #state{http_content=Content} = State) ->
@@ -238,7 +238,7 @@ get_http_content(#state{socket=Socket, http_headers=HttpHeaders} = State) ->
 	end;
 
 'HTTP_CC_LINE'(timeout, State) ->
-	error_logger:error_msg("~p Client connection timeout - closing.\n", [self()]),
+	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
 'HTTP_CC_CHUNK'({data, Line}, #state{http_content=Content, tmp=CSize} = State) ->
@@ -254,7 +254,7 @@ get_http_content(#state{socket=Socket, http_headers=HttpHeaders} = State) ->
 	end;
 
 'HTTP_CC_CHUNK'(timeout, State) ->
-	error_logger:error_msg("~p Client connection timeout - closing.\n", [self()]),
+	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
 'HTTP_CC_CRLF'({data, <<"\r\n">> = CRLF}, #state{http_content=Content} = State) ->
@@ -262,13 +262,13 @@ get_http_content(#state{socket=Socket, http_headers=HttpHeaders} = State) ->
 	{next_state, 'HTTP_CC_LINE', State#state{http_content=Content1}, ?TIMEOUT};
 
 'HTTP_CC_CRLF'(timeout, State) ->
-	error_logger:error_msg("~p Client connection timeout - closing.\n", [self()]),
+	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
 'REQ_OK'(#state{files=Files,http_content=HttpContent, addr=Addr} = State) ->
 	case mydlp_acl:q(Addr, dest, df_to_files(list_to_binary(HttpContent), Files)) of
-		pass ->	'CONNECT_REMOTE'(connect, State);
-		block -> 'BLOCK_REQ'(block, State)
+		pass ->	log_req(State, pass), 'CONNECT_REMOTE'(connect, State);
+		block -> log_req(State, block), 'BLOCK_REQ'(block, State)
 	end.
 
 'READ_FILES'(#state{http_headers=HttpHeaders} = State) ->
@@ -287,18 +287,18 @@ parse_multipart(#state{http_content=HttpContent, http_headers=H, http_packet=Req
 		'POST' ->
 			case CT of
 				undefined ->
-					error_logger:error_msg("Can't parse multipart if we "
+					?DEBUG("Can't parse multipart if we "
 						"have no Content-Type header",[]), [];
 				"multipart/form-data"++Line ->
 					LineArgs = parse_arg_line(Line),
 					{value, {_, Boundary}} = lists:keysearch(boundary, 1, LineArgs),
 					parse_multipart(binary_to_list(un_partial(list_to_binary(HttpContent))), Boundary);
 				_Other ->
-					error_logger:error_msg("Can't parse multipart if we "
+					?DEBUG("Can't parse multipart if we "
 						"find no multipart/form-data",[]), []
 			end;
 		Other ->
-			error_logger:error_msg("Can't parse multipart if get a ~p", [Other]), []
+			?DEBUG("Can't parse multipart if get a ~p", [Other]), []
 	end,
 	result_to_files(Res).
 
@@ -409,12 +409,12 @@ handle_info({ssl, Socket, http_eoh}, StateName,
 
 handle_info({_, Socket, {http_error, _}}, _StateName,
 			#state{socket=Socket, addr=Addr} = StateData) ->
-	error_logger:info_msg("~p HTTP error client ip: ~p .\n", [self(), Addr]),
+	?DEBUG("~p HTTP error client ip: ~p .\n", [self(), Addr]),
 	{stop, normal, StateData};
 
 handle_info({_, Socket, http_error}, _StateName,
 			#state{socket=Socket, addr=Addr} = StateData) ->
-	error_logger:info_msg("~p HTTP error client ip: ~p .\n", [self(), Addr]),
+	?DEBUG("~p HTTP error client ip: ~p .\n", [self(), Addr]),
 	{stop, normal, StateData};
 
 handle_info({tcp, Socket, Data}, StateName, 
@@ -445,11 +445,11 @@ handle_info({ssl, PeerSock, Data}, StateName,
 	{next_state, StateName, StateData, ?TIMEOUT};
 
 handle_info({tcp_closed, _}, _StateName, #state{comm_type=plain, addr=Addr} = StateData) ->
-	error_logger:info_msg("~p Client ~p disconnected.\n", [self(), Addr]),
+	?DEBUG("~p Client ~p disconnected.\n", [self(), Addr]),
 	{stop, normal, StateData};
 
 handle_info({ssl_closed, _}, _StateName, #state{comm_type=ssl, addr=Addr} = StateData) ->
-	error_logger:info_msg("~p Client ~p disconnected.\n", [self(), Addr]),
+	?DEBUG("~p Client ~p disconnected.\n", [self(), Addr]),
 	{stop, normal, StateData};
 
 handle_info(_Info, StateName, StateData) ->
@@ -781,4 +781,7 @@ df_to_files(Data, Files) ->
                         [DFile];
                 _ ->    Files
         end.
+
+log_req(#state{addr=Addr, http_headers=(#http_headers{host=DestHost}), files=Files}, Action) ->
+	?ACL_LOG(Addr, DestHost, Files, Action).
 

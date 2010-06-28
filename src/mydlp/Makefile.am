@@ -19,6 +19,7 @@
 ###--------------------------------------------------------------------------
 
 dist_erl_DATA = \
+	dynamic_compile.erl \
 	gen_server_cluster.erl \
 	mydlp.erl \
 	mydlp_acl.erl \
@@ -27,6 +28,8 @@ dist_erl_DATA = \
 	mydlp_acceptor.erl \
 	mydlp_fsm.erl \
 	mydlp_http_fsm.erl \
+	mydlp_loglevel.erl \
+	mydlp_logger_h.erl \
 	mydlp_matchers.erl \
 	mydlp_mnesia.erl \
 	mydlp_regex.erl \

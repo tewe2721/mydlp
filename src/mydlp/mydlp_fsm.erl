@@ -25,6 +25,8 @@
 
 -behaviour(gen_fsm).
 
+-include("mydlp.hrl").
+
 -export([behaviour_info/1]).
 
 -export([start_link/1,
@@ -124,7 +126,7 @@ init([TargetModule]) ->
 		?TIMEOUT};
 
 'WAIT_FOR_SOCKET'(Other, State) ->
-	error_logger:error_msg("State: 'WAIT_FOR_SOCKET'. Unexpected message: ~p\n", [Other]),
+	?DEBUG("State: 'WAIT_FOR_SOCKET'. Unexpected message: ~p\n", [Other]),
 	%% Allow to receive async messages
 	{next_state, 'WAIT_FOR_SOCKET', State}.
 
@@ -133,7 +135,7 @@ init([TargetModule]) ->
 	consume({data, Data}, State#state{buff = B ++ Data});
 
 'WAIT_FOR_DATA'(timeout, State) ->
-	error_logger:error_msg("~p Client connection timeout - closing.\n", [self()]),
+	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State};
 
 'WAIT_FOR_DATA'(Data, State) ->
@@ -215,12 +217,12 @@ handle_info({ssl, Socket, Bin}, StateName,
 
 handle_info({tcp_closed, Socket}, _StateName,
 			#state{socket=Socket, comm_type=plain, addr=Addr} = StateData) ->
-	error_logger:info_msg("~p Client ~p disconnected.\n", [self(), Addr]),
+	?DEBUG("~p Client ~p disconnected.\n", [self(), Addr]),
 	{stop, normal, StateData};
 
 handle_info({ssl_closed, Socket}, _StateName,
 			#state{socket=Socket, comm_type=ssl, addr=Addr} = StateData) ->
-	error_logger:info_msg("~p Client ~p disconnected.\n", [self(), Addr]),
+	?DEBUG("~p Client ~p disconnected.\n", [self(), Addr]),
 	{stop, normal, StateData};
 
 handle_info(_Info, StateName, StateData) ->
