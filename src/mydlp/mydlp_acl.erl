@@ -104,9 +104,9 @@ code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 
 %%%%%%%%%%%%%%% helper func
-apply_rules([{_Id, Action, Matchers}|Rules], Params) ->
+apply_rules([{Id, Action, Matchers}|Rules], Params) ->
 	case execute_matchers(Matchers, Params) of
-		pos -> Action;
+		pos -> {Action, {rule, Id}};
 		neg -> apply_rules(Rules, Params)
 	end;
 apply_rules([], _Params) -> pass.

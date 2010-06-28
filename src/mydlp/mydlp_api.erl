@@ -514,12 +514,12 @@ strhash(S) when is_binary(S) -> erlang:phash2(S).
 %% @doc Logs acl messages
 %% @end
 %%----------------------------------------------------------------------
-acl_msg({Ip1,Ip2,Ip3,Ip4}, To, Files, Action) ->
+acl_msg({Ip1,Ip2,Ip3,Ip4}, To, Files, RuleId, Action) ->
 	mydlp_logger:notify(acl_msg,
-		"FROM: ~w.~w.~w.~w , TO: ~s , FILES: ~s , ACTION: ~w ~n",
+		"FROM: ~w.~w.~w.~w , TO: ~s , FILES: ~s , RULE: ~w , ACTION: ~w ~n",
 		[Ip1,Ip2,Ip3,Ip4,To,
 			"\"" ++ string:join([F#file.filename || F <- Files], "\",\"") ++ "\"",
-			Action]
+			RuleId, Action]
 	);
-acl_msg(_,_,_,_) -> ok.
+acl_msg(_,_,_,_,_) -> ok.
 

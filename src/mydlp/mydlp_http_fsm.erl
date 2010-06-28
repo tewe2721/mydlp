@@ -267,8 +267,10 @@ get_http_content(#state{socket=Socket, http_headers=HttpHeaders} = State) ->
 
 'REQ_OK'(#state{files=Files,http_content=HttpContent, addr=Addr} = State) ->
 	case mydlp_acl:q(Addr, dest, df_to_files(list_to_binary(HttpContent), Files)) of
-		pass ->	log_req(State, pass), 'CONNECT_REMOTE'(connect, State);
-		block -> log_req(State, block), 'BLOCK_REQ'(block, State)
+		pass -> log_req(State, pass), 'CONNECT_REMOTE'(connect, State);
+		{pass, {rule, Id}} -> log_req(State, pass, Id), 'CONNECT_REMOTE'(connect, State);
+		{block, {rule, Id}} -> log_req(State, block, Id), 'BLOCK_REQ'(block, State)
+
 	end.
 
 'READ_FILES'(#state{http_headers=HttpHeaders} = State) ->
@@ -782,6 +784,8 @@ df_to_files(Data, Files) ->
                 _ ->    Files
         end.
 
-log_req(#state{addr=Addr, http_headers=(#http_headers{host=DestHost}), files=Files}, Action) ->
-	?ACL_LOG(Addr, DestHost, Files, Action).
+log_req(State, Action) -> log_req(State, Action, none).
+
+log_req(#state{addr=Addr, http_headers=(#http_headers{host=DestHost}), files=Files}, Action, RuleId) ->
+	?ACL_LOG(Addr, DestHost, Files, RuleId, Action).
 
