@@ -132,7 +132,11 @@ execute_matchers([], _Params, _PLTexted) -> pos.
 
 pl_text(Files) -> pl_text(Files, []).
 pl_text([#file{text=undefined} = File|Files], Rets) -> 
-	pl_text(Files, [ File#file{text = mydlp_api:get_text(File)} |Rets]);
+	File1 = case mydlp_api:get_text(File) of
+		{ok, Text} -> File#file{text = Text};
+		_Else -> File#file{is_encrypted=true}
+	end,
+	pl_text(Files, [ File1 |Rets]);
 pl_text([File|Files], Rets) -> pl_text(Files, [File|Rets]);
 pl_text([], Rets) -> lists:reverse(Rets).
 

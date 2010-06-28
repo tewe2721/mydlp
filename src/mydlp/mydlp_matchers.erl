@@ -36,6 +36,7 @@
 	regex_match/2,
 	iban_match/2,
 	trid_match/2,
+	e_file_match/2,
 	e_archive_match/2,
 	shash_match/2,
 	cc_match/2
@@ -57,6 +58,7 @@ mime_match(MimeTypes, [File|Files]) ->
 mime_match(_MimeTypes, []) -> neg.
 
 regex_match(RGIs, {_Addr, Files}) -> regex_match(RGIs, Files);
+regex_match(RGIs, [#file{text=undefined}|Files]) -> regex_match(RGIs, Files);
 regex_match(RGIs, [File|Files]) ->
 	case mydlp_regex:match(RGIs, File#file.text) of
 		true -> pos;
@@ -75,6 +77,7 @@ md5_match(_HGIs, []) -> neg.
 
 cc_match(_, {_Addr, Files}) -> cc_match(Files).
 
+cc_match([#file{text=undefined}|Files]) -> cc_match(Files);
 cc_match([File|Files]) ->
 	Res = mydlp_regex:match_bin(
 	 	credit_card, 
@@ -88,6 +91,7 @@ cc_match([]) -> neg.
 
 iban_match(_, {_Addr, Files}) -> iban_match(Files).
 
+iban_match([#file{text=undefined}|Files]) -> iban_match(Files);
 iban_match([File|Files]) ->
 	Res = mydlp_regex:match_bin(
 	 	iban, 
@@ -101,6 +105,7 @@ iban_match([]) -> neg.
 
 trid_match(_, {_Addr, Files}) -> trid_match(Files).
 
+trid_match([#file{text=undefined}|Files]) -> trid_match(Files);
 trid_match([File|Files]) ->
 	Res = mydlp_regex:match_bin(
 	 	trid, 
@@ -119,6 +124,12 @@ e_archive_match([#file{mime_type= <<"application/x-rar">>, is_encrypted=true}|_F
 e_archive_match([_File|Files]) -> e_archive_match(Files);
 e_archive_match([]) -> neg.
 
+e_file_match(_, {_Addr, Files}) -> e_file_match(Files).
+
+e_file_match([#file{is_encrypted=true}|_Files]) -> pos;
+e_file_match([_File|Files]) -> e_file_match(Files);
+e_file_match([]) -> neg.
+
 shash_match(Conf, {_Addr, Files}) when is_list(Conf) -> 
 	Perc = case lists:keyfind(percentage, 1, Conf) of
 		{percentage, P} -> P;
@@ -134,6 +145,7 @@ shash_match(Conf, {_Addr, Files}) when is_list(Conf) ->
 	end,
 	shash_match(HGIs, Perc, Count, Files).
 
+shash_match(HGIs, Perc, Count, [#file{text=undefined}|Files]) -> shash_match(HGIs, Perc, Count, Files);
 shash_match(HGIs, Perc, Count, [File|Files]) ->
 	Res = mydlp_regex:split_bin(
 	 	sentence, 

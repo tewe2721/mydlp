@@ -184,8 +184,12 @@ office_to_text(#file{filename = Filename, data = Data}) ->
 		true ->
 			Ext = string:sub_string(Filename, StrLen - 3, StrLen),
 			case Ext of
-				".doc" -> office_to_text(Data, [?DOC, ?XLS, ?PPT]);
-				".xls" -> office_to_text(Data, [?XLS, ?DOC, ?PPT]);
+% catppt always returns 0, should resolve this bug before uncommenting these.
+%				".doc" -> office_to_text(Data, [?DOC, ?XLS, ?PPT]);
+%				".xls" -> office_to_text(Data, [?XLS, ?DOC, ?PPT]);
+%				".ppt" -> office_to_text(Data, [?PPT, ?DOC, ?XLS]);
+				".doc" -> office_to_text(Data, [?DOC, ?XLS]);
+				".xls" -> office_to_text(Data, [?XLS, ?DOC]);
 				".ppt" -> office_to_text(Data, [?PPT, ?DOC, ?XLS]);
 				_ -> office_to_text(Data, [?DOC, ?XLS, ?PPT])
 			end;
@@ -208,7 +212,7 @@ office_to_text(Data, [Prog|Progs]) ->
 %%	port_command(Port, <<-1>>),
 
 	Ret = case get_port_resp(Port, []) of
-		{ok, Text} -> Text;
+		{ok, Text} -> {ok, Text};
 		{error, {retcode, _}} -> office_to_text(Data, Progs);
 		{error, timeout} -> {error, timeout}
 	end,
@@ -239,11 +243,15 @@ get_port_resp(Port) ->
 %% @doc Extracts Text from File records
 %% @end
 %%----------------------------------------------------------------------
-get_text(#file{mime_type=undefined, data=Data}) -> Data;
-get_text(#file{mime_type= <<"application/x-empty">>, data=Data}) -> Data;
-get_text(#file{mime_type= <<"text/plain">>, data=Data}) -> Data;
+get_text(#file{mime_type=undefined, data=Data}) -> {ok, Data};
+get_text(#file{mime_type= <<"application/x-empty">>, data=Data}) -> {ok, Data};
+get_text(#file{mime_type= <<"text/plain">>, data=Data}) -> {ok, Data};
 get_text(#file{mime_type= <<"application/xml">>, data=Data}) ->
-	xml_to_txt(Data);
+	try
+		Text = xml_to_txt(Data),
+		{ok, Text}
+	catch E -> {error, E}
+	end;
 get_text(#file{mime_type= <<"application/pdf">>, data=Data}) ->
 	pdf_to_text(Data);
 get_text(#file{mime_type= <<"application/postscript">>, data=Data}) ->
@@ -256,7 +264,7 @@ get_text(#file{mime_type= <<"application/msword">>} = File) ->
 	office_to_text(File);
 get_text(#file{mime_type= <<"application/vnd.ms-office">>} = File) ->
 	office_to_text(File);
-get_text(#file{data=Data}) -> Data.
+get_text(#file{data=Data}) -> {ok, Data}.
 
 %%--------------------------------------------------------------------
 %% @doc Extracts Text from XML string
@@ -464,7 +472,7 @@ ps_to_text(Bin) when is_binary(Bin) ->
 			stderr_to_stdout]),
 
 	Ret = case get_port_resp(Port, []) of
-		{ok, Text} -> Text;
+		{ok, Text} -> {ok, Text};
 		Else -> Else
 	end,
 	ok = file:delete(Ps), Ret.
@@ -484,7 +492,7 @@ pdf_to_text(Bin) when is_binary(Bin) ->
 			stderr_to_stdout]),
 
 	Ret = case get_port_resp(Port) of
-		ok -> {ok, Text} = file:read_file(TextFN), Text;
+		ok -> {ok, Text} = file:read_file(TextFN), {ok, Text};
 		Else -> Else
 	end,
 	ok = file:delete(Pdf), ok = file:delete(TextFN), Ret.
