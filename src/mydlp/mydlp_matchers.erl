@@ -31,18 +31,29 @@
 
 %% API
 -export([
+	mime_match/0,
 	mime_match/2,
+	md5_match/0,
 	md5_match/2,
+	regex_match/0,
 	regex_match/2,
+	iban_match/0,
 	iban_match/2,
+	trid_match/0,
 	trid_match/2,
+	e_file_match/0,
 	e_file_match/2,
+	e_archive_match/0,
 	e_archive_match/2,
+	shash_match/0,
 	shash_match/2,
+	cc_match/0,
 	cc_match/2
 ]).
 
 -include_lib("eunit/include/eunit.hrl").
+
+mime_match() -> raw.
 
 mime_match(MimeTypes, {_Addr, Files}) -> mime_match(MimeTypes, Files);
 mime_match(MimeTypes, [File|Files]) ->
@@ -57,14 +68,17 @@ mime_match(MimeTypes, [File|Files]) ->
 	end;
 mime_match(_MimeTypes, []) -> neg.
 
+regex_match() -> text.
+
 regex_match(RGIs, {_Addr, Files}) -> regex_match(RGIs, Files);
-regex_match(RGIs, [#file{text=undefined}|Files]) -> regex_match(RGIs, Files);
 regex_match(RGIs, [File|Files]) ->
 	case mydlp_regex:match(RGIs, File#file.text) of
 		true -> pos;
 		false -> regex_match(RGIs, Files)
 	end;
 regex_match(_RGIs, []) -> neg.
+
+md5_match() -> raw.
 
 md5_match(HGIs, {_Addr, Files}) -> md5_match(HGIs, Files);
 md5_match(HGIs, [File|Files]) ->
@@ -75,9 +89,10 @@ md5_match(HGIs, [File|Files]) ->
 	end;
 md5_match(_HGIs, []) -> neg.
 
+cc_match() -> text.
+
 cc_match(_, {_Addr, Files}) -> cc_match(Files).
 
-cc_match([#file{text=undefined}|Files]) -> cc_match(Files);
 cc_match([File|Files]) ->
 	Res = mydlp_regex:match_bin(
 	 	credit_card, 
@@ -89,9 +104,10 @@ cc_match([File|Files]) ->
 	end;
 cc_match([]) -> neg.
 
+iban_match() -> text.
+
 iban_match(_, {_Addr, Files}) -> iban_match(Files).
 
-iban_match([#file{text=undefined}|Files]) -> iban_match(Files);
 iban_match([File|Files]) ->
 	Res = mydlp_regex:match_bin(
 	 	iban, 
@@ -103,9 +119,10 @@ iban_match([File|Files]) ->
 	end;
 iban_match([]) -> neg.
 
+trid_match() -> text.
+
 trid_match(_, {_Addr, Files}) -> trid_match(Files).
 
-trid_match([#file{text=undefined}|Files]) -> trid_match(Files);
 trid_match([File|Files]) ->
 	Res = mydlp_regex:match_bin(
 	 	trid, 
@@ -117,6 +134,8 @@ trid_match([File|Files]) ->
 	end;
 trid_match([]) -> neg.
 
+e_archive_match() -> analyzed.
+
 e_archive_match(_, {_Addr, Files}) -> e_archive_match(Files).
 
 e_archive_match([#file{mime_type= <<"application/zip">>, is_encrypted=true}|_Files]) -> pos;
@@ -124,11 +143,15 @@ e_archive_match([#file{mime_type= <<"application/x-rar">>, is_encrypted=true}|_F
 e_archive_match([_File|Files]) -> e_archive_match(Files);
 e_archive_match([]) -> neg.
 
+e_file_match() -> analyzed.
+
 e_file_match(_, {_Addr, Files}) -> e_file_match(Files).
 
 e_file_match([#file{is_encrypted=true}|_Files]) -> pos;
 e_file_match([_File|Files]) -> e_file_match(Files);
 e_file_match([]) -> neg.
+
+shash_match() -> text.
 
 shash_match(Conf, {_Addr, Files}) when is_list(Conf) -> 
 	Perc = case lists:keyfind(percentage, 1, Conf) of
@@ -145,7 +168,6 @@ shash_match(Conf, {_Addr, Files}) when is_list(Conf) ->
 	end,
 	shash_match(HGIs, Perc, Count, Files).
 
-shash_match(HGIs, Perc, Count, [#file{text=undefined}|Files]) -> shash_match(HGIs, Perc, Count, Files);
 shash_match(HGIs, Perc, Count, [File|Files]) ->
 	Res = mydlp_regex:split_bin(
 	 	sentence, 
@@ -164,3 +186,4 @@ shash_match(HGIs, Perc, Count, [File|Files]) ->
 		false -> shash_match(HGIs, Perc, Count, Files)
 	end;
 shash_match(_HGIs, _Perc, _Count, []) -> neg.
+

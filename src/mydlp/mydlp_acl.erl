@@ -45,8 +45,6 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
--define(NOTEXT, [mime_match, md5_match, e_archive_match]).
-
 -record(state, {}).
 
 %%%%%%%%%%%%% MyDLP ACL API
@@ -114,21 +112,32 @@ apply_rules([], _Params) -> pass.
 execute_matchers(Matchers, Params) -> execute_matchers(Matchers, Params, false).
 
 execute_matchers([{Func, FuncParams}|Matchers], Params, true) ->
-	case apply(mydlp_matchers, Func, [FuncParams, Params]) of
+	case apply_m(Func, [FuncParams, Params]) of
 		pos -> execute_matchers(Matchers, Params, true);
 		neg -> neg
 	end;
 execute_matchers([{Func, FuncParams}|Matchers], {Addr, Files} = Params, false) ->
-	{PLT, Params1} = case lists:member(Func, ?NOTEXT) of
-		true -> {false, Params};
-		false -> {true, {Addr, pl_text(Files)}}
+	{PLT, Params1} = case get_matcher_req(Func) of
+		raw -> {false, Params};
+		analyzed -> {true, {Addr, pl_text(Files)}};
+		text -> {true, {Addr, pl_text(Files)}}
 	end,
 
-	case apply(mydlp_matchers, Func, [FuncParams, Params1]) of
+	case apply_m(Func, [FuncParams, Params1]) of
 		pos -> execute_matchers(Matchers, Params1, PLT);
 		neg -> neg
 	end;
 execute_matchers([], _Params, _PLTexted) -> pos.
+
+apply_m(Func, [FuncParams, {Addr, Files}]) ->
+	Args = case get_matcher_req(Func) of
+		raw -> [FuncParams, {Addr, Files}];
+		analyzed -> [FuncParams, {Addr, Files}];
+		text -> [FuncParams, {Addr, drop_notext(Files)}]
+	end,
+	apply(mydlp_matchers, Func, Args).
+
+get_matcher_req(Func) -> apply(mydlp_matchers, Func, []).
 
 pl_text(Files) -> pl_text(Files, []).
 pl_text([#file{text=undefined} = File|Files], Rets) -> 
@@ -185,3 +194,18 @@ ext_to_file(Ext) ->
 		data=Data} 
 		|| {Filename,Data} <- Ext].
 
+has_text(#file{is_encrypted=true}) -> false;
+has_text(#file{text=undefined}) -> false;
+has_text(#file{text=Text}) when is_binary(Text) -> 
+	case size(Text) of
+		0 -> false;
+		_Else -> true
+	end;
+has_text(#file{text=Text}) when is_list(Text) -> 
+	case length(Text) of
+		0 -> false;
+		_Else -> true
+	end;
+has_text(_) -> true.
+
+drop_notext(Files) -> lists:filter(fun(I) -> has_text(I) end, Files).
