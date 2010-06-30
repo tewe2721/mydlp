@@ -18,10 +18,15 @@
 ###    along with MyDLP.  If not, see <http://www.gnu.org/licenses/>.
 ###--------------------------------------------------------------------------
 
+mydlpconfdir = $(sysconfdir)/mydlp
+
+mydlpconf_DATA = \
+	logger_file.config \
+	logger_sasl.config
+
 dist_erl_DATA = \
 	dynamic_compile.erl \
 	gen_server_cluster.erl \
-	mydlp.erl \
 	mydlp_acl.erl \
 	mydlp_api.erl \
 	mydlp_app.erl \
@@ -103,11 +108,11 @@ uniq-console:
 
 run: $(beam_DATA) $(boot_DATA)
 	@echo "Running application..."
-	@$(ERL) -pa ../thrift/gen-erl -boot start_sasl -sname console -run mydlp start
+	@$(ERL) -pa ../thrift/gen-erl -sname console -boot mydlp 
 
 run-production: $(beam_DATA) $(boot_DATA)
 	@echo "Running application..."
-	@$(ERL) -pa ../thrift/gen-erl -boot start_sasl -config logger_sasl -sname console -run mydlp start
+	@$(ERL) -pa ../thrift/gen-erl -config logger_sasl -sname console -boot mydlp
 
 clean-local:
 	rm -rf $(beam_DATA) $(boot_DATA) $(html_DATA) mydlp.rel overview.edoc Mnesia.*

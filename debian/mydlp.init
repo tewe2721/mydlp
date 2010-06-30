@@ -1,0 +1,44 @@
+#! /bin/sh
+
+### BEGIN INIT INFO
+# Provides:		mydlp
+# Default-Start:	2 3 4 5
+# Default-Stop:		0 1 6
+# Short-Description:	An open source data loss prevention solution.
+### END INIT INFO
+
+PATH=/usr/bin:/bin
+
+ERLANG=/usr/bin/erl
+PYTHON=/usr/bin/python
+
+ERLANG_OPTS="-sname system -noshell -detached"
+
+HOMEDIR=/etc/mydlp
+
+start_mydlp() {
+        (cd $HOMEDIR; $ERLANG $ERLANG_OPTS -config logger_sasl -boot mydlp )
+}
+
+case "$1" in
+  start)
+	start_mydlp
+	;;
+  stop)
+	;;
+
+  reload|force-reload)
+	;;
+
+  restart)
+	;;
+
+  status)
+	;;
+
+  *)
+	log_action_msg "Usage: /etc/init.d/myldp {start|stop|reload|force-reload|restart|status}"
+	exit 1
+esac
+
+exit 0

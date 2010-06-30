@@ -74,7 +74,7 @@ init([Port, CommType, SocketSup]) ->
 			plain -> {gen_tcp, Opts};
 			ssl -> 
 				{ok, SslFiles} = application:get_env(ssl_files),
-				{ssl, Opts ++ [{ssl_imp, new}, {verify, 0}] ++ SslFiles}
+				{ssl, Opts ++ [{ssl_imp, new}, {verify, verify_none}] ++ SslFiles}
 		end,
 
 	case Backend:listen(Port, Opts1) of

@@ -18,6 +18,13 @@
 ###    along with MyDLP.  If not, see <http://www.gnu.org/licenses/>.
 ###--------------------------------------------------------------------------
 
+python_PYTHON = \
+	MyDLPBackendServer.py \
+	iban.py
+
 run:
 	@echo "Running application..."
-	PYTHONPATH="/usr/lib/python2.6/site-packages:../thrift/gen-py" python BackendServer.py
+	PYTHONPATH="/usr/lib/python2.6/site-packages:../thrift/gen-py" python MyDLPBackendServer.py
+
+clean-local:
+	rm -f *.pyc *.pyo

@@ -48,9 +48,8 @@
 	  }
 	 ]},
     {ssl_files, [
-          {cacertfile, "/home/kerem/certs/cacert.pem"},
-          {certfile, "/home/kerem/certs/cert.pem"},
-          {keyfile, "/home/kerem/certs/privkey.pem"}
+          {certfile, "/etc/mydlp/ssl/public.pem"},
+          {keyfile, "/etc/mydlp/ssl/private.pem"}
          ]}
    ]}
  ]

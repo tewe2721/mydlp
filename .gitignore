@@ -1,5 +1,6 @@
 Makefile
 Makefile.in
+aclocal.m4
 autom4te.cache
 config.log
 config.status
@@ -23,8 +24,10 @@ src/thrift/gen-erl/
 src/thrift/gen-php/
 src/thrift/gen-py/
 debian/files
-debian/network-app-example.debhelper.log
-debian/network-app-example.substvars
-debian/network-app-example
+debian/mydlp.debhelper.log
+debian/mydlp.substvars
+debian/mydlp
+debian/mydlp.*.debhelper
 debian/stamp-autotools-files
 debian/stamp-makefile-build
+py-compile

@@ -35,6 +35,13 @@ dist_hrl_DATA = \
 beam_DATA = \
 	$(dist_erl_DATA:.erl=.beam)
 
+pkgpython_PYTHON = \
+	gen-py/mydlp/constants.py \
+	gen-py/mydlp/__init__.py \
+	gen-py/mydlp/Mydlp.py \
+	gen-py/mydlp/Mydlp-remote \
+	gen-py/mydlp/ttypes.py
+
 erldir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/src
 hrldir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/include
 beamdir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/ebin

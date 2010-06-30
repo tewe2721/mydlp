@@ -1,0 +1,4 @@
+/etc/mydlp
+/var/lib/mydlp
+/var/lib/mydlp/sasl
+/var/log/mydlp

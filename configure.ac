@@ -18,10 +18,10 @@
 ###    along with MyDLP.  If not, see <http://www.gnu.org/licenses/>.
 ###--------------------------------------------------------------------------
 
-AC_INIT([mydlp], [1.0.0], [kerem@medratech.com])
+AC_INIT([mydlp], [0.1.0], [kerem@medra.com.tr])
 
 AC_PREREQ([2.64])
-AC_COPYRIGHT([Copyright (C) 2009 H. Kerem Cevahir])
+AC_COPYRIGHT([Copyright (C) 2010 Huseyin Kerem Cevahir])
 AM_INIT_AUTOMAKE
 
 AC_ERLANG_NEED_ERLC
@@ -33,7 +33,15 @@ AC_ERLANG_CHECK_LIB([kernel])
 AC_ERLANG_CHECK_LIB([stdlib])
 AC_ERLANG_CHECK_LIB([edoc])
 AC_ERLANG_CHECK_LIB([eunit])
-AC_ERLANG_SUBST_INSTALL_LIB_SUBDIR([mydlp], [1.0.0])
+AC_ERLANG_CHECK_LIB([mnesia])
+AC_ERLANG_CHECK_LIB([xmerl])
+AC_ERLANG_CHECK_LIB([ssl])
+AC_ERLANG_CHECK_LIB([crypto])
+AC_ERLANG_CHECK_LIB([sasl])
+AC_ERLANG_CHECK_LIB([thrift])
+AC_ERLANG_SUBST_INSTALL_LIB_SUBDIR([mydlp], [0.1.0])
+
+AM_PATH_PYTHON
 
 AC_PATH_PROG(THRIFT, thrift, thrift, $PATH:/usr/local/bin:/usr/bin)
 

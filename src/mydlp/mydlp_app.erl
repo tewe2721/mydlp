@@ -41,7 +41,19 @@
 %% top supervisor of the tree.
 %%--------------------------------------------------------------------
 start(_Type, _Args) ->
+	% Start dependencies
+	mydlp_loglevel:set(4),
+        application:start(ssl),
+        application:start(crypto),
+        application:load(thrift),
+        application:load(sasl),
+        application:load(mydlp),
+        error_logger:add_report_handler(mydlp_logger_h, get_log_path()),
+
+	% Read configuration
 	{ok, Protocols} = application:get_env(protocols),
+
+	% Start mydlp
 	supervisor:start_link({local, ?MODULE}, ?MODULE, [Protocols]).
 
 init([Protocols]) ->
@@ -91,4 +103,21 @@ init([], ChildSpecs) ->
 %%--------------------------------------------------------------------
 stop(_S) ->
 	ok.
+
+%% @spec () -> string()
+%% @doc Returns the full path to the ejabberd log file.
+%% It first checks for application configuration parameter 'log_path'.
+%% If not defined it checks the environment variable EJABBERD_LOG_PATH.
+%% And if that one is neither defined, returns the default value:
+%% "ejabberd.log" in current directory.
+get_log_path() ->
+        case application:get_env(mydlp, log_path) of
+        {ok, Path} ->
+                Path;
+        undefined ->
+                case os:getenv("MYDLP_LOG_PATH") of
+                        false -> ?LOG_PATH;
+                        Path -> Path
+                end
+        end.
 
