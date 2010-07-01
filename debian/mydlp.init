@@ -13,16 +13,16 @@ ERLANG=/usr/bin/erl
 PYTHON=/usr/bin/python
 
 ERLANG_OPTS="-sname system -noshell -detached"
-MNESIA_OPTS="-mnesia dir '\"/var/lib/mydlp/mnesia\"'"
 
 HOMEDIR=/etc/mydlp
 PIDFILE=/var/run/mydlp/mydlp.pid
+PIDFILE2=/var/run/mydlp/backend.pid
 
 . /lib/lsb/init-functions
 
 start_mydlp() {
 	log_daemon_msg "Starting MyDLP" "mydlp"
-        if start-stop-daemon --start --quiet --oknodo --chdir $HOMEDIR --pidfile $PIDFILE --exec $ERLANG -- $ERLANG_OPTS $MNESIA_OPTS -config mydlp-production -boot mydlp; then
+        if start-stop-daemon --start --quiet --oknodo --chdir $HOMEDIR --pidfile $PIDFILE --exec $ERLANG -- $ERLANG_OPTS -mnesia dir '"/var/lib/mydlp/mnesia"' -config mydlp-production -boot mydlp; then
             log_end_msg 0
         else
             log_end_msg 1
@@ -38,24 +38,66 @@ stop_mydlp() {
         fi
 }
 
+status_mydlp() {
+        status_of_proc -p $PIDFILE mydlp MyDLP 2>&1 > /dev/null 
+}
+
+cleanpids() {
+	status_mydlp || rm -f $PIDFILE
+	status_backend || rm -f $PIDFILE2
+}
+
+start_backend() {
+	log_daemon_msg "Starting MyDLP Backend" "mydlp"
+        if (PYTHONPATH=/usr/lib/python2.6/site-packages/ start-stop-daemon --start --quiet --oknodo --pidfile $PIDFILE2 --exec $PYTHON -- /usr/lib/python2.6/dist-packages/MyDLPBackendServer.py); then
+            log_end_msg 0
+        else
+            log_end_msg 1
+        fi
+}
+
+stop_backend() {
+	log_daemon_msg "Stopping MyDLP Backend" "mydlp"
+        if start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE2; then
+            log_end_msg 0
+        else
+            log_end_msg 1
+        fi
+}
+
+status_backend() {
+        status_of_proc -p $PIDFILE2 mydlp "MyDLP Backend" 2>&1 > /dev/null 
+}
+
 case "$1" in
   start)
+	cleanpids
+	start_backend
 	start_mydlp
+	cleanpids
 	;;
   stop)
+	cleanpids
 	stop_mydlp
+	stop_backend
+	cleanpids
 	;;
 
   reload|force-reload)
 	;;
 
   restart)
+	cleanpids
 	stop_mydlp
+	stop_backend
+	cleanpids
+	start_backend
 	start_mydlp
+	cleanpids
 	;;
 
   status)
-        status_of_proc -p $PIDFILE mydlp MyDLP && exit 0 || exit $?
+        status_mydlp && exit 0 || exit $?
 	;;
 
   *)

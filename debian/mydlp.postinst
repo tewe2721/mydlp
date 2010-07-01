@@ -1,4 +1,4 @@
-#!/bin/sh -e
+#!/bin/bash 
 # This script can be called in the following ways:
 #
 # After the package was installed:
