@@ -111,7 +111,7 @@ run: $(beam_DATA) $(boot_DATA)
 
 run-production: $(beam_DATA) $(boot_DATA)
 	@echo "Running application..."
-	@$(ERL) -pa ../thrift/gen-erl -sname console -config mydlp-production -boot mydlp 
+	@$(ERL) -pa ../thrift/gen-erl -sname console -config mydlp-production -mnesia dir '"/var/lib/mydlp/mnesia"' -boot mydlp 
 
 clean-local:
 	rm -rf $(beam_DATA) $(boot_DATA) $(html_DATA) mydlp.rel overview.edoc Mnesia.*

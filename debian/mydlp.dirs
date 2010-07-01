@@ -1,4 +1,6 @@
 /etc/mydlp
 /var/lib/mydlp
 /var/lib/mydlp/sasl
+/var/lib/mydlp/mnesia
 /var/log/mydlp
+/var/run/mydlp
