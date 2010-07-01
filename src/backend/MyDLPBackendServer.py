@@ -32,6 +32,7 @@ from thrift.server import TServer
 import magic
 
 import iban
+import daemon
 
 class MydlpHandler:
 	def __init__(self):
@@ -50,18 +51,23 @@ class MydlpHandler:
 		myIBAN = iban.IBAN(iban_str)
 		return myIBAN.is_valid()
 
-handler = MydlpHandler()
+class MyDLPBackendServer(daemon.Daemon):
+	def run(self):
+		handler = MydlpHandler()
 
-processor = Mydlp.Processor(handler)
-transport = TSocket.TServerSocket(9090)
-tfactory = TTransport.TBufferedTransportFactory()
-pfactory = TBinaryProtocol.TBinaryProtocolFactory()
+		processor = Mydlp.Processor(handler)
+		transport = TSocket.TServerSocket(9090)
+		tfactory = TTransport.TBufferedTransportFactory()
+		pfactory = TBinaryProtocol.TBinaryProtocolFactory()
 
+		#server = TServer.TSimpleServer(processor, transport, tfactory, pfactory)
+		#server = TServer.TThreadedServer(processor, transport, tfactory, pfactory)
+		server = TServer.TThreadPoolServer(processor, transport, tfactory, pfactory)
 
-#server = TServer.TSimpleServer(processor, transport, tfactory, pfactory)
-#server = TServer.TThreadedServer(processor, transport, tfactory, pfactory)
-server = TServer.TThreadPoolServer(processor, transport, tfactory, pfactory)
+		print 'Starting MyDLP Backend server...'
+		server.serve()
+		print 'done.'
 
-print 'Starting MyDLP Backend server...'
-server.serve()
-print 'done.'
+s = MyDLPBackendServer("/var/run/mydlp/backend.pid")
+s.start()
+

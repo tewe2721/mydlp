@@ -20,6 +20,7 @@
 
 python_PYTHON = \
 	MyDLPBackendServer.py \
+	daemon.py \
 	iban.py
 
 run:
