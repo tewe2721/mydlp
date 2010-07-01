@@ -30,6 +30,11 @@
 
 %% imported from http://github.com/processone/ejabberd/blob/master/src/ejabberd.hrl
 -define(LOG_PATH, "mydlp.log").
+-define(PID_FILE, "mydlp.pid").
+-define(SSL_FILES, [
+          {certfile, "/etc/mydlp/ssl/public.pem"},
+          {keyfile, "/etc/mydlp/ssl/private.pem"}
+         ]).
 
 -define(ACL_LOG(From, To, Files, RuleId, Action), 
 	mydlp_api:acl_msg(From, To, Files, RuleId, Action)).

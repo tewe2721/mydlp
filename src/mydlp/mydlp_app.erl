@@ -49,6 +49,7 @@ start(_Type, _Args) ->
         application:load(sasl),
         application:load(mydlp),
         error_logger:add_report_handler(mydlp_logger_h, get_log_path()),
+	create_pid_file(),
 
 	% Read configuration
 	{ok, Protocols} = application:get_env(protocols),
@@ -102,6 +103,8 @@ init([], ChildSpecs) ->
 %% should do any necessary cleaning up. The return value is ignored.
 %%--------------------------------------------------------------------
 stop(_S) ->
+	application:stop(mydlp),
+	mnesia:stop(),
 	ok.
 
 %% @spec () -> string()
@@ -121,3 +124,16 @@ get_log_path() ->
                 end
         end.
 
+get_pid_path() ->
+        case application:get_env(mydlp, pid_file) of
+        {ok, Path} ->
+                Path;
+        undefined ->
+                case os:getenv("MYDLP_PID_FILE") of
+                        false -> ?PID_FILE;
+                        Path -> Path
+                end
+        end.
+
+create_pid_file() ->
+	file:write_file(get_pid_path(), os:getpid()).

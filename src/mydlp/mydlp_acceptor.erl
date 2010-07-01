@@ -25,6 +25,8 @@
 
 -behaviour(gen_server).
 
+-include("mydlp.hrl").
+
 %% External API
 -export([start_link/4,
 	accept_loop/2]).
@@ -73,7 +75,10 @@ init([Port, CommType, SocketSup]) ->
 	{Backend, Opts1} = case CommType of
 			plain -> {gen_tcp, Opts};
 			ssl -> 
-				{ok, SslFiles} = application:get_env(ssl_files),
+				SslFiles = case application:get_env(ssl_files) of
+					{ok, SF} -> SF;
+					_Else -> ?SSL_FILES
+				end,
 				{ssl, Opts ++ [{ssl_imp, new}, {verify, verify_none}] ++ SslFiles}
 		end,
 

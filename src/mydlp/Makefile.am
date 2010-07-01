@@ -21,8 +21,7 @@
 mydlpconfdir = $(sysconfdir)/mydlp
 
 mydlpconf_DATA = \
-	logger_file.config \
-	logger_sasl.config
+	mydlp-production.config
 
 dist_erl_DATA = \
 	dynamic_compile.erl \
@@ -112,7 +111,7 @@ run: $(beam_DATA) $(boot_DATA)
 
 run-production: $(beam_DATA) $(boot_DATA)
 	@echo "Running application..."
-	@$(ERL) -pa ../thrift/gen-erl -config logger_sasl -sname console -boot mydlp
+	@$(ERL) -pa ../thrift/gen-erl -sname console -config mydlp-production -boot mydlp 
 
 clean-local:
 	rm -rf $(beam_DATA) $(boot_DATA) $(html_DATA) mydlp.rel overview.edoc Mnesia.*
