@@ -243,8 +243,7 @@ get_port_resp(Port) ->
 %% @doc Extracts Text from File records
 %% @end
 %%----------------------------------------------------------------------
-get_text(#file{mime_type=undefined, data=Data}) -> {ok, Data};
-get_text(#file{mime_type= <<"application/x-empty">>, data=Data}) -> {ok, Data};
+get_text(#file{mime_type= <<"application/x-empty">>}) -> {ok, <<>>};
 get_text(#file{mime_type= <<"text/plain">>, data=Data}) -> {ok, Data};
 get_text(#file{mime_type= <<"application/xml">>, data=Data}) ->
 	try
@@ -254,8 +253,6 @@ get_text(#file{mime_type= <<"application/xml">>, data=Data}) ->
 	end;
 get_text(#file{mime_type= <<"application/pdf">>, data=Data}) ->
 	pdf_to_text(Data);
-get_text(#file{mime_type= <<"application/postscript">>, data=Data}) ->
-	ps_to_text(Data);
 get_text(#file{mime_type= <<"application/vnd.ms-excel">>, data=Data}) ->
 	office_to_text(Data, [?XLS, ?DOC, ?PPT]);
 get_text(#file{mime_type= <<"CDF V2 Document", _/binary>>} = File) ->  %%% TODO: should be refined
@@ -264,7 +261,12 @@ get_text(#file{mime_type= <<"application/msword">>} = File) ->
 	office_to_text(File);
 get_text(#file{mime_type= <<"application/vnd.ms-office">>} = File) ->
 	office_to_text(File);
-get_text(#file{data=Data}) -> {ok, Data}.
+get_text(#file{mime_type= <<"text/html">>, data=Data}) ->
+	html_to_text(Data);
+get_text(#file{mime_type= <<"application/postscript">>, data=Data}) ->
+	ps_to_text(Data);
+get_text(#file{mime_type=undefined}) -> {error, unknown_type};
+get_text(_File) -> {error, unsupported_type}.
 
 %%--------------------------------------------------------------------
 %% @doc Extracts Text from XML string
@@ -476,6 +478,25 @@ ps_to_text(Bin) when is_binary(Bin) ->
 		Else -> Else
 	end,
 	ok = file:delete(Ps), Ret.
+
+%%--------------------------------------------------------------------
+%% @doc Extracts Text from HTML files
+%% @end
+%%----------------------------------------------------------------------
+html_to_text(Bin) when is_binary(Bin) -> 
+	{ok, HTML} = mktempfile(),
+	ok = file:write_file(HTML, Bin, [raw]),
+	Port = open_port({spawn_executable, "/usr/bin/html2text"}, 
+			[{args, ["-width","9999999",HTML]},
+			use_stdio,
+			exit_status,
+			stderr_to_stdout]),
+
+	Ret = case get_port_resp(Port, []) of
+		{ok, Text} -> {ok, Text};
+		Else -> Else
+	end,
+	ok = file:delete(HTML), Ret.
 	
 %%--------------------------------------------------------------------
 %% @doc Extracts Text from PDF files
