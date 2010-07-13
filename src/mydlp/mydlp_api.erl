@@ -540,7 +540,6 @@ norm_str([], Ret) -> lists:reverse(Ret).
 strhash(S) when is_list(S) -> strhash(list_to_binary(S));
 strhash(S) when is_binary(S) -> erlang:phash2(S).
 
-
 %%--------------------------------------------------------------------
 %% @doc Logs acl messages
 %% @end
@@ -554,3 +553,20 @@ acl_msg({Ip1,Ip2,Ip3,Ip4}, To, Files, RuleId, Action) ->
 	);
 acl_msg(_,_,_,_,_) -> ok.
 
+%%--------------------------------------------------------------------
+%% @doc Returns whether given term has text
+%% @end
+%%----------------------------------------------------------------------
+has_text(#file{is_encrypted=true}) -> false;
+has_text(#file{text=undefined}) -> false;
+has_text(#file{text=Text}) when is_binary(Text) -> 
+	case size(Text) of
+		0 -> false;
+		_Else -> true
+	end;
+has_text(#file{text=Text}) when is_list(Text) -> 
+	case length(Text) of
+		0 -> false;
+		_Else -> true
+	end;
+has_text(_) -> true.
