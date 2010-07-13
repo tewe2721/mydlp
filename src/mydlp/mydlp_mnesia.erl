@@ -37,6 +37,7 @@
 	get_regexes/1,
 	is_fhash_of_gid/2,
 	is_shash_of_gid/2,
+	is_mime_of_gid/2,
 	dyn_query/2,
 	get_record_fields/1,
 	stop/0]).
@@ -66,6 +67,8 @@
 		fun() -> mnesia:add_table_index(file_hash, md5) end},
 	{sentence_hash, ordered_set, 
 		fun() -> mnesia:add_table_index(sentence_hash, phash2) end},
+	{mime_type, ordered_set, 
+		fun() -> mnesia:add_table_index(mime_type, mime) end},
 	regex
 ]).
 
@@ -79,7 +82,8 @@ get_record_fields(Record) ->
 		match -> record_info(fields, match);
 		match_group -> record_info(fields, match_group);
 		file_hash -> record_info(fields, file_hash);
-		sentence_hash -> record_info(fields, file_hash);
+		sentence_hash -> record_info(fields, sentence_hash);
+		mime_type -> record_info(fields, mime_type);
 		regex -> record_info(fields, regex)
 	end.
 
@@ -96,6 +100,9 @@ is_fhash_of_gid(Hash, GroupIds) ->
 
 is_shash_of_gid(Hash, GroupIds) ->
 	gen_server:call(?MODULE, {is_shash_of_gid, Hash, GroupIds}).
+
+is_mime_of_gid(Mime, GroupIds) ->
+	gen_server:call(?MODULE, {is_mime_of_gid, Mime, GroupIds}).
 
 dyn_query(Def, Args) ->
 	gen_server:call(?MODULE, {dyn_query, Def, Args}).
@@ -191,6 +198,22 @@ handle_call({is_shash_of_gid, Hash, HGIs}, From, State) ->
 		end,
 		{atomic, GIs} = transaction(F),
 		Res = lists:any(fun(I) -> lists:member(I, HGIs) end,GIs),
+		Worker ! {async_reply, Res, From}
+	end),
+	{noreply, State, 5000};
+
+handle_call({is_mime_of_gid, Mime, MGIs}, From, State) ->
+	Worker = self(),
+	spawn_link(fun() ->
+		F = fun() ->
+			Q = qlc:q([M#mime_type.group_id ||
+				M <- mnesia:table(mime_type),
+				M#mime_type.mime == Mime
+				]),
+			qlc:e(Q)
+		end,
+		{atomic, GIs} = transaction(F),
+		Res = lists:any(fun(I) -> lists:member(I, MGIs) end,GIs),
 		Worker ! {async_reply, Res, From}
 	end),
 	{noreply, State, 5000};

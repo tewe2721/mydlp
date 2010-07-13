@@ -55,16 +55,16 @@
 
 mime_match() -> raw.
 
-mime_match(MimeTypes, {_Addr, Files}) -> mime_match(MimeTypes, Files);
-mime_match(MimeTypes, [File|Files]) ->
+mime_match(MGIs, {_Addr, Files}) -> mime_match(MGIs, Files);
+mime_match(MGIs, [File|Files]) ->
 	MT = case File#file.mime_type of 
 		undefined -> mydlp_tc:get_mime(File#file.data);
 		Else -> Else
 	end,
 
-	case lists:member(MT, MimeTypes) of
+	case mydlp_mnesia:is_mime_of_gid(MT, MGIs) of
 		true -> pos;
-		false -> mime_match(MimeTypes, Files)
+		false -> mime_match(MGIs, Files)
 	end;
 mime_match(_MimeTypes, []) -> neg.
 

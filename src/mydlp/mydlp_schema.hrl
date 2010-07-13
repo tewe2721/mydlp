@@ -76,4 +76,10 @@
 	phash2
 }).
 
+-record(mime_type, {
+	id,
+	group_id,
+	mime
+}).
+
 -endif.
