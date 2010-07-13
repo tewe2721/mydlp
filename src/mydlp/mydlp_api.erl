@@ -253,6 +253,8 @@ get_text(#file{mime_type= <<"application/xml">>, data=Data}) ->
 	end;
 get_text(#file{mime_type= <<"application/pdf">>, data=Data}) ->
 	pdf_to_text(Data);
+get_text(#file{mime_type= <<"text/rtf">>, data=Data}) ->
+	office_to_text(Data, [?DOC]);
 get_text(#file{mime_type= <<"application/vnd.ms-excel">>, data=Data}) ->
 	office_to_text(Data, [?XLS, ?DOC, ?PPT]);
 get_text(#file{mime_type= <<"CDF V2 Document", _/binary>>} = File) ->  %%% TODO: should be refined
