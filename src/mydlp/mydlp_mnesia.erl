@@ -33,8 +33,12 @@
 
 %% API
 -export([start_link/0,
+	get_cgid/0,
+	get_pgid/0,
 	get_rules/1,
 	get_regexes/1,
+	add_fhash_with_gid/2,
+	add_shash_with_gid/2,
 	is_fhash_of_gid/2,
 	is_shash_of_gid/2,
 	is_mime_of_gid/2,
@@ -89,14 +93,26 @@ get_record_fields(Record) ->
 
 %%%%%%%%%%%%% MyDLP Mnesia API
 
+get_cgid() -> 1.
+
+get_pgid() -> 2.
+
 get_rules(Who) ->
 	gen_server:call(?MODULE, {get_rules, Who}).
 
 get_regexes(GroupId) ->
 	gen_server:call(?MODULE, {get_regexes, GroupId}).
 
+add_fhash_with_gid(Hash, GroupId) when is_binary(Hash) ->
+	gen_server:call(?MODULE, {add_fhash_with_gid, Hash, GroupId}).
+
 is_fhash_of_gid(Hash, GroupIds) ->
 	gen_server:call(?MODULE, {is_fhash_of_gid, Hash, GroupIds}).
+
+add_shash_with_gid(Hash, GroupId) when is_integer(Hash) ->
+	add_shash_with_gid([Hash], GroupId);
+add_shash_with_gid(HList, GroupId) when is_list(HList) ->
+	gen_server:call(?MODULE, {add_shl_with_gid, HList, GroupId}).
 
 is_shash_of_gid(Hash, GroupIds) ->
 	gen_server:call(?MODULE, {is_shash_of_gid, Hash, GroupIds}).
@@ -170,6 +186,17 @@ handle_call({get_regexes, GroupId}, From, State) ->
 	end),
 	{noreply, State, 5000};
 
+handle_call({add_fhash_with_gid, Hash, GI}, From, State) ->
+	Worker = self(),
+	spawn_link(fun() ->
+		NewId = get_unique_id(file_hash),
+		FileHash = #file_hash{id=NewId, group_id=GI, md5=Hash},
+		F = fun() -> mnesia:write(FileHash) end,
+		{atomic, Res} = transaction(F),
+		Worker ! {async_reply, Res, From}
+	end),
+	{noreply, State, 5000};
+
 handle_call({is_fhash_of_gid, Hash, HGIs}, From, State) ->
 	Worker = self(),
 	spawn_link(fun() ->
@@ -182,6 +209,21 @@ handle_call({is_fhash_of_gid, Hash, HGIs}, From, State) ->
 		end,
 		{atomic, GIs} = transaction(F),
 		Res = lists:any(fun(I) -> lists:member(I, HGIs) end,GIs),
+		Worker ! {async_reply, Res, From}
+	end),
+	{noreply, State, 5000};
+
+handle_call({add_shl_with_gid, HList, GI}, From, State) ->
+	Worker = self(),
+	spawn_link(fun() ->
+		F = fun() -> 
+			lists:foreach(fun(Hash) ->
+				NewId = get_unique_id(sentence_hash),
+				SentenceHash = #sentence_hash{id=NewId, group_id=GI, phash2=Hash},
+				mnesia:write(SentenceHash) 
+			end, HList)
+		end,
+		{atomic, Res} = transaction(F),
 		Worker ! {async_reply, Res, From}
 	end),
 	{noreply, State, 5000};
@@ -368,3 +410,6 @@ compile_regex([R|RS], Ret) ->
 	end,
 	compile_regex(RS, [R1|Ret]);
 compile_regex([], Ret) -> lists:reverse(Ret).
+
+get_unique_id(TableName) -> mnesia:dirty_update_counter(unique_ids, TableName, 1).
+

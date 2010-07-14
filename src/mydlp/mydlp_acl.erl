@@ -178,15 +178,20 @@ comp_to_files([#file{mime_type= <<"application/x-rar">>, is_encrypted=false} = F
 		{error, _ShouldBeLogged} -> 
 			comp_to_files(Files, [File#file{is_encrypted=true}|Returns])
 	end;
-comp_to_files([#file{mime_type= <<"application/octet-stream">>} = File|Files], Returns) -> % Needs refinement for better ODF handling
+comp_to_files([#file{mime_type= <<"application/vnd.oasis.opendocument.text">>}|_] = Files, Returns) -> % Needs refinement for better ODF handling
+	try_unzip(Files, Returns);
+comp_to_files([#file{mime_type= <<"application/octet-stream">>}|_] = Files, Returns) -> % Needs refinement for better ODF handling
+	try_unzip(Files, Returns);
+comp_to_files([File|Files], Returns) -> comp_to_files(Files, [File|Returns]);
+comp_to_files([], Returns) -> lists:reverse(Returns).
+
+try_unzip([File|Files], Returns) ->
 	case zip:extract(File#file.data, [memory]) of
 		{ok, Ext} -> 
 			ExtFiles = ext_to_file(Ext),
 			comp_to_files(Files, [df_to_files(ExtFiles)|Returns]);
 		{error, _ShouldBeLogged} -> comp_to_files(Files, [File|Returns])
-	end;
-comp_to_files([File|Files], Returns) -> comp_to_files(Files, [File|Returns]);
-comp_to_files([], Returns) -> lists:reverse(Returns).
+	end.
 
 ext_to_file(Ext) ->
 	[#file{name= <<"extracted file">>, 

@@ -275,7 +275,10 @@ get_text(_File) -> {error, unsupported_type}.
 %% @end
 %%----------------------------------------------------------------------
 xml_to_txt(Data) when is_binary(Data)-> xml_to_txt(binary_to_list(Data));
-xml_to_txt(Data) when is_list(Data) -> list_to_binary(xml_to_txt1(xmerl_scan:string(Data))).
+xml_to_txt(Data) when is_list(Data) -> 
+	RetList = xml_to_txt1(xmerl_scan:string(Data)),
+	RetList1 = lists:filter(fun(I) -> (I >= 0) and (I < 256) end, RetList), 
+	list_to_binary(RetList1).
 
 xml_to_txt1(List) when is_list(List) -> xml_to_txt1(List, []);
 %xml_to_txt1(#xmlElement{attributes=Attrs, content=Conts}) ->
@@ -570,3 +573,18 @@ has_text(#file{text=Text}) when is_list(Text) ->
 		_Else -> true
 	end;
 has_text(_) -> true.
+
+%%--------------------------------------------------------------------
+%% @doc Returns strhash of normalized senteces from Text
+%% @end
+%%----------------------------------------------------------------------
+get_nsh(Text) -> 
+	Res = mydlp_regex:split_bin(
+		sentence,
+		Text),
+	Res1 = lists:filter(fun(I) -> string:len(I) > 10 end, Res), %%% 10 as string length threshold, shorter strings will be neglacted.
+	lists:map(fun(I) ->
+			strhash(
+			norm_str(I)
+		) end, Res1).
+

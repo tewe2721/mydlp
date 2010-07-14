@@ -169,21 +169,17 @@ shash_match(Conf, {_Addr, Files}) when is_list(Conf) ->
 	shash_match(HGIs, Perc, Count, Files).
 
 shash_match(HGIs, Perc, Count, [File|Files]) ->
-	Res = mydlp_regex:split_bin(
-	 	sentence, 
-		File#file.text),
-	Res1 = lists:filter(fun(I) -> string:len(I) > 10 end, Res), %%% 10 as string length threshold, shorter strings will be neglacted.
-	Res2 = lists:map(fun(I) -> 
-			mydlp_api:strhash(
-			mydlp_api:norm_str(I)
-			) end, Res1),
+	Res2 = mydlp_api:get_nsh(File#file.text),
 	Res3 = lists:filter(fun(I) -> mydlp_mnesia:is_shash_of_gid(I, HGIs) end, Res2),
 	TotalLen = length(Res2), MatchLen = length(Res3),
-
-	case ((Perc /= undefined) and (Perc < (MatchLen/TotalLen))) or
-		((Count /= undefined) and ( Count < MatchLen)) of
-		true -> pos;
-		false -> shash_match(HGIs, Perc, Count, Files)
+	case TotalLen of 
+		0 -> shash_match(HGIs, Perc, Count, Files);
+		_Else ->
+			case ((Perc /= undefined) and (Perc < (MatchLen/TotalLen))) or
+				((Count /= undefined) and ( Count < MatchLen)) of
+				true -> pos;
+				false -> shash_match(HGIs, Perc, Count, Files)
+			end
 	end;
 shash_match(_HGIs, _Perc, _Count, []) -> neg.
 

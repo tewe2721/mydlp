@@ -39,6 +39,7 @@ dist_erl_DATA = \
 	mydlp_regex.erl \
 	mydlp_sup.erl \
 	mydlp_tc.erl \
+	mydlp_trainer.erl \
 	mydlp_ui.erl \
 	mydlp_worker_sup.erl
 

@@ -37,6 +37,7 @@
      mydlp_regex,
      mydlp_sup,
      mydlp_tc,
+     mydlp_trainer,
      mydlp_ui,
      mydlp_worker_sup
     ]},
@@ -53,6 +54,7 @@
           {mydlp_regex, start_link,[]}, 
           {mydlp_tc, start_link,[]}, 
           {mydlp_acl, start_link,[]}, 
+          {mydlp_trainer, start_link,[]},
           {mydlp_ui, start_link,[]}
          ]},
     {protocols, [
