@@ -25,7 +25,7 @@ python_PYTHON = \
 
 run:
 	@echo "Running application..."
-	PYTHONPATH="/usr/lib/python2.6/site-packages:../thrift/gen-py" python MyDLPBackendServer.py
+	PYTHONPATH="/usr/lib/python2.6/site-packages:../thrift/gen-py" python MyDLPBackendServer.py /tmp/.mydlp-backend.pid
 
 clean-local:
 	rm -f *.pyc *.pyo
