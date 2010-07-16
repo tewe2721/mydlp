@@ -1,4 +1,4 @@
-%%
+%
 %%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@medra.com.tr>
 %%%
 %%%--------------------------------------------------------------------------
@@ -58,7 +58,7 @@ handle_call({acl_q, {Addr, Files}}, From, State) ->
 	Worker = self(),
 	spawn_link(fun() ->
 		Rules = mydlp_mnesia:get_rules(Addr),
-		Param = {Addr, df_to_files(Files)},
+		Param = {Addr, mydlp_api:df_to_files(Files)},
 
 		Result = apply_rules(Rules, Param),
 		Worker ! {async_acl_q, Result, From}
@@ -148,55 +148,5 @@ pl_text([#file{text=undefined} = File|Files], Rets) ->
 	pl_text(Files, [ File1 |Rets]);
 pl_text([File|Files], Rets) -> pl_text(Files, [File|Rets]);
 pl_text([], Rets) -> lists:reverse(Rets).
-
-df_to_files(Files) ->
-	Files1 = df_to_files1(Files, []),
-	Files2 =comp_to_files(Files1),
-	lists:flatten(Files2).
-
-df_to_files1([#file{mime_type=undefined} = File|Files], Returns) -> 
-	MT = mydlp_tc:get_mime(File#file.data),
-	df_to_files1(Files, [File#file{mime_type=MT}|Returns]);
-df_to_files1([File|Files], Returns) -> 
-	df_to_files1(Files, [File|Returns]);
-df_to_files1([], Returns) -> lists:reverse(Returns).
-
-comp_to_files(Files) -> comp_to_files(Files, []).
-comp_to_files([#file{mime_type= <<"application/zip">>, is_encrypted=false} = File|Files], Returns) -> 
-	case zip:extract(File#file.data, [memory]) of
-		{ok, Ext} -> 
-			ExtFiles = ext_to_file(Ext),
-			comp_to_files(Files, [df_to_files(ExtFiles)|Returns]);
-		{error, _ShouldBeLogged} -> 
-			comp_to_files(Files, [File#file{is_encrypted=true}|Returns])
-	end;
-comp_to_files([#file{mime_type= <<"application/x-rar">>, is_encrypted=false} = File|Files], Returns) -> 
-	case mydlp_api:unrar(File#file.data) of
-		{ok, Ext} -> 
-			ExtFiles = ext_to_file(Ext),
-			comp_to_files(Files, [df_to_files(ExtFiles)|Returns]);
-		{error, _ShouldBeLogged} -> 
-			comp_to_files(Files, [File#file{is_encrypted=true}|Returns])
-	end;
-comp_to_files([#file{mime_type= <<"application/vnd.oasis.opendocument.text">>}|_] = Files, Returns) -> % Needs refinement for better ODF handling
-	try_unzip(Files, Returns);
-comp_to_files([#file{mime_type= <<"application/octet-stream">>}|_] = Files, Returns) -> % Needs refinement for better ODF handling
-	try_unzip(Files, Returns);
-comp_to_files([File|Files], Returns) -> comp_to_files(Files, [File|Returns]);
-comp_to_files([], Returns) -> lists:reverse(Returns).
-
-try_unzip([File|Files], Returns) ->
-	case zip:extract(File#file.data, [memory]) of
-		{ok, Ext} -> 
-			ExtFiles = ext_to_file(Ext),
-			comp_to_files(Files, [df_to_files(ExtFiles)|Returns]);
-		{error, _ShouldBeLogged} -> comp_to_files(Files, [File|Returns])
-	end.
-
-ext_to_file(Ext) ->
-	[#file{name= <<"extracted file">>, 
-		filename=Filename, 
-		data=Data} 
-		|| {Filename,Data} <- Ext].
 
 drop_notext(Files) -> lists:filter(fun(I) -> mydlp_api:has_text(I) end, Files).

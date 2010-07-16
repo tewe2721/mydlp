@@ -155,9 +155,11 @@ train_cfile(#file{mime_type=undefined} = File) when is_record(File, file) ->
 	MT = mydlp_tc:get_mime(File#file.data),
 	train_cfile(File#file{mime_type = MT});
 train_cfile(File) when is_record(File, file) ->
+	% add to file hash 
         MD5Hash = erlang:md5(File#file.data),
         CGID = mydlp_mnesia:get_cgid(),
         ok = mydlp_mnesia:add_fhash_with_gid(MD5Hash, CGID),
+	% add to sentence hash
 	TR = case mydlp_api:has_text(File) of
 		true -> {ok, File#file.text};
 		false -> mydlp_api:get_text(File)
@@ -168,6 +170,30 @@ train_cfile(File) when is_record(File, file) ->
 			SList = mydlp_api:get_nsh(Text),
 			ok = mydlp_mnesia:add_shash_with_gid(SList, CGID);
 		_Else -> err
-	end, ok.
+	end, 
 
-train_pfile(_File) -> ok.
+	% train bayes
+	Txt = concat_texts(File),
+	mydlp_tc:bayes_train_confidential(Txt),
+	ok.
+
+train_pfile(File) -> 
+	% train bayes
+	Txt = concat_texts(File),
+	mydlp_tc:bayes_train_public(Txt),
+	ok.
+
+concat_texts(File) when is_record(File, file) -> concat_texts([File], []);
+concat_texts(Files) when is_list(Files) -> 
+	Files1 = mydlp_api:df_to_files(Files),
+	concat_texts(Files1, []).
+
+concat_texts([File|Files], Returns) ->
+	case mydlp_api:get_text(File) of
+		{ok, Txt} -> concat_texts(Files, [<<"\n">>, Txt| Returns]);
+		_Else -> concat_texts(Files, Returns)
+	end;
+concat_texts([], Returns) -> list_to_binary(lists:reverse(Returns)).
+
+
+
