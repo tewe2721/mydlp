@@ -33,9 +33,11 @@
 %% API
 -export([start_link/0,
 	get_mime/1,
-	get_pdf_text/1,
-	get_ooo_text/1,
 	is_valid_iban/1,
+	bayes_score/1,
+	bayes_train_confidential/1,
+	bayes_train_public/1,
+	bayes_reset/0,
 	stop/0]).
 
 %% gen_server callbacks
@@ -48,7 +50,7 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
--record(state, {thrift_server}).
+-record(state, {backend_py, backend_java}).
 
 %%%%%%%%%%%%% MyDLP Thrift RPC API
 
@@ -60,7 +62,7 @@ get_mime(Data) when is_list(Data) ->
 		true -> lists:sublist(Data, ?MMLEN);
 		false -> Data
 	end,
-	gen_server:call(?MODULE, {thrift, getMagicMime, [Data1]});
+	gen_server:call(?MODULE, {thrift, py, getMagicMime, [Data1]});
 
 get_mime(Data) when is_binary(Data) ->
 	S = size(Data),
@@ -68,20 +70,26 @@ get_mime(Data) when is_binary(Data) ->
 		true -> <<D:?MMLEN/binary, _/binary>> = Data, D;
 		false -> Data
 	end,
-	gen_server:call(?MODULE, {thrift, getMagicMime, [Data1]}).
-
-get_pdf_text(Data) ->
-	gen_server:call(?MODULE, {thrift, getPdfText, [Data]}).
-
-get_ooo_text(Data) ->
-	gen_server:call(?MODULE, {thrift, getOOoText, [Data]}).
+	gen_server:call(?MODULE, {thrift, py, getMagicMime, [Data1]}).
 
 is_valid_iban(IbanStr) ->
-	gen_server:call(?MODULE, {thrift, isValidIban, [IbanStr]}).
+	gen_server:call(?MODULE, {thrift, py, isValidIban, [IbanStr]}).
+
+bayes_score(Text) ->
+	gen_server:call(?MODULE, {thrift, java, score, [Text]}).
+
+bayes_train_confidential(Text) ->
+	gen_server:call(?MODULE, {thrift, java, trainConfidential, [Text]}).
+
+bayes_train_public(Text) ->
+	gen_server:call(?MODULE, {thrift, java, trainPublic, [Text]}).
+
+bayes_reset() ->
+	gen_server:call(?MODULE, {thrift, java, reset, []}).
 
 %%%%%%%%%%%%%% gen_server handles
 
-handle_call({thrift, Func, Params}, From, #state{thrift_server=TS} = State) ->
+handle_call({thrift, py, Func, Params}, From, #state{backend_py=TS} = State) ->
 	Worker = self(),
 	spawn_link(fun() ->
 			{ok, Reply} = thrift_client:call(TS, Func, Params),
@@ -89,9 +97,17 @@ handle_call({thrift, Func, Params}, From, #state{thrift_server=TS} = State) ->
 		end),
 	{noreply, State, 15000};
 
-handle_call(stop, _From, #state{thrift_server=TS} = State) ->
+handle_call({thrift, java, Func, Params}, From, #state{backend_java=TS} = State) ->
+	Worker = self(),
+	spawn_link(fun() ->
+			{ok, Reply} = thrift_client:call(TS, Func, Params),
+			Worker ! {async_thrift, Reply, From}
+		end),
+	{noreply, State, 15000};
+
+handle_call(stop, _From, #state{backend_py=TS} = State) ->
 	thrift_client:close(TS),
-	{stop, normalStop, State#state{thrift_server=undefined}};
+	{stop, normalStop, State#state{backend_py=undefined}};
 
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
@@ -115,8 +131,9 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
-	{ok, TS} = thrift_client:start_link("localhost",9090, mydlp_thrift),
-	{ok, #state{thrift_server=TS}}.
+	{ok, PY} = thrift_client:start_link("localhost",9090, mydlp_thrift),
+	{ok, JAVA} = thrift_client:start_link("localhost",9091, mydlp_bz_thrift),
+	{ok, #state{backend_py=PY, backend_java=JAVA}}.
 
 handle_cast(_Msg, State) ->
 	{noreply, State}.

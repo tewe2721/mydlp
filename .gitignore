@@ -22,6 +22,7 @@ src/mydlp/erlang.png
 src/mydlp/stylesheet.css
 src/mydlp/Mnesia.*/
 src/thrift/gen-erl/
+src/thrift/gen-java/
 src/thrift/gen-php/
 src/thrift/gen-py/
 debian/files

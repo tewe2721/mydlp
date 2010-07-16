@@ -18,10 +18,9 @@
  *     along with MyDLP.  If not, see <http://www.gnu.org/licenses/>.
  ***************************************************************************/
 
-service Mydlp_ui {
-
-	oneway void trainClassified(1: binary Data)
-	oneway void trainPublic(1: binary Data)
-
-	void compileFilters()
+service Mydlp_bz {
+    double score(1 : string Text)
+    void trainConfidential(1 : string Text)
+    void trainPublic(1 : string Text)
+    void reset()
 }

@@ -21,6 +21,8 @@
 dist_erl_DATA = \
 	gen-erl/mydlp_ui_thrift.erl \
 	gen-erl/mydlp_ui_types.erl \
+	gen-erl/mydlp_bz_thrift.erl \
+	gen-erl/mydlp_bz_types.erl \
 	gen-erl/mydlp_thrift.erl \
 	gen-erl/mydlp_types.erl
 
@@ -28,6 +30,9 @@ dist_hrl_DATA = \
 	gen-erl/mydlp_ui_thrift.hrl \
 	gen-erl/mydlp_ui_constants.hrl \
 	gen-erl/mydlp_ui_types.hrl \
+	gen-erl/mydlp_bz_thrift.hrl \
+	gen-erl/mydlp_bz_constants.hrl \
+	gen-erl/mydlp_bz_types.hrl \
 	gen-erl/mydlp_thrift.hrl \
 	gen-erl/mydlp_constants.hrl \
 	gen-erl/mydlp_types.hrl
@@ -60,9 +65,12 @@ gen-erl/mydlp_thrift.erl: mydlp.thrift
 gen-erl/mydlp_ui_thrift.erl: mydlp_ui.thrift
 	$(THRIFT) --gen erl --gen php $<
 
+gen-erl/mydlp_bz_thrift.erl: mydlp_bz.thrift
+	$(THRIFT) --gen erl --gen java $<
+
 .erl.beam:
 	@echo "Compiling $<..."
 	@$(ERLC) $(ERLCFLAGS) $<
 
 clean-local:
-	rm -rf gen-erl gen-py gen-php
+	rm -rf gen-erl gen-py gen-php gen-java

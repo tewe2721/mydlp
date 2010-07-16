@@ -16,7 +16,7 @@ ERLANG_OPTS="-sname system -noshell -detached"
 
 HOMEDIR=/etc/mydlp
 PIDFILE=/var/run/mydlp/mydlp.pid
-PIDFILE2=/var/run/mydlp/backend.pid
+PIDFILE2=/var/run/mydlp/backend-py.pid
 
 . /lib/lsb/init-functions
 

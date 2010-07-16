@@ -45,6 +45,8 @@ AM_PATH_PYTHON
 
 AC_PATH_PROG(THRIFT, thrift, thrift, $PATH:/usr/local/bin:/usr/bin)
 
+AC_PATH_PROG(MVN, mvn, mvn, $PATH:/usr/local/bin:/usr/bin:/opt/maven/bin)
+
 AC_CONFIG_FILES([
 		Makefile 
 		src/Makefile
@@ -54,5 +56,7 @@ AC_CONFIG_FILES([
 		src/mydlp/overview.edoc
 		src/thrift/Makefile
 		src/backend/Makefile
+		src/backend/py/Makefile
+		src/backend/java/Makefile
 	])
 AC_OUTPUT
