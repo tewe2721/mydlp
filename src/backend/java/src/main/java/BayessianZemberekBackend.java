@@ -1,5 +1,5 @@
-import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -11,6 +11,7 @@ import org.apache.thrift.transport.TServerTransport;
 
 import com.medratech.bayessianzemberek.BayessianAnalyzer;
 import com.medratech.bayessianzemberek.BayessianFileUtil;
+import com.sun.akuma.Daemon;
 
 /**
  * Hello world!
@@ -24,11 +25,21 @@ public class BayessianZemberekBackend {
 		private final Lock write = readWriteLock.writeLock();
 
 		private BayessianAnalyzer analyzer = null;
+
 		private BayessianFileUtil bayessianFileUtil = null;
 
 		public MyDLPZBHandler() {
 			analyzer = new BayessianAnalyzer();
-			bayessianFileUtil = new BayessianFileUtil("/var/lib/mydlp/bz/confidential.dat", "/var/lib/mydlp/bz/public.dat");
+
+			String datC = "/var/lib/mydlp/bz/confidential.dat";
+			if (System.getProperty("bayesdb.confidential") != null)
+				datC = System.getProperty("bayesdb.confidential");
+
+			String datP = "/var/lib/mydlp/bz/public.dat";
+			if (System.getProperty("bayesdb.public") != null)
+				datP = System.getProperty("bayesdb.public");
+
+			bayessianFileUtil = new BayessianFileUtil(datC, datP);
 			bayessianFileUtil.read();
 			analyzer.setBayessianDB(bayessianFileUtil.getBayessianDB());
 		}
@@ -102,23 +113,29 @@ public class BayessianZemberekBackend {
 		}
 
 	}
-	
-	static public File getPidFile ()
-	{
-		return new File(System.getProperty("daemon.pidfile"));
-	}
-	
-	static public void daemonize()
-	{
-	   getPidFile().deleteOnExit();
-	   System.out.close();
-	   System.err.close();
-	}
 
 	public static void main(String[] args) {
+		Daemon d = new Daemon();
+
+		if (d.isDaemonized()) {
+			String pidFN = "/var/run/mydlp/backend-java.pid";
+			if (System.getProperty("daemon.pidfile") != null)
+				pidFN = System.getProperty("daemon.pidfile");
+			try {
+				d.init(pidFN);
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		} else {
+			try {
+				d.daemonize();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			System.exit(0);
+		}
+
 		try {
-			daemonize();
-			
 			MyDLPZBHandler handler = new MyDLPZBHandler();
 			Mydlp_bz.Processor processor = new Mydlp_bz.Processor(handler);
 			TServerTransport serverTransport = new TServerSocket(9091);
@@ -126,7 +143,6 @@ public class BayessianZemberekBackend {
 
 			System.out.println("Starting the server...");
 			server.serve();
-
 		} catch (Exception x) {
 			x.printStackTrace();
 		}

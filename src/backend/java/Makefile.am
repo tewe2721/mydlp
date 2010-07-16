@@ -29,14 +29,17 @@ python_PYTHON = \
 	daemon.py \
 	iban.py
 
-target/mydlp-backend-java-0.1.0-jar-with-dependencies.jar: pom.xml
-	[ -e src/main/java/Mydlp_bz.java ] || ln -s ../../../../../thrift/gen-java/Mydlp_bz.java src/main/java/
+src/main/java/Mydlp_bz.java:
+	[ -e src/main/java/Mydlp_bz.java ] || \
+		ln -s ../../../../../thrift/gen-java/Mydlp_bz.java src/main/java/
+
+target/mydlp-backend-java-0.1.0-jar-with-dependencies.jar: pom.xml src/main/java/Mydlp_bz.java src/main/java/BayessianZemberekBackend.java
 	$(MVN) assembly:assembly
 
 # http://barelyenough.org/blog/2005/03/java-daemon/
 run: target/mydlp-backend-java-0.1.0-jar-with-dependencies.jar
 	@echo "Running application..."
-	java -Ddaemon.pidfile=backend-java.pid -jar target/mydlp-backend-java-0.1.0-jar-with-dependencies.jar &
+	java -Ddaemon.pidfile=/tmp/.mydlp-backend-java.pid -Dbayesdb.confidential=confidential.dat -Dbayesdb.public=public.dat -jar target/mydlp-backend-java-0.1.0-jar-with-dependencies.jar 
 
 clean-local:
 	rm -f src/main/java/Mydlp_bz.java

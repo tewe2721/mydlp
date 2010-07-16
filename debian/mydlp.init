@@ -11,12 +11,14 @@ PATH=/usr/bin:/usr/sbin:/bin:/sbin
 
 ERLANG=/usr/bin/erl
 PYTHON=/usr/bin/python
+JAVA=/usr/bin/java
 
 ERLANG_OPTS="-sname system -noshell -detached"
 
 HOMEDIR=/etc/mydlp
 PIDFILE=/var/run/mydlp/mydlp.pid
 PIDFILE2=/var/run/mydlp/backend-py.pid
+PIDFILE2=/var/run/mydlp/backend-java.pid
 
 . /lib/lsb/init-functions
 
@@ -44,11 +46,12 @@ status_mydlp() {
 
 cleanpids() {
 	status_mydlp || rm -f $PIDFILE
-	status_backend || rm -f $PIDFILE2
+	status_backend_py || rm -f $PIDFILE2
+	status_backend_java || rm -f $PIDFILE3
 }
 
-start_backend() {
-	log_daemon_msg "Starting MyDLP Backend" "mydlp"
+start_backend_py() {
+	log_daemon_msg "Starting MyDLP Python Backend" "mydlp"
         if (PYTHONPATH=/usr/lib/python2.6/site-packages/ start-stop-daemon --start --quiet --oknodo --pidfile $PIDFILE2 --exec $PYTHON -- /usr/lib/python2.6/dist-packages/MyDLPBackendServer.py); then
             log_end_msg 0
         else
@@ -56,8 +59,8 @@ start_backend() {
         fi
 }
 
-stop_backend() {
-	log_daemon_msg "Stopping MyDLP Backend" "mydlp"
+stop_backend_py() {
+	log_daemon_msg "Stopping MyDLP Python Backend" "mydlp"
         if start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE2; then
             log_end_msg 0
         else
@@ -65,21 +68,45 @@ stop_backend() {
         fi
 }
 
-status_backend() {
-        status_of_proc -p $PIDFILE2 mydlp "MyDLP Backend" 2>&1 > /dev/null 
+status_backend_py() {
+        status_of_proc -p $PIDFILE2 mydlp "MyDLP Python Backend" 2>&1 > /dev/null 
+}
+
+start_backend_java() {
+	log_daemon_msg "Starting MyDLP Java Backend" "mydlp"
+        if (start-stop-daemon --start --quiet --oknodo --pidfile $PIDFILE3 --exec $JAVA -- -jar /usr/share/mydlp/mydlp-backend-java-0.1.0-jar-with-dependencies.jar); then
+            log_end_msg 0
+        else
+            log_end_msg 1
+        fi
+}
+
+stop_backend_java() {
+	log_daemon_msg "Stopping MyDLP Java Backend" "mydlp"
+        if start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE3; then
+            log_end_msg 0
+        else
+            log_end_msg 1
+        fi
+}
+
+status_backend_java() {
+        status_of_proc -p $PIDFILE3 mydlp "MyDLP Java Backend" 2>&1 > /dev/null 
 }
 
 case "$1" in
   start)
 	cleanpids
-	start_backend
+	start_backend_java
+	start_backend_py
 	start_mydlp
 	cleanpids
 	;;
   stop)
 	cleanpids
 	stop_mydlp
-	stop_backend
+	stop_backend_py
+	start_backend_java
 	cleanpids
 	;;
 
@@ -89,9 +116,11 @@ case "$1" in
   restart)
 	cleanpids
 	stop_mydlp
-	stop_backend
+	stop_backend_py
+	start_backend_java
 	cleanpids
-	start_backend
+	start_backend_java
+	start_backend_py
 	start_mydlp
 	cleanpids
 	;;
