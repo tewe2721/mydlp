@@ -23,12 +23,6 @@ mydlpjbdir = $(datadir)/mydlp
 mydlpjb_DATA = \
         target/mydlp-backend-java-0.1.0-jar-with-dependencies.jar
 
-
-python_PYTHON = \
-	MyDLPBackendServer.py \
-	daemon.py \
-	iban.py
-
 src/main/java/Mydlp_bz.java:
 	[ -e src/main/java/Mydlp_bz.java ] || \
 		ln -s ../../../../../thrift/gen-java/Mydlp_bz.java src/main/java/
