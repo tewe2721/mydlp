@@ -73,8 +73,6 @@ pidfile = "/var/run/mydlp/backend-py.pid"
 if len(sys.argv) > 1:
 	pidfile = sys.argv[1]
 
-print pidfile
-
 s = MyDLPBackendServer(pidfile)
 s.start()
 
