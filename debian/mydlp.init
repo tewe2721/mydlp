@@ -18,7 +18,7 @@ ERLANG_OPTS="-sname system -noshell -detached"
 HOMEDIR=/etc/mydlp
 PIDFILE=/var/run/mydlp/mydlp.pid
 PIDFILE2=/var/run/mydlp/backend-py.pid
-PIDFILE2=/var/run/mydlp/backend-java.pid
+PIDFILE3=/var/run/mydlp/backend-java.pid
 
 . /lib/lsb/init-functions
 
@@ -106,7 +106,7 @@ case "$1" in
 	cleanpids
 	stop_mydlp
 	stop_backend_py
-	start_backend_java
+	stop_backend_java
 	cleanpids
 	;;
 
@@ -117,7 +117,7 @@ case "$1" in
 	cleanpids
 	stop_mydlp
 	stop_backend_py
-	start_backend_java
+	stop_backend_java
 	cleanpids
 	start_backend_java
 	start_backend_py
