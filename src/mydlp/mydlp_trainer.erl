@@ -183,7 +183,7 @@ train_pfile(File) ->
 	mydlp_tc:bayes_train_public(Txt),
 	ok.
 
-concat_texts(File) when is_record(File, file) -> concat_texts([File], []);
+concat_texts(File) when is_record(File, file) -> concat_texts([File]);
 concat_texts(Files) when is_list(Files) -> 
 	Files1 = mydlp_api:df_to_files(Files),
 	concat_texts(Files1, []).

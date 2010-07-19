@@ -105,9 +105,10 @@ handle_call({thrift, java, Func, Params}, From, #state{backend_java=TS} = State)
 		end),
 	{noreply, State, 15000};
 
-handle_call(stop, _From, #state{backend_py=TS} = State) ->
-	thrift_client:close(TS),
-	{stop, normalStop, State#state{backend_py=undefined}};
+handle_call(stop, _From, #state{backend_py=PY, backend_java=JAVA} = State) ->
+	thrift_client:close(PY),
+	thrift_client:close(JAVA),
+	{stop, normalStop, State#state{backend_py=undefined, backend_java=undefined}};
 
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
