@@ -779,13 +779,16 @@ gen_deny_page(#state{http_packet=HttpReq}) ->
 
 df_to_files(Data, Files) ->
         case length(Files) of
-                0 ->    DFile = #file{name= <<"post-data">>, data=Data},
+                0 ->    DFile = #file{name= "post-data", data=Data},
                         [DFile];
                 _ ->    Files
         end.
 
 log_req(State, Action) -> log_req(State, Action, none).
 
-log_req(#state{addr=Addr, http_headers=(#http_headers{host=DestHost}), files=Files}, Action, RuleId) ->
-	?ACL_LOG(Addr, DestHost, Files, RuleId, Action).
+log_req(#state{comm_type=plain} = State, Action, RuleId) -> log_req1(http, State, Action, RuleId);
+log_req(#state{comm_type=ssl} = State, Action, RuleId) -> log_req1(https, State, Action, RuleId).
+
+log_req1(Proto, #state{addr=Addr, http_headers=(#http_headers{host=DestHost}), files=Files}, Action, RuleId) ->
+	?ACL_LOG(Proto, Addr, DestHost, Files, RuleId, Action).
 

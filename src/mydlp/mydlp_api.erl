@@ -547,14 +547,31 @@ strhash(S) when is_binary(S) -> erlang:phash2(S).
 %% @doc Logs acl messages
 %% @end
 %%----------------------------------------------------------------------
-acl_msg({Ip1,Ip2,Ip3,Ip4}, To, Files, RuleId, Action) ->
+acl_msg(Proto, {Ip1,Ip2,Ip3,Ip4}, To, Files, RuleId, Action) ->
 	mydlp_logger:notify(acl_msg,
-		"FROM: ~w.~w.~w.~w , TO: ~s , FILES: ~s , RULE: ~w , ACTION: ~w ~n",
-		[Ip1,Ip2,Ip3,Ip4,To,
-			"\"" ++ string:join([F#file.filename || F <- Files], "\",\"") ++ "\"",
+		"PROTOCOL: ~w , FROM: ~w.~w.~w.~w , TO: ~s , FILES: ~s , RULE: ~w , ACTION: ~w ~n",
+		[Proto, Ip1,Ip2,Ip3,Ip4,To,
+			"\"" ++ string:join(files_to_str(Files), "\",\"") ++ "\"",
 			RuleId, Action]
 	);
-acl_msg(_,_,_,_,_) -> ok.
+acl_msg(_,_,_,_,_,_) -> ok.
+
+files_to_str(Files) -> files_to_str(Files, []).
+
+files_to_str([#file{name=undefined, filename=undefined}|Files], Returns) -> 
+	files_to_str(Files, ["data"|Returns]);
+files_to_str([#file{name=Name, filename=undefined}|Files], Returns) -> 
+	files_to_str(Files, [Name|Returns]);
+files_to_str([#file{name=undefined, filename=Filename}|Files], Returns) -> 
+	files_to_str(Files, [Filename|Returns]);
+files_to_str([#file{name="extracted file", filename=Filename}|Files], Returns) -> 
+	files_to_str(Files, ["extracted file: " ++ Filename|Returns]);
+files_to_str([#file{filename=Filename}|Files], Returns) -> 
+	files_to_str(Files, [Filename|Returns]);
+files_to_str([_File|Files], Returns) -> 
+	files_to_str(Files, ["data"|Returns]);
+files_to_str([], Returns) -> 
+	lists:reverse(Returns).
 
 %%--------------------------------------------------------------------
 %% @doc Returns whether given term has text
@@ -637,7 +654,7 @@ try_unzip([File|Files], Returns) ->
 	end.
 
 ext_to_file(Ext) ->
-	[#file{name= <<"extracted file">>, 
+	[#file{name= "extracted file", 
 		filename=Filename, 
 		data=Data} 
 		|| {Filename,Data} <- Ext].
