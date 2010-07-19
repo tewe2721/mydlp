@@ -1,4 +1,4 @@
-%%
+%
 %%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@medra.com.tr>
 %%%
 %%%--------------------------------------------------------------------------
@@ -42,7 +42,6 @@
 	is_fhash_of_gid/2,
 	is_shash_of_gid/2,
 	is_mime_of_gid/2,
-	dyn_query/2,
 	get_record_fields/1,
 	stop/0]).
 
@@ -97,166 +96,98 @@ get_cgid() -> 1.
 
 get_pgid() -> 2.
 
-get_rules(Who) ->
-	gen_server:call(?MODULE, {get_rules, Who}).
+get_rules(Who) -> 
+	async_query_call({get_rules, Who}).
 
-get_regexes(GroupId) ->
-	gen_server:call(?MODULE, {get_regexes, GroupId}).
+get_regexes(GroupId) ->	
+	async_query_call({get_regexes, GroupId}).
 
-add_fhash_with_gid(Hash, GroupId) when is_binary(Hash) ->
-	gen_server:call(?MODULE, {add_fhash_with_gid, Hash, GroupId}).
+add_fhash_with_gid(Hash, GroupId) when is_binary(Hash) -> 
+	async_query_call({add_fhash_with_gid, Hash, GroupId}).
 
-is_fhash_of_gid(Hash, GroupIds) ->
-	gen_server:call(?MODULE, {is_fhash_of_gid, Hash, GroupIds}).
+is_fhash_of_gid(Hash, GroupIds) -> 
+	async_query_call({is_fhash_of_gid, Hash, GroupIds}).
 
-add_shash_with_gid(Hash, GroupId) when is_integer(Hash) ->
-	add_shash_with_gid([Hash], GroupId);
-add_shash_with_gid(HList, GroupId) when is_list(HList) ->
-	gen_server:call(?MODULE, {add_shl_with_gid, HList, GroupId}).
+add_shash_with_gid(Hash, GroupId) when is_integer(Hash) -> add_shash_with_gid([Hash], GroupId);
+add_shash_with_gid(HList, GroupId) when is_list(HList) -> 
+	async_query_call({add_shl_with_gid, HList, GroupId}).
 
-is_shash_of_gid(Hash, GroupIds) ->
-	gen_server:call(?MODULE, {is_shash_of_gid, Hash, GroupIds}).
+is_shash_of_gid(Hash, GroupIds) -> 
+	async_query_call({is_shash_of_gid, Hash, GroupIds}).
 
-is_mime_of_gid(Mime, GroupIds) ->
-	gen_server:call(?MODULE, {is_mime_of_gid, Mime, GroupIds}).
-
-dyn_query(Def, Args) ->
-	gen_server:call(?MODULE, {dyn_query, Def, Args}).
-
-dyn_query1({_, Table, _} = Def, Args) ->
-	{QS, BS} = dyn_query2(Def,Args),
-	erlang:display(QS),
-	erlang:display(BS),
-	Q = qlc:string_to_handle(QS, [], BS),
-	qlc:e(Q).
-
-dyn_query2({list, Table, Ands}, Args) ->
-	QS = "[ I || I <- L ",
-	BS = erl_eval:add_binding('L', mnesia:table(Table), erl_eval:new_bindings()),
-	{QS1,BS1} = dyn_query3(QS, BS, Table, Ands, Args),
-	{QS1 ++ " ].", BS1}.
-
-dyn_query3(QS, BS, Table, [And|Ands], [Arg|Args]) ->
-	QS1 = QS ++ ", I#" ++ atom_to_list(Table) ++ "." ++ atom_to_list(And) ++ " == A" ++ atom_to_list(And) ++ " ",
-	BS1 = erl_eval:add_binding(list_to_atom("A"++atom_to_list(And)), Arg, BS),
-	dyn_query3(QS1, BS1, Table, Ands, Args);
-dyn_query3(QS, BS, _Table, [], []) -> {QS, BS}.
+is_mime_of_gid(Mime, GroupIds) -> 
+	async_query_call({is_mime_of_gid, Mime, GroupIds}).
 
 %%%%%%%%%%%%%% gen_server handles
 
-handle_call({dyn_query, Def, Args}, From, State) ->
-	Worker = self(),
-	spawn_link(fun() ->
-		F = fun() ->
-			dyn_query1(Def, Args)
-		end,
-		{atomic, Objects} = transaction(F),
-		Worker ! {async_reply, Objects, From}
-	end),
-	{noreply, State, 5000};
+handle_result({is_mime_of_gid, _Mime, MGIs}, {atomic, GIs}) -> 
+	lists:any(fun(I) -> lists:member(I, MGIs) end,GIs);
 
-handle_call({get_rules, Who}, From, State) ->
-	Worker = self(),
-	spawn_link(fun() ->
-		F = fun() ->
-			Q = qlc:q([I#ipr.parent || I <- mnesia:table(ipr),
-					ip_band(I#ipr.ipbase, I#ipr.ipmask) == ip_band(Who, I#ipr.ipmask)
-					]),
-			Parents = qlc:e(Q),
-			Rules = resolve_rules(Parents),
-			resolve_funcs(Rules)
-		end,
-		{atomic, Objects} = transaction(F),
-		Worker ! {async_reply, Objects, From}
-	end),
-	{noreply, State, 5000};
+handle_result({is_shash_of_gid, _Hash, HGIs}, {atomic, GIs}) -> 
+	lists:any(fun(I) -> lists:member(I, HGIs) end,GIs);
 
-handle_call({get_regexes, GroupId}, From, State) ->
-	Worker = self(),
-	spawn_link(fun() ->
-		F = fun() ->
-			Q = qlc:q([R#regex.compiled ||
-				R <- mnesia:table(regex),
-				R#regex.group_id == GroupId
-				]),
-			qlc:e(Q)
-		end,
-		{atomic, Objects} = transaction(F),
-		Worker ! {async_reply, Objects, From}
-	end),
-	{noreply, State, 5000};
+handle_result({is_fhash_of_gid, _Hash, HGIs}, {atomic, GIs}) -> 
+	lists:any(fun(I) -> lists:member(I, HGIs) end,GIs);
 
-handle_call({add_fhash_with_gid, Hash, GI}, From, State) ->
-	Worker = self(),
-	spawn_link(fun() ->
-		NewId = get_unique_id(file_hash),
-		FileHash = #file_hash{id=NewId, group_id=GI, md5=Hash},
-		F = fun() -> mnesia:write(FileHash) end,
-		{atomic, Res} = transaction(F),
-		Worker ! {async_reply, Res, From}
-	end),
-	{noreply, State, 5000};
+handle_result(_Query, {atomic, Objects}) -> Objects.
 
-handle_call({is_fhash_of_gid, Hash, HGIs}, From, State) ->
-	Worker = self(),
-	spawn_link(fun() ->
-		F = fun() ->
-			Q = qlc:q([H#file_hash.group_id ||
-				H <- mnesia:table(file_hash),
-				H#file_hash.md5 == Hash
-				]),
-			qlc:e(Q)
-		end,
-		{atomic, GIs} = transaction(F),
-		Res = lists:any(fun(I) -> lists:member(I, HGIs) end,GIs),
-		Worker ! {async_reply, Res, From}
-	end),
-	{noreply, State, 5000};
+handle_query({get_rules, Who}) ->
+	Q = qlc:q([I#ipr.parent || I <- mnesia:table(ipr),
+			ip_band(I#ipr.ipbase, I#ipr.ipmask) == ip_band(Who, I#ipr.ipmask)
+			]),
+	Parents = qlc:e(Q),
+	Rules = resolve_rules(Parents),
+	resolve_funcs(Rules);
 
-handle_call({add_shl_with_gid, HList, GI}, From, State) ->
-	Worker = self(),
-	spawn_link(fun() ->
-		F = fun() -> 
-			lists:foreach(fun(Hash) ->
-				NewId = get_unique_id(sentence_hash),
-				SentenceHash = #sentence_hash{id=NewId, group_id=GI, phash2=Hash},
-				mnesia:write(SentenceHash) 
-			end, HList)
-		end,
-		{atomic, Res} = transaction(F),
-		Worker ! {async_reply, Res, From}
-	end),
-	{noreply, State, 5000};
+handle_query({get_regexes, GroupId}) ->
+	Q = qlc:q([R#regex.compiled ||
+		R <- mnesia:table(regex),
+		R#regex.group_id == GroupId
+		]),
+	qlc:e(Q);
 
-handle_call({is_shash_of_gid, Hash, HGIs}, From, State) ->
-	Worker = self(),
-	spawn_link(fun() ->
-		F = fun() ->
-			Q = qlc:q([H#sentence_hash.group_id ||
-				H <- mnesia:table(sentence_hash),
-				H#sentence_hash.phash2 == Hash
-				]),
-			qlc:e(Q)
-		end,
-		{atomic, GIs} = transaction(F),
-		Res = lists:any(fun(I) -> lists:member(I, HGIs) end,GIs),
-		Worker ! {async_reply, Res, From}
-	end),
-	{noreply, State, 5000};
+handle_query({add_fhash_with_gid, Hash, GI}) ->
+	NewId = get_unique_id(file_hash),
+	FileHash = #file_hash{id=NewId, group_id=GI, md5=Hash},
+	mnesia:write(FileHash);
 
-handle_call({is_mime_of_gid, Mime, MGIs}, From, State) ->
+handle_query({is_fhash_of_gid, Hash, _HGIs}) ->
+	Q = qlc:q([H#file_hash.group_id ||
+		H <- mnesia:table(file_hash),
+		H#file_hash.md5 == Hash
+		]),
+	qlc:e(Q);
+
+handle_query({add_shl_with_gid, HList, GI}) ->
+	lists:foreach(fun(Hash) ->
+		NewId = get_unique_id(sentence_hash),
+		SentenceHash = #sentence_hash{id=NewId, group_id=GI, phash2=Hash},
+		mnesia:write(SentenceHash) 
+	end, HList);
+
+handle_query({is_shash_of_gid, Hash, _HGIs}) ->
+	Q = qlc:q([H#sentence_hash.group_id ||
+		H <- mnesia:table(sentence_hash),
+		H#sentence_hash.phash2 == Hash
+		]),
+	qlc:e(Q);
+
+handle_query({is_mime_of_gid, Mime, _MGIs}) ->
+	Q = qlc:q([M#mime_type.group_id ||
+		M <- mnesia:table(mime_type),
+		M#mime_type.mime == Mime
+		]),
+	qlc:e(Q);
+
+handle_query(_Query) -> error.
+
+handle_call({async_query, Query}, From, State) ->
 	Worker = self(),
 	spawn_link(fun() ->
-		F = fun() ->
-			Q = qlc:q([M#mime_type.group_id ||
-				M <- mnesia:table(mime_type),
-				M#mime_type.mime == Mime
-				]),
-			qlc:e(Q)
-		end,
-		{atomic, GIs} = transaction(F),
-		Res = lists:any(fun(I) -> lists:member(I, MGIs) end,GIs),
-		Worker ! {async_reply, Res, From}
+		F = fun() -> handle_query(Query) end,
+		Result = transaction(F),
+		Return = handle_result(Query, Result),
+		Worker ! {async_reply, Return, From}
 	end),
 	{noreply, State, 5000};
 
@@ -412,4 +343,6 @@ compile_regex([R|RS], Ret) ->
 compile_regex([], Ret) -> lists:reverse(Ret).
 
 get_unique_id(TableName) -> mnesia:dirty_update_counter(unique_ids, TableName, 1).
+
+async_query_call(Query) -> gen_server:call(?MODULE, {async_query, Query}).
 
