@@ -134,7 +134,7 @@ public class BayessianZemberekBackend {
 			}
 			System.exit(0);
 		}
-
+		
 		try {
 			MyDLPZBHandler handler = new MyDLPZBHandler();
 			Mydlp_bz.Processor processor = new Mydlp_bz.Processor(handler);
