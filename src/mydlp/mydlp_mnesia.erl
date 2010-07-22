@@ -37,8 +37,12 @@
 	get_pgid/0,
 	get_rules/1,
 	get_regexes/1,
-	add_fhash_with_gid/2,
-	add_shash_with_gid/2,
+	add_fhash/3,
+	remove_fhash/1,
+	remove_fhash_group/1,
+	add_shash/3,
+	remove_shash/1,
+	remove_shash_group/1,
 	is_fhash_of_gid/2,
 	is_shash_of_gid/2,
 	is_mime_of_gid/2,
@@ -92,9 +96,9 @@ get_record_fields(Record) ->
 
 %%%%%%%%%%%%% MyDLP Mnesia API
 
-get_cgid() -> 1.
+get_cgid() -> -1.
 
-get_pgid() -> 2.
+get_pgid() -> -2.
 
 get_rules(Who) -> 
 	async_query_call({get_rules, Who}).
@@ -102,15 +106,23 @@ get_rules(Who) ->
 get_regexes(GroupId) ->	
 	async_query_call({get_regexes, GroupId}).
 
-add_fhash_with_gid(Hash, GroupId) when is_binary(Hash) -> 
-	async_query_call({add_fhash_with_gid, Hash, GroupId}).
+add_fhash(Hash, FileId, GroupId) when is_binary(Hash) -> 
+	async_query_call({add_fhash, Hash, FileId, GroupId}).
+
+remove_fhash(FileId) -> async_query_call({remove_fhash, FileId}).
+
+remove_fhash_group(GroupId) -> async_query_call({remove_fhash_group, GroupId}).
 
 is_fhash_of_gid(Hash, GroupIds) -> 
 	async_query_call({is_fhash_of_gid, Hash, GroupIds}).
 
-add_shash_with_gid(Hash, GroupId) when is_integer(Hash) -> add_shash_with_gid([Hash], GroupId);
-add_shash_with_gid(HList, GroupId) when is_list(HList) -> 
-	async_query_call({add_shl_with_gid, HList, GroupId}).
+add_shash(Hash, FileId, GroupId) when is_integer(Hash) -> add_shash([Hash], FileId, GroupId);
+add_shash(HList, FileId, GroupId) when is_list(HList) -> 
+	async_query_call({add_shl, HList, FileId, GroupId}).
+
+remove_shash(FileId) -> async_query_call({remove_shash, FileId}).
+
+remove_shash_group(GroupId) -> async_query_call({remove_shash_group, GroupId}).
 
 is_shash_of_gid(Hash, GroupIds) -> 
 	async_query_call({is_shash_of_gid, Hash, GroupIds}).
@@ -146,10 +158,26 @@ handle_query({get_regexes, GroupId}) ->
 		]),
 	qlc:e(Q);
 
-handle_query({add_fhash_with_gid, Hash, GI}) ->
+handle_query({add_fhash, Hash, FI, GI}) ->
 	NewId = get_unique_id(file_hash),
-	FileHash = #file_hash{id=NewId, group_id=GI, md5=Hash},
+	FileHash = #file_hash{id=NewId, file_id=FI, group_id=GI, md5=Hash},
 	mnesia:write(FileHash);
+
+handle_query({remove_fhash, FI}) ->
+	Q = qlc:q([H#file_hash.id ||
+		H <- mnesia:table(file_hash),
+		H#file_hash.file_id == FI
+		]),
+	FIDs = qlc:e(Q),
+	lists:foreach(fun(Id) -> mnesia:delete({file_hash, Id}) end, FIDs);
+
+handle_query({remove_fhash_group, GI}) ->
+	Q = qlc:q([H#file_hash.id ||
+		H <- mnesia:table(file_hash),
+		H#file_hash.group_id == GI 
+		]),
+	FIDs = qlc:e(Q),
+	lists:foreach(fun(Id) -> mnesia:delete({file_hash, Id}) end, FIDs);
 
 handle_query({is_fhash_of_gid, Hash, _HGIs}) ->
 	Q = qlc:q([H#file_hash.group_id ||
@@ -158,12 +186,28 @@ handle_query({is_fhash_of_gid, Hash, _HGIs}) ->
 		]),
 	qlc:e(Q);
 
-handle_query({add_shl_with_gid, HList, GI}) ->
+handle_query({add_shl, HList, FI, GI}) ->
 	lists:foreach(fun(Hash) ->
 		NewId = get_unique_id(sentence_hash),
-		SentenceHash = #sentence_hash{id=NewId, group_id=GI, phash2=Hash},
+		SentenceHash = #sentence_hash{id=NewId, file_id=FI, group_id=GI, phash2=Hash},
 		mnesia:write(SentenceHash) 
 	end, HList);
+
+handle_query({remove_shash, FI}) ->
+	Q = qlc:q([H#sentence_hash.id ||
+		H <- mnesia:table(sentence_hash),
+		H#sentence_hash.file_id == FI
+		]),
+	FIDs = qlc:e(Q),
+	lists:foreach(fun(Id) -> mnesia:delete({sentence_hash, Id}) end, FIDs);
+
+handle_query({remove_shash_group, GI}) ->
+	Q = qlc:q([H#sentence_hash.id ||
+		H <- mnesia:table(sentence_hash),
+		H#sentence_hash.group_id == GI 
+		]),
+	FIDs = qlc:e(Q),
+	lists:foreach(fun(Id) -> mnesia:delete({sentence_hash, Id}) end, FIDs);
 
 handle_query({is_shash_of_gid, Hash, _HGIs}) ->
 	Q = qlc:q([H#sentence_hash.group_id ||

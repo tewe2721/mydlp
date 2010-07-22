@@ -23,9 +23,8 @@ service Mydlp_ui {
 	oneway void trainClassified(1: binary Data, 2: i32 Fileid, 3: i32 Groupid)
 	oneway void trainPublic(1: binary Data, 2: i32 Fileid)
 
-	oneway void removeClassified(1: i32 Fileid)
-	oneway void removeClassifiedGroup(1: i32 Groupid)
-	oneway void removePublic(1: i32 Fileid)
+	oneway void removeFile(1: i32 Fileid)
+	oneway void removeGroup(1: i32 Groupid)
 
 	void compileFilters()
 }

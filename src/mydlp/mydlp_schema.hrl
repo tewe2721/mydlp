@@ -58,6 +58,7 @@
 
 -record(file_hash, {
 	id,
+	file_id,
 	group_id,
 	md5
 }).
@@ -72,6 +73,7 @@
 
 -record(sentence_hash, {
 	id,
+	file_id,
 	group_id,
 	phash2
 }).

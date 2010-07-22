@@ -18,24 +18,42 @@
 ###    along with MyDLP.  If not, see <http://www.gnu.org/licenses/>.
 ###--------------------------------------------------------------------------
 
-dist_erl_DATA = \
-	gen-erl/mydlp_ui_thrift.erl \
-	gen-erl/mydlp_ui_types.erl \
-	gen-erl/mydlp_bz_thrift.erl \
-	gen-erl/mydlp_bz_types.erl \
+mydlp_erl = \
 	gen-erl/mydlp_thrift.erl \
 	gen-erl/mydlp_types.erl
 
-dist_hrl_DATA = \
-	gen-erl/mydlp_ui_thrift.hrl \
-	gen-erl/mydlp_ui_constants.hrl \
-	gen-erl/mydlp_ui_types.hrl \
-	gen-erl/mydlp_bz_thrift.hrl \
-	gen-erl/mydlp_bz_constants.hrl \
-	gen-erl/mydlp_bz_types.hrl \
+mydlp_hrl = \
 	gen-erl/mydlp_thrift.hrl \
 	gen-erl/mydlp_constants.hrl \
 	gen-erl/mydlp_types.hrl
+
+mydlp_ui_erl = \
+	gen-erl/mydlp_ui_thrift.erl \
+	gen-erl/mydlp_ui_types.erl
+
+mydlp_ui_hrl = \
+	gen-erl/mydlp_ui_thrift.hrl \
+	gen-erl/mydlp_ui_constants.hrl \
+	gen-erl/mydlp_ui_types.hrl
+
+mydlp_bz_erl = \
+	gen-erl/mydlp_bz_thrift.erl \
+	gen-erl/mydlp_bz_types.erl
+
+mydlp_bz_hrl = \
+	gen-erl/mydlp_bz_thrift.hrl \
+	gen-erl/mydlp_bz_constants.hrl \
+	gen-erl/mydlp_bz_types.hrl
+
+dist_erl_DATA = \
+	$(mydlp_erl) \
+	$(mydlp_ui_erl) \
+	$(mydlp_bz_erl)
+	
+dist_hrl_DATA = \
+	$(mydlp_hrl) \
+	$(mydlp_ui_hrl) \
+	$(mydlp_bz_hrl)
 
 beam_DATA = \
 	$(dist_erl_DATA:.erl=.beam)
@@ -46,6 +64,12 @@ pkgpython_PYTHON = \
 	gen-py/mydlp/Mydlp.py \
 	gen-py/mydlp/Mydlp-remote \
 	gen-py/mydlp/ttypes.py
+
+mydlpphpdir = $(datadir)/php/packages/mydlp_ui
+
+mydlpphp_DATA = \
+	gen-php/mydlp_ui/Mydlp_ui.php \
+	gen-php/mydlp_ui/mydlp_ui_types.php
 
 erldir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/src
 hrldir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/include
@@ -59,13 +83,13 @@ ERLCFLAGS += -W -o gen-erl
 $(beam_DATA): $(dist_erl_DATA) 
 $(boot_DATA): $(beam_DATA)
 
-gen-erl/mydlp_thrift.erl: mydlp.thrift
+$(mydlp_erl) $(mydlp_hrl) $(pkgpython_PYTHON): mydlp.thrift
 	$(THRIFT) --gen erl --gen py $<
 
-gen-erl/mydlp_ui_thrift.erl: mydlp_ui.thrift
+$(mydlp_ui_erl) $(mydlp_ui_hrl) $(mydlpphplib_DATA): mydlp_ui.thrift
 	$(THRIFT) --gen erl --gen php $<
 
-gen-erl/mydlp_bz_thrift.erl: mydlp_bz.thrift
+$(mydlp_bz_erl) $(mydlp_bz_hrl): mydlp_bz.thrift
 	$(THRIFT) --gen erl --gen java $<
 
 .erl.beam:

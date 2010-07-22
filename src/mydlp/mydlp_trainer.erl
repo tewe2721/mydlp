@@ -33,7 +33,10 @@
 %% API
 -export([start_link/0,
 	confidential/1,
+	confidential/2,
+	confidential/3,
 	public/1,
+	public/2,
 	stop/0]).
 
 %% gen_server callbacks
@@ -57,11 +60,23 @@
 
 confidential(Term) ->
 	File = term2file(Term),
-	gen_server:cast(?MODULE, {confidential, File}).
+	gen_server:cast(?MODULE, {confidential, {File}}).
+
+confidential(Term, FileId) ->
+	File = term2file(Term),
+	gen_server:cast(?MODULE, {confidential, {File, FileId}}).
+
+confidential(Term, FileId, GroupId) ->
+	File = term2file(Term),
+	gen_server:cast(?MODULE, {confidential, {File, FileId, GroupId}}).
 
 public(Term) ->
 	File = term2file(Term),
-	gen_server:cast(?MODULE, {public, File}).
+	gen_server:cast(?MODULE, {public, {File}}).
+
+public(Term, FileId) ->
+	File = term2file(Term),
+	gen_server:cast(?MODULE, {public, {File, FileId}}).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -71,38 +86,38 @@ handle_call(stop, _From, State) ->
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-handle_cast({confidential, File}, #state{cfile_queue=CQ, cfile_inprog=false} = State) ->
-	CQ1 = queue:in(File, CQ),
+handle_cast({confidential, Item}, #state{cfile_queue=CQ, cfile_inprog=false} = State) ->
+	CQ1 = queue:in(Item, CQ),
 	consume_cfile(),
 	{noreply, State#state{cfile_queue=CQ1, cfile_inprog=true}};
 
-handle_cast({confidential, File}, #state{cfile_queue=CQ, cfile_inprog=true} = State) ->
-	CQ1 = queue:in(File, CQ),
+handle_cast({confidential, Item}, #state{cfile_queue=CQ, cfile_inprog=true} = State) ->
+	CQ1 = queue:in(Item, CQ),
 	{noreply,State#state{cfile_queue=CQ1}};
 
 handle_cast(consume_cfile, #state{cfile_queue=CQ} = State) ->
 	case queue:out(CQ) of
-		{{value, File}, CQ1} ->
-			train_cfile(File),
+		{{value, Item}, CQ1} ->
+			train_cfile(Item),
 			consume_cfile(),
 			{noreply, State#state{cfile_queue=CQ1}};
 		{empty, _} ->
 			{noreply, State#state{cfile_inprog=false}}
 	end;
 
-handle_cast({public, File}, #state{pfile_queue=PQ, pfile_inprog=false} = State) ->
-	PQ1 = queue:in(File, PQ),
+handle_cast({public, Item}, #state{pfile_queue=PQ, pfile_inprog=false} = State) ->
+	PQ1 = queue:in(Item, PQ),
 	consume_pfile(),
 	{noreply, State#state{pfile_queue=PQ1, pfile_inprog=true}};
 
-handle_cast({public, File}, #state{pfile_queue=PQ, pfile_inprog=true} = State) ->
-	PQ1 = queue:in(File, PQ),
+handle_cast({public, Item}, #state{pfile_queue=PQ, pfile_inprog=true} = State) ->
+	PQ1 = queue:in(Item, PQ),
 	{noreply,State#state{pfile_queue=PQ1}};
 
 handle_cast(consume_pfile, #state{pfile_queue=PQ} = State) ->
 	case queue:out(PQ) of
-		{{value, File}, PQ1} ->
-			train_pfile(File),
+		{{value, Item}, PQ1} ->
+			train_pfile(Item),
 			consume_pfile(),
 			{noreply, State#state{pfile_queue=PQ1}};
 		{empty, _} ->
@@ -151,33 +166,42 @@ term2file(Term) when is_list(Term) ->
         {ok, Bin} = file:read_file(Term),
         #file{data=Bin}.
 
-train_cfile(#file{mime_type=undefined} = File) when is_record(File, file) ->
+train_cfile({File}) -> train_cfile({File, undefined});
+
+train_cfile({File, FileId}) ->
+	CGID = mydlp_mnesia:get_cgid(),
+	train_cfile({File, FileId, CGID});
+
+train_cfile({#file{mime_type=undefined} = File, FileId, GroupId}) 
+		when is_record(File, file) ->
 	MT = mydlp_tc:get_mime(File#file.data),
-	train_cfile(File#file{mime_type = MT});
-train_cfile(File) when is_record(File, file) ->
+	train_cfile({File#file{mime_type = MT}, FileId, GroupId});
+
+train_cfile({File, FileId, GroupId}) 
+		when is_record(File, file) ->
 	% add to file hash 
         MD5Hash = erlang:md5(File#file.data),
-        CGID = mydlp_mnesia:get_cgid(),
-        ok = mydlp_mnesia:add_fhash_with_gid(MD5Hash, CGID),
-	% add to sentence hash
-	TR = case mydlp_api:has_text(File) of
-		true -> {ok, File#file.text};
-		false -> mydlp_api:get_text(File)
+        ok = mydlp_mnesia:add_fhash(MD5Hash, FileId, GroupId),
+
+	% get text
+	case concat_texts(File) of
+		<<>> -> ok;
+		Txt ->
+			% add to sentence hash
+			SList = mydlp_api:get_nsh(Txt),
+			ok = mydlp_mnesia:add_shash(SList, FileId, GroupId),
+			% train bayes
+			mydlp_tc:bayes_train_confidential(Txt)
 	end,
-
-	case TR of
-		{ok, Text} -> 
-			SList = mydlp_api:get_nsh(Text),
-			ok = mydlp_mnesia:add_shash_with_gid(SList, CGID);
-		_Else -> err
-	end, 
-
-	% train bayes
-	Txt = concat_texts(File),
-	mydlp_tc:bayes_train_confidential(Txt),
 	ok.
 
-train_pfile(File) -> 
+train_pfile({File}) -> train_pfile({File, undefined});
+
+train_pfile({File, FileId}) -> 
+	% add to whitefiles
+	PGID = mydlp_mnesia:get_pgid(),
+        MD5Hash = erlang:md5(File#file.data),
+        ok = mydlp_mnesia:add_fhash(MD5Hash, FileId, PGID),
 	% train bayes
 	Txt = concat_texts(File),
 	mydlp_tc:bayes_train_public(Txt),
@@ -194,6 +218,4 @@ concat_texts([File|Files], Returns) ->
 		_Else -> concat_texts(Files, Returns)
 	end;
 concat_texts([], Returns) -> list_to_binary(lists:reverse(Returns)).
-
-
 

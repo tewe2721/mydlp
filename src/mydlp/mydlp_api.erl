@@ -600,10 +600,7 @@ get_nsh(Text) ->
 		sentence,
 		Text),
 	Res1 = lists:filter(fun(I) -> string:len(I) > 10 end, Res), %%% 10 as string length threshold, shorter strings will be neglacted.
-	lists:map(fun(I) ->
-			strhash(
-			norm_str(I)
-		) end, Res1).
+	lists:map(fun(I) -> strhash(norm_str(I)) end, Res1).
 
 %%--------------------------------------------------------------------
 %% @doc Defines files, detects mimetypes, extracts compressed ones.

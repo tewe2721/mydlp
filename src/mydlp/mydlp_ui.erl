@@ -37,9 +37,8 @@
 
 -export([trainClassified/3,
 	trainPublic/2,
-	removeClassified/1,
-	removeClassifiedGroup/1,
-	removePublic/1,
+	removeFile/1,
+	removeGroup/1,
 	compileFilters/0
 	]).
 
@@ -59,15 +58,17 @@ handle_function(Function, Args) when is_atom(Function), is_tuple(Args) ->
 
 %%%%% FUNCTIONS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-trainClassified(_Data, _Fileid, _Groupid) -> ok.
+trainClassified(Data, Fileid, Groupid) -> mydlp_trainer:confidential(Data, Fileid, Groupid).
 
-trainPublic(_Data, _Fileid) -> ok.
+trainPublic(Data, Fileid) -> mydlp_trainer:public(Data, Fileid).
 
-removeClassified(_Fileid) -> ok.
+removeFile(Fileid) -> 
+	mydlp_mnesia:remove_fhash(Fileid),
+	mydlp_mnesia:remove_shash(Fileid).
 
-removeClassifiedGroup(_Groupid) -> ok.
-
-removePublic(_Fileid) -> ok.
+removeGroup(Groupid) ->
+	mydlp_mnesia:remove_fhash_group(Groupid),
+	mydlp_mnesia:remove_shash_group(Groupid).
 
 compileFilters() -> ok.
 
