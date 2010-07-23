@@ -25,15 +25,13 @@
 
 -record(filter, {
 	id,
-	name,
-	is_active
+	name
 }).
 
 -record(rule, {
 	id,
 	filter_id,
-	action,
-	is_active
+	action
 }).
 
 -record(ipr, {

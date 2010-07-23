@@ -34,6 +34,7 @@
      mydlp_loglevel,
      mydlp_matchers,
      mydlp_mnesia,
+     mydlp_mysql,
      mydlp_regex,
      mydlp_sup,
      mydlp_tc,
@@ -51,6 +52,7 @@
    [
     {shared_workers, [
           {mydlp_mnesia, start_link,[]},
+          {mydlp_mysql, start_link,[]},
           {mydlp_regex, start_link,[]}, 
           {mydlp_tc, start_link,[]}, 
           {mydlp_acl, start_link,[]}, 

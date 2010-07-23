@@ -332,11 +332,7 @@ resolve_rule({mgroup, Id}) ->
 resolve_rule({rule, Id}) ->
 	Q = qlc:q([{R#rule.id, R#rule.action} || 
 			R <- mnesia:table(rule), 
-			F <- mnesia:table(filter),
-			R#rule.id == Id, 
-			R#rule.is_active == true,
-			F#filter.id == R#rule.filter_id, 
-			F#filter.is_active == true
+			R#rule.id == Id
 			]),
 	[Rule] = qlc:e(Q), Rule.
 	

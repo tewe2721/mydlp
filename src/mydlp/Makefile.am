@@ -36,6 +36,7 @@ dist_erl_DATA = \
 	mydlp_logger_h.erl \
 	mydlp_matchers.erl \
 	mydlp_mnesia.erl \
+	mydlp_mysql.erl \
 	mydlp_regex.erl \
 	mydlp_sup.erl \
 	mydlp_tc.erl \

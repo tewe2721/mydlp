@@ -32,8 +32,16 @@
 -define(LOG_PATH, "mydlp.log").
 -define(PID_FILE, "mydlp.pid").
 -define(SSL_FILES, [
-          {certfile, "/etc/mydlp/ssl/public.pem"},
-          {keyfile, "/etc/mydlp/ssl/private.pem"}
+		{certfile, "/etc/mydlp/ssl/public.pem"},
+		{keyfile, "/etc/mydlp/ssl/private.pem"}
+         ]).
+-define(MYSQL, [
+		{host, "localhost"},
+		{port, 3306},
+		{user, "root"},
+		{password, ""},
+		{database, "mydlp"},
+		{pool_size, 2}
          ]).
 
 -define(ACL_LOG(Protocol, From, To, Files, RuleId, Action), 
