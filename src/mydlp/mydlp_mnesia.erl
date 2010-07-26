@@ -43,6 +43,7 @@
 	add_shash/3,
 	remove_shash/1,
 	remove_shash_group/1,
+	set_gid_by_fid/2,
 	is_fhash_of_gid/2,
 	is_shash_of_gid/2,
 	is_mime_of_gid/2,
@@ -129,6 +130,8 @@ is_shash_of_gid(Hash, GroupIds) ->
 
 is_mime_of_gid(Mime, GroupIds) -> 
 	async_query_call({is_mime_of_gid, Mime, GroupIds}).
+
+set_gid_by_fid(FileId, GroupId) -> async_query_call({set_gid_by_fid, FileId, GroupId}).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -222,6 +225,18 @@ handle_query({is_mime_of_gid, Mime, _MGIs}) ->
 		M#mime_type.mime == Mime
 		]),
 	qlc:e(Q);
+
+handle_query({set_gid_by_fid, FI, GI}) ->
+	Q = qlc:q([H#sentence_hash{group_id=GI} ||	
+		H <- mnesia:table(sentence_hash),
+		H#sentence_hash.file_id == FI ]),
+	SHs = qlc:e(Q),
+	Q2 = qlc:q([H#file_hash{group_id=GI} ||	
+		H <- mnesia:table(file_hash),
+		H#file_hash.file_id == FI ]),
+	SH2s = qlc:e(Q2),
+	lists:foreach(fun(H) -> mnesia:write(H) end, SHs),
+	lists:foreach(fun(H) -> mnesia:write(H) end, SH2s);
 
 handle_query(_Query) -> error.
 

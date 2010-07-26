@@ -35,7 +35,8 @@
 	handle_function/2
 	]).
 
--export([trainClassified/3,
+-export([trainConfidential/2,
+	setConfidentialGroup/2,
 	trainPublic/2,
 	removeFile/1,
 	removeGroup/1,
@@ -58,7 +59,9 @@ handle_function(Function, Args) when is_atom(Function), is_tuple(Args) ->
 
 %%%%% FUNCTIONS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-trainClassified(Data, Fileid, Groupid) -> mydlp_trainer:confidential(Data, Fileid, Groupid).
+trainConfidential(Data, Fileid) -> mydlp_trainer:confidential(Data, Fileid).
+
+setConfidentialGroup(Fileid, Groupid) -> mydlp_mnesia:set_gid_by_fid(Fileid, Groupid).
 
 trainPublic(Data, Fileid) -> mydlp_trainer:public(Data, Fileid).
 

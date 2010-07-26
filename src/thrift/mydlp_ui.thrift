@@ -20,7 +20,8 @@
 
 service Mydlp_ui {
 
-	oneway void trainClassified(1: binary Data, 2: i32 Fileid, 3: i32 Groupid)
+	oneway void trainConfidential(1: binary Data, 2: i32 Fileid)
+	oneway void setConfidentialGroup(1: i32 Fileid, 2: i32 Groupid)
 	oneway void trainPublic(1: binary Data, 2: i32 Fileid)
 
 	oneway void removeFile(1: i32 Fileid)
