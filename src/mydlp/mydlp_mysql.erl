@@ -29,6 +29,7 @@
 -behaviour(gen_server).
 
 -include("mydlp.hrl").
+-include("mydlp_schema.hrl").
 
 %% API
 -export([start_link/0,
@@ -64,11 +65,9 @@ psq(PreparedKey, Params) when is_atom(PreparedKey), is_list(Params) ->
 	end.
 
 handle_call(compile_filters, _From, State) ->
-	% under sweer construction :)
-	erlang:display(psq(select_filters)),
-	erlang:display(psq(select_rules_by_fid, [12])),
+	Reply = populate(),
 
-	{reply, ok, State};
+	{reply, Reply, State};
 
 handle_call(stop, _From,  State) ->
 	{stop, normalStop, State};
@@ -125,8 +124,14 @@ init([]) ->
 	[ erlang:monitor(process, P) || P <- PPids ],
 
 	[ mysql:prepare(Key, Query) || {Key, Query} <- [
-		{select_filters, <<"SELECT id,name FROM sh_filter WHERE is_active=TRUE">>},
-		{select_rules_by_fid, <<"SELECT id,action FROM sh_rule WHERE is_nw_active=TRUE and filter_id=?">>}
+		{filters, <<"SELECT id,name FROM sh_filter WHERE is_active=TRUE">>},
+		{rules_by_fid, <<"SELECT id,action FROM sh_rule WHERE is_nw_active=TRUE and filter_id=?">>},
+		{ipr_by_rule_id, <<"SELECT a.id,a.base_ip,a.subnet FROM sh_ipr AS i, sh_ipaddress AS a WHERE i.parent_rule_id=? AND i.sh_ipaddress_id=a.id">>},
+		{match_by_rule_id, <<"SELECT m.id,m.func FROM sh_match AS m, sh_func_params AS p WHERE m.parent_rule_id=? AND p.match_id=m.id AND p.param <> \"0\" ">>},
+		{params_by_match_id, <<"SELECT p.param FROM sh_match AS m, sh_func_params AS p WHERE m.id=? AND p.match_id=m.id AND p.param <> \"0\" ">>},
+		{file_params_by_match_id, <<"SELECT DISTINCT m.enable_shash, m.enable_bayes, m.enable_whitefile FROM sh_match AS m, sh_func_params AS p WHERE m.id=? AND p.match_id=m.id AND p.param <> \"0\" ">>},
+		{mimes, <<"SELECT m.id, c.group_id, m.mime, m.extension FROM nw_mime_type_cross AS c, nw_mime_type m WHERE c.mime_id=m.id">>},
+		{regexes, <<"SELECT r.id, c.group_id, r.regex FROM sh_regex_cross AS c, sh_regex r WHERE c.regex_id=r.id">>}
 	]],
 
 	{ok, #state{host=Host, port=Port, 
@@ -142,4 +147,160 @@ terminate(_Reason, _State) ->
 
 code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
+
+%%%%%%%%%%%% internal
+
+populate() -> 
+	{ok, FQ} = psq(filters),
+	populate_filters(FQ),
+	{ok, MQ} = psq(mimes),
+	populate_mimes(MQ),
+	{ok, RQ} = psq(regexes),
+	populate_regexes(RQ),
+	ok.
+
+populate_filters([[Id, Name]|Rows]) ->
+	{ok, RQ} = psq(rules_by_fid, [Id]),
+	populate_rules(RQ, Id),
+	F = #filter{id=Id, name=Name},
+	mydlp_mnesia:write(F),
+	populate_filters(Rows);
+populate_filters([]) -> ok.
+
+populate_rules([[Id, <<"block">>]|Rows], FilterId) ->
+	populate_rule(Id, block, FilterId),
+	populate_rules(Rows, FilterId);
+populate_rules([[Id, <<"log">>]|Rows], FilterId) ->
+	populate_rule(Id, log, FilterId),
+	populate_rules(Rows, FilterId);
+populate_rules([[Id, <<"pass">>]|Rows], FilterId) ->
+	populate_rule(Id, pass, FilterId),
+	populate_rules(Rows, FilterId);
+populate_rules([], _FilterId) -> ok.
+
+populate_rule(Id, Action, FilterId) ->
+	Parent = {rule, Id},
+	{ok, IQ} = psq(ipr_by_rule_id, [Id]),
+	populate_iprs(IQ, Parent),
+	{ok, MQ} = psq(match_by_rule_id, [Id]),
+	populate_matches(MQ, Parent),
+	%{ok, MGQ} = psq(mgroup_by_rule_id, [Id]),
+	%populate_matchGroups(MGQ, Parent),
+	R = #rule{id=Id, action=Action, filter_id=FilterId},
+	mydlp_mnesia:write(R).
+
+populate_iprs([[Id, Base, Subnet]| Rows], Parent) ->
+	B1 = int_to_ip(Base),
+	S1 = int_to_ip(Subnet),
+	I = #ipr{id=Id, parent=Parent, ipbase=B1, ipmask=S1},
+	mydlp_mnesia:write(I),
+	populate_iprs(Rows, Parent);
+populate_iprs([], _Parent) -> ok.
+
+int_to_ip(N4) ->
+	I4 = N4 rem 256,
+	N3 = N4 div 256,
+	I3 = N3 rem 256,
+	N2 = N3 div 256,
+	I2 = N2 rem 256,
+	N1 = N2 div 256,
+	I1 = N1,
+	I1 = N1 rem 256,
+	{I1, I2, I3, I4}.
+
+populate_matches([[Id, Func]| Rows], Parent) ->
+	populate_match(Id, Func, Parent),
+	populate_matches(Rows, Parent);
+populate_matches([], _Parent) -> ok.
+
+populate_match(Id, <<"e_archive">>, Parent) ->
+	Func = e_archive,
+	M = #match{id=Id, parent=Parent, func=Func},
+	mydlp_mnesia:write(M);
+
+populate_match(Id, <<"e_file">>, Parent) ->
+	Func = e_file,
+	M = #match{id=Id, parent=Parent, func=Func},
+	mydlp_mnesia:write(M);
+
+populate_match(Id, <<"trid">>, Parent) ->
+	Func = trid,
+	[CountS] = get_func_params(Id),
+	FuncParams = [{count, binary_to_integer(CountS)}],
+	M = #match{id=Id, parent=Parent, func=Func, func_params=FuncParams},
+	mydlp_mnesia:write(M);
+
+populate_match(Id, <<"ssn">>, Parent) ->
+	Func = ssn,
+	[CountS] = get_func_params(Id),
+	FuncParams = [{count, binary_to_integer(CountS)}],
+	M = #match{id=Id, parent=Parent, func=Func, func_params=FuncParams},
+	mydlp_mnesia:write(M);
+
+populate_match(Id, <<"iban">>, Parent) ->
+	Func = iban,
+	[CountS] = get_func_params(Id),
+	FuncParams = [{count, binary_to_integer(CountS)}],
+	M = #match{id=Id, parent=Parent, func=Func, func_params=FuncParams},
+	mydlp_mnesia:write(M);
+
+populate_match(Id, <<"cc">>, Parent) ->
+	Func = cc,
+	[CountS] = get_func_params(Id),
+	FuncParams = [{count, binary_to_integer(CountS)}],
+	M = #match{id=Id, parent=Parent, func=Func, func_params=FuncParams},
+	mydlp_mnesia:write(M);
+
+populate_match(Id, <<"mime">>, Parent) ->
+	Func = mime,
+	GroupsS = get_func_params(Id),
+	FuncParams = [ binary_to_integer(G) || G <- GroupsS ],
+	M = #match{id=Id, parent=Parent, func=Func, func_params=FuncParams},
+	mydlp_mnesia:write(M);
+
+populate_match(Id, <<"regex">>, Parent) ->
+	Func = regex,
+	GroupsS = get_func_params(Id),
+	FuncParams = [ binary_to_integer(G) || G <- GroupsS ],
+	M = #match{id=Id, parent=Parent, func=Func, func_params=FuncParams},
+	mydlp_mnesia:write(M);
+
+populate_match(Id, <<"file">>, Parent) ->
+	Func = file,
+	GroupsS = get_func_params(Id),
+	GroupsI = [ binary_to_integer(G) || G <- GroupsS ],
+	{ok, [[SentenceHashI, BayesI, WhiteFileI]]} = psq(file_params_by_match_id, [Id]),
+	SentenceHash = case SentenceHashI of 0 -> false; _ -> true end,
+	Bayes = case BayesI of 0 -> false; _ -> true end,
+	WhiteFile = case WhiteFileI of 0 -> false; _ -> true end,
+
+	FuncParams = [{shash,SentenceHash}, {bayes, Bayes}, {whitefile, WhiteFile}, {groups, GroupsI}],
+	
+	M = #match{id=Id, parent=Parent, func=Func, func_params=FuncParams},
+	mydlp_mnesia:write(M);
+
+populate_match(_, _, _) -> ok.
+
+get_func_params(MatchId) ->
+	{ok, PQ} = psq(params_by_match_id, [MatchId]),
+	lists:append(PQ).
+
+binary_to_integer(Bin) -> list_to_integer(binary_to_list(Bin)).
+
+populate_mimes([[Id, GroupId, Mime, Ext]|Rows]) ->
+	M = #mime_type{id=Id, group_id=GroupId, mime=Mime, extension=Ext},
+	mydlp_mnesia:write(M),
+	populate_mimes(Rows);
+populate_mimes([]) -> ok.
+
+
+populate_regexes(Rows) -> 
+	populate_regexes1(Rows),
+	mydlp_mnesia:compile_regex().
+
+populate_regexes1([[Id, GroupId, Regex]|Rows]) ->
+	R = #regex{id=Id, group_id=GroupId, plain=Regex},
+	mydlp_mnesia:write(R),
+	populate_regexes1(Rows);
+populate_regexes1([]) -> ok.
 

@@ -73,5 +73,5 @@ removeGroup(Groupid) ->
 	mydlp_mnesia:remove_fhash_group(Groupid),
 	mydlp_mnesia:remove_shash_group(Groupid).
 
-compileFilters() -> ok.
+compileFilters() -> mydlp_mysql:compile_filters().
 

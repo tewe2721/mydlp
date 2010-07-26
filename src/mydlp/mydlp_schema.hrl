@@ -79,6 +79,7 @@
 -record(mime_type, {
 	id,
 	group_id,
+	extension,
 	mime
 }).
 

@@ -33,6 +33,7 @@
 
 %% API
 -export([start_link/0,
+	compile_regex/0,
 	get_cgid/0,
 	get_pgid/0,
 	get_rules/1,
