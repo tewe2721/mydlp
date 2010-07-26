@@ -48,6 +48,7 @@
 	is_shash_of_gid/2,
 	is_mime_of_gid/2,
 	get_record_fields/1,
+	write/1,
 	stop/0]).
 
 %% gen_server callbacks
@@ -132,6 +133,9 @@ is_mime_of_gid(Mime, GroupIds) ->
 	async_query_call({is_mime_of_gid, Mime, GroupIds}).
 
 set_gid_by_fid(FileId, GroupId) -> async_query_call({set_gid_by_fid, FileId, GroupId}).
+
+write(RecordList) when is_list(RecordList) -> async_query_call({write, RecordList});
+write(Record) when is_tuple(Record) -> write([Record]).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -237,6 +241,9 @@ handle_query({set_gid_by_fid, FI, GI}) ->
 	SH2s = qlc:e(Q2),
 	lists:foreach(fun(H) -> mnesia:write(H) end, SHs),
 	lists:foreach(fun(H) -> mnesia:write(H) end, SH2s);
+
+handle_query({write, RecordList}) when is_list(RecordList) ->
+	lists:foreach(fun(R) -> mnesia:write(R) end, RecordList);
 
 handle_query(_Query) -> error.
 
@@ -347,7 +354,9 @@ resolve_rule({mgroup, Id}) ->
 resolve_rule({rule, Id}) ->
 	Q = qlc:q([{R#rule.id, R#rule.action} || 
 			R <- mnesia:table(rule), 
-			R#rule.id == Id
+			F <- mnesia:table(filter), 
+			R#rule.id == Id,
+			F#filter.id == R#rule.filter_id
 			]),
 	[Rule] = qlc:e(Q), Rule.
 	
