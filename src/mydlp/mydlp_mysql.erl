@@ -214,59 +214,59 @@ populate_matches([[Id, Func]| Rows], Parent) ->
 populate_matches([], _Parent) -> ok.
 
 populate_match(Id, <<"e_archive">>, Parent) ->
-	Func = e_archive,
+	Func = e_archive_match,
 	M = #match{id=Id, parent=Parent, func=Func},
 	mydlp_mnesia:write(M);
 
 populate_match(Id, <<"e_file">>, Parent) ->
-	Func = e_file,
+	Func = e_file_match,
 	M = #match{id=Id, parent=Parent, func=Func},
 	mydlp_mnesia:write(M);
 
 populate_match(Id, <<"trid">>, Parent) ->
-	Func = trid,
+	Func = trid_match,
 	[CountS] = get_func_params(Id),
 	FuncParams = [{count, binary_to_integer(CountS)}],
 	M = #match{id=Id, parent=Parent, func=Func, func_params=FuncParams},
 	mydlp_mnesia:write(M);
 
 populate_match(Id, <<"ssn">>, Parent) ->
-	Func = ssn,
+	Func = ssn_match,
 	[CountS] = get_func_params(Id),
 	FuncParams = [{count, binary_to_integer(CountS)}],
 	M = #match{id=Id, parent=Parent, func=Func, func_params=FuncParams},
 	mydlp_mnesia:write(M);
 
 populate_match(Id, <<"iban">>, Parent) ->
-	Func = iban,
+	Func = iban_match,
 	[CountS] = get_func_params(Id),
 	FuncParams = [{count, binary_to_integer(CountS)}],
 	M = #match{id=Id, parent=Parent, func=Func, func_params=FuncParams},
 	mydlp_mnesia:write(M);
 
 populate_match(Id, <<"cc">>, Parent) ->
-	Func = cc,
+	Func = cc_match,
 	[CountS] = get_func_params(Id),
 	FuncParams = [{count, binary_to_integer(CountS)}],
 	M = #match{id=Id, parent=Parent, func=Func, func_params=FuncParams},
 	mydlp_mnesia:write(M);
 
 populate_match(Id, <<"mime">>, Parent) ->
-	Func = mime,
+	Func = mime_match,
 	GroupsS = get_func_params(Id),
 	FuncParams = [ binary_to_integer(G) || G <- GroupsS ],
 	M = #match{id=Id, parent=Parent, func=Func, func_params=FuncParams},
 	mydlp_mnesia:write(M);
 
 populate_match(Id, <<"regex">>, Parent) ->
-	Func = regex,
+	Func = regex_match,
 	GroupsS = get_func_params(Id),
 	FuncParams = [ binary_to_integer(G) || G <- GroupsS ],
 	M = #match{id=Id, parent=Parent, func=Func, func_params=FuncParams},
 	mydlp_mnesia:write(M);
 
 populate_match(Id, <<"file">>, Parent) ->
-	Func = file,
+	Func = file_match,
 	GroupsS = get_func_params(Id),
 	GroupsI = [ binary_to_integer(G) || G <- GroupsS ],
 	{ok, [[SentenceHashI, BayesI, WhiteFileI]]} = psq(file_params_by_match_id, [Id]),
