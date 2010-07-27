@@ -127,9 +127,9 @@ init([]) ->
 		{filters, <<"SELECT id,name FROM sh_filter WHERE is_active=TRUE">>},
 		{rules_by_fid, <<"SELECT id,action FROM sh_rule WHERE is_nw_active=TRUE and filter_id=?">>},
 		{ipr_by_rule_id, <<"SELECT a.id,a.base_ip,a.subnet FROM sh_ipr AS i, sh_ipaddress AS a WHERE i.parent_rule_id=? AND i.sh_ipaddress_id=a.id">>},
-		{match_by_rule_id, <<"SELECT m.id,m.func FROM sh_match AS m, sh_func_params AS p WHERE m.parent_rule_id=? AND p.match_id=m.id AND p.param <> \"0\" ">>},
-		{params_by_match_id, <<"SELECT p.param FROM sh_match AS m, sh_func_params AS p WHERE m.id=? AND p.match_id=m.id AND p.param <> \"0\" ">>},
-		{file_params_by_match_id, <<"SELECT DISTINCT m.enable_shash, m.enable_bayes, m.enable_whitefile FROM sh_match AS m, sh_func_params AS p WHERE m.id=? AND p.match_id=m.id AND p.param <> \"0\" ">>},
+		{match_by_rule_id, <<"SELECT DISTINCT m.id,m.func FROM sh_match AS m, sh_func_params AS p WHERE m.parent_rule_id=? AND p.match_id=m.id AND p.param <> \"0\" ">>},
+		{params_by_match_id, <<"SELECT DISTINCT p.param FROM sh_match AS m, sh_func_params AS p WHERE m.id=? AND p.match_id=m.id AND p.param <> \"0\" ">>},
+		{file_params_by_match_id, <<"SELECT DISTINCT m.enable_shash, m.sentence_hash_count, m.sentence_hash_percentage, m.enable_bayes, m.bayes_average, m.enable_whitefile FROM sh_match AS m, sh_func_params AS p WHERE m.id=? AND p.match_id=m.id AND p.param <> \"0\" ">>},
 		{mimes, <<"SELECT m.id, c.group_id, m.mime, m.extension FROM nw_mime_type_cross AS c, nw_mime_type m WHERE c.mime_id=m.id">>},
 		{regexes, <<"SELECT r.id, c.group_id, r.regex FROM sh_regex_cross AS c, sh_regex r WHERE c.regex_id=r.id">>}
 	]],
@@ -208,76 +208,103 @@ int_to_ip(N4) ->
 	I1 = N1 rem 256,
 	{I1, I2, I3, I4}.
 
-populate_matches([[Id, Func]| Rows], Parent) ->
-	populate_match(Id, Func, Parent),
-	populate_matches(Rows, Parent);
-populate_matches([], _Parent) -> ok.
+populate_matches(Rows, Parent) -> populate_matches(Rows, Parent, []).
+
+populate_matches([[Id, Func]| Rows], Parent, Matches) ->
+	Match = populate_match(Id, Func, Parent),
+	populate_matches(Rows, Parent, [Match|Matches]);
+populate_matches([], _Parent, Matches) -> 
+	Matches1 = expand_matches(lists:reverse(Matches)),
+	Matches2 = whitefile(Matches1),
+	write_matches(Matches2),
+	ok.
+
+expand_matches(Matches) -> expand_matches(Matches, []).
+
+expand_matches([#match{func={group, Group}, func_params=FuncParams, 
+		parent=Parent, orig_id=OrigId}|Matches], Returns) -> 
+	GReturn = mydlp_matchers:Group(FuncParams),
+	GMatchers = [new_match(OrigId, Parent, F, FP) || {F,FP} <- GReturn],
+	expand_matches(Matches, lists:append(lists:reverse(GMatchers), Returns));
+expand_matches([Match|Matches], Returns) -> expand_matches(Matches, [Match|Returns]);
+expand_matches([], Returns) -> lists:reverse(Returns).
+	
+whitefile(Matches) -> whitefile(Matches, []).
+
+whitefile([#match{func=whitefile} = Match|Matches], Returns) -> 
+	L1 = lists:append([lists:reverse(Matches), Returns, [Match]]),
+	lists:reverse(L1);
+whitefile([Match|Matches], Returns) -> whitefile(Matches, [Match|Returns]);
+whitefile([], Returns) -> lists:reverse(Returns).
+
+new_match(Id, Parent, Func) -> new_match(Id, Parent, Func, []).
+
+new_match(Id, Parent, Func, FuncParams) ->
+	#match{orig_id=Id, parent=Parent, func=Func, func_params=FuncParams}.
+
+write_matches(Matches) ->
+	Matches1 = [ M#match{id=mydlp_mnesia:get_unique_id(match)} || M <- Matches ],
+	mydlp_mnesia:write(Matches1).
 
 populate_match(Id, <<"e_archive">>, Parent) ->
 	Func = e_archive_match,
-	M = #match{id=Id, parent=Parent, func=Func},
-	mydlp_mnesia:write(M);
+	new_match(Id, Parent, Func);
 
 populate_match(Id, <<"e_file">>, Parent) ->
 	Func = e_file_match,
-	M = #match{id=Id, parent=Parent, func=Func},
-	mydlp_mnesia:write(M);
+	new_match(Id, Parent, Func);
 
 populate_match(Id, <<"trid">>, Parent) ->
 	Func = trid_match,
 	[CountS] = get_func_params(Id),
 	FuncParams = [{count, binary_to_integer(CountS)}],
-	M = #match{id=Id, parent=Parent, func=Func, func_params=FuncParams},
-	mydlp_mnesia:write(M);
+	new_match(Id, Parent, Func, FuncParams);
 
 populate_match(Id, <<"ssn">>, Parent) ->
 	Func = ssn_match,
 	[CountS] = get_func_params(Id),
 	FuncParams = [{count, binary_to_integer(CountS)}],
-	M = #match{id=Id, parent=Parent, func=Func, func_params=FuncParams},
-	mydlp_mnesia:write(M);
+	new_match(Id, Parent, Func, FuncParams);
 
 populate_match(Id, <<"iban">>, Parent) ->
 	Func = iban_match,
 	[CountS] = get_func_params(Id),
 	FuncParams = [{count, binary_to_integer(CountS)}],
-	M = #match{id=Id, parent=Parent, func=Func, func_params=FuncParams},
-	mydlp_mnesia:write(M);
+	new_match(Id, Parent, Func, FuncParams);
 
 populate_match(Id, <<"cc">>, Parent) ->
 	Func = cc_match,
 	[CountS] = get_func_params(Id),
 	FuncParams = [{count, binary_to_integer(CountS)}],
-	M = #match{id=Id, parent=Parent, func=Func, func_params=FuncParams},
-	mydlp_mnesia:write(M);
+	new_match(Id, Parent, Func, FuncParams);
 
 populate_match(Id, <<"mime">>, Parent) ->
 	Func = mime_match,
 	GroupsS = get_func_params(Id),
 	FuncParams = [ binary_to_integer(G) || G <- GroupsS ],
-	M = #match{id=Id, parent=Parent, func=Func, func_params=FuncParams},
-	mydlp_mnesia:write(M);
+	new_match(Id, Parent, Func, FuncParams);
 
 populate_match(Id, <<"regex">>, Parent) ->
 	Func = regex_match,
 	GroupsS = get_func_params(Id),
 	FuncParams = [ binary_to_integer(G) || G <- GroupsS ],
-	M = #match{id=Id, parent=Parent, func=Func, func_params=FuncParams},
-	mydlp_mnesia:write(M);
+	new_match(Id, Parent, Func, FuncParams);
 
 populate_match(Id, <<"file">>, Parent) ->
-	Func = file_match,
+	Func = {group,file},
 	GroupsS = get_func_params(Id),
 	GroupsI = [ binary_to_integer(G) || G <- GroupsS ],
-	{ok, [[SentenceHashI, BayesI, WhiteFileI]]} = psq(file_params_by_match_id, [Id]),
+	{ok, [[SentenceHashI, SHCount, SHPercI, BayesI, BThresI, WhiteFileI]]} = psq(file_params_by_match_id, [Id]),
 	SentenceHash = case SentenceHashI of 0 -> false; _ -> true end,
+	SHPerc = SHPercI / 100,
 	Bayes = case BayesI of 0 -> false; _ -> true end,
+	BThres = BThresI / 100,
 	WhiteFile = case WhiteFileI of 0 -> false; _ -> true end,
 
-	FuncParams = [{shash,SentenceHash}, {bayes, Bayes}, {whitefile, WhiteFile}, {groups, GroupsI}],
-	
-	M = #match{id=Id, parent=Parent, func=Func, func_params=FuncParams},
-	mydlp_mnesia:write(M);
+	FuncParams = [{shash,SentenceHash}, {shash_count,SHCount}, {shash_percentage, SHPerc},
+			{bayes, Bayes}, {bayes_threshold, BThres},
+			{whitefile, WhiteFile}, {group_ids, GroupsI}],
+	new_match(Id, Parent, Func, FuncParams);
 
 populate_match(_, _, _) -> ok.
 

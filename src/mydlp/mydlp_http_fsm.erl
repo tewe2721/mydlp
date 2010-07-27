@@ -268,6 +268,7 @@ get_http_content(#state{socket=Socket, http_headers=HttpHeaders} = State) ->
 'REQ_OK'(#state{files=Files,http_content=HttpContent, addr=Addr} = State) ->
 	case mydlp_acl:q(Addr, dest, df_to_files(list_to_binary(HttpContent), Files)) of
 		pass -> log_req(State, pass), 'CONNECT_REMOTE'(connect, State);
+		{log, {rule, Id}} -> log_req(State, pass, Id), 'CONNECT_REMOTE'(connect, State); % refine this
 		{pass, {rule, Id}} -> log_req(State, pass, Id), 'CONNECT_REMOTE'(connect, State);
 		{block, {rule, Id}} -> log_req(State, block, Id), 'BLOCK_REQ'(block, State)
 

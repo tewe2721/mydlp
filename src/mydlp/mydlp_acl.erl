@@ -111,23 +111,24 @@ apply_rules([], _Params) -> pass.
 
 execute_matchers(Matchers, Params) -> execute_matchers(Matchers, Params, false).
 
-execute_matchers([{Func, FuncParams}|Matchers], Params, true) ->
-	case apply_m(Func, [FuncParams, Params]) of
-		pos -> execute_matchers(Matchers, Params, true);
-		neg -> neg
-	end;
-execute_matchers([{Func, FuncParams}|Matchers], {Addr, Files} = Params, false) ->
+execute_matchers(Matchers, Params, true) -> apply_f(Matchers, Params, true);
+execute_matchers([{Func,_}|_] = Matchers, {Addr, Files} = Params, false) ->
 	{PLT, Params1} = case get_matcher_req(Func) of
 		raw -> {false, Params};
 		analyzed -> {true, {Addr, pl_text(Files)}};
 		text -> {true, {Addr, pl_text(Files)}}
 	end,
+	apply_f(Matchers, Params1, PLT);
+execute_matchers([], Params, PLT) -> apply_f([], Params, PLT).
 
-	case apply_m(Func, [FuncParams, Params1]) of
-		pos -> execute_matchers(Matchers, Params1, PLT);
-		neg -> neg
-	end;
-execute_matchers([], _Params, _PLTexted) -> pos.
+apply_f([{whitefile, _FuncParams}|Matchers], {Addr, Files}, PLT) ->
+	execute_matchers(Matchers, {Addr, drop_whitefile(Files)}, PLT);
+apply_f([{Func, FuncParams}|Matchers], Params, PLT) ->
+	case apply_m(Func, [FuncParams, Params]) of
+                pos -> pos;
+                neg -> execute_matchers(Matchers, Params, PLT)
+        end;
+apply_f([], _Params, _PLT) -> neg.
 
 apply_m(Func, [FuncParams, {Addr, Files}]) ->
 	Args = case get_matcher_req(Func) of
@@ -137,6 +138,7 @@ apply_m(Func, [FuncParams, {Addr, Files}]) ->
 	end,
 	apply(mydlp_matchers, Func, Args).
 
+get_matcher_req(whitefile) -> raw;
 get_matcher_req(Func) -> apply(mydlp_matchers, Func, []).
 
 pl_text(Files) -> pl_text(Files, []).
@@ -148,5 +150,11 @@ pl_text([#file{text=undefined} = File|Files], Rets) ->
 	pl_text(Files, [ File1 |Rets]);
 pl_text([File|Files], Rets) -> pl_text(Files, [File|Rets]);
 pl_text([], Rets) -> lists:reverse(Rets).
+
+is_whitefile(File) ->
+	Hash = erlang:md5(File#file.data),
+	mydlp_mnesia:is_fhash_of_gid(Hash, [mydlp_mnesia:get_pgid()]).
+
+drop_whitefile(Files) -> lists:filter(fun(F) -> not is_whitefile(F) end, Files).
 
 drop_notext(Files) -> lists:filter(fun(I) -> mydlp_api:has_text(I) end, Files).

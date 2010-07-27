@@ -31,6 +31,7 @@
 
 %% API
 -export([
+	file/1,
 	mime_match/0,
 	mime_match/2,
 	md5_match/0,
@@ -47,6 +48,8 @@
 	e_archive_match/2,
 	shash_match/0,
 	shash_match/2,
+	bayes_match/0,
+	bayes_match/2,
 	cc_match/0,
 	cc_match/2
 ]).
@@ -78,61 +81,65 @@ regex_match(RGIs, [File|Files]) ->
 	end;
 regex_match(_RGIs, []) -> neg.
 
-md5_match() -> raw.
-
-md5_match(HGIs, {_Addr, Files}) -> md5_match(HGIs, Files);
-md5_match(HGIs, [File|Files]) ->
-	Hash = erlang:md5(File#file.data),
-	case mydlp_mnesia:is_fhash_of_gid(Hash, HGIs) of
-		true -> pos;
-		false -> md5_match(HGIs, Files)
-	end;
-md5_match(_HGIs, []) -> neg.
-
 cc_match() -> text.
 
-cc_match(_, {_Addr, Files}) -> cc_match(Files).
+cc_match(Conf, {_Addr, Files}) when is_list(Conf) -> 
+	Count = case lists:keyfind(count, 1, Conf) of
+		{count, C} -> C;
+		false -> undefined
+	end,
+	cc_match1(Count, Files).
 
-cc_match([File|Files]) ->
+cc_match1(Count, [File|Files]) ->
 	Res = mydlp_regex:match_bin(
 	 	credit_card, 
 		File#file.text),
 	
-	case lists:any(fun(I) -> mydlp_api:is_valid_cc(I) end, Res) of
+	case mydlp_api:more_than_count(fun(I) -> mydlp_api:is_valid_cc(I) end, Count, Res) of
 		true -> pos;
-		false -> cc_match(Files)
+		false -> cc_match1(Count, Files)
 	end;
-cc_match([]) -> neg.
+cc_match1(_Count, []) -> neg.
 
 iban_match() -> text.
 
-iban_match(_, {_Addr, Files}) -> iban_match(Files).
+iban_match(Conf, {_Addr, Files}) when is_list(Conf) -> 
+	Count = case lists:keyfind(count, 1, Conf) of
+		{count, C} -> C;
+		false -> undefined
+	end,
+	iban_match1(Count, Files).
 
-iban_match([File|Files]) ->
+iban_match1(Count, [File|Files]) ->
 	Res = mydlp_regex:match_bin(
 	 	iban, 
 		File#file.text),
 	
-	case lists:any(fun(I) -> mydlp_api:is_valid_iban(I) end, Res) of
+	case mydlp_api:more_than_count(fun(I) -> mydlp_api:is_valid_iban(I) end, Count, Res) of
 		true -> pos;
-		false -> iban_match(Files)
+		false -> iban_match1(Count, Files)
 	end;
-iban_match([]) -> neg.
+iban_match1(_Count, []) -> neg.
 
 trid_match() -> text.
 
-trid_match(_, {_Addr, Files}) -> trid_match(Files).
+trid_match(Conf, {_Addr, Files}) when is_list(Conf) ->
+	Count = case lists:keyfind(count, 1, Conf) of
+		{count, C} -> C;
+		false -> undefined
+	end,
+	trid_match1(Count, Files).
 
-trid_match([File|Files]) ->
+trid_match1(Count, [File|Files]) ->
 	Res = mydlp_regex:match_bin(
 	 	trid, 
 		File#file.text),
 	
-	case lists:any(fun(I) -> mydlp_api:is_valid_trid(I) end, Res) of
+	case mydlp_api:more_than_count(fun(I) -> mydlp_api:is_valid_trid(I) end, Count, Res) of
 		true -> pos;
-		false -> trid_match(Files)
+		false -> trid_match1(Count, Files)
 	end;
-trid_match([]) -> neg.
+trid_match1(_Count, []) -> neg.
 
 e_archive_match() -> analyzed.
 
@@ -151,20 +158,31 @@ e_file_match([#file{is_encrypted=true}|_Files]) -> pos;
 e_file_match([_File|Files]) -> e_file_match(Files);
 e_file_match([]) -> neg.
 
+md5_match() -> raw.
+
+md5_match(HGIs, {_Addr, Files}) -> md5_match(HGIs, Files);
+md5_match(HGIs, [File|Files]) ->
+	Hash = erlang:md5(File#file.data),
+	case mydlp_mnesia:is_fhash_of_gid(Hash, HGIs) of
+		true -> pos;
+		false -> md5_match(HGIs, Files)
+	end;
+md5_match(_HGIs, []) -> neg.
+
 shash_match() -> text.
 
 shash_match(Conf, {_Addr, Files}) when is_list(Conf) -> 
 	Perc = case lists:keyfind(percentage, 1, Conf) of
 		{percentage, P} -> P;
-		false -> undefined
+		false -> 0.5
 	end,
 	Count = case lists:keyfind(count, 1, Conf) of
 		{count, C} -> C;
-		false -> undefined
+		false -> 50
 	end,
 	HGIs = case lists:keyfind(group_ids, 1, Conf) of
 		{group_ids, G} -> G;
-		false -> undefined
+		false -> []
 	end,
 	shash_match(HGIs, Perc, Count, Files).
 
@@ -182,4 +200,57 @@ shash_match(HGIs, Perc, Count, [File|Files]) ->
 			end
 	end;
 shash_match(_HGIs, _Perc, _Count, []) -> neg.
+
+bayes_match() -> text.
+
+bayes_match(Conf, {_Addr, Files}) when is_list(Conf) ->
+	Threshold = case lists:keyfind(threshold, 1, Conf) of
+		{threshold, T} -> T;
+		false -> 0.5
+	end,
+	bayes_match1(Threshold, Files).
+
+bayes_match1(Threshold, [File|Files]) ->
+	BayesScore = mydlp_tc:bayes_score(File#file.text),
+	case (BayesScore > Threshold) of
+		true -> pos;
+		false -> bayes_match1(Threshold, Files)
+	end;
+bayes_match1(_Count, []) -> neg.
+
+file(Conf) ->
+	WF = case lists:keyfind(whitefile, 1, Conf) of
+                {whitefile, true} -> {whitefile, []};
+                _Else -> []
+        end,
+	Groups = case lists:keyfind(group_ids, 1, Conf) of
+                {group_ids, G} -> G;
+                _Else2 -> []
+        end,
+	FH = {md5_match, Groups},
+	SH = case lists:keyfind(shash, 1, Conf) of
+                {shash, true} ->
+			SFP = [{group_ids, Groups}],
+			SFP1 = SFP ++ case lists:keyfind(shash_count, 1, Conf) of
+					{shash_count, C} -> [{count, C}];
+					_Else3 -> []
+			end,
+			SFP2 = SFP1 ++ case lists:keyfind(shash_percentage, 1, Conf) of
+					{shash_percentage, P} -> [{percentage, P}];
+					_Else4 -> []
+			end,
+			{shash_match, lists:flatten(SFP2)};
+                _Else5 -> []
+        end,
+	BYS = case lists:keyfind(bayes, 1, Conf) of
+                {bayes, true} -> 
+			BFP = case lists:keyfind(bayes_threshold, 1, Conf) of
+					{bayes_threshold, T} -> [{threshold, T}];
+					_Else6 -> []
+			end,
+			{bayes_match, BFP};
+                _Else7 -> []
+        end,
+	lists:flatten([WF, FH, SH, BYS]).
+	
 

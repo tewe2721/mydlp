@@ -656,3 +656,17 @@ ext_to_file(Ext) ->
 		data=Data} 
 		|| {Filename,Data} <- Ext].
 
+%%--------------------------------------------------------------------
+%% @doc Checks whether function returns true more than count for given function
+%% @end
+%%----------------------------------------------------------------------
+more_than_count(Fun, Count, List) -> more_than_count(Fun, Count, List, 0).
+
+more_than_count(_Fun, Count, _List, Count) -> true;
+more_than_count(Fun, Count, [I|List], Curr) ->
+	case Fun(I) of
+		true -> more_than_count(Fun, Count, List, Curr + 1);
+		_Else -> more_than_count(Fun, Count, List, Curr)
+	end;
+more_than_count(_, _, [], _) -> false.
+

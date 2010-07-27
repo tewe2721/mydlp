@@ -43,6 +43,7 @@
 
 -record(match, {
 	id,
+	orig_id,
 	parent,
 	func,
 	func_params=[]

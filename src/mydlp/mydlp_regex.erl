@@ -133,7 +133,7 @@ handle_info({async_match, {Result, CID}, From}, #state{cache_tree=RT} = State) -
 	gen_server:reply(From, Result),
 	case CID of
 		nochange -> {noreply, State};
-		{add, GroupId, Rs} -> {noreply, #state{cache_tree=gb_trees:enter(GroupId, Rs, RT)}}
+		{add, GroupId, Rs} -> {noreply, State#state{cache_tree=gb_trees:enter(GroupId, Rs, RT)}}
 	end;
 
 handle_info(_Info, State) ->
