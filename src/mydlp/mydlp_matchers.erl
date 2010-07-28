@@ -42,6 +42,8 @@
 	iban_match/2,
 	trid_match/0,
 	trid_match/2,
+	ssn_match/0,
+	ssn_match/2,
 	e_file_match/0,
 	e_file_match/2,
 	e_archive_match/0,
@@ -140,6 +142,26 @@ trid_match1(Count, [File|Files]) ->
 		false -> trid_match1(Count, Files)
 	end;
 trid_match1(_Count, []) -> neg.
+
+ssn_match() -> text.
+
+ssn_match(Conf, {_Addr, Files}) when is_list(Conf) ->
+	Count = case lists:keyfind(count, 1, Conf) of
+		{count, C} -> C;
+		false -> undefined
+	end,
+	ssn_match1(Count, Files).
+
+ssn_match1(Count, [File|Files]) ->
+	Res = mydlp_regex:match_bin(
+	 	ssn, 
+		File#file.text),
+	
+	case mydlp_api:more_than_count(fun(I) -> mydlp_api:is_valid_ssn(I) end, Count, Res) of
+		true -> pos;
+		false -> ssn_match1(Count, Files)
+	end;
+ssn_match1(_Count, []) -> neg.
 
 e_archive_match() -> analyzed.
 

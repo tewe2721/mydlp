@@ -378,6 +378,29 @@ is_valid_trid(TrIdStr) ->
 	S2 = ((I0 + I1 + I2 + I3 + I4 + I5 + I6 + I7 + I8 + I9) rem 10),
 	(S1 == I9) and (S2 == I10).
 
+%%--------------------------------------------------------------------
+%% @doc Checks whether string is a valid SSN number
+%% @end
+%%----------------------------------------------------------------------
+is_valid_ssn(SSNStr) ->
+	Clean = remove_chars(SSNStr, " -"),
+	case string:len(Clean) of 
+		9 ->
+			AreaN = list_to_integer(string:substr(Clean,1,3)),
+			GroupN = list_to_integer(string:substr(Clean,4,2)),
+			SerialN = list_to_integer(string:substr(Clean,6,4)),
+
+			case {AreaN, GroupN, SerialN} of
+				{666,_,_} -> false;
+				{0,_,_} -> false;
+				{_,0,_} -> false;
+				{_,_,0} -> false;
+				{A1,_,_} -> (A1 < 773) and ( not ( (A1 < 750) and (A1 > 733 ) ) )
+		%		{987,65,S1} -> (S1 < 4320) and (S1 > 4329); this line for advertisements
+			end;
+		_Else -> false
+	end.
+
 %%% imported from tsuraan tempfile module http://www.erlang.org/cgi-bin/ezmlm-cgi/4/41649
 
 %%--------------------------------------------------------------------
