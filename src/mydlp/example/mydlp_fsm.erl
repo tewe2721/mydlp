@@ -1,4 +1,4 @@
-%%
+%%%
 %%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@medra.com.tr>
 %%%
 %%%--------------------------------------------------------------------------
@@ -20,9 +20,12 @@
 
 -module(mydlp_fsm).
 
--author('kerem@medra.com.tr').
+-author('kerem@medratech.com').
+-author('saleyn@gmail.com').
 
 -behaviour(gen_fsm).
+
+-include("mydlp.hrl").
 
 -export([behaviour_info/1]).
 
@@ -39,22 +42,20 @@
 
 %% FSM States
 -export([
-	'WF_SOCKET'/2,
-	'WF_DATA'/2
+	'WAIT_FOR_SOCKET'/2,
+	'WAIT_FOR_DATA'/2
 ]).
 
--include("mydlp.hrl").
-
 -record(state, {
-		module, % name of FSM module
-		module_state, % state obj for FSM module
-		module_fsm_state, % FSM state of FSM module
-		socket, % client socket
-		peer_sock,      % remote socket
-		comm_type, % whether socket uses ssl
-		addr,      % client address
-		in_buffer=[]
-	}).
+				module, % name of FSM module
+				module_state, % state obj for FSM module
+				module_fsm_state, % FSM state of FSM module
+				socket,	% client socket
+				peer_sock,	% remote socket
+				comm_type, % whether socket uses ssl
+				addr,	   % client address
+				buff
+			   }).
 
 -define(TIMEOUT, 120000).
 
@@ -69,7 +70,7 @@ behaviour_info(_Other) ->
 %%%------------------------------------------------------------------------
 
 %%-------------------------------------------------------------------------
-%% @spec (TargetModule) -> {ok,Pid} | ignore | {error,Error}
+%% @spec (TargetFsmModule) -> {ok,Pid} | ignore | {error,Error}
 %% @doc To be called by the supervisor in order to start the server.
 %%	  If init/1 fails with Reason, the function returns {error,Reason}.
 %%	  If init/1 returns {stop,Reason} or ignore, the process is
@@ -98,10 +99,11 @@ set_socket(Pid, Socket, CommType) when is_pid(Pid) ->
 init([TargetModule]) ->
 	process_flag(trap_exit, true),
 	{ok, FirstState, StateObj} = TargetModule:init(),
-	{ok, 'WF_SOCKET', #state{
-			module=TargetModule,
-			module_fsm_state=FirstState,
-			module_state=StateObj}
+	{ok, 'WAIT_FOR_SOCKET', #state{
+			module=TargetModule, 
+			module_fsm_state=FirstState, 
+			module_state=StateObj,
+			buff=[]}
 		}.
 
 %%-------------------------------------------------------------------------
@@ -111,89 +113,65 @@ init([TargetModule]) ->
 %%		  {stop, Reason, NewStateData}
 %% @private
 %%-------------------------------------------------------------------------
-'WF_SOCKET'({socket_ready, Socket, CommType}, State) ->
+'WAIT_FOR_SOCKET'({socket_ready, Socket, CommType}, State) ->
 	% Now we own the socket
-	BackendOpts = backend_opts(CommType),
-	BackendOpts:setopts(Socket, [{active, once}, {packet, 0}, binary]),
-	{ok, {IP, _Port}} = BackendOpts:peername(Socket),
-	{next_state, 'WF_DATA', 
+	Backend = case CommType of
+			plain -> inet;
+			ssl -> ssl
+		end,
+	Backend:setopts(Socket, [{active, once}, {packet, 0}, list]),
+	{ok, {IP, _Port}} = Backend:peername(Socket),
+	{next_state, 'WAIT_FOR_DATA', 
 			State#state{socket=Socket, comm_type=CommType, addr=IP}, 
 		?TIMEOUT};
 
-'WF_SOCKET'(Other, State) ->
-	?DEBUG("State: 'WF_SOCKET'. Unexpected message: ~p\n", [Other]),
+'WAIT_FOR_SOCKET'(Other, State) ->
+	?DEBUG("State: 'WAIT_FOR_SOCKET'. Unexpected message: ~p\n", [Other]),
 	%% Allow to receive async messages
-	{next_state, 'WF_SOCKET', State}.
+	{next_state, 'WAIT_FOR_SOCKET', State}.
 
-'WF_DATA'({data, Data}, #state{in_buffer=Buffer} = State) ->
-	consume({data, Data}, State#state{in_buffer = [Data|Buffer]});
+%% Notification event coming from client
+'WAIT_FOR_DATA'({data, Data}, #state{buff=B} = State) ->
+	consume({data, Data}, State#state{buff = B ++ Data});
 
-'WF_DATA'(timeout, State) ->
+'WAIT_FOR_DATA'(timeout, State) ->
 	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State};
 
-'WF_DATA'(Data, State) ->
-	?DEBUG("~p Ignoring data: ~p\n", [self(), Data]),
-	{next_state, 'WF_DATA', State, ?TIMEOUT}.
+'WAIT_FOR_DATA'(Data, State) ->
+	io:format("~p Ignoring data: ~p\n", [self(), Data]),
+	{next_state, 'WAIT_FOR_DATA', State, ?TIMEOUT}.
 
-consume({data, Data}, #state{module=Module, module_fsm_state=ModuleFSMState, module_state=ModuleState} = State) ->
-	ModuleReply = Module:ModuleFSMState({data, Data}, ModuleState),
+consume({data, []}, State) ->
+	{next_state, 'WAIT_FOR_DATA', State, ?TIMEOUT};
 
+consume({data, [Byte|Data]}, State) ->
+	Module = State#state.module,
+	ModuleFSMState = State#state.module_fsm_state,
+	ModuleState = State#state.module_state,
+
+	%%% Debug line
+	io:format("~c", [Byte]),
+	ModuleReply = Module:ModuleFSMState({byte,Byte}, ModuleState),
+	%% should refactor for other return options.
 	case ModuleReply of
-		{next_state, ModuleFSMState1, ModuleState1, Return} ->
+		{next_state, ModuleFSMState1, ModuleState1, Reply} ->
 			State1 = State#state{module_state=ModuleState1, module_fsm_state=ModuleFSMState1},
-			case Return of
-				{req_ok, {files, Files}, {peer, {Host, Port}}} ->
+			case Reply of
+				{send, ReplyData} -> 
+					ok = send(State, ReplyData),
+					consume({data, Data}, State1);
+				{pass, Host, Port} -> 
+					consume({data, Data}, State1);
+				none -> 
+					consume({data, Data}, State1);
+				pass -> 
 					%%%% here should send buff to remote and reset buff
-					'REQ_OK'(State1, Files, {Host, Port});
-				continue ->
-					{next_state, 'WF_DATA', State1, ?TIMEOUT}
-                        end;
-		{next_state, ModuleFSMState1, ModuleState1} ->
-			{next_state, 'WF_DATA', 
-				State#state{module_state=ModuleState1, module_fsm_state=ModuleFSMState1},
-				?TIMEOUT};
-                {error, Error} ->
-                        {stop, {error, Error}, State}
-        end.
-
-'REQ_OK'(#state{addr=Addr} = State, Files, Peer) ->
-	case mydlp_acl:q(Addr, dest, Files) of
-		pass -> 'CONNECT_REMOTE'(connect, State, Peer);
-		{block, AclR} -> log_req(State, Peer, block, AclR), 'BLOCK_REQ'(block, State);
-		{log, AclR} -> log_req(State, Peer, log, AclR), 'CONNECT_REMOTE'(connect, State, Peer); % refine this
-		{pass, AclR} -> log_req(State, Peer, pass, AclR), 'CONNECT_REMOTE'(connect, State, Peer)
+					consume({data, Data}, State1#state{buff=[]})
+			end;
+		{error, invalid_char} ->
+			{stop, {error, invalid_char}, State}
 	end.
-
-
-'CONNECT_REMOTE'(connect, #state{socket=Socket} = State, {Host, Port}) ->
-	BackendOpts = backend_opts(State),
-	BackendOpts:setopts(Socket, [{active, false}]),
-	Backend = backend(State),
-	{ok, PeerSock} = Backend:connect(Host, Port, [{active, false}]),
-	'SEND_REMOTE'(send_req, State#state{peer_sock=PeerSock}).
-
-'SEND_REMOTE'(send_req, #state{socket=Socket,
-				peer_sock=PeerSock,
-				in_buffer=Buffer
-				} = State) ->
-	Backend = backend(State),
-	Backend:send(PeerSock, lists:reverse(Buffer)),
-
-	BackendOpts = backend_opts(State),
-	BackendOpts:setopts(PeerSock, [{packet, 0}, {active, once}]),
-	BackendOpts:setopts(Socket, [{packet, 0}, {active, once}, binary]),
-
-	{next_state, 'WF_DATA', State#state{in_buffer=[]}, ?TIMEOUT}.
-
-'BLOCK_REQ'(block, #state{socket=Socket} = State) ->
-	Backend = backend(State),
-	Backend:send(Socket, gen_deny_page(State)),
-
-	BackendOpts = backend_opts(State),
-	BackendOpts:setopts(Socket, [{packet, 0}, {active, once}, binary]),
-
-	{next_state, 'WF_DATA', State#state{in_buffer=[]}, ?TIMEOUT}.
 
 %%-------------------------------------------------------------------------
 %% Func: handle_event/3
@@ -225,39 +203,25 @@ handle_sync_event(Event, _From, StateName, StateData) ->
 %%		  {stop, Reason, NewStateData}
 %% @private
 %%-------------------------------------------------------------------------
-%%%% TODO: this setopts active once s should be moved to states.
-handle_info({tcp, Socket, Data}, StateName, 
+handle_info({tcp, Socket, Bin}, StateName, 
 		#state{socket=Socket, comm_type=plain} = StateData) ->
 	% Flow control: enable forwarding of next TCP message
 	inet:setopts(Socket, [{active, once}]),
-	?MODULE:StateName({data, Data}, StateData);
+	?MODULE:StateName({data, Bin}, StateData);
 
-handle_info({ssl, Socket, Data}, StateName, 
+handle_info({ssl, Socket, Bin}, StateName, 
 		#state{socket=Socket, comm_type=ssl} = StateData) ->
 	% Flow control: enable forwarding of next TCP message
 	ssl:setopts(Socket, [{active, once}]),
-	?MODULE:StateName({data, Data}, StateData);
+	?MODULE:StateName({data, Bin}, StateData);
 
-%%% any data coming from peer sock should be immediatly passed to local socket.
-handle_info({tcp, PeerSock, Data}, StateName, 
-		#state{socket=Socket, peer_sock=PeerSock, comm_type=plain} = StateData) ->
-	% Flow control: enable forwarding of next TCP message
-	gen_tcp:send(Socket, Data),
-	inet:setopts(PeerSock, [{active, once}]),
-	{next_state, StateName, StateData, ?TIMEOUT};
-
-handle_info({ssl, PeerSock, Data}, StateName, 
-		#state{socket=Socket, peer_sock=PeerSock, comm_type=ssl} = StateData) ->
-	% Flow control: enable forwarding of next TCP message
-	ssl:send(Socket, Data),
-	ssl:setopts(PeerSock, [{active, once}]),
-	{next_state, StateName, StateData, ?TIMEOUT};
-
-handle_info({tcp_closed, _}, _StateName, #state{comm_type=plain, addr=Addr} = StateData) ->
+handle_info({tcp_closed, Socket}, _StateName,
+			#state{socket=Socket, comm_type=plain, addr=Addr} = StateData) ->
 	?DEBUG("~p Client ~p disconnected.\n", [self(), Addr]),
 	{stop, normal, StateData};
 
-handle_info({ssl_closed, _}, _StateName, #state{comm_type=ssl, addr=Addr} = StateData) ->
+handle_info({ssl_closed, Socket}, _StateName,
+			#state{socket=Socket, comm_type=ssl, addr=Addr} = StateData) ->
 	?DEBUG("~p Client ~p disconnected.\n", [self(), Addr]),
 	{stop, normal, StateData};
 
@@ -270,13 +234,8 @@ handle_info(_Info, StateName, StateData) ->
 %% Returns: any
 %% @private
 %%-------------------------------------------------------------------------
-terminate(_Reason, _StateName, State) ->
-	Backend = backend(State),
-	(catch Backend:close(State#state.socket)),
-	case State#state.peer_sock of
-		undefined -> ok;
-		PeerSock -> (catch Backend:close(PeerSock))
-	end,
+terminate(_Reason, _StateName, #state{socket=Socket}) ->
+	(catch gen_tcp:close(Socket)),
 	ok.
 
 %%-------------------------------------------------------------------------
@@ -288,30 +247,11 @@ terminate(_Reason, _StateName, State) ->
 code_change(_OldVsn, StateName, StateData, _Extra) ->
 	{ok, StateName, StateData}.
 
-%%%%% internal
+%%%% Internal functions
 
-backend(State) when is_record(State, state) -> 
-	case State#state.comm_type of
+send(State, Data) ->
+	Backend = case State#state.comm_type of
 			plain -> gen_tcp;
 			ssl -> ssl
-	end;
-backend(plain) -> gen_tcp;
-backend(ssl) -> ssl.
-
-backend_opts(State) when is_record(State, state) -> 
-	case State#state.comm_type of
-			plain -> inet;
-			ssl -> ssl
-	end;
-backend_opts(plain) -> inet;
-backend_opts(ssl) -> ssl.
-
-gen_deny_page(#state{module=Module}) -> apply(Module, deny_page, []).
-
-get_proto_name(#state{module=Module, comm_type=CommType}) ->
-	apply(Module, proto_name, [CommType]).
-
-log_req(#state{addr=Addr} = State, {DestHost, _Port}, Action,
-		{{rule, RuleId}, {file, File}, {matcher, Matcher}, {misc, Misc}}) ->
-	?ACL_LOG(get_proto_name(State), RuleId, Action, Addr, DestHost, Matcher, File, Misc).
-
+		end,
+	Backend:send(State#state.socket, Data).

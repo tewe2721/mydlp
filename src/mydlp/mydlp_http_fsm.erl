@@ -24,8 +24,6 @@
 
 -behaviour(gen_fsm).
 
--export([behaviour_info/1]).
-
 -export([start_link/0,
 	set_socket/3]).
 
@@ -94,12 +92,6 @@
 -define(MPART_CNK, 1024).
 
 -define(NEWLINE, <<"\r\n">>).
-
-behaviour_info(callbacks) ->
-	[{init, 0}];
-
-behaviour_info(_Other) ->
-	undefined.
 
 %%%------------------------------------------------------------------------
 %%% API
@@ -468,7 +460,7 @@ terminate(_Reason, _StateName, State) ->
 	Backend = backend(State),
 	(catch Backend:close(State#state.socket)),
 	case State#state.peer_sock of
-		undefined -> true;
+		undefined -> ok;
 		PeerSock -> (catch Backend:close(PeerSock))
 	end,
 	ok.
