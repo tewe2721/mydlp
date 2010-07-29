@@ -37,66 +37,9 @@
 -author('sjackson@simpleenigma.com').
 -include("mydlp_smtp.hrl").
 
--export([encode/1,decode/1]).
+-export([decode/1, decode_content/2]).
 
 -export([split/1,headers/1,split_multipart/2,get_header/2,get_header/3,dec_addr/1]).
-
-
-
-
-%%-------------------------------------------------------------------------
-%% @spec (Mime::mime()) -> string() | {error,Reason::atom()}
-%% @type mime() = {mime,header,header_text,body,body_text}
-%% @doc Encodes a #mime{} record into a string
-%% @end
-%%-------------------------------------------------------------------------
-encode(MIME) ->
-	Header = enc_header(MIME#mime.header),
-	Body = case MIME#mime.body of
-		[#mime{}|_] = MIMEBody -> encode(MIMEBody);
-		TextBody -> TextBody
-	end,
-	lists:flatten([Header,13,10,Body]).
-	
-
-
-enc_header(MIME) -> enc_header(MIME,[]).
-
-enc_header([],Acc) -> lists:reverse(Acc);
-enc_header([{from,From}|Rest],Acc) ->
-	enc_header(Rest,[10,13,enc_addr(From),32,"From:"|Acc]);
-enc_header([{to,To}|Rest],Acc) ->
-	enc_header(Rest,[10,13,enc_addr_list(To),32,"To:"|Acc]);
-enc_header([{cc,CC}|Rest],Acc) ->
-	enc_header(Rest,[10,13,enc_addr_list(CC),32,"CC:"|Acc]);
-enc_header([{bcc,BCC}|Rest],Acc) ->
-	enc_header(Rest,[10,13,enc_addr_list(BCC),32,"BCC:"|Acc]);
-enc_header([{subject,Subject}|Rest],Acc) ->
-	enc_header(Rest,[10,13,Subject,32,"Subject:"|Acc]);
-enc_header([{Atom,_Value}|Rest],Acc) ->
-	enc_header(Rest,[10,13,58,atom_to_list(Atom)|Acc]).
-
-
-
-enc_addr_list(List) -> enc_addr_list(List,[]).
-enc_addr_list([],Acc) -> string:strip(lists:flatten(lists:reverse(Acc)),right,44);
-enc_addr_list([{UserName,DomainName}|Rest],Acc) ->
-	Address = enc_addr({UserName,DomainName}),
-	enc_addr_list(Rest,[44,Address|Acc]);
-enc_addr_list([Address|Rest],Acc) ->
-	enc_addr_list(Rest,[44,enc_addr(Address)|Acc]).
-
-
-
-enc_addr(#addr{description = []} = Addr) when is_record(Addr,addr) ->
-	"<" ++ Addr#addr.username ++ "@" ++ Addr#addr.domainname ++ ">";
-enc_addr(Addr) when is_record(Addr,addr) ->
-	"\"" ++ Addr#addr.description ++ "\" <" ++ Addr#addr.username ++ "@" ++ Addr#addr.domainname ++ ">";
-enc_addr({UserName,DomainName,Desc})  -> "\"" ++ Desc ++ "\" <" ++ UserName ++ "@" ++ DomainName ++ ">";
-enc_addr({UserName,DomainName}) -> "<" ++ UserName ++ "@" ++ DomainName ++ ">";
-enc_addr(Address) -> "<" ++ Address ++ ">".
-
-
 
 %%-------------------------------------------------------------------------
 %% @spec (Mime::mime()) -> mime() | {error,Reason::atom()}
@@ -113,12 +56,19 @@ decode(Message) ->
 					Pos = string:chr(Value,61),
 					{_,B} = lists:split(Pos,Value),
 					Boundary = string:strip(B,both,34),
+					Content = case string:str(MIME#mime.body_text, Boundary) of
+						0 -> [];
+						1 -> [];
+						2 -> [];
+						3 -> [];
+						I -> string:substr(MIME#mime.body_text, 1, I-3)
+					end,
 					Parts = split_multipart(Boundary,MIME#mime.body_text),
 					MIMEParts = lists:map(fun(P) ->
 							decode(P)
 						end, Parts),
-					MIME#mime{header = Headers, body = MIMEParts};
-				false -> MIME#mime{header = Headers, body = MIME#mime.body_text}
+					MIME#mime{header = Headers, content = Content, body = MIMEParts};
+				false -> MIME#mime{header = Headers, content = MIME#mime.body_text}
 			end;
 		_ -> MIME#mime{header = Headers, body = MIME#mime.body_text, message = Message}
 	end.
@@ -225,31 +175,19 @@ split_multipart(Boundary,Body) -> split_multipart(Boundary,Body,[]).
 split_multipart(_Boundary,[],Acc) -> lists:reverse(Acc);
 split_multipart(Boundary,Body,Acc) -> 
 	%case regexp:match(Body,Boundary) of
-	case re:run(Body,Boundary,[{capture,[1]}]) of
-		{match,[{-1,_Length}]} -> split_multipart(Boundary,[],Acc);
-		{match,[{Start,Length}]} ->
-			{_Pre,New} = lists:split(Start + Length + 1,Body),
+	Length = string:len(Boundary),
+	case string:str(Body,Boundary) of
+		0 -> split_multipart(Boundary,[],Acc);
+		Start when is_integer(Start) ->
+			{_Pre,New} = lists:split(Start + Length,Body),
 			%case regexp:match(New,Boundary) of
-			case re:run(New,Boundary, [{capture,[1]}]) of
-				{match,[{-1,_Length}]} -> split_multipart(Boundary,[],Acc);
-				{match,[{Start2,_Length2}]} ->
-					{Part,Next} = lists:split(Start2 - 3,New),
-					 split_multipart(Boundary,Next,[Part|Acc]);
-				nomatch -> split_multipart(Boundary,[],Acc)
-			end;
-		nomatch -> split_multipart(Boundary,[],Acc)
+			case string:str(New,Boundary) of
+				0 -> split_multipart(Boundary,[],Acc);
+				Start2 when is_integer(Start2) ->
+					{Part,Next} = lists:split(Start2 - 4,New),
+					 split_multipart(Boundary,Next,[Part|Acc])
+			end
 	end.
-
-
-
-
-
-
-
-
-
-
-
 
 get_header(Key,MIME) when is_record(MIME,mime) -> get_header(Key,MIME#mime.header,[]);
 get_header(Key,Header) -> get_header(Key,Header,[]).
@@ -260,6 +198,27 @@ get_header(Key,Header,Default) ->
 		{value,{Key,Value}} -> Value;
 		_ -> Default
 	end.
+
+quoted_to_raw(EncContent) when is_binary(EncContent) -> quoted_to_raw(binary_to_list(EncContent));
+quoted_to_raw(EncContent) when is_list(EncContent) -> quoted_to_raw(EncContent, []).
+
+quoted_to_raw([$=, 13, 10| Rest], Acc ) -> quoted_to_raw(Rest, Acc);
+quoted_to_raw([$=, 10| Rest], Acc ) -> quoted_to_raw(Rest, Acc);
+quoted_to_raw([$=, H1, H2| Rest], Acc ) -> quoted_to_raw(Rest, [mydlp_api:hex2int([H1,H2])| Acc]);
+quoted_to_raw([C| Rest], Acc ) -> quoted_to_raw(Rest, [C|Acc]);
+quoted_to_raw([], Acc ) -> lists:reverse(Acc).
+
+decode_content("7bit", EncContent) -> decode_content('7bit', EncContent);
+decode_content('7bit', EncContent) -> list_to_binary([EncContent]);
+decode_content("8bit", EncContent) -> decode_content('8bit', EncContent);
+decode_content('8bit', EncContent) -> list_to_binary([EncContent]);
+decode_content("binary", EncContent) -> decode_content('binary', EncContent);
+decode_content('binary', EncContent) -> list_to_binary([EncContent]);
+decode_content("base64", EncContent) -> decode_content('base64', EncContent);
+decode_content('base64', EncContent) -> base64:decode(EncContent);
+decode_content("quoted-printable", EncContent) -> decode_content('quoted-printable', EncContent);
+decode_content('quoted-printable', EncContent) -> list_to_binary(quoted_to_raw(EncContent));
+decode_content(_Other, EncContent) -> decode_content('7bit', EncContent).
 
 
 

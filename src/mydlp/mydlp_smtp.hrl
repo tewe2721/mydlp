@@ -40,14 +40,11 @@
 	rcpt        = undefined,
 	to          = undefined,
 	messagename = undefined,
+	message_record = undefined,
+	message_mime = undefined,
+	files       = [],
 	data        = undefined
 	}).
-
--record(smtpd_state, {
-                listener,       % Listening socket
-                acceptor,       % Asynchronous acceptor's internal reference
-                module          % FSM handling module
-               }).
 
 -record(message,{
         mail_from    = [], % mail from value
@@ -67,6 +64,7 @@
         header_text = [],
         body        = [],
         body_text   = [],
+        content     = [],
         message     = []
         }).
 

@@ -1,4 +1,4 @@
-%%---------------------------------------------------------------------------------------
+%---------------------------------------------------------------------------------------
 %%% @author    Stuart Jackson <sjackson@simpleenigma.com> [http://erlsoft.org]
 %%% @copyright 2006 - 2007 Simple Enigma, Inc. All Rights Reserved.
 %%% @doc       SMTP server commands
@@ -39,7 +39,7 @@
 -include("mydlp_smtp.hrl").
 
 -export([command/2]).
--export([to_message/2]).
+-export([read_message/2]).
 -export([send/2]).
 
 
@@ -136,8 +136,12 @@ command({Command,Param},State) ->
 
 %% @todo cehck relay state and store messages according to local or outgoing status. Only real differene is in the message name.
 
-to_message(Message,State) when is_binary(Message) -> to_message(binary_to_list(Message),State);
-to_message(Message,_State) when is_record(Message,message) ->
+show([]) -> ok;
+show([M|Rest]) -> erlang:display(M#mime.header), show(M#mime.body), show(Rest);
+show(MIME) -> show([MIME]).
+
+read_message(Message,State) when is_binary(Message) -> read_message(binary_to_list(Message),State);
+read_message(Message,State) when is_record(Message,message) ->
 %	case erlmail_antispam:pre_deliver(Message) of
 %		{ok,NewMessage} -> 
 %			erlmail_store:deliver(NewMessage),
@@ -148,9 +152,12 @@ to_message(Message,_State) when is_record(Message,message) ->
 %		{error,Reason} -> {error,Reason}
 %	end;
 	MIME = mime_util:decode(Message#message.message),
-        _NewMessage = expand(Message,MIME);
-to_message(Message,#smtpd_fsm{mail=From, rcpt=To} = State) ->
-	to_message(#message{
+	show(MIME),
+        NewMessage = expand(Message,MIME),
+	%erlang:display(NewMessage),
+	State#smtpd_fsm{message_record=NewMessage, message_mime=MIME};
+read_message(Message,#smtpd_fsm{mail=From, rcpt=To} = State) ->
+	read_message(#message{
 		mail_from=From,
 		rcpt_to=lists:reverse(To),
 		message=Message},State).

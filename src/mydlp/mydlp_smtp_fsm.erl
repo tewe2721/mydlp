@@ -132,19 +132,9 @@ init([]) ->
 		0 -> {next_state, 'WAIT_FOR_DATA', State#smtpd_fsm{buff = NewBuff}, ?TIMEOUT};
 		Pos -> % wait for end of data and return data in state.
 			<<Message:Pos/binary,13,10,46,13,10,NextBuff/binary>> = NewBuff,
-			MessageR = smtpd_cmd:to_message(Message,State),
-			smtpd_cmd:send(State,250),
-
-			mydlp_smtpc:mail(MessageR),
-
-			NextState = State#smtpd_fsm{cmd   = undefined,
-			                       param = undefined,
-								   mail  = undefined,
-								   rcpt  = undefined,
-								   to    = undefined,
-								   messagename = undefined,
-								   data  = undefined},
-			{next_state, 'WAIT_FOR_CMD', NextState#smtpd_fsm{buff = NextBuff}, ?TIMEOUT}
+			NewState = smtpd_cmd:read_message(Message,State),
+			smtpd_cmd:send(NewState,250),
+			'READ_FILES'(NewState#smtpd_fsm{buff=NextBuff})
 	end;
 
 'WAIT_FOR_DATA'(timeout, State) ->
@@ -154,6 +144,108 @@ init([]) ->
 'WAIT_FOR_DATA'(Data, State) ->
     io:format("~p Ignoring data: ~p\n", [self(), Data]),
     {next_state, 'WAIT_FOR_DATA', State, ?TIMEOUT}.
+
+'READ_FILES'(#smtpd_fsm{message_mime=MIME} = State) ->
+	Files = mime_to_files(MIME),
+	erlang:display(Files),
+	'REQ_OK'(State#smtpd_fsm{files=Files}).
+
+heads_to_file(Headers) -> heads_to_file(Headers, #file{}).
+
+heads_to_file([{'content-disposition', CD}|Rest], #file{filename=undefined} = File) ->
+	case string:str(CD, "filename=") of
+		0 -> heads_to_file(Rest, File);
+		I when is_integer(I) -> 
+			FN = case string:strip(string:substr(CD, I + 9)) of
+				"\\\"" ++ Str -> 
+					Len = string:len(Str),
+					"\"\\" = string:substr(Str, Len - 1),
+					string:substr(Str, 1, Len - 2);
+				"\"" ++ Str -> 
+					Len = string:len(Str),
+					"\"" = string:substr(Str, Len),
+					string:substr(Str, 1, Len - 1);
+				Str -> Str
+			end,
+			heads_to_file(Rest, File#file{filename=FN})
+	end;
+heads_to_file([{'content-type', CT}|Rest], #file{filename=undefined} = F) ->
+	GT = case string:chr(CT, $\s) of
+		0 -> CT;
+		I when is_integer(I) -> string:substr(CT, 1, I - 1)
+	end,
+	File = F#file{given_type=GT},
+	case string:str(CT, "name=") of
+		0 -> heads_to_file(Rest, File);
+		I2 when is_integer(I2) -> 
+			FN = case string:strip(string:substr(CT, I2 + 5)) of
+				"\\\"" ++ Str -> 
+					Len = string:len(Str),
+					"\"\\" = string:substr(Str, Len - 1),
+					string:substr(Str, 1, Len - 2);
+				"\"" ++ Str -> 
+					Len = string:len(Str),
+					"\"" = string:substr(Str, Len),
+					string:substr(Str, 1, Len - 1);
+				Str -> Str
+			end,
+			heads_to_file(Rest, File#file{filename=FN})
+	end;
+heads_to_file([{'content-id', CI}|Rest], #file{filename=undefined, name=undefined} = File) ->
+	heads_to_file(Rest, File#file{name=CI});
+heads_to_file([{subject, Subject}|Rest], #file{filename=undefined, name=undefined} = File) ->
+	heads_to_file(Rest, File#file{name="Mail: " ++ Subject});
+heads_to_file([_|Rest], File) ->
+	ignore,	heads_to_file(Rest, File);
+heads_to_file([], File) -> File.
+
+mime_to_files(Mime) -> mime_to_files([Mime], []).
+
+mime_to_files([#mime{content=Content, header=Headers, body=Body}|Rest], Acc) ->
+	File = heads_to_file(Headers),
+	CTE = case lists:keysearch('content-transfer-encoding',1,Headers) of
+		{value,{'content-transfer-encoding',Value}} -> Value;
+		_ -> '7bit'
+	end,
+	Data = mime_util:decode_content(CTE, Content),
+	mime_to_files(lists:append(Body, Rest), [File#file{data=Data}|Acc]);
+mime_to_files([], Acc) -> lists:reverse(Acc).
+
+
+% {Action, {{rule, Id}, {file, File}, {matcher, Func}, {misc, Misc}}}
+'REQ_OK'(#smtpd_fsm{files=Files} = State) ->
+	%case mydlp_acl:q(addr, dest, Files) of
+	%	pass -> 'CONNECT_REMOTE'(connect, State);
+	%	{block, AclR} -> log_req(State, block, AclR), 'BLOCK_REQ'(block, State);
+	%	{log, AclR} -> log_req(State, log, AclR), 'CONNECT_REMOTE'(connect, State); % refine this
+	%	{pass, AclR} -> log_req(State, pass, AclR), 'CONNECT_REMOTE'(connect, State)
+	%end.
+	'CONNECT_REMOTE'(connect, State).
+
+log_req(_,_,_) -> ok.
+
+% refined this
+'BLOCK_REQ'(connect, #smtpd_fsm{message_record=MessageR} = State) ->
+	mydlp_smtpc:mail(MessageR),
+	NextState = State#smtpd_fsm{cmd   = undefined,
+			param = undefined,
+			mail  = undefined,
+			rcpt  = undefined,
+			to    = undefined,
+			messagename = undefined,
+			data  = undefined},
+	{next_state, 'WAIT_FOR_CMD', NextState, ?TIMEOUT}.
+
+'CONNECT_REMOTE'(connect, #smtpd_fsm{message_record=MessageR} = State) ->
+	mydlp_smtpc:mail(MessageR),
+	NextState = State#smtpd_fsm{cmd   = undefined,
+			param = undefined,
+			mail  = undefined,
+			rcpt  = undefined,
+			to    = undefined,
+			messagename = undefined,
+			data  = undefined},
+	{next_state, 'WAIT_FOR_CMD', NextState, ?TIMEOUT}.
 
 %%-------------------------------------------------------------------------
 %% Func: handle_event/3
