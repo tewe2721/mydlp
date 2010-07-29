@@ -570,31 +570,32 @@ strhash(S) when is_binary(S) -> erlang:phash2(S).
 %% @doc Logs acl messages
 %% @end
 %%----------------------------------------------------------------------
-acl_msg(Proto, {Ip1,Ip2,Ip3,Ip4}, To, Files, RuleId, Action) ->
+acl_msg(Proto, RuleId, Action, {Ip1,Ip2,Ip3,Ip4} = Ip, To, Matcher, File, Misc) ->
+	FileS = file_to_str(File),
 	mydlp_logger:notify(acl_msg,
-		"PROTOCOL: ~w , FROM: ~w.~w.~w.~w , TO: ~s , FILES: ~s , RULE: ~w , ACTION: ~w ~n",
-		[Proto, Ip1,Ip2,Ip3,Ip4,To,
-			"\"" ++ string:join(files_to_str(Files), "\",\"") ++ "\"",
-			RuleId, Action]
-	);
-acl_msg(_,_,_,_,_,_) -> ok.
+		"PROTOCOL: ~w , RULE: ~w , ACTION: ~w , FROM: ~w.~w.~w.~w , TO: ~s , MATCHER: ~w , FILE: ~s , MISC: ~s ~n",
+		[Proto, RuleId, Action, Ip1,Ip2,Ip3,Ip4, To, Matcher, "\"" ++ FileS ++ "\"", Misc]),
+
+	case Action of
+		log -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, To, Matcher, FileS, Misc);
+		block -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, To, Matcher, FileS, Misc);
+		_Else -> ok
+	end;
+acl_msg(_,_,_,_,_,_,_,_) -> ok.
 
 files_to_str(Files) -> files_to_str(Files, []).
 
-files_to_str([#file{name=undefined, filename=undefined}|Files], Returns) -> 
-	files_to_str(Files, ["data"|Returns]);
-files_to_str([#file{name=Name, filename=undefined}|Files], Returns) -> 
-	files_to_str(Files, [Name|Returns]);
-files_to_str([#file{name=undefined, filename=Filename}|Files], Returns) -> 
-	files_to_str(Files, [Filename|Returns]);
-files_to_str([#file{name="extracted file", filename=Filename}|Files], Returns) -> 
-	files_to_str(Files, ["extracted file: " ++ Filename|Returns]);
-files_to_str([#file{filename=Filename}|Files], Returns) -> 
-	files_to_str(Files, [Filename|Returns]);
-files_to_str([_File|Files], Returns) -> 
-	files_to_str(Files, ["data"|Returns]);
+files_to_str([File|Files], Returns) -> 
+	files_to_str(Files, [file_to_str(File)|Returns]);
 files_to_str([], Returns) -> 
 	lists:reverse(Returns).
+
+file_to_str(#file{name=undefined, filename=undefined}) -> "data";
+file_to_str(#file{name=Name, filename=undefined}) -> Name;
+file_to_str(#file{name=undefined, filename=Filename}) -> Filename;
+file_to_str(#file{name="extracted file", filename=Filename}) -> "extracted file: " ++ Filename;
+file_to_str(#file{filename=Filename}) -> Filename;
+file_to_str(_File) -> "data".
 
 %%--------------------------------------------------------------------
 %% @doc Returns whether given term has text

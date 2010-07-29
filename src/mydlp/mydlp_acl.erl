@@ -104,7 +104,8 @@ code_change(_OldVsn, State, _Extra) ->
 %%%%%%%%%%%%%%% helper func
 apply_rules([{Id, Action, Matchers}|Rules], Params) ->
 	case execute_matchers(Matchers, Params) of
-		pos -> {Action, {rule, Id}};
+		{pos, {file, File}, {matcher, Func}, {misc, Misc}} -> 
+			{Action, {{rule, Id}, {file, File}, {matcher, Func}, {misc, Misc}}};
 		neg -> apply_rules(Rules, Params)
 	end;
 apply_rules([], _Params) -> pass.
@@ -125,8 +126,10 @@ apply_f([{whitefile, _FuncParams}|Matchers], {Addr, Files}, PLT) ->
 	execute_matchers(Matchers, {Addr, drop_whitefile(Files)}, PLT);
 apply_f([{Func, FuncParams}|Matchers], Params, PLT) ->
 	case apply_m(Func, [FuncParams, Params]) of
-                pos -> pos;
-                neg -> execute_matchers(Matchers, Params, PLT)
+                neg -> execute_matchers(Matchers, Params, PLT);
+                {pos, {file, F}} -> {pos, {file, F}, {matcher, Func}, {misc, ""}};
+                {pos, {file, F}, {misc, Misc}} -> {pos, {file, F}, {matcher, Func}, {misc, Misc}};
+                pos -> {pos, {file, #file{name="unknown"}}, {matcher, Func}, {misc, ""}}
         end;
 apply_f([], _Params, _PLT) -> neg.
 

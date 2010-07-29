@@ -265,13 +265,13 @@ get_http_content(#state{socket=Socket, http_headers=HttpHeaders} = State) ->
 	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
+% {Action, {{rule, Id}, {file, File}, {matcher, Func}, {misc, Misc}}}
 'REQ_OK'(#state{files=Files,http_content=HttpContent, addr=Addr} = State) ->
 	case mydlp_acl:q(Addr, dest, df_to_files(list_to_binary(HttpContent), Files)) of
-		pass -> log_req(State, pass), 'CONNECT_REMOTE'(connect, State);
-		{log, {rule, Id}} -> log_req(State, pass, Id), 'CONNECT_REMOTE'(connect, State); % refine this
-		{pass, {rule, Id}} -> log_req(State, pass, Id), 'CONNECT_REMOTE'(connect, State);
-		{block, {rule, Id}} -> log_req(State, block, Id), 'BLOCK_REQ'(block, State)
-
+		pass -> 'CONNECT_REMOTE'(connect, State);
+		{block, AclR} -> log_req(State, block, AclR), 'BLOCK_REQ'(block, State);
+		{log, AclR} -> log_req(State, log, AclR), 'CONNECT_REMOTE'(connect, State); % refine this
+		{pass, AclR} -> log_req(State, pass, AclR), 'CONNECT_REMOTE'(connect, State)
 	end.
 
 'READ_FILES'(#state{http_headers=HttpHeaders} = State) ->
@@ -785,11 +785,10 @@ df_to_files(Data, Files) ->
                 _ ->    Files
         end.
 
-log_req(State, Action) -> log_req(State, Action, none).
+log_req(#state{comm_type=plain} = State, Action, AclR) -> log_req1(http, State, Action, AclR);
+log_req(#state{comm_type=ssl} = State, Action, AclR) -> log_req1(https, State, Action, AclR).
 
-log_req(#state{comm_type=plain} = State, Action, RuleId) -> log_req1(http, State, Action, RuleId);
-log_req(#state{comm_type=ssl} = State, Action, RuleId) -> log_req1(https, State, Action, RuleId).
-
-log_req1(Proto, #state{addr=Addr, http_headers=(#http_headers{host=DestHost}), files=Files}, Action, RuleId) ->
-	?ACL_LOG(Proto, Addr, DestHost, Files, RuleId, Action).
+log_req1(Proto, #state{addr=Addr, http_headers=(#http_headers{host=DestHost})}, Action, 
+		{{rule, RuleId}, {file, File}, {matcher, Matcher}, {misc, Misc}}) ->
+	?ACL_LOG(Proto, RuleId, Action, Addr, DestHost, Matcher, File, Misc).
 

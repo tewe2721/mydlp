@@ -68,7 +68,7 @@ mime_match(MGIs, [File|Files]) ->
 	end,
 
 	case mydlp_mnesia:is_mime_of_gid(MT, MGIs) of
-		true -> pos;
+		true -> {pos, {file, File}};
 		false -> mime_match(MGIs, Files)
 	end;
 mime_match(_MimeTypes, []) -> neg.
@@ -78,7 +78,7 @@ regex_match() -> text.
 regex_match(RGIs, {_Addr, Files}) -> regex_match(RGIs, Files);
 regex_match(RGIs, [File|Files]) ->
 	case mydlp_regex:match(RGIs, File#file.text) of
-		true -> pos;
+		true -> {pos, {file, File}};
 		false -> regex_match(RGIs, Files)
 	end;
 regex_match(_RGIs, []) -> neg.
@@ -98,7 +98,7 @@ cc_match1(Count, [File|Files]) ->
 		File#file.text),
 	
 	case mydlp_api:more_than_count(fun(I) -> mydlp_api:is_valid_cc(I) end, Count, Res) of
-		true -> pos;
+		true -> {pos, {file, File}};
 		false -> cc_match1(Count, Files)
 	end;
 cc_match1(_Count, []) -> neg.
@@ -118,7 +118,7 @@ iban_match1(Count, [File|Files]) ->
 		File#file.text),
 	
 	case mydlp_api:more_than_count(fun(I) -> mydlp_api:is_valid_iban(I) end, Count, Res) of
-		true -> pos;
+		true -> {pos, {file, File}};
 		false -> iban_match1(Count, Files)
 	end;
 iban_match1(_Count, []) -> neg.
@@ -138,7 +138,7 @@ trid_match1(Count, [File|Files]) ->
 		File#file.text),
 	
 	case mydlp_api:more_than_count(fun(I) -> mydlp_api:is_valid_trid(I) end, Count, Res) of
-		true -> pos;
+		true -> {pos, {file, File}};
 		false -> trid_match1(Count, Files)
 	end;
 trid_match1(_Count, []) -> neg.
@@ -158,7 +158,7 @@ ssn_match1(Count, [File|Files]) ->
 		File#file.text),
 	
 	case mydlp_api:more_than_count(fun(I) -> mydlp_api:is_valid_ssn(I) end, Count, Res) of
-		true -> pos;
+		true -> {pos, {file, File}};
 		false -> ssn_match1(Count, Files)
 	end;
 ssn_match1(_Count, []) -> neg.
@@ -167,8 +167,8 @@ e_archive_match() -> analyzed.
 
 e_archive_match(_, {_Addr, Files}) -> e_archive_match(Files).
 
-e_archive_match([#file{mime_type= <<"application/zip">>, is_encrypted=true}|_Files]) -> pos;
-e_archive_match([#file{mime_type= <<"application/x-rar">>, is_encrypted=true}|_Files]) -> pos;
+e_archive_match([#file{mime_type= <<"application/zip">>, is_encrypted=true} = File|_Files]) -> {pos, {file, File}};
+e_archive_match([#file{mime_type= <<"application/x-rar">>, is_encrypted=true} = File|_Files]) -> {pos, {file, File}};
 e_archive_match([_File|Files]) -> e_archive_match(Files);
 e_archive_match([]) -> neg.
 
@@ -176,7 +176,7 @@ e_file_match() -> analyzed.
 
 e_file_match(_, {_Addr, Files}) -> e_file_match(Files).
 
-e_file_match([#file{is_encrypted=true}|_Files]) -> pos;
+e_file_match([#file{is_encrypted=true} = File|_Files]) -> {pos, {file, File}};
 e_file_match([_File|Files]) -> e_file_match(Files);
 e_file_match([]) -> neg.
 
@@ -186,7 +186,7 @@ md5_match(HGIs, {_Addr, Files}) -> md5_match(HGIs, Files);
 md5_match(HGIs, [File|Files]) ->
 	Hash = erlang:md5(File#file.data),
 	case mydlp_mnesia:is_fhash_of_gid(Hash, HGIs) of
-		true -> pos;
+		true -> {pos, {file, File}};
 		false -> md5_match(HGIs, Files)
 	end;
 md5_match(_HGIs, []) -> neg.
@@ -217,7 +217,9 @@ shash_match(HGIs, Perc, Count, [File|Files]) ->
 		_Else ->
 			case ((Perc /= undefined) and (Perc < (MatchLen/TotalLen))) or
 				((Count /= undefined) and ( Count < MatchLen)) of
-				true -> pos;
+				true -> {pos, {file, File}, 
+					{misc, "count=" ++ integer_to_list(Count) ++
+					" percentage=" ++ float_to_list(float(Perc))}};
 				false -> shash_match(HGIs, Perc, Count, Files)
 			end
 	end;
@@ -235,7 +237,8 @@ bayes_match(Conf, {_Addr, Files}) when is_list(Conf) ->
 bayes_match1(Threshold, [File|Files]) ->
 	BayesScore = mydlp_tc:bayes_score(File#file.text),
 	case (BayesScore > Threshold) of
-		true -> pos;
+		true -> {pos, {file, File}, 
+			{misc, "score=" ++ float_to_list(float(BayesScore))}};
 		false -> bayes_match1(Threshold, Files)
 	end;
 bayes_match1(_Count, []) -> neg.

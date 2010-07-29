@@ -34,6 +34,7 @@
 %% API
 -export([start_link/0,
 	compile_filters/0,
+	push_log/8,
 	stop/0]).
 
 %% gen_server callbacks
@@ -64,15 +65,33 @@ psq(PreparedKey, Params) when is_atom(PreparedKey), is_list(Params) ->
 		Else -> {error, Else}
 	end.
 
-handle_call(compile_filters, _From, State) ->
-	Reply = populate(),
 
-	{reply, Reply, State};
+push_log(Proto, RuleId, Action, Ip, To, Matcher, FileS, Misc) ->
+	gen_server:cast(?MODULE, {push_log, {Proto, RuleId, Action, Ip, To, Matcher, FileS, Misc}}).
+
+handle_call(compile_filters, From, State) ->
+	Worker = self(),
+        spawn_link(fun() ->
+			Reply = populate(),
+                        Worker ! {async_reply, Reply, From}
+                end),
+        {noreply, State, 60000};
 
 handle_call(stop, _From,  State) ->
 	{stop, normalStop, State};
 
 handle_call(_Msg, _From, State) ->
+	{noreply, State}.
+
+% INSERT INTO log_incedent (id, rule_id, protocol, src_ip, destination, action, matcher, filename, misc)
+handle_cast({push_log, {Proto, RuleId, Action, Ip, To, Matcher, FileS, Misc}}, State) ->
+	spawn_link(fun() ->
+		psq(insert_incident, 
+			[RuleId, Proto, ip_to_int(Ip), To, Action, Matcher, FileS, Misc])
+	end),
+	{noreply, State};
+
+handle_cast(_Msg, State) ->
 	{noreply, State}.
 
 handle_info({async_reply, Reply, From}, State) ->
@@ -131,16 +150,14 @@ init([]) ->
 		{params_by_match_id, <<"SELECT DISTINCT p.param FROM sh_match AS m, sh_func_params AS p WHERE m.id=? AND p.match_id=m.id AND p.param <> \"0\" ">>},
 		{file_params_by_match_id, <<"SELECT DISTINCT m.enable_shash, m.sentence_hash_count, m.sentence_hash_percentage, m.enable_bayes, m.bayes_average, m.enable_whitefile FROM sh_match AS m, sh_func_params AS p WHERE m.id=? AND p.match_id=m.id AND p.param <> \"0\" ">>},
 		{mimes, <<"SELECT m.id, c.group_id, m.mime, m.extension FROM nw_mime_type_cross AS c, nw_mime_type m WHERE c.mime_id=m.id">>},
-		{regexes, <<"SELECT r.id, c.group_id, r.regex FROM sh_regex_cross AS c, sh_regex r WHERE c.regex_id=r.id">>}
+		{regexes, <<"SELECT r.id, c.group_id, r.regex FROM sh_regex_cross AS c, sh_regex r WHERE c.regex_id=r.id">>},
+		{insert_incident, <<"INSERT INTO log_incedent (id, rule_id, protocol, src_ip, destination, action, matcher, filename, misc) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?)">>}
 	]],
 
 	{ok, #state{host=Host, port=Port, 
 			user=User, password=Password, 
 			database=DB, pool_size=PoolSize, 
 			master_pid=MPid, pool_pids=PPids}}.
-
-handle_cast(_Msg, State) ->
-	{noreply, State}.
 
 terminate(_Reason, _State) ->
 	ok.
@@ -207,6 +224,9 @@ int_to_ip(N4) ->
 	I1 = N1,
 	I1 = N1 rem 256,
 	{I1, I2, I3, I4}.
+
+ip_to_int({I1,I2,I3,I4}) ->
+	(I1*256*256*256)+(I2*256*256)+(I3*256)+I4.
 
 populate_matches(Rows, Parent) -> populate_matches(Rows, Parent, []).
 
