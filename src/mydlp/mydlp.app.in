@@ -36,11 +36,15 @@
      mydlp_mnesia,
      mydlp_mysql,
      mydlp_regex,
+     mydlp_smtp_fsm,
      mydlp_sup,
      mydlp_tc,
      mydlp_trainer,
      mydlp_ui,
-     mydlp_worker_sup
+     mydlp_worker_sup,
+     smtpd_cmd,
+     smtpc_fsm,
+     smtpc
     ]},
   {registered,   []},
   {applications, [kernel, stdlib]},
@@ -64,6 +68,9 @@
                  {workers, []}
 	  },
 	  {https, {acceptor, {8443, ssl, http} },
+                 {workers, []}
+	  },
+	  {smtp, {acceptor, {10025, plain, smtp} },
                  {workers, []}
 	  }
 	 ]}

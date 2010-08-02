@@ -102,6 +102,21 @@ init([socket, http]) ->
 			]
 		}
 	};
+init([socket, smtp]) ->
+	{ok,
+		{_SupFlags = {simple_one_for_one, ?MAX_RESTART, ?MAX_TIME},
+			[
+				% TCP Client
+			  {   undefined,								% Id	   = internal id
+				  {mydlp_smtp_fsm,start_link,[]},		% StartFun = {M, F, A}
+				  temporary,								% Restart  = permanent | transient | temporary
+				  ?KILL_TIMEOUT,							% Shutdown = brutal_kill | int() >= 0 | infinity
+				  worker,									% Type	 = worker | supervisor
+				  []										% Modules  = [Module] | dynamic
+			  }
+			]
+		}
+	};
 init([socket, FsmModule]) ->
 	{ok,
 		{_SupFlags = {simple_one_for_one, ?MAX_RESTART, ?MAX_TIME},

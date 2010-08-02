@@ -38,11 +38,15 @@ dist_erl_DATA = \
 	mydlp_mnesia.erl \
 	mydlp_mysql.erl \
 	mydlp_regex.erl \
+	mydlp_smtp_fsm.erl \
 	mydlp_sup.erl \
 	mydlp_tc.erl \
 	mydlp_trainer.erl \
 	mydlp_ui.erl \
-	mydlp_worker_sup.erl
+	mydlp_worker_sup.erl \
+	smtpc.erl \
+	smtpc_fsm.erl \
+	smtpd_cmd.erl
 
 dist_hrl_DATA = \
 	mydlp.hrl \
