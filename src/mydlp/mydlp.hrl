@@ -25,6 +25,8 @@
 -define(MAX_TIME, 60).
 -define(KILL_TIMEOUT, 2000).
 
+-define(TIMEOUT, 120000).
+
 %% ---------------------------------
 %% Logging mechanism
 

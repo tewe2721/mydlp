@@ -24,8 +24,6 @@
 
 -behaviour(gen_fsm).
 
--export([behaviour_info/1]).
-
 -export([start_link/1,
 	set_socket/3]).
 
@@ -55,14 +53,6 @@
 		addr,      % client address
 		in_buffer=[]
 	}).
-
--define(TIMEOUT, 120000).
-
-behaviour_info(callbacks) ->
-	[{init, 0}];
-
-behaviour_info(_Other) ->
-	undefined.
 
 %%%------------------------------------------------------------------------
 %%% API

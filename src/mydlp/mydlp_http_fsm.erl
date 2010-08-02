@@ -85,7 +85,6 @@
 		value
 	}).
 
--define(TIMEOUT, 120000).
 %%% Keep-alive timeout (Apache web server default)
 -define(KA_TIMEOUT, 15000).
 
