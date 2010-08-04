@@ -47,7 +47,7 @@
 command(Line,State) when is_binary(Line) -> command(parse(Line),State);
 
 command({greeting,_},State) ->
-	send(State,220,erlmail_util:get_app_env(server_smtp_greeting,"ErlMail http://erlsoft.org (NO UCE)")),
+	send(State,220,"MyDLP http://www.mydlp.org (NO UCE)"),
 	State;
 
 command({helo = _Command,Domain},State) when is_list(Domain), length(Domain) > 0 -> 
@@ -147,11 +147,13 @@ store_message(Message,_State) when is_record(Message,message) ->
 %			end;
 %		{error,Reason} -> {error,Reason}
 %	end;
-	erlang:display(Message);
+	MIME = mime_util:decode(Message#message.message),
+        NewMessage = expand(Message,MIME),
+	erlang:display(NewMessage);
 store_message(Message,#smtpd_fsm{relay = _Relay} = State) ->
 	lists:map(fun(To) -> 
 		MessageName = message_name(now()),
-		store_message(MessageName,split_email(To),Message,State)
+		store_message(MessageName,mydlp_api:split_email(To),Message,State)
 		end,State#smtpd_fsm.rcpt).
 
 store_message(MessageName,{UserName,DomainName},Message,#smtpd_fsm{relay = true} = State) -> 
@@ -198,7 +200,7 @@ parse(Line) when is_list(Line)  ->
 
 clean_email(String) -> 
 	case re:run(String,"<(.*)>",[{capture,[1]}]) of
-		{match,[{Start,Length}]} -> string:substr(String,Start+1,Length-2);
+		{match,[{Start,Length}]} -> string:substr(String,Start+1,Length);
 		{error,Reason} -> {error,Reason}
 	end.
 
@@ -206,7 +208,8 @@ resp(211) -> "System Status"; % Need more info
 resp(214) -> "For help please go to http://erlsoft.org/modules/erlmail/";
 resp(220) -> "ErlMail (NO UCE)";
 resp(221) -> "SMTP server closing transmission channel";
-resp(250) -> "Requested mail action okay, completed";
+%resp(250) -> "Requested mail action okay, completed";
+resp(250) -> "OK";
 resp(251) -> "User not local";
 resp(252) -> "Cannot VRFY user, but will accept message and attempt deliver";
 resp(354) -> "Mail input accepted";
@@ -236,18 +239,30 @@ message_name(_Args) ->
         [82] ++ integer_to_list(Number + 1000) ++ [46] ++             % R then random number between 1,001 and 10,000
         Host.
 
-split_email(Atom) when is_atom(Atom) -> split_email(atom_to_list(Atom));
-split_email([]) -> {[],[]};
-split_email(EmailAddress) ->
-        case string:tokens(string:strip(EmailAddress),[64]) of
-                [UserName,DomainName] -> {UserName,DomainName};
-                _AnythingsElse -> {[],[]}
-        end.
-
 %combine_email([])                                 -> [];
 %combine_email({[],[]})                            -> [];
 %combine_email({UsersName,DomainName})             -> combine_email(UsersName,DomainName).
 combine_email(Atom,DomainName) when is_atom(Atom) -> combine_email(atom_to_list(Atom),DomainName);
 combine_email(UsersName,Atom)  when is_atom(Atom) -> combine_email(UsersName,atom_to_list(Atom));
 combine_email(UsersName,DomainName)               -> UsersName ++ [64] ++ DomainName.
+
+expand(Message,MIME) -> expand(Message,MIME,record_info(fields,message)).
+
+expand(Message,_MIME,[]) -> Message;
+expand(#message{from = []} = Message,MIME,[from | Rest]) ->
+	expand(Message#message{from = mime_util:get_header(from,MIME)},MIME,Rest);
+expand(#message{to = []} = Message,MIME,[to | Rest]) ->
+	expand(Message#message{to = mime_util:get_header(to,MIME)},MIME,Rest);
+expand(#message{cc = []} = Message,MIME,[cc | Rest]) ->
+	expand(Message#message{cc = mime_util:get_header(cc,MIME)},MIME,Rest);
+expand(#message{bcc = []} = Message,MIME,[bcc | Rest]) ->
+	expand(Message#message{bcc = mime_util:get_header(bcc,MIME)},MIME,Rest);
+expand(#message{size = 0} = Message,MIME,[size | Rest]) ->
+	expand(Message#message{size = length(Message#message.message)},MIME,Rest);
+expand(#message{flags = []} = Message,MIME,[flags | Rest]) ->
+	expand(Message#message{flags = [recent]},MIME,Rest);
+expand(#message{internaldate = []} = Message,MIME,[internaldate | Rest]) ->
+	expand(Message#message{internaldate={date(),time()}},MIME,Rest);
+expand(Message,MIME,[_Unknown | Rest]) ->
+	expand(Message,MIME,Rest).
 

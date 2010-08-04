@@ -70,4 +70,18 @@
         message      = []  % Whole Mail Message
         }).
 
+-record(mime,{
+        header      = [],
+        header_text = [],
+        body        = [],
+        body_text   = [],
+        message     = []
+        }).
+
+-record(addr,{
+        username    = [],
+        domainname  = [],
+        description = []
+        }).
+
 -endif.

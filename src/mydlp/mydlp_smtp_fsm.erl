@@ -39,7 +39,7 @@
 -behaviour(gen_fsm).
 -include("mydlp_smtp.hrl").
 
--export([start_link/0, set_socket/2]).
+-export([start_link/0]).
 
 %% gen_fsm callbacks
 -export([init/1, handle_event/3,
@@ -60,9 +60,6 @@
 
 start_link() ->
     gen_fsm:start_link(?MODULE, [], []).
-
-set_socket(Pid, Socket) when is_pid(Pid), is_port(Socket) ->
-    gen_fsm:send_event(Pid, {socket_ready, Socket}).
 
 %%%------------------------------------------------------------------------
 %%% Callback functions from gen_server
@@ -87,17 +84,18 @@ init([]) ->
 %%          {stop, Reason, NewStateData}
 %% @private
 %%-------------------------------------------------------------------------
-'WAIT_FOR_SOCKET'({socket_ready, Socket}, State) when is_port(Socket) ->
+'WAIT_FOR_SOCKET'({socket_ready, Socket, _CommType}, State) when is_port(Socket) ->
     % Now we own the socket
     inet:setopts(Socket, [{active, once}, binary]),
     {ok, {IP, _Port}} = inet:peername(Socket),
-	{ok,DNSBL} = erlmail_antispam:dnsbl(IP),
-	?D({relay,IP,smtpd_queue:checkip(IP)}),
-	NewState = State#smtpd_fsm{socket=Socket, addr=IP, options = DNSBL, relay = smtpd_queue:checkip(IP)},
+%	{ok,DNSBL} = erlmail_antispam:dnsbl(IP),
+%	?D({relay,IP,smtpd_queue:checkip(IP)}),
+%	NewState = State#smtpd_fsm{socket=Socket, addr=IP, options = DNSBL, relay = smtpd_queue:checkip(IP)},
+	NewState = State#smtpd_fsm{socket=Socket, addr=IP, relay = true},
 	NextState = smtpd_cmd:command({greeting,IP},NewState),
     {next_state, 'WAIT_FOR_CMD', NextState, ?TIMEOUT};
 'WAIT_FOR_SOCKET'(Other, State) ->
-    error_logger:error_msg("State: 'WAIT_FOR_SOCKET'. Unexpected message: ~p\n", [Other]),
+    ?DEBUG("SMTP State: 'WAIT_FOR_SOCKET'. Unexpected message: ~p\n", [Other]),
     %% Allow to receive async messages
     {next_state, 'WAIT_FOR_SOCKET', State}.
 

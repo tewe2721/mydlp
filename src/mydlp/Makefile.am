@@ -26,6 +26,7 @@ mydlpconf_DATA = \
 dist_erl_DATA = \
 	dynamic_compile.erl \
 	gen_server_cluster.erl \
+	mime_util.erl \
 	mydlp_acl.erl \
 	mydlp_api.erl \
 	mydlp_app.erl \

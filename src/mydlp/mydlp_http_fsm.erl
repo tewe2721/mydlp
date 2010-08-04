@@ -24,8 +24,7 @@
 
 -behaviour(gen_fsm).
 
--export([start_link/0,
-	set_socket/3]).
+-export([start_link/0]).
 
 %% gen_fsm callbacks
 -export([init/1,
@@ -107,9 +106,6 @@
 %%-------------------------------------------------------------------------
 start_link() ->
 	gen_fsm:start_link(?MODULE, [], []).
-
-set_socket(Pid, Socket, CommType) when is_pid(Pid) ->
-	gen_fsm:send_event(Pid, {socket_ready, Socket, CommType}).
 
 %%%------------------------------------------------------------------------
 %%% Callback functions from gen_server

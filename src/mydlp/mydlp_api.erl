@@ -694,3 +694,42 @@ more_than_count(Fun, Count, [I|List], Curr) ->
 	end;
 more_than_count(_, _, [], _) -> false.
 
+%%-------------------------------------------------------------------------
+%% @spec (String::string()) -> {string(),string()}
+%% @doc Splits the given string into two strings at the last SPACE (chr(32))
+%% @end
+%%-------------------------------------------------------------------------
+rsplit_at(String) -> rsplit_at(String,32).
+%%-------------------------------------------------------------------------
+%% @spec (String::string(),Chr::char()) -> {string(),string()}
+%% @doc Splits the given string into two strings at the last instace of Chr
+%% @end
+%%-------------------------------------------------------------------------
+rsplit_at(String,Chr) ->
+        case string:rchr(String, Chr) of
+                0 -> {String,[]};
+                Pos ->
+                        case lists:split(Pos,String) of
+                                {One,Two} -> {string:strip(One),Two};
+                                Other -> Other
+                        end
+        end.
+
+%%-------------------------------------------------------------------------
+%% @spec (String::string()) -> string()
+%% @doc Removes Double Quotes and white space from both sides of a string
+%% @end
+%%-------------------------------------------------------------------------
+unquote(String) ->
+        S2 = string:strip(String,both,32),
+        string:strip(S2,both,34).
+
+
+split_email(Atom) when is_atom(Atom) -> split_email(atom_to_list(Atom));
+split_email([]) -> {[],[]};
+split_email(EmailAddress) ->
+        case string:tokens(string:strip(EmailAddress),[64]) of
+                [UserName,DomainName] -> {UserName,DomainName};
+                _AnythingsElse -> {[],[]}
+        end.
+
