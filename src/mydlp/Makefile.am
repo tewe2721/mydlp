@@ -40,6 +40,7 @@ dist_erl_DATA = \
 	mydlp_mysql.erl \
 	mydlp_regex.erl \
 	mydlp_smtp_fsm.erl \
+	mydlp_smtpc.erl \
 	mydlp_sup.erl \
 	mydlp_tc.erl \
 	mydlp_trainer.erl \

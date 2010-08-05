@@ -132,11 +132,11 @@ init([]) ->
 		0 -> {next_state, 'WAIT_FOR_DATA', State#smtpd_fsm{buff = NewBuff}, ?TIMEOUT};
 		Pos -> % wait for end of data and return data in state.
 			<<Message:Pos/binary,13,10,46,13,10,NextBuff/binary>> = NewBuff,
-			% @todo Check return value of store_message to see if it fails
-			smtpd_cmd:store_message(Message,State),
-			%% acl_q
-
+			MessageR = smtpd_cmd:to_message(Message,State),
 			smtpd_cmd:send(State,250),
+
+			mydlp_smtpc:mail(MessageR),
+
 			NextState = State#smtpd_fsm{cmd   = undefined,
 			                       param = undefined,
 								   mail  = undefined,

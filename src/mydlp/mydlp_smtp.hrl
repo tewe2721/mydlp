@@ -49,24 +49,16 @@
                 module          % FSM handling module
                }).
 
--record(outgoing_smtp,{
-	rcpt       = [],
-	tries      = 0,
-	next_retry = [],
-	response   = []
-	}).
-
 -record(message,{
-        name         = [], % Tuple {Message Name, User Name, Doamin Name}
+        mail_from    = [], % mail from value
         from         = [], % single address for sender
+        rcpt_to      = [], % rcpt to value
         to           = [], % address list for recepient
         cc           = [], % address list for carbon copy
         bcc          = [], % address list for blind carbon copy
         internaldate = [], % date message was received
         size         = 0,  % integer() size of message
         options      = [], % Key/Value list of options
-        uid          = 0,  % Unique Identifier
-        flags        = [], % IMAP flags in proplist
         message      = []  % Whole Mail Message
         }).
 

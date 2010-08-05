@@ -45,6 +45,10 @@
 		{database, "mydlp"},
 		{pool_size, 2}
          ]).
+-define(SMTP, [ 
+          {helo_name, "mydlp.org"},
+          {next_hop, {"localhost", 10026}}
+         ]).
 
 -define(ACL_LOG(Proto, RuleId, Action, From, To, Matcher, File, Misc), 
 	mydlp_api:acl_msg(Proto, RuleId, Action, From, To, Matcher, File, Misc)).

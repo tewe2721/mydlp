@@ -105,7 +105,6 @@ enc_addr(Address) -> "<" ++ Address ++ ">".
 %%-------------------------------------------------------------------------
 decode(Message) -> 
 	MIME = split(Message),
-	erlang:display(MIME),
 	Headers = headers(MIME#mime.header_text),
 	case lists:keysearch('content-type',1,Headers) of
 		{value,{'content-type',Value}} ->
@@ -227,11 +226,13 @@ split_multipart(_Boundary,[],Acc) -> lists:reverse(Acc);
 split_multipart(Boundary,Body,Acc) -> 
 	%case regexp:match(Body,Boundary) of
 	case re:run(Body,Boundary,[{capture,[1]}]) of
-		{match,Start,Length} ->
+		{match,[{-1,_Length}]} -> split_multipart(Boundary,[],Acc);
+		{match,[{Start,Length}]} ->
 			{_Pre,New} = lists:split(Start + Length + 1,Body),
 			%case regexp:match(New,Boundary) of
 			case re:run(New,Boundary, [{capture,[1]}]) of
-				{match,Start2,_Length2} ->
+				{match,[{-1,_Length}]} -> split_multipart(Boundary,[],Acc);
+				{match,[{Start2,_Length2}]} ->
 					{Part,Next} = lists:split(Start2 - 3,New),
 					 split_multipart(Boundary,Next,[Part|Acc]);
 				nomatch -> split_multipart(Boundary,[],Acc)

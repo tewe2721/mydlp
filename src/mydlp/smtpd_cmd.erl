@@ -1,4 +1,4 @@
-%%%---------------------------------------------------------------------------------------
+%%---------------------------------------------------------------------------------------
 %%% @author    Stuart Jackson <sjackson@simpleenigma.com> [http://erlsoft.org]
 %%% @copyright 2006 - 2007 Simple Enigma, Inc. All Rights Reserved.
 %%% @doc       SMTP server commands
@@ -39,7 +39,7 @@
 -include("mydlp_smtp.hrl").
 
 -export([command/2]).
--export([store_message/2,store_message/4]).
+-export([to_message/2]).
 -export([send/2]).
 
 
@@ -136,8 +136,8 @@ command({Command,Param},State) ->
 
 %% @todo cehck relay state and store messages according to local or outgoing status. Only real differene is in the message name.
 
-store_message(Message,State) when is_binary(Message) -> store_message(binary_to_list(Message),State);
-store_message(Message,_State) when is_record(Message,message) ->
+to_message(Message,State) when is_binary(Message) -> to_message(binary_to_list(Message),State);
+to_message(Message,_State) when is_record(Message,message) ->
 %	case erlmail_antispam:pre_deliver(Message) of
 %		{ok,NewMessage} -> 
 %			erlmail_store:deliver(NewMessage),
@@ -148,33 +148,12 @@ store_message(Message,_State) when is_record(Message,message) ->
 %		{error,Reason} -> {error,Reason}
 %	end;
 	MIME = mime_util:decode(Message#message.message),
-        NewMessage = expand(Message,MIME),
-	erlang:display(NewMessage);
-store_message(Message,#smtpd_fsm{relay = _Relay} = State) ->
-	lists:map(fun(To) -> 
-		MessageName = message_name(now()),
-		store_message(MessageName,mydlp_api:split_email(To),Message,State)
-		end,State#smtpd_fsm.rcpt).
-
-store_message(MessageName,{UserName,DomainName},Message,#smtpd_fsm{relay = true} = State) -> 
-%	case check_user({UserName,DomainName}) of
-%		true ->
-%			store_message(#message{
-%				name={MessageName,UserName,DomainName},
-%				message=Message},State);
-%		false ->
-			?D({relay,non_local}),
-			SmtpOut = #outgoing_smtp{rcpt = combine_email(UserName,DomainName)},
-			store_message(#message{
-				name={MessageName,SmtpOut,now()},
-				message=Message},State)
-	;
-%	end;
-store_message(MessageName,{UserName,DomainName},Message,#smtpd_fsm{relay = false} = State) -> 
-	store_message(#message{
-		name={MessageName,UserName,DomainName},
+        _NewMessage = expand(Message,MIME);
+to_message(Message,#smtpd_fsm{mail=From, rcpt=To} = State) ->
+	to_message(#message{
+		mail_from=From,
+		rcpt_to=lists:reverse(To),
 		message=Message},State).
-
 
 send(State,Code) -> send(State,Code,resp(Code)).
 send(State,Code,[]) -> send(State,Code,resp(Code));
@@ -201,7 +180,8 @@ parse(Line) when is_list(Line)  ->
 clean_email(String) -> 
 	case re:run(String,"<(.*)>",[{capture,[1]}]) of
 		{match,[{Start,Length}]} -> string:substr(String,Start+1,Length);
-		{error,Reason} -> {error,Reason}
+		{match,[{-1,_Length}]} -> {error,nomatch};
+		nomatch -> {error,nomatch}
 	end.
 
 resp(211) -> "System Status"; % Need more info
@@ -229,23 +209,6 @@ resp(552) -> "Requestion action not taken: insufficient system storage";
 resp(553) -> "Requestion action not taken: mailbox name not allowed";
 resp(554) -> "Transaction Failed".
 
-message_name(_Args) ->
-        {Number,_} = random:uniform_s(9000,now()),
-        Seconds = calendar:datetime_to_gregorian_seconds({date(),time()}) - 62167219200,
-        Node = atom_to_list(node()),
-        [_N,Host] = string:tokens(Node,[64]),
-        integer_to_list(Seconds) ++ [46] ++                                               % Seconds since UNIX Epoch (1-1-1970)
-        [77] ++ integer_to_list(calendar:time_to_seconds(time())) ++  % M then Seconds in day
-        [82] ++ integer_to_list(Number + 1000) ++ [46] ++             % R then random number between 1,001 and 10,000
-        Host.
-
-%combine_email([])                                 -> [];
-%combine_email({[],[]})                            -> [];
-%combine_email({UsersName,DomainName})             -> combine_email(UsersName,DomainName).
-combine_email(Atom,DomainName) when is_atom(Atom) -> combine_email(atom_to_list(Atom),DomainName);
-combine_email(UsersName,Atom)  when is_atom(Atom) -> combine_email(UsersName,atom_to_list(Atom));
-combine_email(UsersName,DomainName)               -> UsersName ++ [64] ++ DomainName.
-
 expand(Message,MIME) -> expand(Message,MIME,record_info(fields,message)).
 
 expand(Message,_MIME,[]) -> Message;
@@ -259,8 +222,6 @@ expand(#message{bcc = []} = Message,MIME,[bcc | Rest]) ->
 	expand(Message#message{bcc = mime_util:get_header(bcc,MIME)},MIME,Rest);
 expand(#message{size = 0} = Message,MIME,[size | Rest]) ->
 	expand(Message#message{size = length(Message#message.message)},MIME,Rest);
-expand(#message{flags = []} = Message,MIME,[flags | Rest]) ->
-	expand(Message#message{flags = [recent]},MIME,Rest);
 expand(#message{internaldate = []} = Message,MIME,[internaldate | Rest]) ->
 	expand(Message#message{internaldate={date(),time()}},MIME,Rest);
 expand(Message,MIME,[_Unknown | Rest]) ->
