@@ -777,5 +777,5 @@ log_req(#state{comm_type=ssl} = State, Action, AclR) -> log_req1(https, State, A
 
 log_req1(Proto, #state{addr=Addr, http_headers=(#http_headers{host=DestHost})}, Action, 
 		{{rule, RuleId}, {file, File}, {matcher, Matcher}, {misc, Misc}}) ->
-	?ACL_LOG(Proto, RuleId, Action, Addr, DestHost, Matcher, File, Misc).
+	?ACL_LOG(Proto, RuleId, Action, Addr, nil, DestHost, Matcher, File, Misc).
 

@@ -38,6 +38,7 @@
 	get_cgid/0,
 	get_pgid/0,
 	get_rules/1,
+	get_rules_by_user/1,
 	get_regexes/1,
 	add_fhash/3,
 	remove_fhash/1,
@@ -107,6 +108,9 @@ get_pgid() -> -2.
 get_rules(Who) -> 
 	async_query_call({get_rules, Who}).
 
+get_rules_by_user(Who) -> 
+	async_query_call({get_rules_by_user, Who}).
+
 get_regexes(GroupId) ->	
 	async_query_call({get_regexes, GroupId}).
 
@@ -156,6 +160,12 @@ handle_query({get_rules, Who}) ->
 	Q = qlc:q([I#ipr.parent || I <- mnesia:table(ipr),
 			ip_band(I#ipr.ipbase, I#ipr.ipmask) == ip_band(Who, I#ipr.ipmask)
 			]),
+	Parents = qlc:e(Q),
+	Rules = resolve_rules(Parents),
+	resolve_funcs(Rules);
+
+handle_query({get_rules_by_user, _Who}) ->
+	Q = qlc:q([{rule, R#rule.id} || R <- mnesia:table(rule)]), % this line will be refined
 	Parents = qlc:e(Q),
 	Rules = resolve_rules(Parents),
 	resolve_funcs(Rules);

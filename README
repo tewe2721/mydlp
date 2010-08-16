@@ -5,4 +5,4 @@ References:
 http://www.mydlp.org
 
 Dependencies:
-Thrift, Python 2.6, python-magic, unrar, catdoc, pstotext, poppler-utils, html2text, sun-java6-jre
+Thrift, Python 2.6, python-magic, unrar, catdoc, pstotext, poppler-utils, python-beautifulsoup, sun-java6-jre

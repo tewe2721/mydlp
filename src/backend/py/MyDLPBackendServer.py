@@ -34,6 +34,9 @@ import magic
 import iban
 import daemon
 
+from BeautifulSoup import BeautifulSoup
+
+
 class MydlpHandler:
 	def __init__(self):
 		self.mime = magic.open(magic.MAGIC_MIME)
@@ -50,6 +53,11 @@ class MydlpHandler:
 	def isValidIban(self, iban_str):
 		myIBAN = iban.IBAN(iban_str)
 		return myIBAN.is_valid()
+
+	def htmlToText(self, html):
+		soup = BeautifulSoup(html)
+		text_parts = soup.findAll(text=True)
+		return ''.join(text_parts)
 
 class MyDLPBackendServer(daemon.Daemon):
 	def run(self):

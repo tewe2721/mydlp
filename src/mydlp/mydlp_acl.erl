@@ -33,6 +33,7 @@
 %% API
 -export([start_link/0,
 	q/3,
+	qu/3,
 	stop/0]).
 
 %% gen_server callbacks
@@ -52,6 +53,9 @@
 q(Addr, _Dest, Files) ->
 	gen_server:call(?MODULE, {acl_q, {Addr, Files}}, 60000).
 
+qu(_User, _Dest, Files) ->
+	gen_server:call(?MODULE, {acl_qu, {user, Files}}, 60000).
+
 %%%%%%%%%%%%%% gen_server handles
 
 handle_call({acl_q, {Addr, Files}}, From, State) ->
@@ -59,6 +63,17 @@ handle_call({acl_q, {Addr, Files}}, From, State) ->
 	spawn_link(fun() ->
 		Rules = mydlp_mnesia:get_rules(Addr),
 		Param = {Addr, mydlp_api:df_to_files(Files)},
+
+		Result = apply_rules(Rules, Param),
+		Worker ! {async_acl_q, Result, From}
+	end),
+	{noreply, State, 60000};
+
+handle_call({acl_qu, {User, Files}}, From, State) ->
+	Worker = self(),
+	spawn_link(fun() ->
+		Rules = mydlp_mnesia:get_rules_by_user(User),
+		Param = {User, mydlp_api:df_to_files(Files)},
 
 		Result = apply_rules(Rules, Param),
 		Worker ! {async_acl_q, Result, From}

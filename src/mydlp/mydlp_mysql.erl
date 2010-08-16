@@ -34,7 +34,7 @@
 %% API
 -export([start_link/0,
 	compile_filters/0,
-	push_log/8,
+	push_log/9,
 	stop/0]).
 
 %% gen_server callbacks
@@ -66,8 +66,8 @@ psq(PreparedKey, Params) when is_atom(PreparedKey), is_list(Params) ->
 	end.
 
 
-push_log(Proto, RuleId, Action, Ip, To, Matcher, FileS, Misc) ->
-	gen_server:cast(?MODULE, {push_log, {Proto, RuleId, Action, Ip, To, Matcher, FileS, Misc}}).
+push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc) ->
+	gen_server:cast(?MODULE, {push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc}}).
 
 handle_call(compile_filters, From, State) ->
 	Worker = self(),
@@ -84,10 +84,18 @@ handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
 % INSERT INTO log_incedent (id, rule_id, protocol, src_ip, destination, action, matcher, filename, misc)
-handle_cast({push_log, {Proto, RuleId, Action, Ip, To, Matcher, FileS, Misc}}, State) ->
+handle_cast({push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc}}, State) ->
 	spawn_link(fun() ->
+		User1 = case User of
+			nil -> null;
+			Else -> Else
+		end,
+		Ip1 = case ip_to_int(Ip) of
+			nil -> null;
+			Else2 -> Else2
+		end,
 		psq(insert_incident, 
-			[RuleId, Proto, ip_to_int(Ip), To, Action, Matcher, FileS, Misc])
+			[RuleId, Proto, Ip1, User1, To, Action, Matcher, FileS, Misc])
 	end),
 	{noreply, State};
 
@@ -151,7 +159,7 @@ init([]) ->
 		{file_params_by_match_id, <<"SELECT DISTINCT m.enable_shash, m.sentence_hash_count, m.sentence_hash_percentage, m.enable_bayes, m.bayes_average, m.enable_whitefile FROM sh_match AS m, sh_func_params AS p WHERE m.id=? AND p.match_id=m.id AND p.param <> \"0\" ">>},
 		{mimes, <<"SELECT m.id, c.group_id, m.mime, m.extension FROM nw_mime_type_cross AS c, nw_mime_type m WHERE c.mime_id=m.id">>},
 		{regexes, <<"SELECT r.id, c.group_id, r.regex FROM sh_regex_cross AS c, sh_regex r WHERE c.regex_id=r.id">>},
-		{insert_incident, <<"INSERT INTO log_incedent (id, rule_id, protocol, src_ip, destination, action, matcher, filename, misc) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?)">>}
+		{insert_incident, <<"INSERT INTO log_incedent (id, rule_id, protocol, src_ip, src_user, destination, action, matcher, filename, misc) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)">>}
 	]],
 
 	{ok, #state{host=Host, port=Port, 
@@ -214,6 +222,7 @@ populate_iprs([[Id, Base, Subnet]| Rows], Parent) ->
 	populate_iprs(Rows, Parent);
 populate_iprs([], _Parent) -> ok.
 
+int_to_ip(nil) -> nil;
 int_to_ip(N4) ->
 	I4 = N4 rem 256,
 	N3 = N4 div 256,
@@ -225,6 +234,7 @@ int_to_ip(N4) ->
 	I1 = N1 rem 256,
 	{I1, I2, I3, I4}.
 
+ip_to_int(nil) -> nil;
 ip_to_int({I1,I2,I3,I4}) ->
 	(I1*256*256*256)+(I2*256*256)+(I3*256)+I4.
 

@@ -37,7 +37,7 @@ is_char(_) -> false.
 %%--------------------------------------------------------------------
 %% @doc Check if a byte is an HTTP control character
 %% @end
-%%----------------------------------------------------------------------
+%----------------------------------------------------------------------
 is_ctl(X) when X >= 0 , X =< 31 -> true;
 is_ctl(X) when X == 127 -> true;
 is_ctl(_) -> false.
@@ -264,11 +264,16 @@ get_text(#file{mime_type= <<"application/msword">>} = File) ->
 get_text(#file{mime_type= <<"application/vnd.ms-office">>} = File) ->
 	office_to_text(File);
 get_text(#file{mime_type= <<"text/html">>, data=Data}) ->
-	html_to_text(Data);
+	try
+		Text = mydlp_tc:html_to_text(Data),
+		{ok, Text}
+	catch E -> {error, E}
+	end;
 get_text(#file{mime_type= <<"application/postscript">>, data=Data}) ->
 	ps_to_text(Data);
 get_text(#file{mime_type=undefined}) -> {error, unknown_type};
-get_text(_File) -> {error, unsupported_type}.
+%get_text(_File) -> {error, unsupported_type}.
+get_text(_File) -> {ok, <<>>}.
 
 %%--------------------------------------------------------------------
 %% @doc Extracts Text from XML string
@@ -508,25 +513,6 @@ ps_to_text(Bin) when is_binary(Bin) ->
 	ok = file:delete(Ps), Ret.
 
 %%--------------------------------------------------------------------
-%% @doc Extracts Text from HTML files
-%% @end
-%%----------------------------------------------------------------------
-html_to_text(Bin) when is_binary(Bin) -> 
-	{ok, HTML} = mktempfile(),
-	ok = file:write_file(HTML, Bin, [raw]),
-	Port = open_port({spawn_executable, "/usr/bin/html2text"}, 
-			[{args, ["-width","9999999",HTML]},
-			use_stdio,
-			exit_status,
-			stderr_to_stdout]),
-
-	Ret = case get_port_resp(Port, []) of
-		{ok, Text} -> {ok, Text};
-		Else -> Else
-	end,
-	ok = file:delete(HTML), Ret.
-	
-%%--------------------------------------------------------------------
 %% @doc Extracts Text from PDF files
 %% @end
 %%----------------------------------------------------------------------
@@ -570,18 +556,27 @@ strhash(S) when is_binary(S) -> erlang:phash2(S).
 %% @doc Logs acl messages
 %% @end
 %%----------------------------------------------------------------------
-acl_msg(Proto, RuleId, Action, {Ip1,Ip2,Ip3,Ip4} = Ip, To, Matcher, File, Misc) ->
+acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, File, Misc) ->
 	FileS = file_to_str(File),
-	mydlp_logger:notify(acl_msg,
-		"PROTOCOL: ~w , RULE: ~w , ACTION: ~w , FROM: ~w.~w.~w.~w , TO: ~s , MATCHER: ~w , FILE: ~s , MISC: ~s ~n",
-		[Proto, RuleId, Action, Ip1,Ip2,Ip3,Ip4, To, Matcher, "\"" ++ FileS ++ "\"", Misc]),
+	acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
 
 	case Action of
-		log -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, To, Matcher, FileS, Misc);
-		block -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, To, Matcher, FileS, Misc);
+		log -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
+		block -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
 		_Else -> ok
-	end;
-acl_msg(_,_,_,_,_,_,_,_) -> ok.
+	end.
+
+acl_msg1(Proto, RuleId, Action, {Ip1,Ip2,Ip3,Ip4}, nil, To, Matcher, FileS, Misc) ->
+	mydlp_logger:notify(acl_msg,
+		"PROTOCOL: ~w , RULE: ~w , ACTION: ~w , FROM: ~w.~w.~w.~w , TO: \"~s\" , MATCHER: ~w , FILE: \"~s\" , MISC: ~s ~n",
+		[Proto, RuleId, Action, Ip1,Ip2,Ip3,Ip4, To, Matcher, FileS, Misc]);
+acl_msg1(Proto, RuleId, Action, nil, User, To, Matcher, FileS, Misc) ->
+	mydlp_logger:notify(acl_msg,
+		"PROTOCOL: ~w , RULE: ~w , ACTION: ~w , FROM: ~s , TO: \"~s\" , MATCHER: ~w , FILE: \"~s\" , MISC: ~s ~n",
+		[Proto, RuleId, Action, User, To, Matcher, FileS, Misc]);
+acl_msg1(_,_,_,_,_,_,_,_,_) -> ok.
+
+
 
 files_to_str(Files) -> files_to_str(Files, []).
 

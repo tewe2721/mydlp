@@ -34,6 +34,7 @@
 -export([start_link/0,
 	get_mime/1,
 	is_valid_iban/1,
+	html_to_text/1,
 	bayes_score/1,
 	bayes_train_confidential/1,
 	bayes_train_public/1,
@@ -74,6 +75,9 @@ get_mime(Data) when is_binary(Data) ->
 
 is_valid_iban(IbanStr) ->
 	gen_server:call(?MODULE, {thrift, py, isValidIban, [IbanStr]}).
+
+html_to_text(Html) ->
+	gen_server:call(?MODULE, {thrift, py, htmlToText, [Html]}).
 
 bayes_score(Text) ->
 	gen_server:call(?MODULE, {thrift, java, score, [Text]}).

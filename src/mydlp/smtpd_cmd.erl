@@ -136,25 +136,10 @@ command({Command,Param},State) ->
 
 %% @todo cehck relay state and store messages according to local or outgoing status. Only real differene is in the message name.
 
-show([]) -> ok;
-show([M|Rest]) -> erlang:display(M#mime.header), show(M#mime.body), show(Rest);
-show(MIME) -> show([MIME]).
-
 read_message(Message,State) when is_binary(Message) -> read_message(binary_to_list(Message),State);
 read_message(Message,State) when is_record(Message,message) ->
-%	case erlmail_antispam:pre_deliver(Message) of
-%		{ok,NewMessage} -> 
-%			erlmail_store:deliver(NewMessage),
-%			case erlmail_antispam:post_deliver(Message) of
-%				{ok,_M} -> ok;
-%				{error,Reason} -> {error,Reason}
-%			end;
-%		{error,Reason} -> {error,Reason}
-%	end;
 	MIME = mime_util:decode(Message#message.message),
-	show(MIME),
         NewMessage = expand(Message,MIME),
-	%erlang:display(NewMessage),
 	State#smtpd_fsm{message_record=NewMessage, message_mime=MIME};
 read_message(Message,#smtpd_fsm{mail=From, rcpt=To} = State) ->
 	read_message(#message{

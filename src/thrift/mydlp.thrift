@@ -22,4 +22,5 @@ service Mydlp {
     // returns mimetype of binary
     string getMagicMime(1 : binary Data)
     bool isValidIban(1 : string IbanStr)
+    binary htmlToText(1 : binary Data)
 }

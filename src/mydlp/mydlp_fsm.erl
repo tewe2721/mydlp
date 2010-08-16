@@ -303,5 +303,5 @@ get_proto_name(#state{module=Module, comm_type=CommType}) ->
 
 log_req(#state{addr=Addr} = State, {DestHost, _Port}, Action,
 		{{rule, RuleId}, {file, File}, {matcher, Matcher}, {misc, Misc}}) ->
-	?ACL_LOG(get_proto_name(State), RuleId, Action, Addr, DestHost, Matcher, File, Misc).
+	?ACL_LOG(get_proto_name(State), RuleId, Action, Addr, nil, DestHost, Matcher, File, Misc).
 
