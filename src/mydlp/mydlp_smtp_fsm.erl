@@ -158,13 +158,28 @@ init([]) ->
 
 % refined this
 'BLOCK_REQ'(block, #smtpd_fsm{message_record=MessageR} = State) ->
-	mydlp_smtpc:mail(MessageR),
+	MailFrom = MessageR#message.mail_from,
+	RepMessage = #message{mail_from=MailFrom, 
+			rcpt_to=MailFrom,
+			message=
+				"From: <" ++ MailFrom ++ ">\r\n" ++
+				"To: <" ++ MailFrom ++ ">\r\n" ++
+				"Subject: Access denied!!!\r\n" ++
+				"\r\n" ++
+				"\r\n" ++
+				"Your e-mail to \'" ++ MessageR#message.rcpt_to ++ "\' have been denied by MyDLP. \n" ++
+				"\n" ++
+				"Please contact to your administrator for details.\n"},
+	mydlp_smtpc:mail(RepMessage),
 	NextState = State#smtpd_fsm{cmd   = undefined,
 			param = undefined,
 			mail  = undefined,
 			rcpt  = undefined,
 			to    = undefined,
 			messagename = undefined,
+			message_record = undefined,
+		        message_mime = undefined,
+		        files       = [],
 			data  = undefined},
 	{next_state, 'WAIT_FOR_CMD', NextState, ?TIMEOUT}.
 
@@ -176,6 +191,9 @@ init([]) ->
 			rcpt  = undefined,
 			to    = undefined,
 			messagename = undefined,
+			message_record = undefined,
+		        message_mime = undefined,
+		        files       = [],
 			data  = undefined},
 	{next_state, 'WAIT_FOR_CMD', NextState, ?TIMEOUT}.
 
