@@ -574,6 +574,10 @@ acl_msg1(Proto, RuleId, Action, nil, User, To, Matcher, FileS, Misc) ->
 	mydlp_logger:notify(acl_msg,
 		"PROTOCOL: ~w , RULE: ~w , ACTION: ~w , FROM: ~s , TO: \"~s\" , MATCHER: ~w , FILE: \"~s\" , MISC: ~s ~n",
 		[Proto, RuleId, Action, User, To, Matcher, FileS, Misc]);
+acl_msg1(Proto, RuleId, Action, {Ip1,Ip2,Ip3,Ip4}, User, To, Matcher, FileS, Misc) ->
+	mydlp_logger:notify(acl_msg,
+		"PROTOCOL: ~w , RULE: ~w , ACTION: ~w , FROM: ~w.~w.~w.~w (~s) , TO: \"~s\" , MATCHER: ~w , FILE: \"~s\" , MISC: ~s ~n",
+		[Proto, RuleId, Action, Ip1,Ip2,Ip3,Ip4, User, To, Matcher, FileS, Misc]);
 acl_msg1(_,_,_,_,_,_,_,_,_) -> ok.
 
 
