@@ -10,7 +10,7 @@ Thrift, Python 2.6, python-magic, unrar, catdoc, pstotext, poppler-utils, python
 Squid configuration for ICAP:
 
  icap_enable on
- icap_service service_req reqmod_precache 0 icap://127.0.0.1:1344/request
+ icap_service service_req reqmod_precache 0 icap://127.0.0.1:1344/dlp
  icap_class class_req service_req
  icap_access class_req allow all
  icap_send_client_ip on

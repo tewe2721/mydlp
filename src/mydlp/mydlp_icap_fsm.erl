@@ -54,6 +54,9 @@
 	http_headers,
 	http_content=[],
 	files=[],
+	max_connections,
+	options_ttl,
+	path,
 	tmp
 }).
 
@@ -92,8 +95,18 @@ start_link() ->
 %% @private
 %%-------------------------------------------------------------------------
 init([]) ->
-    process_flag(trap_exit, true),
-    {ok, 'WAIT_FOR_SOCKET', #state{}}.
+	process_flag(trap_exit, true),
+
+	ConfList = case application:get_env(icap) of
+		{ok, CL} -> CL;
+		_Else -> ?ICAP
+	end,
+
+	{path, P} = lists:keyfind(path, 1, ConfList),
+	{max_connections, MC} = lists:keyfind(max_connections, 1, ConfList),
+	{options_ttl, OT} = lists:keyfind(options_ttl, 1, ConfList),
+
+	{ok, 'WAIT_FOR_SOCKET', #state{max_connections=MC, path=P, options_ttl=OT}}.
 
 %%-------------------------------------------------------------------------
 %% Func: StateName/2
@@ -111,16 +124,18 @@ init([]) ->
 	%% Allow to receive async messages
 	{next_state, 'WAIT_FOR_SOCKET', State}.
 
-
 %% Notification event coming from client
-'ICAP_REQ_LINE'({data, Line}, State) ->
+'ICAP_REQ_LINE'({data, Line}, #state{path=Path} = State) ->
 	[MethodS, Uri, VersionS] = string:tokens(Line, " "),
+	case get_path(Uri) of
+		Path -> ok;
+		Else -> throw({error, {path_does_not_match, {Path, Else}}}) end,
 
 	Method = case http_util:to_lower(MethodS) of
 		"options" -> options;
 		"reqmod" -> reqmod;
 		"respmod" -> respmod;
-		_Else -> throw({error, bad_method}) end,
+		_Else2 -> throw({error, bad_method}) end,
 
 	[$i, $c, $a, $p, $/, MajorVersionC, $., MinorVersionC, $\r, $\n ] = 
 			http_util:to_lower(VersionS),
@@ -309,14 +324,20 @@ get_body(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_impl
 
 'BLOCK_REQ'(block, State) -> reply(block, State).
 
-reply(What, #state{socket=Socket, icap_request=IcapReq, http_request=HttpReq} = State) ->
+reply(What, #state{socket=Socket, icap_request=IcapReq, http_request=HttpReq,
+		max_connections=MC, options_ttl=OT} = State) ->
 	IcapVer = ["ICAP/", integer_to_list(IcapReq#icap_request.major_version), ".", 
 		integer_to_list(IcapReq#icap_request.minor_version)],
-	StdIH = ["Service: MyDLP ICAP Server\r\n", "Connection: keep-alive\r\n", "ISTag: \"mydlp-icap-rocks\"\r\n"],
+	StdIH = ["Date: ", httpd_util:rfc1123_date(), "\r\n",
+		"Service: MyDLP ICAP Server\r\n", 
+		"Connection: keep-alive\r\n", 
+		"ISTag: \"mydlp-icap-rocks\"\r\n"],
 	Reply = case {What, IcapReq#icap_request.method} of
 		{ok, options} -> [IcapVer, " 200 OK\r\n",
-				"Methods: REQMOD\r\n",
 				StdIH,
+				"Methods: REQMOD\r\n",
+				"Max-Connections: ", integer_to_list(MC), "\r\n",
+				"Options-TTL: ", integer_to_list(OT), "\r\n",
 				"Encapsulated: null-body=0\r\n",
 				"Allow: 204\r\n\r\n"];
 		{ok, reqmod} -> [IcapVer, " 204 No Content\r\n",
@@ -328,7 +349,8 @@ reply(What, #state{socket=Socket, icap_request=IcapReq, http_request=HttpReq} = 
 				"<head><title>Blocked by MyDLP</title></head>",
 				"<body><center><strong>DENIED !!!</strong></center></body>",
 				"</html>">>,
-				ReqModB = <<"72\r\n", Deny/binary, "\r\n0\r\n"	>>,
+				ReqModB = [httpd_util:integer_to_hexlist(size(Deny)), 
+						"\r\n", Deny, "\r\n0\r\n"],
 				ReqModH = list_to_binary(
 					["HTTP/", integer_to_list(HTTPMajorv), ".", 
 						integer_to_list(HTTPMinorv), " 403 Forbidden\r\n",
@@ -470,3 +492,10 @@ log_req(#state{icap_headers=#icap_headers{x_client_ip=Addr},
 		http_headers=(#http_headers{host=DestHost})}, Action, 
 		{{rule, RuleId}, {file, File}, {matcher, Matcher}, {misc, Misc}}) ->
 	?ACL_LOG(icap, RuleId, Action, Addr, nil, DestHost, Matcher, File, Misc).
+
+get_path(("/" ++ _Str) = Uri) -> Uri;
+get_path("icap://" ++ Str) ->
+	case string:chr(Str, $/) of
+		0 -> "/";
+		I2 -> string:substr(Str, I2) end;
+get_path(Uri) -> throw({error, {bad_uri, Uri}}).

@@ -50,6 +50,12 @@
           {next_hop, {"localhost", 10026}}
          ]).
 
+-define(ICAP, [
+          {path, "/dlp"},
+          {max_connections, 1000},
+          {options_ttl, 3600}
+         ]).
+
 -define(ACL_LOG(Proto, RuleId, Action, Ip, User, To, Matcher, File, Misc), 
 	mydlp_api:acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, File, Misc)).
 
