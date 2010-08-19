@@ -16,13 +16,51 @@ JAVA=/usr/bin/java
 ERLANG_OPTS="-sname system -noshell -detached"
 
 HOMEDIR=/etc/mydlp
-PIDFILE=/var/run/mydlp/mydlp.pid
-PIDFILE2=/var/run/mydlp/backend-py.pid
-PIDFILE3=/var/run/mydlp/backend-java.pid
+
+PIDDIR=/var/run/mydlp
+PIDFILE=$PIDDIR/mydlp.pid
+PIDFILE2=$PIDDIR/backend-py.pid
+PIDFILE3=$PIDDIR/backend-java.pid
+
+SERV=/usr/sbin/service
+MYSQLC=/usr/bin/mysql
+MYSQLADM=/usr/bin/mysqladmin
 
 . /lib/lsb/init-functions
 
+check_piddir() {
+	[ -d $PIDDIR ] || \
+		mkdir -p $PIDDIR
+}
+
+check_mysql_db() {
+	log_daemon_msg "Starting MyDLP" "mydlp"
+	$SERV mysql status) || \
+		($SERV mysql start; /bin/sleep 2)
+
+	# Import MySQL schema
+	if (echo|$MYSQLC); then
+		if [ -z "$(echo 'show databases'|$MYSQLC|grep -e '^mydlp$')" ]; then
+			( $MYSQLADM create mydlp && \
+			$MYSQLC mydlp < /usr/share/mydlp/schema/mydlp.sql && \
+			echo "Initialized database 'mydlp' successfully...") || \
+			      ( echo "================================================="; \
+				echo "|   A problem occured while importing schema.   |"; \
+				echo "|   Please create a database and import         |"; \
+				echo "|   /usr/share/mydlp/schema/mydlp.sql manually. |"; \
+				echo "================================================="; \
+				echo; )
+		else
+			echo "Database 'mydlp' already exists..."
+		fi
+	else
+		echo "Cannot find mysql-client!!!"
+	fi
+}
+
 start_mydlp() {
+	check_mysql_db
+
 	log_daemon_msg "Starting MyDLP" "mydlp"
         if start-stop-daemon --start --quiet --oknodo --chdir $HOMEDIR --pidfile $PIDFILE --exec $ERLANG -- $ERLANG_OPTS -mnesia dir '"/var/lib/mydlp/mnesia"' -config mydlp-production -boot mydlp; then
             log_end_msg 0
@@ -96,6 +134,7 @@ status_backend_java() {
 
 case "$1" in
   start)
+	check_piddir
 	cleanpids
 	start_backend_java
 	start_backend_py
@@ -103,6 +142,7 @@ case "$1" in
 	cleanpids
 	;;
   stop)
+	check_piddir
 	cleanpids
 	stop_mydlp
 	stop_backend_py
@@ -114,6 +154,7 @@ case "$1" in
 	;;
 
   restart)
+	check_piddir
 	cleanpids
 	stop_mydlp
 	stop_backend_py
@@ -126,6 +167,7 @@ case "$1" in
 	;;
 
   status)
+	check_piddir
         status_mydlp && exit 0 || exit $?
 	;;
 

@@ -4,3 +4,5 @@
 /var/lib/mydlp/mnesia
 /var/log/mydlp
 /var/run/mydlp
+/var/lib/mydlp/backup/
+/var/lib/mydlp/quarantine/

@@ -32,10 +32,16 @@ generate_keys() {
 	return 0
 }
 
+configure_apache() {
+	/usr/sbin/a2enmod ssl
+	/usr/sbin/a2dissite default-ssl
+	/usr/sbin/a2ensite mydlp-site
+}
 
 case "$1" in
     configure)
 	generate_keys
+	configure_apache
 	;;
 
     abort-upgrade|abort-deconfigure|abort-remove)
