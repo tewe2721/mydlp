@@ -7,6 +7,9 @@ config.status
 configure
 configure.lineno
 erl_crash.dump
+py-compile
+install-sh
+missing
 *.beam
 *.app
 *.rel
@@ -32,4 +35,3 @@ debian/mydlp
 debian/mydlp.*.debhelper
 debian/stamp-autotools-files
 debian/stamp-makefile-build
-py-compile
