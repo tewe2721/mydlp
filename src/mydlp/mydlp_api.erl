@@ -954,3 +954,19 @@ heads_to_file([_|Heads], File) ->
 	heads_to_file(Heads, File);
 heads_to_file([], File) ->
 	File.
+
+%%-------------------------------------------------------------------------
+%% @doc Writes files to quarantine directory.
+%% @end
+%%-------------------------------------------------------------------------
+quarantine(#file{} = File) ->
+	FN = case File#file.filename of
+		"" -> integer_to_list(erlang:phash2(File#file.data));
+		undefined -> integer_to_list(erlang:phash2(File#file.data));
+		Else -> Else end,
+	Path = ?QUARANTINE_DIR ++ FN,
+	file:write_file(Path, File#file.data, [raw]), ok;
+quarantine([File|Files]) ->
+	quarantine(File),
+	quarantine(Files);
+quarantine([]) -> ok.

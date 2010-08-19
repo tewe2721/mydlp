@@ -77,4 +77,6 @@
 		is_encrypted = false
         }).
 
+-define(QUARANTINE_DIR, "/var/lib/mydlp/quarantine/").
+
 -endif.

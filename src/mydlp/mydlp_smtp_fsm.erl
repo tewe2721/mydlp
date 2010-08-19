@@ -143,10 +143,15 @@ init([]) ->
 'REQ_OK'(#smtpd_fsm{files=Files} = State) ->
 	case mydlp_acl:qu(user, dest, Files) of
 		pass -> 'CONNECT_REMOTE'(connect, State);
-		{quarantine, AclR} -> log_req(State, quarantine, AclR), 'BLOCK_REQ'(block, State);
-		{block, AclR} -> log_req(State, block, AclR), 'BLOCK_REQ'(block, State);
-		{log, AclR} -> log_req(State, log, AclR), 'CONNECT_REMOTE'(connect, State);
-		{pass, AclR} -> log_req(State, pass, AclR), 'CONNECT_REMOTE'(connect, State)
+		{quarantine, AclR} -> log_req(State, quarantine, AclR),
+					mydlp_api:quarantine(Files),
+					'BLOCK_REQ'(block, State);
+		{block, AclR} -> log_req(State, block, AclR),
+					'BLOCK_REQ'(block, State);
+		{log, AclR} -> log_req(State, log, AclR),
+					'CONNECT_REMOTE'(connect, State);
+		{pass, AclR} -> log_req(State, pass, AclR),
+					'CONNECT_REMOTE'(connect, State)
 	end.
 
 % refined this
