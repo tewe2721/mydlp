@@ -61,10 +61,10 @@ kok_ozeti_bul(Word) -> gen_server:call(?MODULE, {kob, Word}).
 
 %%%%%%%%%%%%%% gen_server handles
 
-handle_call({kob, _Word}, From, State) ->
+handle_call({kob, Word}, From, #state{wordtree = WT} = State) ->
 	Worker = self(),
 	spawn_link(fun() ->
-			Reply = 1,
+			Reply = find_leaf(WT, Word),
 			Worker ! {async_reply, Reply, From}
 		end),
 	{noreply, State, 15000};
@@ -95,7 +95,6 @@ init([]) ->
 		{ok, Path} -> Path;
 		undefined -> ?NLP_TR_KOKLER end,
 	WT = populate_word_tree(Kokler),
-	erlang:display(WT),
 	{ok, #state{wordtree=WT}}.
 
 handle_cast(stop, State) ->
@@ -110,6 +109,28 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 
+find_leaf(WT, Word) -> 
+	case find_leaf(WT, to_lower(Word), none) of
+		none -> Word;
+		Else -> Else end.
+
+find_leaf({{w, WHash}, Branch}, [C|Rest], _Return) ->
+	case gb_trees:is_defined(C, Branch) of
+		true ->
+			NextBranch = gb_trees:get(C, Branch),
+			find_leaf(NextBranch, Rest, WHash);
+		false ->
+			WHash end;
+find_leaf({_, Branch}, [C|Rest], Return) ->
+	case gb_trees:is_defined(C, Branch) of
+		true ->
+			NextBranch = gb_trees:get(C, Branch),
+			find_leaf(NextBranch, Rest, Return);
+		false ->
+			Return end;
+find_leaf({{w, WHash}, _Branch}, [], _Return) -> WHash;
+find_leaf({_, _Branch}, [], Return) -> Return.
+
 populate_word_tree(KoklerPath) ->
 	{ok, Bin} = file:read_file(KoklerPath),
 	populate_word_tree1(Bin, {root, gb_trees:empty()}).
@@ -122,11 +143,10 @@ populate_word_tree1(Bin, WordTree) ->
 			populate_word_tree1(Rest, WordTree1);
 		_Else -> WordTree end.
 
-
 update_word_tree(WT, Word) ->
 	WLists = word_to_wlists(Word),
 	%erlang:display({Word#word.word, WLists}),
-	{root, update_word_tree(WT, Word#word.word, WLists)}.
+	update_word_tree(WT, Word#word.word, WLists).
 
 update_word_tree(WT, WHash, [WL|WLists]) -> 
 	WT1 = update_word_tree1(WT, WHash, WL),
@@ -142,7 +162,6 @@ update_word_tree1({Pre, Branch}, WHash, [C]) ->
 			gb_trees:insert(C, hash_branch(WHash), Branch)
 	end};
 update_word_tree1({Pre, Branch}, WHash, [C|WL]) ->
-	erlang:display(ugh),
 	{Pre, case gb_trees:is_defined(C, Branch) of
 		true ->
 			NextBranch = gb_trees:get(C, Branch),
@@ -184,7 +203,6 @@ word_to_wlists(#word{word=W, dus=true} = Word, Acc) ->
 	word_to_wlists(Word#word{dus=false}, [WD|Acc]);
 word_to_wlists(#word{word=W}, Acc) -> lists:usort([W|Acc]).
 
-
 line_to_word(Line) -> line_to_word(Line, #word{}, [], []).
 
 line_to_word([$\s|Rest], #word{word=undefined} = Word, Tags, Acc) -> 
@@ -201,7 +219,6 @@ line_to_word([], Word, Tags, []) ->
 	YUM = lists:member("YUM", Tags),
 	DUS = lists:member("DUS", Tags),
 	Word#word{fi=FI, yum=YUM, dus=DUS}.
-
 
 to_yum([C]) -> to_yum(C);
 
