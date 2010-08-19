@@ -64,7 +64,8 @@ kok_ozeti_bul(Word) -> gen_server:call(?MODULE, {kob, Word}).
 handle_call({kob, Word}, From, #state{wordtree = WT} = State) ->
 	Worker = self(),
 	spawn_link(fun() ->
-			Reply = find_leaf(WT, Word),
+			LowerWord = to_lower(Word),
+			Reply = find_leaf(WT, LowerWord),
 			Worker ! {async_reply, Reply, From}
 		end),
 	{noreply, State, 15000};
@@ -110,7 +111,7 @@ code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 
 find_leaf(WT, Word) -> 
-	case find_leaf(WT, to_lower(Word), none) of
+	case find_leaf(WT, Word, none) of
 		none -> Word;
 		Else -> Else end.
 
