@@ -1,4 +1,4 @@
-%%
+%%%
 %%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@medra.com.tr>
 %%%
 %%%--------------------------------------------------------------------------
@@ -47,6 +47,8 @@
 
 -include("mydlp.hrl").
 
+-include("mydlp_http.hrl").
+
 -record(state, {
 		socket,	% client socket
 		peer_sock,	% remote socket
@@ -58,38 +60,6 @@
 		files=[],
 		tmp
 	}).
-
--record(http_request, {
-		method,
-		path,
-		version
-	}).
-
--record(http_headers, {
-		connection,
-		host,
-		cookie = [],
-		keep_alive,
-		content_length,
-		content_type,
-		content_encoding,
-		transfer_encoding,
-		other = []   %% misc other headers
-	}).
-
--record(http_header, {
-		num,
-		key,
-		reserved,
-		value
-	}).
-
-%%% Keep-alive timeout (Apache web server default)
--define(KA_TIMEOUT, 15000).
-
--define(MPART_CNK, 1024).
-
--define(NEWLINE, <<"\r\n">>).
 
 %%%------------------------------------------------------------------------
 %%% API
@@ -216,9 +186,9 @@ get_http_content(#state{socket=Socket, http_headers=HttpHeaders} = State) ->
 	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
-'HTTP_CC_LINE'({data, Line}, #state{http_content=Content} = State) ->
+'HTTP_CC_LINE'({data, Line}, #state{http_content=Content1} = State) ->
 	CSize = mydlp_api:hex2int(Line),
-	Content1 = [Line|Content],
+	%Content1 = [Line|Content],
 	case CSize of
 		0 -> 'REQ_OK'(State#state{http_content=lists:reverse(Content1)});
 		_ -> {next_state, 'HTTP_CC_CHUNK', State#state{http_content=Content1, tmp=CSize}, ?TIMEOUT}
