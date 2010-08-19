@@ -189,10 +189,10 @@ split_multipart(Boundary,Body,Acc) ->
 			end
 	end.
 
-get_header(Key,MIME) when is_record(MIME,mime) -> get_header(Key,MIME#mime.header,[]);
+get_header(Key, #mime{} = MIME) -> get_header(Key,MIME#mime.header,[]);
 get_header(Key,Header) -> get_header(Key,Header,[]).
 
-get_header(Key,MIME,Default) when is_record(MIME,mime) -> get_header(Key,MIME#mime.header,Default);
+get_header(Key, #mime{} = MIME,Default) -> get_header(Key,MIME#mime.header,Default);
 get_header(Key,Header,Default) ->
 	case lists:keysearch(Key,1,Header) of
 		{value,{Key,Value}} -> Value;

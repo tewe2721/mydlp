@@ -425,7 +425,7 @@ code_change(_OldVsn, StateName, StateData, _Extra) ->
 
 %%%%% internal
 
-backend(State) when is_record(State, state) -> 
+backend(#state{} = State) -> 
 	case State#state.comm_type of
 			plain -> gen_tcp;
 			ssl -> ssl
@@ -433,7 +433,7 @@ backend(State) when is_record(State, state) ->
 backend(plain) -> gen_tcp;
 backend(ssl) -> ssl.
 
-backend_opts(State) when is_record(State, state) -> 
+backend_opts(#state{} = State) -> 
 	case State#state.comm_type of
 			plain -> inet;
 			ssl -> ssl

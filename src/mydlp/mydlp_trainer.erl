@@ -168,7 +168,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%%%%%%%%%%%%%%%% internal
 
 term2file(Term) when is_binary(Term) -> #file{data=Term};
-term2file(Term) when is_record(Term, file) -> Term;
+term2file(#file{} = Term) -> Term;
 term2file(Term) when is_list(Term) ->
         {ok, Bin} = file:read_file(Term),
         #file{data=Bin}.
@@ -179,13 +179,11 @@ train_cfile({File, FileId}) ->
 	CGID = mydlp_mnesia:get_cgid(),
 	train_cfile({File, FileId, CGID});
 
-train_cfile({#file{mime_type=undefined} = File, FileId, GroupId}) 
-		when is_record(File, file) ->
+train_cfile({#file{mime_type=undefined} = File, FileId, GroupId}) ->
 	MT = mydlp_tc:get_mime(File#file.data),
 	train_cfile({File#file{mime_type = MT}, FileId, GroupId});
 
-train_cfile({File, FileId, GroupId}) 
-		when is_record(File, file) ->
+train_cfile({#file{} = File, FileId, GroupId}) ->
 	% add to file hash 
         MD5Hash = erlang:md5(File#file.data),
         ok = mydlp_mnesia:add_fhash(MD5Hash, FileId, GroupId),
@@ -214,7 +212,7 @@ train_pfile({File, FileId}) ->
 	mydlp_tc:bayes_train_public(Txt),
 	ok.
 
-concat_texts(File) when is_record(File, file) -> concat_texts([File]);
+concat_texts(#file{} = File) -> concat_texts([File]);
 concat_texts(Files) when is_list(Files) -> 
 	Files1 = mydlp_api:df_to_files(Files),
 	concat_texts(Files1, []).

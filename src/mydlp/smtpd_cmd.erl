@@ -137,7 +137,7 @@ command({Command,Param},State) ->
 %% @todo cehck relay state and store messages according to local or outgoing status. Only real differene is in the message name.
 
 read_message(Message,State) when is_binary(Message) -> read_message(binary_to_list(Message),State);
-read_message(Message,State) when is_record(Message,message) ->
+read_message(#message{} = Message,State) ->
 	MIME = mime_util:decode(Message#message.message),
         NewMessage = expand(Message,MIME),
 	State#smtpd_fsm{message_record=NewMessage, message_mime=MIME};
@@ -149,7 +149,7 @@ read_message(Message,#smtpd_fsm{mail=From, rcpt=To} = State) ->
 
 send(State,Code) -> send(State,Code,resp(Code)).
 send(State,Code,[]) -> send(State,Code,resp(Code));
-send(State,Code,Message) when is_record(State,smtpd_fsm) -> send(State#smtpd_fsm.socket,Code,Message);
+send(#smtpd_fsm{} = State,Code,Message) -> send(State#smtpd_fsm.socket,Code,Message);
 send(Socket,Code,Message) ->
 	Last = string:right(Message,2),
 	Msg = case Last of
