@@ -150,7 +150,7 @@ consume({data, Data}, #state{module=Module, module_fsm_state=ModuleFSMState, mod
 'REQ_OK'(#state{addr=Addr} = State, Files, Peer) ->
 	case mydlp_acl:q(Addr, dest, Files) of
 		pass -> 'CONNECT_REMOTE'(connect, State, Peer);
-		{quarantine, AclR} -> log_req(State, Peer, block, AclR), 'BLOCK_REQ'(block, State);
+		{quarantine, AclR} -> log_req(State, Peer, quarantine, AclR), 'BLOCK_REQ'(block, State);
 		{block, AclR} -> log_req(State, Peer, block, AclR), 'BLOCK_REQ'(block, State);
 		{log, AclR} -> log_req(State, Peer, log, AclR), 'CONNECT_REMOTE'(connect, State, Peer); % refine this
 		{pass, AclR} -> log_req(State, Peer, pass, AclR), 'CONNECT_REMOTE'(connect, State, Peer)

@@ -315,7 +315,7 @@ get_body(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_impl
 'REQ_OK'(#state{files=Files, http_content=HttpContent, icap_headers=#icap_headers{x_client_ip=Addr} } = State) ->
 	case mydlp_acl:q(Addr, dest, df_to_files(list_to_binary(HttpContent), Files)) of
 		pass -> 'REPLY_OK'(State);
-		{quarantine, AclR} -> log_req(State, block, AclR), 'BLOCK_REQ'(block, State);
+		{quarantine, AclR} -> log_req(State, quarantine, AclR), 'BLOCK_REQ'(block, State);
 		{block, AclR} -> log_req(State, block, AclR), 'BLOCK_REQ'(block, State);
 		{log, AclR} -> log_req(State, log, AclR), 'REPLY_OK'(State); % refine this
 		{pass, AclR} -> log_req(State, pass, AclR), 'REPLY_OK'(State)
