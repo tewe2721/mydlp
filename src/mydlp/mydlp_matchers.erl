@@ -289,6 +289,14 @@ scode_match(Conf, {_Addr, Files}) when is_list(Conf) ->
 	end,
 	scode_match1(Score, Files).
 
-scode_match1(Count, [_File|Files]) ->
-	scode_match1(Count, Files); % should be implemented
+scode_match1(Count, [File|Files]) ->
+	Score = mydlp_regex:score_suite(
+	 	scode, 
+		File#file.text),
+	
+	case Score >= Count of
+		true -> {pos, {file, File}, 
+			{misc, "score=" ++ integer_to_list(Score)}};
+		false -> scode_match1(Count, Files)
+	end;
 scode_match1(_Count, []) -> neg.
