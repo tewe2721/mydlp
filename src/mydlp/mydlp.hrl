@@ -40,6 +40,7 @@
 -define(DENIED_PAGE, "denied_page.html").
 -define(NLP_TR, [ 
           {activate, true},
+          {pool_size, 4},
           {kokler, "mydlp_nlp_tr_kokler.txt"}
          ]).
 -define(MYSQL, [

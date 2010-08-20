@@ -58,18 +58,23 @@
 
 normalize(Word) -> kok_ozeti_bul(Word).
 
-kok_ozeti_bul(Word) -> gen_server:call(?MODULE, {kob, Word}).
+kok_ozeti_bul(Word) -> 
+	Pid = pg2:get_closest_pid(?MODULE),
+	gen_server:call(Pid, {kob, Word}).
 
 %%%%%%%%%%%%%% gen_server handles
 
-handle_call({kob, Word}, From, #state{wordtree = WT} = State) ->
-	Worker = self(),
-	spawn_link(fun() ->
-			LowerWord = to_lower(Word),
-			Reply = find_leaf(WT, LowerWord),
-			Worker ! {async_reply, Reply, From}
-		end),
-	{noreply, State, 15000};
+handle_call({kob, Word}, _From, #state{wordtree = WT} = State) ->
+%	Worker = self(),
+%	spawn_link(fun() ->
+%			LowerWord = to_lower(Word),
+%			Reply = find_leaf(WT, LowerWord),
+%			Worker ! {async_reply, Reply, From}
+%		end),
+%	{noreply, State, 15000};
+	LowerWord = to_lower(Word),
+	Reply = find_leaf(WT, LowerWord),
+	{reply, Reply, State, 15000};
 
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
@@ -84,15 +89,6 @@ handle_info(_Info, State) ->
 %%%%%%%%%%%%%%%% Implicit functions
 
 start_link() ->
-	case gen_server:start_link({local, ?MODULE}, ?MODULE, [], []) of
-		{ok, Pid} -> {ok, Pid};
-		{error, {already_started, Pid}} -> {ok, Pid}
-	end.
-
-stop() ->
-	gen_server:cast(?MODULE, stop).
-
-init([]) ->
 	ConfList = case application:get_env(nlp_tr) of
                 {ok, CL} -> CL;
                 _Else -> ?NLP_TR
@@ -101,11 +97,30 @@ init([]) ->
         case lists:keyfind(activate, 1, ConfList) of
 		{activate, true} ->
         		{kokler, Kokler} = lists:keyfind(kokler, 1, ConfList),
+        		{pool_size, PS} = lists:keyfind(pool_size, 1, ConfList),
+
 			WT = populate_word_tree(Kokler),
+
+			PL = [ gen_server:start_link(?MODULE, [WT], []) || _I <- lists:seq(1, PS)],
+			pg2:create(?MODULE),
+			[pg2:join(?MODULE, P) || {ok, P} <- PL],
+
 			bayeserl:register_normalizer(mydlp_nlp_tr),
 			bayeserl:register_store(mydlp_bayeserl_store),
-			{ok, #state{wordtree=WT}};
-		_ -> {stop, normal} end.
+
+			ok;
+		_ -> ok end,
+%	case gen_server:start_link({local, ?MODULE}, ?MODULE, [], []) of
+%		{ok, Pid} -> {ok, Pid};
+%		{error, {already_started, Pid}} -> {ok, Pid}
+%	end.
+	ignore.
+
+stop() ->
+	gen_server:cast(?MODULE, stop).
+
+init([WT]) ->
+	{ok, #state{wordtree=WT}}.
 
 handle_cast(stop, State) ->
 	{stop, normal, State};
@@ -217,7 +232,8 @@ word_to_wlists(#word{word=W, fi=true, yum=IsYUM}=Word, Acc) ->
 		"mak" -> string:substr(W, 1, WLen - 3);
 		"mek" -> string:substr(W, 1, WLen - 3);
 		_ -> W end,
-	AccAdd = [W, 
+	AccAdd = [
+			%W, 
 			string:substr(W, 1, WLen - 1),
 			fiil_simdiki_zaman(W1, IsYUM)
 	],
