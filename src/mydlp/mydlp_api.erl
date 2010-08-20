@@ -25,6 +25,7 @@
 -compile(export_all).
 
 -include("mydlp.hrl").
+-include("mydlp_http.hrl").
 -include_lib("xmerl/include/xmerl.hrl").
 
 %%--------------------------------------------------------------------
@@ -732,3 +733,225 @@ split_email(EmailAddress) ->
                 _AnythingsElse -> {[],[]}
         end.
 
+
+%%% imported from yaws (may be refactored for binary operation)
+parse_multipart(HttpContent, H, Req) ->
+	CT = H#http_headers.content_type,
+	Res = case Req#http_request.method of
+		'POST' ->
+			case CT of
+				undefined ->
+					?DEBUG("Can't parse multipart if we "
+						"have no Content-Type header",[]), [];
+				"multipart/form-data"++Line ->
+					LineArgs = parse_arg_line(Line),
+					{value, {_, Boundary}} = lists:keysearch(boundary, 1, LineArgs),
+					parse_multipart(binary_to_list(un_partial(list_to_binary(HttpContent))), Boundary);
+				_Other ->
+					?DEBUG("Can't parse multipart if we "
+						"find no multipart/form-data",[]), []
+			end;
+		Other ->
+			?DEBUG("Can't parse multipart if get a ~p", [Other]), []
+	end,
+	result_to_files(Res).
+
+%%%%% multipart parsing
+un_partial({partial, Bin}) ->
+    Bin;
+un_partial(Bin) ->
+    Bin.
+
+parse_arg_line(Line) ->
+    parse_arg_line(Line, []).
+
+parse_arg_line([],Acc) -> Acc;
+parse_arg_line([$ |Line], Acc) ->
+    parse_arg_line(Line, Acc);
+parse_arg_line([$;|Line], Acc) ->
+    {KV,Rest} = parse_arg_key(Line, [], []),
+    parse_arg_line(Rest, [KV|Acc]).
+
+%%
+
+parse_arg_key([], Key, Value) ->
+    make_parse_line_reply(Key, Value, []);
+parse_arg_key([$;|Line], Key, Value) ->
+    make_parse_line_reply(Key, Value, [$;|Line]);
+parse_arg_key([$ |Line], Key, Value) ->
+    parse_arg_key(Line, Key, Value);
+parse_arg_key([$=|Line], Key, Value) ->
+    parse_arg_value(Line, Key, Value, false, false);
+parse_arg_key([C|Line], Key, Value) ->
+    parse_arg_key(Line, [C|Key], Value).
+
+%%
+%% We need to deal with quotes and initial spaces here.
+%% parse_arg_value(String, Key, ValueAcc, InQuoteBool, InValueBool)
+%%
+
+parse_arg_value([], Key, Value, _, _) ->
+    make_parse_line_reply(Key, Value, []);
+parse_arg_value([$\\,$"|Line], Key, Value, Quote, Begun) ->
+    parse_arg_value(Line, Key, [$"|Value], Quote, Begun);
+parse_arg_value([$"|Line], Key, Value, false, _) ->
+    parse_arg_value(Line, Key, Value, true, true);
+parse_arg_value([$"], Key, Value, true, _) ->
+    make_parse_line_reply(Key, Value, []);
+parse_arg_value([$",$;|Line], Key, Value, true, _) ->
+    make_parse_line_reply(Key, Value, [$;|Line]);
+parse_arg_value([$;|Line], Key, Value, false, _) ->
+    make_parse_line_reply(Key, Value, [$;|Line]);
+parse_arg_value([$ |Line], Key, Value, false, true) ->
+    make_parse_line_reply(Key, Value, Line);
+parse_arg_value([$ |Line], Key, Value, false, false) ->
+    parse_arg_value(Line, Key, Value, false, false);
+parse_arg_value([C|Line], Key, Value, Quote, _) ->
+    parse_arg_value(Line, Key, [C|Value], Quote, true).
+
+
+%%
+
+make_parse_line_reply(Key, Value, Rest) ->
+    X = {{list_to_atom(mydlp_api:funreverse(Key, {mydlp_api, to_lowerchar})),
+          lists:reverse(Value)}, Rest},
+    X.
+%%
+
+isolate_arg(Str) -> isolate_arg(Str, []).
+
+isolate_arg([$:,$ |T], L) -> {mydlp_api:funreverse(L, {mydlp_api, to_lowerchar}), T};
+isolate_arg([H|T], L)     -> isolate_arg(T, [H|L]).
+
+%%
+%%% Stateful parser of multipart data - allows easy re-entry
+%% States are header|body|boundary|is_end
+
+parse_multipart(Data, St) ->
+    case parse_multi(Data, St) of
+        {cont, St2, Res} ->
+            {cont, {cont, St2}, lists:reverse(Res)};
+        {result, Res} ->
+            {result, lists:reverse(Res)}
+    end.
+
+%% Re-entry
+parse_multi(Data, {cont, {boundary, Start_data, PartBoundary,
+                          Acc, {Possible,Boundary}}}) ->
+    parse_multi(boundary, Start_data++Data, PartBoundary, Acc, [],
+                {Possible++Data,Boundary});
+parse_multi(Data, {cont, {State, Start_data, Boundary, Acc, Tmp}}) ->
+    parse_multi(State, Start_data++Data, Boundary, Acc, [], Tmp);
+
+%% Initial entry point
+parse_multi(Data, Boundary) ->
+    B1 = "\r\n--"++Boundary,
+    D1 = "\r\n"++Data,
+    parse_multi(boundary, D1, B1, start, [], {D1, B1}).
+
+parse_multi(header, "\r\n\r\n"++Body, Boundary, Acc, Res, Tmp) ->
+    Header = do_header(lists:reverse(Acc)),
+    parse_multi(body, Body, Boundary, [], [{head, Header}|Res], Tmp);
+parse_multi(header, "\r\n"++Body, Boundary, [], Res, Tmp) ->
+    Header = do_header([]),
+    parse_multi(body, Body, Boundary, [], [{head, Header}|Res], Tmp);
+parse_multi(header, "\r\n\r", Boundary, Acc, Res, Tmp) ->
+    {cont, {header, "\r\n\r", Boundary, Acc, Tmp}, Res};
+parse_multi(header, "\r\n", Boundary, Acc, Res, Tmp) ->
+    {cont, {header, "\r\n", Boundary, Acc, Tmp}, Res};
+parse_multi(header, "\r", Boundary, Acc, Res, Tmp) ->
+    {cont, {header, "\r", Boundary, Acc, Tmp}, Res};
+parse_multi(header, [H|T], Boundary, Acc, Res, Tmp) ->
+    parse_multi(header, T, Boundary, [H|Acc], Res, Tmp);
+parse_multi(header, [], Boundary, Acc, Res, Tmp) ->
+    {cont, {header, [], Boundary, Acc, Tmp}, Res};
+
+parse_multi(body, [B|T], [B|T1], Acc, Res, _Tmp) ->
+    parse_multi(boundary, T, T1, Acc, Res, {[B|T], [B|T1]}); %% store in case no match
+parse_multi(body, [H|T], Boundary, Acc, Res, Tmp) ->
+    parse_multi(body, T, Boundary, [H|Acc], Res, Tmp);
+parse_multi(body, [], Boundary, [], Res, Tmp) ->  %% would be empty partial body result
+    {cont, {body, [], Boundary, [], Tmp}, Res};
+parse_multi(body, [], Boundary, Acc, Res, Tmp) ->        %% make a partial body result
+    {cont, {body, [], Boundary, [], Tmp}, [{part_body, lists:reverse(Acc)}|Res]};
+
+parse_multi(boundary, [B|T], [B|T1], Acc, Res, Tmp) ->
+    parse_multi(boundary, T, T1, Acc, Res, Tmp);
+parse_multi(boundary, [_H|_T], [_B|_T1], start, Res, {[D|T2], Bound}) -> %% false alarm
+    parse_multi(body, T2, Bound, [D], Res, []);
+parse_multi(boundary, [_H|_T], [_B|_T1], Acc, Res, {[D|T2], Bound}) -> %% false alarm
+    parse_multi(body, T2, Bound, [D|Acc], Res, []);
+parse_multi(boundary, [], [B|T1], Acc, Res, Tmp) -> %% run out of body
+    {cont, {boundary, [], [B|T1], Acc, Tmp}, Res};
+parse_multi(boundary, [], [], start, Res, {_, Bound}) ->
+    {cont, {is_end, [], Bound, [], []}, Res};
+parse_multi(boundary, [], [], Acc, Res, {_, Bound}) ->
+    {cont, {is_end, [], Bound, [], []}, [{body, lists:reverse(Acc)}|Res]};
+parse_multi(boundary, [H|T], [], start, Res, {_, Bound}) -> %% matched whole boundary!
+    parse_multi(is_end, [H|T], Bound, [], Res, []);
+parse_multi(boundary, [H|T], [], Acc, Res, {_, Bound}) -> %% matched whole boundary!
+    parse_multi(is_end, [H|T], Bound, [], [{body, lists:reverse(Acc)}|Res], []);
+
+parse_multi(is_end, "--"++_, _Boundary, _Acc, Res, _Tmp) ->
+    {result, Res};
+parse_multi(is_end, "-", Boundary, Acc, Res, Tmp) ->
+    {cont, {is_end, "-", Boundary, Acc, Tmp}, Res};
+parse_multi(is_end, "\r\n"++Next, Boundary, _Acc, Res, _Tmp) ->
+    parse_multi(header, Next, Boundary, [], Res, []);
+parse_multi(is_end, "\r", Boundary, Acc, Res, Tmp) ->
+    {cont, {is_end, "\r", Boundary, Acc, Tmp}, Res}.
+
+do_header([]) -> {[]};
+do_header(Head) ->
+    Fields = string:tokens(Head, "\r\n"),
+    MFields = merge_lines_822(Fields),
+    Header = lists:map(fun isolate_arg/1, MFields),
+    case lists:keysearch("content-disposition", 1, Header) of
+        {value, {_,"form-data"++Line}} ->
+            Parameters = parse_arg_line(Line),
+            {value, {_,Name}} = lists:keysearch(name, 1, Parameters),
+            {Name, Parameters};
+        _ ->
+            {Header}
+    end.
+
+merge_lines_822(Lines) ->
+    merge_lines_822(Lines, []).
+
+merge_lines_822([], Acc) ->
+    lists:reverse(Acc);
+merge_lines_822([Line=" "++_|Lines], []) ->
+    merge_lines_822(Lines, [Line]);
+merge_lines_822([Line=" "++_|Lines], [Prev|Acc]) ->
+    merge_lines_822(Lines, [Prev++Line|Acc]);
+merge_lines_822(["\t"++Line|Lines], [Prev|Acc]) ->
+    merge_lines_822(Lines, [Prev++[$ |Line]|Acc]);
+merge_lines_822([Line|Lines], Acc) ->
+    merge_lines_822(Lines, [Line|Acc]).
+
+%%%% convert yaws multipart result to file records
+result_to_files({result, Rest}) ->
+	result_to_files(Rest, [], undefined).
+result_to_files([], Files, File) ->
+	lists:reverse([File|Files]);
+result_to_files([{head,Head}|Rest], Files, File) ->
+	Files1 = case File of
+		undefined -> Files;
+		Else -> [Else|Files]
+	end,
+	{_, Heads} = Head,
+	result_to_files(Rest, Files1, heads_to_file(Heads));
+result_to_files([{body,Data}|Rest], Files, File) ->
+	result_to_files(Rest, Files, File#file{data=list_to_binary(Data)}).
+
+heads_to_file(Heads) ->
+	heads_to_file(Heads, #file{}).
+heads_to_file([{filename,FileName}|Heads], File) ->
+	heads_to_file(Heads, File#file{filename=FileName});
+heads_to_file([{name,PostName}|Heads], File) ->
+	heads_to_file(Heads, File#file{name=PostName});
+heads_to_file([_|Heads], File) ->
+	ignore,
+	heads_to_file(Heads, File);
+heads_to_file([], File) ->
+	File.

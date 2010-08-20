@@ -78,6 +78,9 @@
 	  },
 	  {smtp, {acceptor, {10025, plain, smtp} },
                  {workers, []}
+	  },
+	  {icap, {acceptor, {1344, plain, icap} },
+                 {workers, []}
 	  }
 	 ]}
    ]}

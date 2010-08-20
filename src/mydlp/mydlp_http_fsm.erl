@@ -55,7 +55,7 @@
 		comm_type, % whether socket uses ssl
 		addr,	   % client address
 		http_packet,
-		http_headers=[],
+		http_headers,
 		http_content=[],
 		files=[],
 		tmp
@@ -121,13 +121,13 @@ init([]) ->
 	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
-'HTTP_HEADER'({http, http_eoh}, #state{http_headers=HttpHeaders} = State) ->
+'HTTP_HEADER'({http, http_eoh}, #state{http_headers=HttpHeaders, http_packet=HttpReq} = State) ->
 	Cookies = HttpHeaders#http_headers.cookie,
 	Others = HttpHeaders#http_headers.other,
 	HttpHeaders1 = HttpHeaders#http_headers{cookie=lists:reverse(Cookies), other=lists:reverse(Others)},
 	State1 = State#state{http_headers=HttpHeaders1},
 
-	case has_body(State) of
+	case has_body(HttpReq) of
 		true -> get_http_content(State1);
 		false -> 'REQ_OK'(State1)
 	end;
@@ -186,9 +186,9 @@ get_http_content(#state{socket=Socket, http_headers=HttpHeaders} = State) ->
 	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
-'HTTP_CC_LINE'({data, Line}, #state{http_content=Content1} = State) ->
+'HTTP_CC_LINE'({data, Line}, #state{http_content=Content} = State) ->
 	CSize = mydlp_api:hex2int(Line),
-	%Content1 = [Line|Content],
+	Content1 = [Line|Content],
 	case CSize of
 		0 -> 'REQ_OK'(State#state{http_content=lists:reverse(Content1)});
 		_ -> {next_state, 'HTTP_CC_CHUNK', State#state{http_content=Content1, tmp=CSize}, ?TIMEOUT}
@@ -222,15 +222,6 @@ get_http_content(#state{socket=Socket, http_headers=HttpHeaders} = State) ->
 	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
-% {Action, {{rule, Id}, {file, File}, {matcher, Func}, {misc, Misc}}}
-'REQ_OK'(#state{files=Files,http_content=HttpContent, addr=Addr} = State) ->
-	case mydlp_acl:q(Addr, dest, df_to_files(list_to_binary(HttpContent), Files)) of
-		pass -> 'CONNECT_REMOTE'(connect, State);
-		{block, AclR} -> log_req(State, block, AclR), 'BLOCK_REQ'(block, State);
-		{log, AclR} -> log_req(State, log, AclR), 'CONNECT_REMOTE'(connect, State); % refine this
-		{pass, AclR} -> log_req(State, pass, AclR), 'CONNECT_REMOTE'(connect, State)
-	end.
-
 'READ_FILES'(#state{http_headers=HttpHeaders} = State) ->
 %	when HttpHeaders#http_headers.content_type == ''->
 	Files = case mydlp_api:starts_with(HttpHeaders#http_headers.content_type, "multipart/form-data") of
@@ -240,27 +231,14 @@ get_http_content(#state{socket=Socket, http_headers=HttpHeaders} = State) ->
 
 	'REQ_OK'(State#state{files=Files}).
 
-%%% imported from yaws (may be refactored for binary operation)
-parse_multipart(#state{http_content=HttpContent, http_headers=H, http_packet=Req}) ->
-	CT = H#http_headers.content_type,
-	Res = case Req#http_request.method of
-		'POST' ->
-			case CT of
-				undefined ->
-					?DEBUG("Can't parse multipart if we "
-						"have no Content-Type header",[]), [];
-				"multipart/form-data"++Line ->
-					LineArgs = parse_arg_line(Line),
-					{value, {_, Boundary}} = lists:keysearch(boundary, 1, LineArgs),
-					parse_multipart(binary_to_list(un_partial(list_to_binary(HttpContent))), Boundary);
-				_Other ->
-					?DEBUG("Can't parse multipart if we "
-						"find no multipart/form-data",[]), []
-			end;
-		Other ->
-			?DEBUG("Can't parse multipart if get a ~p", [Other]), []
-	end,
-	result_to_files(Res).
+% {Action, {{rule, Id}, {file, File}, {matcher, Func}, {misc, Misc}}}
+'REQ_OK'(#state{files=Files,http_content=HttpContent, addr=Addr} = State) ->
+	case mydlp_acl:q(Addr, dest, df_to_files(list_to_binary(HttpContent), Files)) of
+		pass -> 'CONNECT_REMOTE'(connect, State);
+		{block, AclR} -> log_req(State, block, AclR), 'BLOCK_REQ'(block, State);
+		{log, AclR} -> log_req(State, log, AclR), 'CONNECT_REMOTE'(connect, State); % refine this
+		{pass, AclR} -> log_req(State, pass, AclR), 'CONNECT_REMOTE'(connect, State)
+	end.
 
 'CONNECT_REMOTE'(connect, #state{socket=Socket, http_headers=HttpHeaders} = State) ->
 	BackendOpts = backend_opts(State),
@@ -457,15 +435,6 @@ backend_opts(State) when is_record(State, state) ->
 backend_opts(plain) -> inet;
 backend_opts(ssl) -> ssl.
 
-has_body(State) ->
-	HttpReq = State#state.http_packet,
-	case HttpReq#http_request.method of
-		'POST' -> true;
-		'PUT' -> true;
-		'PROPFIND' -> true;
-		_ -> false
-	end.
-
 send_header(_Backend, _PeerSock, _Key, undefined) -> ignored;
 send_header(Backend, PeerSock, Key, Value) ->
 	Backend:send(PeerSock, [Key, ": ", Value, "\r\n"]).
@@ -512,211 +481,14 @@ send_req(#state{peer_sock=PeerSock,
 			integer_to_list(Majorv), ".", 
 			integer_to_list(Minorv), "\r\n"]),
 	send_headers(Backend, PeerSock, HttpHeaders),
-	case has_body(State) of
+	case has_body(HttpReq) of
 		true -> Backend:send(PeerSock, State#state.http_content);
 		false -> ok
 	end,
 	ok.
 
-%%%%% multipart parsing
-un_partial({partial, Bin}) ->
-    Bin;
-un_partial(Bin) ->
-    Bin.
-
-parse_arg_line(Line) ->
-    parse_arg_line(Line, []).
-
-parse_arg_line([],Acc) -> Acc;
-parse_arg_line([$ |Line], Acc) ->
-    parse_arg_line(Line, Acc);
-parse_arg_line([$;|Line], Acc) ->
-    {KV,Rest} = parse_arg_key(Line, [], []),
-    parse_arg_line(Rest, [KV|Acc]).
-
-%%
-
-parse_arg_key([], Key, Value) ->
-    make_parse_line_reply(Key, Value, []);
-parse_arg_key([$;|Line], Key, Value) ->
-    make_parse_line_reply(Key, Value, [$;|Line]);
-parse_arg_key([$ |Line], Key, Value) ->
-    parse_arg_key(Line, Key, Value);
-parse_arg_key([$=|Line], Key, Value) ->
-    parse_arg_value(Line, Key, Value, false, false);
-parse_arg_key([C|Line], Key, Value) ->
-    parse_arg_key(Line, [C|Key], Value).
-
-%%
-%% We need to deal with quotes and initial spaces here.
-%% parse_arg_value(String, Key, ValueAcc, InQuoteBool, InValueBool)
-%%
-
-parse_arg_value([], Key, Value, _, _) ->
-    make_parse_line_reply(Key, Value, []);
-parse_arg_value([$\\,$"|Line], Key, Value, Quote, Begun) ->
-    parse_arg_value(Line, Key, [$"|Value], Quote, Begun);
-parse_arg_value([$"|Line], Key, Value, false, _) ->
-    parse_arg_value(Line, Key, Value, true, true);
-parse_arg_value([$"], Key, Value, true, _) ->
-    make_parse_line_reply(Key, Value, []);
-parse_arg_value([$",$;|Line], Key, Value, true, _) ->
-    make_parse_line_reply(Key, Value, [$;|Line]);
-parse_arg_value([$;|Line], Key, Value, false, _) ->
-    make_parse_line_reply(Key, Value, [$;|Line]);
-parse_arg_value([$ |Line], Key, Value, false, true) ->
-    make_parse_line_reply(Key, Value, Line);
-parse_arg_value([$ |Line], Key, Value, false, false) ->
-    parse_arg_value(Line, Key, Value, false, false);
-parse_arg_value([C|Line], Key, Value, Quote, _) ->
-    parse_arg_value(Line, Key, [C|Value], Quote, true).
-
-
-%%
-
-make_parse_line_reply(Key, Value, Rest) ->
-    X = {{list_to_atom(mydlp_api:funreverse(Key, {mydlp_api, to_lowerchar})),
-          lists:reverse(Value)}, Rest},
-    X.
-%%
-
-isolate_arg(Str) -> isolate_arg(Str, []).
-
-isolate_arg([$:,$ |T], L) -> {mydlp_api:funreverse(L, {mydlp_api, to_lowerchar}), T};
-isolate_arg([H|T], L)     -> isolate_arg(T, [H|L]).
-
-%%
-%%% Stateful parser of multipart data - allows easy re-entry
-%% States are header|body|boundary|is_end
-
-parse_multipart(Data, St) ->
-    case parse_multi(Data, St) of
-        {cont, St2, Res} ->
-            {cont, {cont, St2}, lists:reverse(Res)};
-        {result, Res} ->
-            {result, lists:reverse(Res)}
-    end.
-
-%% Re-entry
-parse_multi(Data, {cont, {boundary, Start_data, PartBoundary,
-                          Acc, {Possible,Boundary}}}) ->
-    parse_multi(boundary, Start_data++Data, PartBoundary, Acc, [],
-                {Possible++Data,Boundary});
-parse_multi(Data, {cont, {State, Start_data, Boundary, Acc, Tmp}}) ->
-    parse_multi(State, Start_data++Data, Boundary, Acc, [], Tmp);
-
-%% Initial entry point
-parse_multi(Data, Boundary) ->
-    B1 = "\r\n--"++Boundary,
-    D1 = "\r\n"++Data,
-    parse_multi(boundary, D1, B1, start, [], {D1, B1}).
-
-parse_multi(header, "\r\n\r\n"++Body, Boundary, Acc, Res, Tmp) ->
-    Header = do_header(lists:reverse(Acc)),
-    parse_multi(body, Body, Boundary, [], [{head, Header}|Res], Tmp);
-parse_multi(header, "\r\n"++Body, Boundary, [], Res, Tmp) ->
-    Header = do_header([]),
-    parse_multi(body, Body, Boundary, [], [{head, Header}|Res], Tmp);
-parse_multi(header, "\r\n\r", Boundary, Acc, Res, Tmp) ->
-    {cont, {header, "\r\n\r", Boundary, Acc, Tmp}, Res};
-parse_multi(header, "\r\n", Boundary, Acc, Res, Tmp) ->
-    {cont, {header, "\r\n", Boundary, Acc, Tmp}, Res};
-parse_multi(header, "\r", Boundary, Acc, Res, Tmp) ->
-    {cont, {header, "\r", Boundary, Acc, Tmp}, Res};
-parse_multi(header, [H|T], Boundary, Acc, Res, Tmp) ->
-    parse_multi(header, T, Boundary, [H|Acc], Res, Tmp);
-parse_multi(header, [], Boundary, Acc, Res, Tmp) ->
-    {cont, {header, [], Boundary, Acc, Tmp}, Res};
-
-parse_multi(body, [B|T], [B|T1], Acc, Res, _Tmp) ->
-    parse_multi(boundary, T, T1, Acc, Res, {[B|T], [B|T1]}); %% store in case no match
-parse_multi(body, [H|T], Boundary, Acc, Res, Tmp) ->
-    parse_multi(body, T, Boundary, [H|Acc], Res, Tmp);
-parse_multi(body, [], Boundary, [], Res, Tmp) ->  %% would be empty partial body result
-    {cont, {body, [], Boundary, [], Tmp}, Res};
-parse_multi(body, [], Boundary, Acc, Res, Tmp) ->        %% make a partial body result
-    {cont, {body, [], Boundary, [], Tmp}, [{part_body, lists:reverse(Acc)}|Res]};
-
-parse_multi(boundary, [B|T], [B|T1], Acc, Res, Tmp) ->
-    parse_multi(boundary, T, T1, Acc, Res, Tmp);
-parse_multi(boundary, [_H|_T], [_B|_T1], start, Res, {[D|T2], Bound}) -> %% false alarm
-    parse_multi(body, T2, Bound, [D], Res, []);
-parse_multi(boundary, [_H|_T], [_B|_T1], Acc, Res, {[D|T2], Bound}) -> %% false alarm
-    parse_multi(body, T2, Bound, [D|Acc], Res, []);
-parse_multi(boundary, [], [B|T1], Acc, Res, Tmp) -> %% run out of body
-    {cont, {boundary, [], [B|T1], Acc, Tmp}, Res};
-parse_multi(boundary, [], [], start, Res, {_, Bound}) ->
-    {cont, {is_end, [], Bound, [], []}, Res};
-parse_multi(boundary, [], [], Acc, Res, {_, Bound}) ->
-    {cont, {is_end, [], Bound, [], []}, [{body, lists:reverse(Acc)}|Res]};
-parse_multi(boundary, [H|T], [], start, Res, {_, Bound}) -> %% matched whole boundary!
-    parse_multi(is_end, [H|T], Bound, [], Res, []);
-parse_multi(boundary, [H|T], [], Acc, Res, {_, Bound}) -> %% matched whole boundary!
-    parse_multi(is_end, [H|T], Bound, [], [{body, lists:reverse(Acc)}|Res], []);
-
-parse_multi(is_end, "--"++_, _Boundary, _Acc, Res, _Tmp) ->
-    {result, Res};
-parse_multi(is_end, "-", Boundary, Acc, Res, Tmp) ->
-    {cont, {is_end, "-", Boundary, Acc, Tmp}, Res};
-parse_multi(is_end, "\r\n"++Next, Boundary, _Acc, Res, _Tmp) ->
-    parse_multi(header, Next, Boundary, [], Res, []);
-parse_multi(is_end, "\r", Boundary, Acc, Res, Tmp) ->
-    {cont, {is_end, "\r", Boundary, Acc, Tmp}, Res}.
-
-do_header([]) -> {[]};
-do_header(Head) ->
-    Fields = string:tokens(Head, "\r\n"),
-    MFields = merge_lines_822(Fields),
-    Header = lists:map(fun isolate_arg/1, MFields),
-    case lists:keysearch("content-disposition", 1, Header) of
-        {value, {_,"form-data"++Line}} ->
-            Parameters = parse_arg_line(Line),
-            {value, {_,Name}} = lists:keysearch(name, 1, Parameters),
-            {Name, Parameters};
-        _ ->
-            {Header}
-    end.
-
-merge_lines_822(Lines) ->
-    merge_lines_822(Lines, []).
-
-merge_lines_822([], Acc) ->
-    lists:reverse(Acc);
-merge_lines_822([Line=" "++_|Lines], []) ->
-    merge_lines_822(Lines, [Line]);
-merge_lines_822([Line=" "++_|Lines], [Prev|Acc]) ->
-    merge_lines_822(Lines, [Prev++Line|Acc]);
-merge_lines_822(["\t"++Line|Lines], [Prev|Acc]) ->
-    merge_lines_822(Lines, [Prev++[$ |Line]|Acc]);
-merge_lines_822([Line|Lines], Acc) ->
-    merge_lines_822(Lines, [Line|Acc]).
-
-%%%% convert yaws multipart result to file records
-result_to_files({result, Rest}) ->
-	result_to_files(Rest, [], undefined).
-result_to_files([], Files, File) ->
-	lists:reverse([File|Files]);
-result_to_files([{head,Head}|Rest], Files, File) ->
-	Files1 = case File of
-		undefined -> Files;
-		Else -> [Else|Files]
-	end,
-	{_, Heads} = Head,
-	result_to_files(Rest, Files1, heads_to_file(Heads));
-result_to_files([{body,Data}|Rest], Files, File) ->
-	result_to_files(Rest, Files, File#file{data=list_to_binary(Data)}).
-
-heads_to_file(Heads) ->
-	heads_to_file(Heads, #file{}).
-heads_to_file([{filename,FileName}|Heads], File) ->
-	heads_to_file(Heads, File#file{filename=FileName});
-heads_to_file([{name,PostName}|Heads], File) ->
-	heads_to_file(Heads, File#file{name=PostName});
-heads_to_file([_|Heads], File) ->
-	ignore,
-	heads_to_file(Heads, File);
-heads_to_file([], File) ->
-	File.
+parse_multipart(#state{http_content=HttpContent, http_headers=H, http_packet=Req}) ->
+	mydlp_api:parse_multipart(HttpContent, H, Req).
 
 gen_deny_page(#state{http_packet=HttpReq}) -> 
 	{http_request, _, {_, _}, {Majorv, Minorv}} = HttpReq,
@@ -749,3 +521,10 @@ log_req1(Proto, #state{addr=Addr, http_headers=(#http_headers{host=DestHost})}, 
 		{{rule, RuleId}, {file, File}, {matcher, Matcher}, {misc, Misc}}) ->
 	?ACL_LOG(Proto, RuleId, Action, Addr, nil, DestHost, Matcher, File, Misc).
 
+has_body(HttpReq) when is_record(HttpReq, http_request) ->
+	case HttpReq#http_request.method of
+		'POST' -> true;
+		'PUT' -> true;
+		'PROPFIND' -> true;
+		_ -> false
+	end.

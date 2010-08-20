@@ -115,12 +115,8 @@ init([]) ->
 	end;
 
 'WAIT_FOR_CMD'(timeout, State) ->
-    error_logger:error_msg("~p Client connection timeout - closing.\n", [self()]),
-    {stop, normal, State};
-
-'WAIT_FOR_CMD'(Data, State) ->
-    io:format("~p Ignoring data: ~p\n", [self(), Data]),
-    {next_state, 'WAIT_FOR_CMD', State, ?TIMEOUT}.
+    ?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+    {stop, normal, State}.
 
 %% Notification event coming from client
 'WAIT_FOR_DATA'({data, Data}, #smtpd_fsm{buff = Buff} = State) ->
@@ -135,12 +131,8 @@ init([]) ->
 	end;
 
 'WAIT_FOR_DATA'(timeout, State) ->
-%    error_logger:error_msg("~p Client connection timeout - closing.\n", [self()]),
-    {stop, normal, State};
-
-'WAIT_FOR_DATA'(Data, State) ->
-    io:format("~p Ignoring data: ~p\n", [self(), Data]),
-    {next_state, 'WAIT_FOR_DATA', State, ?TIMEOUT}.
+    ?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+    {stop, normal, State}.
 
 'READ_FILES'(#smtpd_fsm{message_mime=MIME} = State) ->
 	Files = mime_to_files(MIME),
