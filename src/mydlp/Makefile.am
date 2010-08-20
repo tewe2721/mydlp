@@ -21,7 +21,8 @@
 mydlpconfdir = $(sysconfdir)/mydlp
 
 mydlpconf_DATA = \
-	mydlp-production.config
+	mydlp-production.config \
+	mydlp.app
 
 dist_erl_DATA = \
 	dynamic_compile.erl \
@@ -56,8 +57,7 @@ dist_hrl_DATA = \
 	mydlp_schema.hrl
 
 beam_DATA = \
-	$(dist_erl_DATA:.erl=.beam) \
-	mydlp.app
+	$(dist_erl_DATA:.erl=.beam)
 
 #dist_priv_DATA = \
 #	mydlp.conf
@@ -124,3 +124,8 @@ run-production: $(beam_DATA) $(boot_DATA)
 
 clean-local:
 	rm -rf $(beam_DATA) $(boot_DATA) $(html_DATA) mydlp.rel overview.edoc Mnesia.*
+
+install-data-hook: 
+	cd $(DESTDIR)$(beamdir) && \
+		$(LN_S) $(mydlpconfdir)/mydlp.app mydlp.app
+

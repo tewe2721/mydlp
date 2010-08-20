@@ -25,7 +25,7 @@ mydlpjb_DATA = \
 
 src/main/java/Mydlp_bz.java:
 	[ -e src/main/java/Mydlp_bz.java ] || \
-		ln -s ../../../../../thrift/gen-java/Mydlp_bz.java src/main/java/
+		$(LN_S) ../../../../../thrift/gen-java/Mydlp_bz.java src/main/java/
 
 target/mydlp-backend-java-0.1.0-jar-with-dependencies.jar: pom.xml src/main/java/Mydlp_bz.java src/main/java/BayessianZemberekBackend.java
 	$(MVN) assembly:assembly
