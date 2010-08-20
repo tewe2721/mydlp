@@ -90,11 +90,6 @@
 	mime
 }).
 
--record(bayes_data, {
-	key,
-	value
-}).
-
 -record(bayes_item_count, {
 	type,
 	count

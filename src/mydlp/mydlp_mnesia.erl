@@ -40,8 +40,6 @@
 	get_rules/1,
 	get_rules_by_user/1,
 	get_regexes/1,
-	get_bayes_data/0,
-	save_bayes_data/2,
 	add_fhash/3,
 	remove_fhash/1,
 	remove_fhash_group/1,
@@ -55,7 +53,6 @@
 	get_record_fields/1,
 	write/1,
 	delete/1,
-	wait_for_bayes_data/0,
 	truncate_nondata/0,
 	truncate_bayes/0,
 	stop/0]).
@@ -79,8 +76,7 @@
 	{file_hash, ordered_set, 
 		fun() -> mnesia:add_table_index(file_hash, md5) end},
 	{sentence_hash, ordered_set, 
-		fun() -> mnesia:add_table_index(sentence_hash, phash2) end},
-	bayes_data
+		fun() -> mnesia:add_table_index(sentence_hash, phash2) end}
 ]).
 
 -define(BAYES_TABLES, [
@@ -120,7 +116,6 @@ get_record_fields(Record) ->
 		sentence_hash -> record_info(fields, sentence_hash);
 		mime_type -> record_info(fields, mime_type);
 		regex -> record_info(fields, regex);
-		bayes_data -> record_info(fields, bayes_data);
 		bayes_item_count -> record_info(fields, bayes_item_count);
 		bayes_positive -> record_info(fields, bayes_positive);
 		bayes_negative -> record_info(fields, bayes_negative)
@@ -137,10 +132,6 @@ get_rules(Who) -> async_query_call({get_rules, Who}).
 get_rules_by_user(Who) -> async_query_call({get_rules_by_user, Who}).
 
 get_regexes(GroupId) ->	async_query_call({get_regexes, GroupId}).
-
-get_bayes_data() -> async_query_call(get_bayes_data).
-
-save_bayes_data(CDat, PDat) -> async_query_call({save_bayes_data, CDat, PDat}).
 
 add_fhash(Hash, FileId, GroupId) when is_binary(Hash) -> 
 	async_query_call({add_fhash, Hash, FileId, GroupId}).
@@ -188,14 +179,6 @@ handle_result({is_shash_of_gid, _Hash, HGIs}, {atomic, GIs}) ->
 handle_result({is_fhash_of_gid, _Hash, HGIs}, {atomic, GIs}) -> 
 	lists:any(fun(I) -> lists:member(I, HGIs) end,GIs);
 
-handle_result(get_bayes_data, {atomic, BDs}) -> 
-	case BDs of
-		[#bayes_data{key=confidential, value=CDat}, 
-			#bayes_data{key=public, value=PDat}] -> {CDat, PDat};
-		[#bayes_data{key=public, value=PDat}, 
-			#bayes_data{key=confidential, value=CDat}] -> {CDat, PDat};
-		[] -> {<<>>,<<>>} end;
-
 handle_result(_Query, {atomic, Objects}) -> Objects.
 
 handle_query({get_rules, Who}) ->
@@ -222,15 +205,6 @@ handle_query({get_regexes, GroupId}) ->
 		R#regex.group_id == GroupId
 		]),
 	qlc:e(Q);
-
-handle_query(get_bayes_data) ->
-	Q = qlc:q([BD || BD <- mnesia:table(bayes_data)]),
-	qlc:e(Q);
-
-handle_query({save_bayes_data, CDat, PDat}) ->
-	C = #bayes_data{key=confidential, value=CDat},
-	P = #bayes_data{key=public, value=PDat},
-	lists:foreach(fun(I) -> mnesia:write(I) end, [C,P]);
 
 handle_query({add_fhash, Hash, FI, GI}) ->
 	NewId = get_unique_id(file_hash),
@@ -470,9 +444,6 @@ find_funcs(ParentId) ->
 
 consistency_chk() -> 
 	compile_regex().
-
-wait_for_bayes_data() ->
-	mnesia:wait_for_tables([bayes_data], 5000).
 
 compile_regex() ->
 	mnesia:wait_for_tables([regex], 5000),
