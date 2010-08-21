@@ -37,6 +37,7 @@
 
 -record(ipr, {
 	id,
+	customer_id,
 	parent,
 	ipbase,
 	ipmask

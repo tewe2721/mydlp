@@ -168,7 +168,7 @@ init([]) ->
 		{filters, <<"SELECT id,name FROM sh_filter WHERE is_active=TRUE">>},
 		{filters_by_cid, <<"SELECT id,name FROM sh_filter WHERE is_active=TRUE and customer_id=?">>},
 		{rules_by_fid, <<"SELECT id,action FROM sh_rule WHERE is_nw_active=TRUE and filter_id=?">>},
-		{ipr_by_rule_id, <<"SELECT a.id,a.base_ip,a.subnet FROM sh_ipr AS i, sh_ipaddress AS a WHERE i.parent_rule_id=? AND i.sh_ipaddress_id=a.id">>},
+		{ipr_by_rule_id, <<"SELECT a.id,a.customer_id,a.base_ip,a.subnet FROM sh_ipr AS i, sh_ipaddress AS a WHERE i.parent_rule_id=? AND i.sh_ipaddress_id=a.id">>},
 		{user_by_rule_id, <<"SELECT eu.id, eu.username FROM sh_ad_entry_user AS eu, sh_ad_cross AS c, sh_ad_entry AS e, sh_ad_group AS g, sh_ad_rule_cross AS rc WHERE rc.parent_rule_id=? AND rc.group_id=g.id AND rc.group_id=c.group_id AND c.entry_id=e.id AND c.entry_id=eu.entry_id">>},
 		%{user_by_rule_id, <<"SELECT eu.id, eu.username FROM sh_ad_entry_user AS eu, sh_ad_cross AS c, sh_ad_rule_cross AS rc WHERE rc.parent_rule_id=? AND rc.group_id=c.group_id AND c.entry_id=eu.entry_id">>},
 		{match_by_rule_id, <<"SELECT DISTINCT m.id,m.func FROM sh_match AS m, sh_func_params AS p WHERE m.parent_rule_id=? AND p.match_id=m.id AND p.param <> \"0\" ">>},
@@ -252,10 +252,10 @@ populate_rule(Id, Action, FilterId) ->
 	R = #rule{id=Id, action=Action, filter_id=FilterId},
 	mydlp_mnesia:write(R).
 
-populate_iprs([[Id, Base, Subnet]| Rows], Parent) ->
+populate_iprs([[Id, CustomerId, Base, Subnet]| Rows], Parent) ->
 	B1 = int_to_ip(Base),
 	S1 = int_to_ip(Subnet),
-	I = #ipr{id=Id, parent=Parent, ipbase=B1, ipmask=S1},
+	I = #ipr{id=Id, customer_id=CustomerId, parent=Parent, ipbase=B1, ipmask=S1},
 	mydlp_mnesia:write(I),
 	populate_iprs(Rows, Parent);
 populate_iprs([], _Parent) -> ok.

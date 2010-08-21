@@ -32,7 +32,7 @@
 
 %% API
 -export([start_link/0,
-	q/3,
+	q/4,
 	qu/3,
 	stop/0]).
 
@@ -46,19 +46,33 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
--record(state, {}).
+-record(state, {multisite_support=false}).
 
 %%%%%%%%%%%%% MyDLP ACL API
 
-q(Addr, _Dest, Files) ->
-	gen_server:call(?MODULE, {acl_q, {Addr, Files}}, 60000).
+q(Site, Addr, _Dest, Files) ->
+	gen_server:call(?MODULE, {acl_q, Site, {Addr, Files}}, 60000).
 
-qu(_User, _Dest, Files) ->
-	gen_server:call(?MODULE, {acl_qu, {user, Files}}, 60000).
+qu(User, _Dest, Files) ->
+	gen_server:call(?MODULE, {acl_qu, site, {User, Files}}, 60000).
 
 %%%%%%%%%%%%%% gen_server handles
 
-handle_call({acl_q, {Addr, Files}}, From, State) ->
+handle_call({acl_q, SAddr, {Addr, Files}}, From, #state{multisite_support=true} = State) ->
+	Worker = self(),
+	spawn_link(fun() ->
+		Result = case mydlp_mnesia:get_cid(SAddr) of
+			nocustomer -> block;
+			CustomerId -> 
+				Rules = mydlp_mnesia:get_rules_for_cid(CustomerId, Addr),
+				Files1 = mydlp_api:df_to_files(Files),
+				Param = {Addr, drop_nodata(Files1)},
+				apply_rules(Rules, Param) end,
+		Worker ! {async_acl_q, Result, From}
+	end),
+	{noreply, State, 60000};
+
+handle_call({acl_q, _Site, {Addr, Files}}, From, #state{multisite_support=false} = State) ->
 	Worker = self(),
 	spawn_link(fun() ->
 		Rules = mydlp_mnesia:get_rules(Addr),
@@ -70,7 +84,8 @@ handle_call({acl_q, {Addr, Files}}, From, State) ->
 	end),
 	{noreply, State, 60000};
 
-handle_call({acl_qu, {User, Files}}, From, State) ->
+%% now this is used for only SMTP, and in SMTP domain part of, mail adresses itself a siteid for customer.
+handle_call({acl_qu, _Site, {User, Files}}, From, State) ->
 	Worker = self(),
 	spawn_link(fun() ->
 		Rules = mydlp_mnesia:get_rules_by_user(User),
@@ -179,3 +194,4 @@ drop_whitefile(Files) -> lists:filter(fun(F) -> not is_whitefile(F) end, Files).
 drop_notext(Files) -> lists:filter(fun(I) -> mydlp_api:has_text(I) end, Files).
 
 drop_nodata(Files) -> lists:filter(fun(F) -> size(F#file.data) > 0 end, Files).
+

@@ -39,8 +39,10 @@
 	get_pgid/0,
 	get_dcid/0,
 	get_rules/1,
+	get_rules_for_cid/2,
 	get_rules_by_user/1,
 	get_regexes/1,
+	get_cid/1,
 	remove_site/1,
 	remove_file_entry/1,
 	remove_group/1,
@@ -138,9 +140,13 @@ get_dcid() -> -3.
 
 get_rules(Who) -> async_query_call({get_rules, Who}).
 
+get_rules_for_cid(CustomerId, Who) -> async_query_call({get_rules, CustomerId, Who}).
+
 get_rules_by_user(Who) -> async_query_call({get_rules_by_user, Who}).
 
 get_regexes(GroupId) ->	async_query_call({get_regexes, GroupId}).
+
+get_cid(SIpAddr) -> async_query_call({get_cid, SIpAddr}).
 
 remove_site(CustomerId) -> async_query_call({remove_site, CustomerId}).
 
@@ -188,7 +194,22 @@ handle_result({is_shash_of_gid, _Hash, HGIs}, {atomic, GIs}) ->
 handle_result({is_fhash_of_gid, _Hash, HGIs}, {atomic, GIs}) -> 
 	lists:any(fun(I) -> lists:member(I, HGIs) end,GIs);
 
+handle_result({get_cid, _SIpAddr}, {atomic, Result}) -> 
+	case Result of
+		[] -> nocustomer;
+		[CustomerId] -> CustomerId end;
+
 handle_result(_Query, {atomic, Objects}) -> Objects.
+
+handle_query({get_rules_for_cid, CustomerId, Who}) ->
+	Q = qlc:q([I#ipr.parent || I <- mnesia:table(ipr),
+			I#ipr.customer_id == CustomerId,
+			ip_band(I#ipr.ipbase, I#ipr.ipmask) == ip_band(Who, I#ipr.ipmask)
+			]),
+	Parents = qlc:e(Q),
+	Parents1 = lists:usort(Parents),
+	Rules = resolve_rules(Parents1),
+	resolve_funcs(Rules);
 
 handle_query({get_rules, Who}) ->
 	Q = qlc:q([I#ipr.parent || I <- mnesia:table(ipr),
@@ -212,6 +233,13 @@ handle_query({get_regexes, GroupId}) ->
 	Q = qlc:q([R#regex.compiled ||
 		R <- mnesia:table(regex),
 		R#regex.group_id == GroupId
+		]),
+	qlc:e(Q);
+
+handle_query({get_cid, SIpAddr}) ->
+	Q = qlc:q([S#site_desc.customer_id ||
+		S <- mnesia:table(site_desc),
+		S#site_desc.ipaddr == SIpAddr
 		]),
 	qlc:e(Q);
 

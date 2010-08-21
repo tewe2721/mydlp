@@ -233,7 +233,7 @@ get_http_content(#state{socket=Socket, http_headers=HttpHeaders} = State) ->
 
 % {Action, {{rule, Id}, {file, File}, {matcher, Func}, {misc, Misc}}}
 'REQ_OK'(#state{files=Files,http_content=HttpContent, addr=Addr} = State) ->
-	case mydlp_acl:q(Addr, dest, df_to_files(list_to_binary(HttpContent), Files)) of
+	case mydlp_acl:q(Addr, Addr, dest, df_to_files(list_to_binary(HttpContent), Files)) of
 		pass -> 'CONNECT_REMOTE'(connect, State);
 		{quarantine, AclR} -> log_req(State, quarantine, AclR),
 					mydlp_api:quarantine(Files),
