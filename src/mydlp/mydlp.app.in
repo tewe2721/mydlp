@@ -69,7 +69,6 @@
           {mydlp_regex, start_link,[]}, 
           {mydlp_tc, start_link,[]}, 
           {mydlp_acl, start_link,[]}, 
-          {mydlp_smtpc, start_link,[]}, 
           {mydlp_nlp_tr, start_link,[]},
           {mydlp_trainer, start_link,[]},
           {mydlp_ts, start_link,[]}
@@ -82,7 +81,9 @@
                  {workers, []}
 	  },
 	  {smtp, {acceptor, {10025, plain, smtp} },
-                 {workers, []}
+                 {workers, [
+			  {mydlp_smtpc, start_link,[]} 
+			]}
 	  },
 	  {icap, {acceptor, {1344, plain, icap} },
                  {workers, []}
