@@ -38,11 +38,13 @@
 	get_cgid/0,
 	get_pgid/0,
 	get_dcid/0,
+	get_drid/0,
 	get_rules/1,
 	get_rules_for_cid/2,
 	get_rules_by_user/1,
 	get_regexes/1,
 	get_cid/1,
+	get_default_rule/1,
 	remove_site/1,
 	remove_file_entry/1,
 	remove_group/1,
@@ -53,6 +55,7 @@
 	is_fhash_of_gid/2,
 	is_shash_of_gid/2,
 	is_mime_of_gid/2,
+	is_dr_fh_of_fid/2,
 	get_record_fields/1,
 	write/1,
 	delete/1,
@@ -104,6 +107,7 @@
 	{mime_type, ordered_set, 
 		fun() -> mnesia:add_table_index(mime_type, mime) end},
 	site_desc,
+	default_rule,
 	regex
 ]).
 
@@ -127,7 +131,8 @@ get_record_fields(Record) ->
 		bayes_item_count -> record_info(fields, bayes_item_count);
 		bayes_positive -> record_info(fields, bayes_positive);
 		bayes_negative -> record_info(fields, bayes_negative);
-		site_desc -> record_info(fields, site_desc)
+		site_desc -> record_info(fields, site_desc);
+		default_rule -> record_info(fields, default_rule)
 	end.
 
 %%%%%%%%%%%%% MyDLP Mnesia API
@@ -138,6 +143,8 @@ get_pgid() -> -2.
 
 get_dcid() -> -3.
 
+get_drid() -> -4.
+
 get_rules(Who) -> async_query_call({get_rules, Who}).
 
 get_rules_for_cid(CustomerId, Who) -> async_query_call({get_rules, CustomerId, Who}).
@@ -147,6 +154,8 @@ get_rules_by_user(Who) -> async_query_call({get_rules_by_user, Who}).
 get_regexes(GroupId) ->	async_query_call({get_regexes, GroupId}).
 
 get_cid(SIpAddr) -> async_query_call({get_cid, SIpAddr}).
+
+get_default_rule(CustomerId) -> async_query_call({get_default_rule, CustomerId}).
 
 remove_site(CustomerId) -> async_query_call({remove_site, CustomerId}).
 
@@ -171,6 +180,8 @@ is_shash_of_gid(Hash, GroupIds) ->
 
 is_mime_of_gid(Mime, GroupIds) -> 
 	async_query_call({is_mime_of_gid, Mime, GroupIds}).
+
+is_dr_fh_of_fid(Hash, FileId) -> async_query_call({is_dr_fh_of_fid, Hash, FileId}).
 
 set_gid_by_fid(FileId, GroupId) -> async_query_call({set_gid_by_fid, FileId, GroupId}).
 
@@ -198,6 +209,11 @@ handle_result({get_cid, _SIpAddr}, {atomic, Result}) ->
 	case Result of
 		[] -> nocustomer;
 		[CustomerId] -> CustomerId end;
+
+handle_result({is_dr_fh_of_fid, _, _}, {atomic, Result}) -> 
+	case Result of
+		[] -> false;
+		Else when is_list(Else) -> true end;
 
 handle_result(_Query, {atomic, Objects}) -> Objects.
 
@@ -243,6 +259,13 @@ handle_query({get_cid, SIpAddr}) ->
 		]),
 	qlc:e(Q);
 
+handle_query({get_default_rule, CustomerId}) ->
+	Q = qlc:q([D#default_rule.resolved_rule ||
+		D <- mnesia:table(default_rule),
+		D#default_rule.resolved_rule == CustomerId
+		]),
+	qlc:e(Q);
+
 handle_query({remove_site, CI}) ->
 	Q = qlc:q([F#filter.id ||
 		F <- mnesia:table(filter),
@@ -268,11 +291,27 @@ handle_query({remove_site, CI}) ->
 		]),
 	RQ4 = qlc:e(Q4),
 
+	Q5 = qlc:q([F#file_hash.id ||	
+		F <- mnesia:table(file_hash),
+		F#file_hash.file_id == {wl, CI}
+		]),
+	WFIs = qlc:e(Q5),
+
+	Q6 = qlc:q([F#file_hash.id ||	
+		F <- mnesia:table(file_hash),
+		F#file_hash.file_id == {bl, CI}
+		]),
+	BFIs = qlc:e(Q6),
+	
+
 	case RQ4 of
 		[] -> ok;
 		[SDI] -> mnesia:delete({site_desc, SDI}) end,
 
+	mnesia:delete({default_rule, CI}),
 	remove_filters(FIs),
+	lists:foreach(fun(Id) -> mnesia:delete({file_hash, Id}) end, WFIs),
+	lists:foreach(fun(Id) -> mnesia:delete({file_hash, Id}) end, BFIs),
 	lists:foreach(fun(Id) -> mnesia:delete({regex, Id}) end, RIs),
 	lists:foreach(fun(Id) -> mnesia:delete({mime_type, Id}) end, MIs);
 
@@ -352,6 +391,14 @@ handle_query({is_mime_of_gid, Mime, _MGIs}) ->
 	Q = qlc:q([M#mime_type.group_id ||
 		M <- mnesia:table(mime_type),
 		M#mime_type.mime == Mime
+		]),
+	qlc:e(Q);
+
+handle_query({is_dr_fh_of_fid, Hash, FileId}) ->
+	Q = qlc:q([F#file_hash.id ||
+		F <- mnesia:table(file_hash),
+		F#file_hash.file_id == FileId,
+		F#file_hash.md5 == Hash
 		]),
 	qlc:e(Q);
 

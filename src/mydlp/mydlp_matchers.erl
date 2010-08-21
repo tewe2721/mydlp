@@ -36,6 +36,8 @@
 	mime_match/2,
 	md5_match/0,
 	md5_match/2,
+	md5_dr_match/0,
+	md5_dr_match/2,
 	regex_match/0,
 	regex_match/2,
 	iban_match/0,
@@ -192,6 +194,22 @@ md5_match(HGIs, [File|Files]) ->
 		false -> md5_match(HGIs, Files)
 	end;
 md5_match(_HGIs, []) -> neg.
+
+md5_dr_match() -> raw.
+
+md5_dr_match(_Conf, {Source, Files}) -> 
+	CustomerId = case lists:keyfind(cid, 1, Source) of
+		{cid, C} -> C;
+		false -> mydlp_mnesia:get_dcid()
+	end,
+	md5_dr_match(CustomerId, Files);
+md5_dr_match(CustomerId, [File|Files]) ->
+	Hash = erlang:md5(File#file.data),
+	case mydlp_mnesia:is_dr_fh_of_fid(Hash, CustomerId) of
+		true -> {pos, {file, File}};
+		false -> md5_dr_match({bl, CustomerId}, Files)
+	end;
+md5_dr_match(_HGIs, []) -> neg.
 
 shash_match() -> text.
 

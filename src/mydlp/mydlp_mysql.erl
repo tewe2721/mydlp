@@ -191,6 +191,9 @@ init([]) ->
 		{regexes_by_cid, <<"SELECT r.id, c.group_id, r.regex FROM sh_regex_cross AS c, sh_regex r WHERE c.regex_id=r.id and r.customer_id=?">>},
 		{customer_by_id, <<"SELECT id,static_ip FROM sh_customer WHERE id=?">>},
 		{app_type, <<"SELECT type FROM app_type">>},
+		{defaultrule_by_cid, <<"SELECT cc_count, ssn_count, iban_count FROM sh_defaultrule_predefined WHERE enabled <> 0 and customer_id=?">>},
+		{dr_fhash_by_cid, <<"SELECT hash FROM sh_defaultrule_filehash WHERE customer_id=?">>},
+		{dr_wfhash_by_cid, <<"SELECT hash FROM sh_defaultrule_white_filehash WHERE customer_id=?">>},
 		{insert_incident, <<"INSERT INTO log_incedent (id, rule_id, protocol, src_ip, src_user, destination, action, matcher, filename, misc) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)">>}
 	]],
 
@@ -225,6 +228,12 @@ populate_site(CustomerId) ->
 	populate_regexes(RQ, CustomerId),
 	{ok, SQ} = psq(customer_by_id, [CustomerId]),
 	populate_site_desc(SQ),
+	{ok, DQ} = psq(defaultrule_by_cid, [CustomerId]),
+	populate_default_rule(DQ, CustomerId),
+	{ok, FHQ} = psq(dr_fhash_by_cid, [CustomerId]),
+	populate_file_hashes(FHQ, bl, CustomerId),
+	{ok, WFHQ} = psq(dr_wfhash_by_cid, [CustomerId]),
+	populate_file_hashes(WFHQ, wl, CustomerId),
 	ok.
 
 populate_filters(Rows) -> populate_filters(Rows, mydlp_mnesia:get_dcid()).
@@ -236,6 +245,28 @@ populate_filters([[Id, Name]|Rows], CustomerId) ->
 	mydlp_mnesia:write(F),
 	populate_filters(Rows, CustomerId);
 populate_filters([], _CustomerId) -> ok.
+
+populate_default_rule([], _CustomerId) -> ok;
+populate_default_rule([[CCCount, SSNCount, IBANCount]], CustomerId) ->
+	DefaultRuleId = mydlp_mnesia:get_drid(),
+	% Id, Action, [Matchers]	
+	% {Func, FuncParams}
+	WFMatch = [{whitefile_dr, []}],
+	CCMatch = case CCCount of
+		0 -> [];
+		Count -> [{cc_match, [{count, Count}]}] end,
+	SSNMatch = case SSNCount of
+		0 -> [];
+		Count2 -> [{ssn_match, [{count, Count2}]}] end,
+	IBANMatch = case IBANCount of
+		0 -> [];
+		Count3 -> [{iban_match, [{count, Count3}]}] end,
+	MD5Match = [{md5_dr_match, []}],
+	Matchers = lists:append([WFMatch, CCMatch, SSNMatch, IBANMatch, MD5Match]),
+	ResolvedRule = {DefaultRuleId, block, Matchers},
+	DR = #default_rule{customer_id=CustomerId, resolved_rule=ResolvedRule},
+	mnesia:write(DR).
+
 
 populate_rules([[Id, <<"quarantine">>]|Rows], FilterId) ->
 	populate_rule(Id, quarantine, FilterId),
@@ -428,8 +459,16 @@ populate_regexes1([[Id, GroupId, Regex]|Rows], CustomerId) ->
 populate_regexes1([], _CustomerId) -> ok.
 
 populate_site_desc([[Id, _StaticIp]]) ->
-	IpAddr = {1,1,1,1},
+	IpAddr = {1,1,1,1}, % TODO: refine this
 	S = #site_desc{customer_id=Id, ipaddr=IpAddr},
 	mydlp_mnesia:write(S), ok.
+
+populate_file_hashes([[Hash]|Rows], Tag, CustomerId) ->
+	F = #file_hash{id=mydlp_mnesia:get_unique_id(file_hash),
+			file_id={Tag, CustomerId},
+			md5=mydlp_api:hex2bytelist(Hash) },
+	mnesia:write(F),
+	populate_file_hashes(Rows, Tag, CustomerId);
+populate_file_hashes([], _Tag, _CustomerId) -> ok.
 
 

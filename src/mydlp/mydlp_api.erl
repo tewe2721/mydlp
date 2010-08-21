@@ -117,6 +117,13 @@ nonl([]) ->
 hex2int(Line) ->
     erlang:list_to_integer(nonl(Line),16).
 
+hex2bytelist(Str) when is_binary(Str) -> hex2bytelist(binary_to_list(Str));
+hex2bytelist(Str) when is_list(Str) -> hex2bytelist(Str, <<>>).
+
+hex2bytelist([C1,C0|Rest], Bin) -> I = hex2int([C1,C0]), hex2bytelist(Rest, <<Bin/binary, I/integer>>);
+hex2bytelist([C0|Rest], Bin) -> I = hex2int([C0]), hex2bytelist(Rest, <<Bin/binary, I/integer >> );
+hex2bytelist([], Bin) -> Bin.
+
 %%--------------------------------------------------------------------
 %% @doc Checks a string whether starts with given string
 %% @end

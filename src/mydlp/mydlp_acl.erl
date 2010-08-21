@@ -1,4 +1,4 @@
-%
+
 %%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@medra.com.tr>
 %%%
 %%%--------------------------------------------------------------------------
@@ -58,6 +58,13 @@ qu(User, _Dest, Files) ->
 
 %%%%%%%%%%%%%% gen_server handles
 
+acl_exec(Rules, Source, Files) ->
+	[{cid, CustomerId}|_] = Source,
+	Files1 = mydlp_api:df_to_files(Files),
+	Param = {Source, drop_nodata(Files1)},
+	DRules = mydlp_mnesia:get_default_rule(CustomerId),
+	apply_rules(lists:append(DRules, Rules), Param).
+
 handle_call({acl_q, SAddr, {Addr, Files}}, From, #state{is_multisite=true} = State) ->
 	Worker = self(),
 	spawn_link(fun() ->
@@ -65,9 +72,7 @@ handle_call({acl_q, SAddr, {Addr, Files}}, From, #state{is_multisite=true} = Sta
 			nocustomer -> block;
 			CustomerId -> 
 				Rules = mydlp_mnesia:get_rules_for_cid(CustomerId, Addr),
-				Files1 = mydlp_api:df_to_files(Files),
-				Param = {Addr, drop_nodata(Files1)},
-				apply_rules(Rules, Param) end,
+				acl_exec(Rules, [{cid, CustomerId}, {addr, Addr}], Files) end,
 		Worker ! {async_acl_q, Result, From}
 	end),
 	{noreply, State, 60000};
@@ -76,10 +81,7 @@ handle_call({acl_q, _Site, {Addr, Files}}, From, #state{is_multisite=false} = St
 	Worker = self(),
 	spawn_link(fun() ->
 		Rules = mydlp_mnesia:get_rules(Addr),
-		Files1 = mydlp_api:df_to_files(Files),
-		Param = {Addr, drop_nodata(Files1)},
-
-		Result = apply_rules(Rules, Param),
+		Result = acl_exec(Rules, [{cid, mydlp_mnesia:get_dcid()}, {addr, Addr}], Files),
 		Worker ! {async_acl_q, Result, From}
 	end),
 	{noreply, State, 60000};
@@ -89,9 +91,7 @@ handle_call({acl_qu, _Site, {User, Files}}, From, State) ->
 	Worker = self(),
 	spawn_link(fun() ->
 		Rules = mydlp_mnesia:get_rules_by_user(User),
-		Param = {User, mydlp_api:df_to_files(Files)},
-
-		Result = apply_rules(Rules, Param),
+		Result = acl_exec(Rules, [{cid, mydlp_mnesia:get_dcid()}, {user, User}], Files),
 		Worker ! {async_acl_q, Result, From}
 	end),
 	{noreply, State, 60000};
@@ -156,6 +156,9 @@ execute_matchers([], Params, PLT) -> apply_f([], Params, PLT).
 
 apply_f([{whitefile, _FuncParams}|Matchers], {Addr, Files}, PLT) ->
 	execute_matchers(Matchers, {Addr, drop_whitefile(Files)}, PLT);
+apply_f([{whitefile_dr, _FuncParams}|Matchers], {Source, Files}, PLT) ->
+	[{cid, CustomerId}|_] = Source,
+	execute_matchers(Matchers, {Source, drop_whitefile_dr(Files, CustomerId)}, PLT);
 apply_f([{Func, FuncParams}|Matchers], Params, PLT) ->
 	case apply_m(Func, [FuncParams, Params]) of
                 neg -> execute_matchers(Matchers, Params, PLT);
@@ -191,6 +194,12 @@ is_whitefile(File) ->
 	mydlp_mnesia:is_fhash_of_gid(Hash, [mydlp_mnesia:get_pgid()]).
 
 drop_whitefile(Files) -> lists:filter(fun(F) -> not is_whitefile(F) end, Files).
+
+is_whitefile_dr(File, CustomerId) ->
+	Hash = erlang:md5(File#file.data),
+	mydlp_mnesia:is_dr_fh_of_fid(Hash, {wl, CustomerId}).
+
+drop_whitefile_dr(Files, CustomerId) -> lists:filter(fun(F) -> not is_whitefile_dr(F, CustomerId) end, Files).
 
 drop_notext(Files) -> lists:filter(fun(I) -> mydlp_api:has_text(I) end, Files).
 

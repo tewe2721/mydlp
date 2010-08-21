@@ -63,6 +63,11 @@
 	name
 }).
 
+-record(default_rule, {
+	customer_id,
+	resolved_rule
+}).
+
 -record(regex, {
 	id,
 	customer_id,
