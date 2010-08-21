@@ -36,6 +36,7 @@
 	compile_filters/0,
 	compile_customer/1,
 	push_log/9,
+	is_multisite/0,
 	stop/0]).
 
 %% gen_server callbacks
@@ -52,11 +53,13 @@
 
 %%%%%%%%%%%%% MyDLP Thrift RPC API
 
-compile_filters() ->
-	gen_server:call(?MODULE, compile_filters).
+compile_filters() -> 
+	gen_server:call(?MODULE, compile_filters, 60000).
 
 compile_customer(CustomerId) when is_integer(CustomerId) ->
-	gen_server:call(?MODULE, {compile_customer, CustomerId} ).
+	gen_server:call(?MODULE, {compile_customer, CustomerId} , 60000).
+
+is_multisite() -> gen_server:call(?MODULE, is_multisite, 60000).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -90,6 +93,14 @@ handle_call(compile_filters, From, State) ->
                         Worker ! {async_reply, Reply, From}
                 end),
         {noreply, State, 60000};
+
+handle_call(is_multisite, _From, State) ->
+	{ok, ATQ} = psq(app_type),
+	Reply = case ATQ of
+		[] -> false;
+		[[0]] -> false;
+		[[1]] -> true end,
+        {reply, Reply, State};
 
 handle_call(stop, _From,  State) ->
 	{stop, normalStop, State};
@@ -179,6 +190,7 @@ init([]) ->
 		{regexes, <<"SELECT r.id, c.group_id, r.regex FROM sh_regex_cross AS c, sh_regex r WHERE c.regex_id=r.id">>},
 		{regexes_by_cid, <<"SELECT r.id, c.group_id, r.regex FROM sh_regex_cross AS c, sh_regex r WHERE c.regex_id=r.id and r.customer_id=?">>},
 		{customer_by_id, <<"SELECT id,static_ip FROM sh_customer WHERE id=?">>},
+		{app_type, <<"SELECT type FROM app_type">>},
 		{insert_incident, <<"INSERT INTO log_incedent (id, rule_id, protocol, src_ip, src_user, destination, action, matcher, filename, misc) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)">>}
 	]],
 

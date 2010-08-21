@@ -46,7 +46,7 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
--record(state, {multisite_support=false}).
+-record(state, {is_multisite=false}).
 
 %%%%%%%%%%%%% MyDLP ACL API
 
@@ -58,7 +58,7 @@ qu(User, _Dest, Files) ->
 
 %%%%%%%%%%%%%% gen_server handles
 
-handle_call({acl_q, SAddr, {Addr, Files}}, From, #state{multisite_support=true} = State) ->
+handle_call({acl_q, SAddr, {Addr, Files}}, From, #state{is_multisite=true} = State) ->
 	Worker = self(),
 	spawn_link(fun() ->
 		Result = case mydlp_mnesia:get_cid(SAddr) of
@@ -72,7 +72,7 @@ handle_call({acl_q, SAddr, {Addr, Files}}, From, #state{multisite_support=true} 
 	end),
 	{noreply, State, 60000};
 
-handle_call({acl_q, _Site, {Addr, Files}}, From, #state{multisite_support=false} = State) ->
+handle_call({acl_q, _Site, {Addr, Files}}, From, #state{is_multisite=false} = State) ->
 	Worker = self(),
 	spawn_link(fun() ->
 		Rules = mydlp_mnesia:get_rules(Addr),
@@ -121,7 +121,8 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
-	{ok, #state{}}.
+	IsMS = mydlp_mysql:is_multisite(),
+	{ok, #state{is_multisite=IsMS}}.
 
 handle_cast(_Msg, State) ->
 	{noreply, State}.
