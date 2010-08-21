@@ -34,7 +34,7 @@
 %% API
 -export([start_link/0,
 	compile_filters/0,
-	compile_filters/1,
+	compile_customer/1,
 	push_log/9,
 	stop/0]).
 
@@ -55,8 +55,8 @@
 compile_filters() ->
 	gen_server:call(?MODULE, compile_filters).
 
-compile_filters(CustomerId) when is_integer(CustomerId) ->
-	gen_server:call(?MODULE, {compile_filters, CustomerId} ).
+compile_customer(CustomerId) when is_integer(CustomerId) ->
+	gen_server:call(?MODULE, {compile_customer, CustomerId} ).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -73,7 +73,7 @@ psq(PreparedKey, Params) when is_atom(PreparedKey), is_list(Params) ->
 push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc) ->
 	gen_server:cast(?MODULE, {push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc}}).
 
-handle_call({compile_filters, CustomerId}, From, State) ->
+handle_call({compile_customer, CustomerId}, From, State) ->
 	Worker = self(),
         spawn_link(fun() ->
 			mydlp_mnesia:remove_site(CustomerId),

@@ -30,4 +30,6 @@ service Mydlp_ui {
 	oneway void removeFileFromGroup(1: i32 Fileid, 2: i32 Groupid)
 
 	void compileFilters()
+
+	void compileCustomer(1: i32 Customerid)
 }
