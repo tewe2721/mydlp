@@ -37,6 +37,7 @@
 	compile_regex/0,
 	get_cgid/0,
 	get_pgid/0,
+	get_dcid/0,
 	get_rules/1,
 	get_rules_by_user/1,
 	get_regexes/1,
@@ -89,7 +90,8 @@
 -define(DATA_TABLES, lists:append(?OTHER_DATA_TABLES, ?BAYES_TABLES)).
 
 -define(NONDATA_TABLES, [
-	filter, 
+	{filter, ordered_set, 
+		fun() -> mnesia:add_table_index(filter, cid) end},
 	rule, 
 	ipr, 
 	{m_user, ordered_set, 
@@ -98,6 +100,7 @@
 	match_group, 
 	{mime_type, ordered_set, 
 		fun() -> mnesia:add_table_index(mime_type, mime) end},
+	site_desc,
 	regex
 ]).
 
@@ -120,7 +123,8 @@ get_record_fields(Record) ->
 		regex -> record_info(fields, regex);
 		bayes_item_count -> record_info(fields, bayes_item_count);
 		bayes_positive -> record_info(fields, bayes_positive);
-		bayes_negative -> record_info(fields, bayes_negative)
+		bayes_negative -> record_info(fields, bayes_negative);
+		site_desc -> record_info(fields, site_desc)
 	end.
 
 %%%%%%%%%%%%% MyDLP Mnesia API
@@ -128,6 +132,8 @@ get_record_fields(Record) ->
 get_cgid() -> -1.
 
 get_pgid() -> -2.
+
+get_dcid() -> -3.
 
 get_rules(Who) -> async_query_call({get_rules, Who}).
 

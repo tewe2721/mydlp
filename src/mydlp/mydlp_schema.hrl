@@ -25,6 +25,7 @@
 
 -record(filter, {
 	id,
+	customer_id,
 	name
 }).
 
@@ -63,6 +64,7 @@
 
 -record(regex, {
 	id,
+	customer_id,
 	group_id,
 	plain,
 	compiled,
@@ -89,6 +91,7 @@
 
 -record(mime_type, {
 	id,
+	customer_id,
 	group_id,
 	extension,
 	mime
@@ -107,6 +110,11 @@
 -record(bayes_negative, {
 	word_hash,
 	count
+}).
+
+-record(site_desc, {
+	ipaddr,
+	customer_id
 }).
 
 -endif.
