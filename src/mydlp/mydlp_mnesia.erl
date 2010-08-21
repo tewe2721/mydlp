@@ -41,6 +41,7 @@
 	get_rules/1,
 	get_rules_by_user/1,
 	get_regexes/1,
+	remove_site/1,
 	remove_file_entry/1,
 	remove_group/1,
 	remove_file_from_group/2,
@@ -141,6 +142,8 @@ get_rules_by_user(Who) -> async_query_call({get_rules_by_user, Who}).
 
 get_regexes(GroupId) ->	async_query_call({get_regexes, GroupId}).
 
+remove_site(CustomerId) -> async_query_call({remove_site, CustomerId}).
+
 remove_file_entry(FileId) -> async_query_call({remove_file_entry, FileId}).
 
 remove_group(GroupId) -> async_query_call({remove_group, GroupId}).
@@ -211,6 +214,39 @@ handle_query({get_regexes, GroupId}) ->
 		R#regex.group_id == GroupId
 		]),
 	qlc:e(Q);
+
+handle_query({remove_site, CI}) ->
+	Q = qlc:q([F#filter.id ||
+		F <- mnesia:table(filter),
+		F#filter.customer_id == CI
+		]),
+	FIs = qlc:e(Q),
+
+	Q2 = qlc:q([R#regex.id ||
+		R <- mnesia:table(regex),
+		R#regex.customer_id == CI
+		]),
+	RIs = qlc:e(Q2),
+
+	Q3 = qlc:q([M#mime_type.id ||	
+		M <- mnesia:table(mime_type),
+		M#mime_type.customer_id == CI
+		]),
+	MIs = qlc:e(Q3),
+
+	Q4 = qlc:q([S#site_desc.ipaddr ||	
+		S <- mnesia:table(site_desc),
+		S#site_desc.customer_id == CI
+		]),
+	RQ4 = qlc:e(Q4),
+
+	case RQ4 of
+		[] -> ok;
+		[SDI] -> mnesia:delete({site_desc, SDI}) end,
+
+	remove_filters(FIs),
+	lists:foreach(fun(Id) -> mnesia:delete({regex, Id}) end, RIs),
+	lists:foreach(fun(Id) -> mnesia:delete({mime_type, Id}) end, MIs);
 
 handle_query({remove_file_entry, FI}) ->
 	Q = qlc:q([H#file_hash.id ||
@@ -505,3 +541,49 @@ add_file_group(FI, GI) ->
 			FG = #file_group{id=NewId, file_id=FI, group_id=GI},
 			mnesia:write(FG);
 		_Else -> ok end.
+
+remove_filters(FIs) -> lists:foreach(fun(Id) -> remove_filter(Id) end, FIs), ok.
+
+remove_filter(FI) ->
+	Q = qlc:q([R#rule.id ||	
+		R <- mnesia:table(rule),
+		R#rule.filter_id == FI
+		]),
+	RIs = qlc:e(Q),
+	remove_rules(RIs),
+	mnesia:delete({filter, FI}).
+
+remove_rules(RIs) -> lists:foreach(fun(Id) -> remove_rule(Id) end, RIs), ok.
+
+remove_rule(RI) ->
+	Q = qlc:q([M#match.id ||	
+		M <- mnesia:table(match),
+		M#match.parent == {rule, RI}
+		]),
+	MIs = qlc:e(Q),
+	remove_matches(MIs),
+
+	Q2 = qlc:q([MG#match_group.id ||	
+		MG <- mnesia:table(match_group),
+		MG#match_group.parent == {rule, RI}
+		]),
+	MGIs = qlc:e(Q2),
+	remove_match_groups(MGIs),
+
+	mnesia:delete({rule, RI}).
+
+remove_matches(MIs) -> lists:foreach(fun(Id) -> remove_match(Id) end, MIs), ok.
+
+remove_match(MI) -> mnesia:delete({match, MI}).
+
+remove_match_groups(MGIs) -> lists:foreach(fun(Id) -> remove_match_group(Id) end, MGIs), ok.
+
+remove_match_group(MGI) ->
+	Q = qlc:q([M#match.id ||	
+		M <- mnesia:table(match),
+		M#match.parent == {mgroup, MGI}
+		]),
+	MIs = qlc:e(Q),
+	remove_matches(MIs),
+	mnesia:delete({match_group, MGI}).
+

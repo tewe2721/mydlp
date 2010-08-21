@@ -34,6 +34,7 @@
 %% API
 -export([start_link/0,
 	compile_filters/0,
+	compile_filters/1,
 	push_log/9,
 	stop/0]).
 
@@ -54,6 +55,9 @@
 compile_filters() ->
 	gen_server:call(?MODULE, compile_filters).
 
+compile_filters(CustomerId) when is_integer(CustomerId) ->
+	gen_server:call(?MODULE, {compile_filters, CustomerId} ).
+
 %%%%%%%%%%%%%% gen_server handles
 
 psq(PreparedKey) when is_atom(PreparedKey) ->
@@ -68,6 +72,15 @@ psq(PreparedKey, Params) when is_atom(PreparedKey), is_list(Params) ->
 
 push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc) ->
 	gen_server:cast(?MODULE, {push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc}}).
+
+handle_call({compile_filters, CustomerId}, From, State) ->
+	Worker = self(),
+        spawn_link(fun() ->
+			mydlp_mnesia:remove_site(CustomerId),
+			Reply = populate_site(CustomerId),
+                        Worker ! {async_reply, Reply, From}
+                end),
+        {noreply, State, 60000};
 
 handle_call(compile_filters, From, State) ->
 	Worker = self(),
@@ -153,6 +166,7 @@ init([]) ->
 
 	[ mysql:prepare(Key, Query) || {Key, Query} <- [
 		{filters, <<"SELECT id,name FROM sh_filter WHERE is_active=TRUE">>},
+		{filters_by_cid, <<"SELECT id,name FROM sh_filter WHERE is_active=TRUE and customer_id=?">>},
 		{rules_by_fid, <<"SELECT id,action FROM sh_rule WHERE is_nw_active=TRUE and filter_id=?">>},
 		{ipr_by_rule_id, <<"SELECT a.id,a.base_ip,a.subnet FROM sh_ipr AS i, sh_ipaddress AS a WHERE i.parent_rule_id=? AND i.sh_ipaddress_id=a.id">>},
 		{user_by_rule_id, <<"SELECT eu.id, eu.username FROM sh_ad_entry_user AS eu, sh_ad_cross AS c, sh_ad_entry AS e, sh_ad_group AS g, sh_ad_rule_cross AS rc WHERE rc.parent_rule_id=? AND rc.group_id=g.id AND rc.group_id=c.group_id AND c.entry_id=e.id AND c.entry_id=eu.entry_id">>},
@@ -161,7 +175,10 @@ init([]) ->
 		{params_by_match_id, <<"SELECT DISTINCT p.param FROM sh_match AS m, sh_func_params AS p WHERE m.id=? AND p.match_id=m.id AND p.param <> \"0\" ">>},
 		{file_params_by_match_id, <<"SELECT DISTINCT m.enable_shash, m.sentence_hash_count, m.sentence_hash_percentage, m.enable_bayes, m.bayes_average, m.enable_whitefile FROM sh_match AS m, sh_func_params AS p WHERE m.id=? AND p.match_id=m.id AND p.param <> \"0\" ">>},
 		{mimes, <<"SELECT m.id, c.group_id, m.mime, m.extension FROM nw_mime_type_cross AS c, nw_mime_type m WHERE c.mime_id=m.id">>},
+		{mimes_by_cid, <<"SELECT m.id, c.group_id, m.mime, m.extension FROM nw_mime_type_cross AS c, nw_mime_type m WHERE c.mime_id=m.id and m.customer_id=?">>},
 		{regexes, <<"SELECT r.id, c.group_id, r.regex FROM sh_regex_cross AS c, sh_regex r WHERE c.regex_id=r.id">>},
+		{regexes_by_cid, <<"SELECT r.id, c.group_id, r.regex FROM sh_regex_cross AS c, sh_regex r WHERE c.regex_id=r.id and r.customer_id=?">>},
+		{customer_by_id, <<"SELECT id,static_ip FROM sh_customer WHERE id=?">>},
 		{insert_incident, <<"INSERT INTO log_incedent (id, rule_id, protocol, src_ip, src_user, destination, action, matcher, filename, misc) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)">>}
 	]],
 
@@ -187,13 +204,26 @@ populate() ->
 	populate_regexes(RQ),
 	ok.
 
-populate_filters([[Id, Name]|Rows]) ->
+populate_site(CustomerId) ->
+	{ok, FQ} = psq(filters_by_cid, [CustomerId]),
+	populate_filters(FQ, CustomerId),
+	{ok, MQ} = psq(mimes_by_cid, [CustomerId]),
+	populate_mimes(MQ, CustomerId),
+	{ok, RQ} = psq(regexes_by_cid, [CustomerId]),
+	populate_regexes(RQ, CustomerId),
+	{ok, SQ} = psq(customer_by_id, [CustomerId]),
+	populate_site_desc(SQ),
+	ok.
+
+populate_filters(Rows) -> populate_filters(Rows, mydlp_mnesia:get_dcid()).
+
+populate_filters([[Id, Name]|Rows], CustomerId) ->
 	{ok, RQ} = psq(rules_by_fid, [Id]),
 	populate_rules(RQ, Id),
-	F = #filter{id=Id, name=Name},
+	F = #filter{id=Id, customer_id=CustomerId, name=Name},
 	mydlp_mnesia:write(F),
-	populate_filters(Rows);
-populate_filters([]) -> ok.
+	populate_filters(Rows, CustomerId);
+populate_filters([], _CustomerId) -> ok.
 
 populate_rules([[Id, <<"quarantine">>]|Rows], FilterId) ->
 	populate_rule(Id, quarantine, FilterId),
@@ -364,20 +394,30 @@ get_func_params(MatchId) ->
 
 binary_to_integer(Bin) -> list_to_integer(binary_to_list(Bin)).
 
-populate_mimes([[Id, GroupId, Mime, Ext]|Rows]) ->
-	M = #mime_type{id=Id, group_id=GroupId, mime=Mime, extension=Ext},
+populate_mimes(Rows) -> populate_mimes(Rows, mydlp_mnesia:get_dcid()).
+
+populate_mimes([[Id, GroupId, Mime, Ext]|Rows], CustomerId) ->
+	M = #mime_type{id=Id, customer_id=CustomerId, group_id=GroupId, mime=Mime, extension=Ext},
 	mydlp_mnesia:write(M),
-	populate_mimes(Rows);
-populate_mimes([]) -> ok.
+	populate_mimes(Rows, CustomerId);
+populate_mimes([], _CustomerId) -> ok.
 
 
-populate_regexes(Rows) -> 
-	populate_regexes1(Rows),
+populate_regexes(Rows) -> populate_regexes(Rows, mydlp_mnesia:get_dcid()).
+
+populate_regexes(Rows, CustomerId) -> 
+	populate_regexes1(Rows, CustomerId),
 	mydlp_mnesia:compile_regex().
 
-populate_regexes1([[Id, GroupId, Regex]|Rows]) ->
-	R = #regex{id=Id, group_id=GroupId, plain=Regex},
+populate_regexes1([[Id, GroupId, Regex]|Rows], CustomerId) ->
+	R = #regex{id=Id, customer_id=CustomerId, group_id=GroupId, plain=Regex},
 	mydlp_mnesia:write(R),
-	populate_regexes1(Rows);
-populate_regexes1([]) -> ok.
+	populate_regexes1(Rows, CustomerId);
+populate_regexes1([], _CustomerId) -> ok.
+
+populate_site_desc([[Id, _StaticIp]]) ->
+	IpAddr = {1,1,1,1},
+	S = #site_desc{customer_id=Id, ipaddr=IpAddr},
+	mydlp_mnesia:write(S), ok.
+
 
