@@ -27,7 +27,9 @@ src/main/java/Mydlp_bz.java:
 	[ -e src/main/java/Mydlp_bz.java ] || \
 		$(LN_S) ../../../../../thrift/gen-java/Mydlp_bz.java src/main/java/
 
-target/mydlp-backend-java-0.1.0-jar-with-dependencies.jar: pom.xml src/main/java/Mydlp_bz.java src/main/java/BayessianZemberekBackend.java
+target/mydlp-backend-java-0.1.0-jar-with-dependencies.jar: pom.xml \
+			src/main/java/Mydlp_bz.java src/main/java/BayessianZemberekBackend.java \
+			src/main/resources/logback.xml
 	$(MVN) assembly:assembly
 
 # http://barelyenough.org/blog/2005/03/java-daemon/

@@ -84,4 +84,9 @@
 	mime
 }).
 
+-record(bayes_data, {
+	key,
+	value
+}).
+
 -endif.

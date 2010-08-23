@@ -23,4 +23,6 @@ service Mydlp_bz {
     void trainConfidential(1 : string Text)
     void trainPublic(1 : string Text)
     void reset()
+    void pushDB(1: string DBC, 2: string DBNC)
+    list<string> pullDB()
 }

@@ -102,6 +102,7 @@ handle_cast(consume_cfile, #state{cfile_queue=CQ} = State) ->
 			consume_cfile(),
 			{noreply, State#state{cfile_queue=CQ1}};
 		{empty, _} ->
+			mydlp_tc:bayes_persist_db(),
 			{noreply, State#state{cfile_inprog=false}}
 	end;
 
@@ -121,6 +122,7 @@ handle_cast(consume_pfile, #state{pfile_queue=PQ} = State) ->
 			consume_pfile(),
 			{noreply, State#state{pfile_queue=PQ1}};
 		{empty, _} ->
+			mydlp_tc:bayes_persist_db(),
 			{noreply, State#state{pfile_inprog=false}}
 	end;
 
@@ -150,6 +152,11 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
+	%% initialize Java Bayessian Zembere Backend.
+	mnesia:wait_for_tables([bayes_data], 5000),
+	mydlp_tc:bayes_reset(),
+	mydlp_tc:bayes_load_db(),
+
 	{ok, #state{cfile_queue=queue:new(), pfile_queue=queue:new()}}.
 
 terminate(_Reason, _State) ->

@@ -1,4 +1,4 @@
-%%%
+%%
 %%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@medra.com.tr>
 %%%
 %%%--------------------------------------------------------------------------
@@ -39,6 +39,8 @@
 	bayes_train_confidential/1,
 	bayes_train_public/1,
 	bayes_reset/0,
+	bayes_load_db/0,
+	bayes_persist_db/0,
 	stop/0]).
 
 %% gen_server callbacks
@@ -90,6 +92,14 @@ bayes_train_public(Text) ->
 
 bayes_reset() ->
 	gen_server:call(?MODULE, {thrift, java, reset, []}).
+
+bayes_load_db() ->
+	{CDat, PDat} = mydlp_mnesia:get_bayes_data(),
+	gen_server:call(?MODULE, {thrift, java, pushDB, [CDat, PDat]}).
+
+bayes_persist_db() ->
+	[CDat, PDat] = gen_server:call(?MODULE, {thrift, java, pullDB, []}),
+	mydlp_mnesia:save_bayes_data(CDat, PDat).
 
 %%%%%%%%%%%%%% gen_server handles
 

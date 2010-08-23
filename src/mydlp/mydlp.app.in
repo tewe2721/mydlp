@@ -34,6 +34,7 @@
         mydlp_acceptor,
         mydlp_fsm,
         mydlp_http_fsm,
+        mydlp_icap_fsm,
         mydlp_loglevel,
         mydlp_logger_h,
         mydlp_matchers,
@@ -44,8 +45,8 @@
         mydlp_smtpc,
         mydlp_sup,
         mydlp_tc,
+        mydlp_ts,
         mydlp_trainer,
-        mydlp_ui,
         mydlp_worker_sup,
         smtpc,
         smtpd_cmd,
@@ -67,7 +68,7 @@
           {mydlp_acl, start_link,[]}, 
           {mydlp_smtpc, start_link,[]}, 
           {mydlp_trainer, start_link,[]},
-          {mydlp_ui, start_link,[]}
+          {mydlp_ts, start_link,[]}
          ]},
     {protocols, [
 	  {http, {acceptor, {8080, plain, http} },

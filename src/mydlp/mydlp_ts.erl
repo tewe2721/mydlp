@@ -24,7 +24,7 @@
 %%% @doc Backend for mydlp ui functions.
 %%% @end
 %%%-------------------------------------------------------------------
--module(mydlp_ui).
+-module(mydlp_ts).
 -author("kerem@medra.com.tr").
 
 -include("mydlp_ui_thrift.hrl").
