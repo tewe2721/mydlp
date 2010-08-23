@@ -273,8 +273,7 @@ get_text(#file{mime_type= <<"text/html">>, data=Data}) ->
 get_text(#file{mime_type= <<"application/postscript">>, data=Data}) ->
 	ps_to_text(Data);
 get_text(#file{mime_type=undefined}) -> {error, unknown_type};
-%get_text(_File) -> {error, unsupported_type}.
-get_text(_File) -> {ok, <<>>}.
+get_text(_File) -> {error, unsupported_type}.
 
 %%--------------------------------------------------------------------
 %% @doc Extracts Text from XML string
