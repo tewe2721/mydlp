@@ -57,5 +57,7 @@ AC_CONFIG_FILES([
 		src/backend/Makefile
 		src/backend/py/Makefile
 		src/backend/java/Makefile
+		src/ui/Makefile
+		src/ui/web/Makefile
 	])
 AC_OUTPUT
