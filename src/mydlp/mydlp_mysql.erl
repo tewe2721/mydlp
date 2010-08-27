@@ -192,6 +192,9 @@ populate_filters([[Id, Name]|Rows]) ->
 	populate_filters(Rows);
 populate_filters([]) -> ok.
 
+populate_rules([[Id, <<"quarantine">>]|Rows], FilterId) ->
+	populate_rule(Id, quarantine, FilterId),
+	populate_rules(Rows, FilterId);
 populate_rules([[Id, <<"block">>]|Rows], FilterId) ->
 	populate_rule(Id, block, FilterId),
 	populate_rules(Rows, FilterId);
