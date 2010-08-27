@@ -308,6 +308,12 @@ populate_match(Id, <<"cc">>, Parent) ->
 	FuncParams = [{count, binary_to_integer(CountS)}],
 	new_match(Id, Parent, Func, FuncParams);
 
+populate_match(Id, <<"scode">>, Parent) ->
+	Func = scode_match,
+	[ScoreS] = get_func_params(Id),
+	FuncParams = [{score, binary_to_integer(ScoreS)}],
+	new_match(Id, Parent, Func, FuncParams);
+
 populate_match(Id, <<"mime">>, Parent) ->
 	Func = mime_match,
 	GroupsS = get_func_params(Id),

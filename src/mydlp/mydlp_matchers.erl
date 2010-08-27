@@ -52,6 +52,8 @@
 	shash_match/2,
 	bayes_match/0,
 	bayes_match/2,
+	scode_match/0,
+	scode_match/2,
 	cc_match/0,
 	cc_match/2
 ]).
@@ -277,5 +279,16 @@ file(Conf) ->
                 _Else7 -> []
         end,
 	lists:flatten([WF, FH, SH, BYS]).
-	
 
+scode_match() -> text.
+
+scode_match(Conf, {_Addr, Files}) when is_list(Conf) -> 
+	Score = case lists:keyfind(score, 1, Conf) of
+		{score, S} -> S;
+		false -> undefined
+	end,
+	scode_match1(Score, Files).
+
+scode_match1(Count, [_File|Files]) ->
+	scode_match1(Count, Files); % should be implemented
+scode_match1(_Count, []) -> neg.
