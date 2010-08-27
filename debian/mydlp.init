@@ -35,7 +35,7 @@ check_piddir() {
 
 check_mysql_db() {
 	log_daemon_msg "Starting MyDLP" "mydlp"
-	$SERV mysql status) || \
+	$SERV mysql status || \
 		($SERV mysql start; /bin/sleep 2)
 
 	# Import MySQL schema

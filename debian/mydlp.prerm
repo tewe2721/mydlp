@@ -1,0 +1,39 @@
+#!/bin/sh -e
+# This script can be called in the following ways:
+#
+# Before the package is removed:
+#	<prerm> remove
+#
+# Before an upgrade:
+#	<old-prerm> upgrade <new-version>
+# if that fails:
+#	<new-prerm> failed-upgrade <old-version>
+#
+#
+# Before package is deconfigured while dependency is replaced due to conflict:
+#	<prerm> deconfigure in-favour <new-package> <version>
+#		removing <old-package> <version>
+#
+# Before the package is replaced due to conflict:
+#	<prerm> remove in-favour <new-package> <version>
+
+configure_apache() {
+	/usr/sbin/a2dissite mydlp-site
+}
+
+case "$1" in
+    remove)
+	configure_apache
+	;;
+
+    upgrade|failed-upgrade|deconfigure)
+	;;
+
+    *)
+	echo "$0 called with unknown argument \`$1'" 1>&2
+	exit 1
+	;;
+esac
+
+#DEBHELPER#
+exit 0
