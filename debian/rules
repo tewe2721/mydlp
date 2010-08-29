@@ -4,9 +4,7 @@ include /usr/share/cdbs/1/rules/debhelper.mk
 include /usr/share/cdbs/1/class/autotools.mk
 
 debian/stamp-autotools-files:
-	autoreconf
-	automake --add-missing
-	autoreconf
+	autoreconf -i -f
 	touch $@
 
 install/mydlp::
