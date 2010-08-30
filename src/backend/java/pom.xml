@@ -76,6 +76,11 @@
       <url>http://downloads.medratech.com/maven</url>
     </repository>
     <repository>
+      <id>medra-internal</id>
+      <name>Medra Tech Internal Maven Repository</name>
+      <url>http://10.0.0.51/maven/repository</url>
+    </repository>
+    <repository>
       <id>sun</id>
       <name>Sun Microsystems Maven Repository</name>
       <url>http://download.java.net/maven/2/</url>
