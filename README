@@ -17,4 +17,3 @@ Squid configuration for ICAP:
  icap_preview_enable off
 
 Also request-reply body-header limits for Squid should be edited for requirements.
-
