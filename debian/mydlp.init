@@ -37,11 +37,23 @@ check_piddir() {
 		mkdir -p $PIDDIR
 }
 
-check_mysql_db() {
-	log_daemon_msg "Starting MyDLP" "mydlp"
-	$SERV mysql status || \
-		($SERV mysql start; /bin/sleep 2)
+is_mysql_alive() {
+	$MYSQLADM -s ping >/dev/null 2>&1  
+}
 
+wait_for_mysqld() {
+	for i in $(seq 10); do
+	    sleep 1
+	    if is_mysql_alive; then break; fi
+	done
+}
+
+start_mysql() {
+	is_mysql_alive || $SERV mysql start >/dev/null 2>&1 
+	wait_for_mysqld
+}
+
+check_mysql_db() {
 	# Import MySQL schema
 	if (echo|$MYSQLC); then
 		if [ -z "$(echo 'show databases'|$MYSQLC|grep -e '^mydlp$')" ]; then
@@ -54,8 +66,8 @@ check_mysql_db() {
 				echo "|   /usr/share/mydlp/schema/mydlp.sql manually. |"; \
 				echo "================================================="; \
 				echo; )
-		else
-			echo "Database 'mydlp' already exists..."
+		#else
+			#echo "Database 'mydlp' already exists..."
 		fi
 	else
 		echo "Cannot find mysql-client!!!"
@@ -63,10 +75,11 @@ check_mysql_db() {
 }
 
 start_mydlp() {
+	start_mysql
 	check_mysql_db
 
 	log_daemon_msg "Starting MyDLP" "mydlp"
-        if start-stop-daemon --start --quiet --oknodo --chdir $HOMEDIR --pidfile $PIDFILE --exec $ERLANG -- $ERLANG_OPTS -mnesia dir '"/var/lib/mydlp/mnesia"' -config mydlp-production -boot mydlp; then
+        if HOME=$HOMEDIR start-stop-daemon --start --quiet --oknodo --chdir $HOMEDIR --pidfile $PIDFILE --exec $ERLANG -- $ERLANG_OPTS -mnesia dir '"/var/lib/mydlp/mnesia"' -config mydlp-production -boot mydlp; then
             log_end_msg 0
         else
             log_end_msg 1
