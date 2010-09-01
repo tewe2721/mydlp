@@ -37,6 +37,7 @@
 		{certfile, "/etc/mydlp/ssl/public.pem"},
 		{keyfile, "/etc/mydlp/ssl/private.pem"}
          ]).
+-define(DENIED_PAGE, "denied_page.html").
 -define(MYSQL, [
 		{host, "localhost"},
 		{port, 3306},

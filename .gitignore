@@ -17,6 +17,7 @@ missing
 *.script
 src/mydlp/overview.edoc
 src/mydlp/*.html
+!src/mydlp/denied_page.html
 src/mydlp/*.log
 src/mydlp/*.pid
 src/mydlp/example/*.html
