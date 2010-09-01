@@ -90,7 +90,7 @@ cc_match() -> text.
 cc_match(Conf, {_Addr, Files}) when is_list(Conf) -> 
 	Count = case lists:keyfind(count, 1, Conf) of
 		{count, C} -> C;
-		false -> undefined
+		false -> 1
 	end,
 	cc_match1(Count, Files).
 
@@ -110,7 +110,7 @@ iban_match() -> text.
 iban_match(Conf, {_Addr, Files}) when is_list(Conf) -> 
 	Count = case lists:keyfind(count, 1, Conf) of
 		{count, C} -> C;
-		false -> undefined
+		false -> 1
 	end,
 	iban_match1(Count, Files).
 
@@ -130,7 +130,7 @@ trid_match() -> text.
 trid_match(Conf, {_Addr, Files}) when is_list(Conf) ->
 	Count = case lists:keyfind(count, 1, Conf) of
 		{count, C} -> C;
-		false -> undefined
+		false -> 1
 	end,
 	trid_match1(Count, Files).
 
@@ -150,7 +150,7 @@ ssn_match() -> text.
 ssn_match(Conf, {_Addr, Files}) when is_list(Conf) ->
 	Count = case lists:keyfind(count, 1, Conf) of
 		{count, C} -> C;
-		false -> undefined
+		false -> 5
 	end,
 	ssn_match1(Count, Files).
 
@@ -285,18 +285,19 @@ scode_match() -> text.
 scode_match(Conf, {_Addr, Files}) when is_list(Conf) -> 
 	Score = case lists:keyfind(score, 1, Conf) of
 		{score, S} -> S;
-		false -> undefined
+		false -> 100
 	end,
 	scode_match1(Score, Files).
 
-scode_match1(Count, [File|Files]) ->
+scode_match1(Limit, [File|Files]) ->
 	Score = mydlp_regex:score_suite(
 	 	scode, 
 		File#file.text),
-	
-	case Score >= Count of
+
+	case Score >= Limit of
 		true -> {pos, {file, File}, 
 			{misc, "score=" ++ integer_to_list(Score)}};
-		false -> scode_match1(Count, Files)
+		false -> scode_match1(Limit, Files)
 	end;
-scode_match1(_Count, []) -> neg.
+scode_match1(_Limit, []) -> neg.
+

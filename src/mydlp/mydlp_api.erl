@@ -272,6 +272,7 @@ get_text(#file{mime_type= <<"text/html">>, data=Data}) ->
 	end;
 get_text(#file{mime_type= <<"application/postscript">>, data=Data}) ->
 	ps_to_text(Data);
+get_text(#file{mime_type= <<"text/",_Rest/binary>>, data=Data}) -> {ok, Data};
 get_text(#file{mime_type=undefined}) -> {error, unknown_type};
 get_text(_File) -> {error, unsupported_type}.
 
