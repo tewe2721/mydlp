@@ -55,6 +55,7 @@
 	get_record_fields/1,
 	write/1,
 	wait_for_bayes_data/0,
+	truncate_all/0,
 	stop/0]).
 
 %% gen_server callbacks
@@ -76,6 +77,8 @@
 	filter, 
 	rule, 
 	ipr, 
+	{m_user, ordered_set, 
+		fun() -> mnesia:add_table_index(m_user, username) end},
 	match, 
 	match_group, 
 	{file_hash, ordered_set, 
@@ -95,6 +98,7 @@ get_record_fields(Record) ->
 		filter -> record_info(fields, filter);
 		rule -> record_info(fields, rule);
 		ipr -> record_info(fields, ipr);
+		m_user -> record_info(fields, m_user);
 		match -> record_info(fields, match);
 		match_group -> record_info(fields, match_group);
 		file_hash -> record_info(fields, file_hash);
@@ -149,6 +153,8 @@ set_gid_by_fid(FileId, GroupId) -> async_query_call({set_gid_by_fid, FileId, Gro
 write(RecordList) when is_list(RecordList) -> async_query_call({write, RecordList});
 write(Record) when is_tuple(Record) -> write([Record]).
 
+truncate_all() -> gen_server:call(?MODULE, truncate_all).
+
 %%%%%%%%%%%%%% gen_server handles
 
 handle_result({is_mime_of_gid, _Mime, MGIs}, {atomic, GIs}) -> 
@@ -175,13 +181,17 @@ handle_query({get_rules, Who}) ->
 			ip_band(I#ipr.ipbase, I#ipr.ipmask) == ip_band(Who, I#ipr.ipmask)
 			]),
 	Parents = qlc:e(Q),
-	Rules = resolve_rules(Parents),
+	Parents1 = lists:usort(Parents),
+	Rules = resolve_rules(Parents1),
 	resolve_funcs(Rules);
 
-handle_query({get_rules_by_user, _Who}) ->
-	Q = qlc:q([{rule, R#rule.id} || R <- mnesia:table(rule)]), % this line will be refined
+handle_query({get_rules_by_user, Who}) ->
+	Q = qlc:q([U#m_user.parent || U <- mnesia:table(m_user),
+			U#m_user.username == Who
+			]),
 	Parents = qlc:e(Q),
-	Rules = resolve_rules(Parents),
+	Parents1 = lists:usort(Parents),
+	Rules = resolve_rules(Parents1),
 	resolve_funcs(Rules);
 
 handle_query({get_regexes, GroupId}) ->
@@ -291,6 +301,14 @@ handle_call({async_query, Query}, From, State) ->
 		Worker ! {async_reply, Return, From}
 	end),
 	{noreply, State, 5000};
+
+handle_call(truncate_all, From, State) ->
+	Worker = self(),
+	spawn_link(fun() ->
+		lists:foreach(fun(T) -> mnesia:clear_table(T) end, tab_names()),
+		Worker ! {async_reply, ok, From}
+	end),
+	{noreply, State, 15000};
 
 handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
@@ -447,4 +465,11 @@ compile_regex([], Ret) -> lists:reverse(Ret).
 get_unique_id(TableName) -> mnesia:dirty_update_counter(unique_ids, TableName, 1).
 
 async_query_call(Query) -> gen_server:call(?MODULE, {async_query, Query}).
+
+tab_names() -> tab_names1(?TABLES, [unique_ids]).
+
+tab_names1([{Tab,_,_}|Tabs], Returns) -> tab_names1(Tabs, [Tab|Returns]);
+tab_names1([{Tab,_}|Tabs], Returns) -> tab_names1(Tabs, [Tab|Returns]);
+tab_names1([Tab|Tabs], Returns) when is_atom(Tab) ->  tab_names1(Tabs, [Tab|Returns]);
+tab_names1([], Returns) -> lists:reverse(Returns).
 

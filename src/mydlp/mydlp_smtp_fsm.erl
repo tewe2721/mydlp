@@ -140,8 +140,8 @@ init([]) ->
 
 
 % {Action, {{rule, Id}, {file, File}, {matcher, Func}, {misc, Misc}}}
-'REQ_OK'(#smtpd_fsm{files=Files} = State) ->
-	case mydlp_acl:qu(user, dest, Files) of
+'REQ_OK'(#smtpd_fsm{files=Files, message_record=#message{mail_from=MailFrom}} = State) ->
+	case mydlp_acl:qu(list_to_binary([MailFrom]), dest, Files) of
 		pass -> 'CONNECT_REMOTE'(connect, State);
 		{quarantine, AclR} -> log_req(State, quarantine, AclR),
 					mydlp_api:quarantine(Files),

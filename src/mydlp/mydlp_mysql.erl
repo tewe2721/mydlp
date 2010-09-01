@@ -72,6 +72,7 @@ push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc) ->
 handle_call(compile_filters, From, State) ->
 	Worker = self(),
         spawn_link(fun() ->
+			mydlp_mnesia:truncate_all(),
 			Reply = populate(),
                         Worker ! {async_reply, Reply, From}
                 end),
@@ -154,6 +155,8 @@ init([]) ->
 		{filters, <<"SELECT id,name FROM sh_filter WHERE is_active=TRUE">>},
 		{rules_by_fid, <<"SELECT id,action FROM sh_rule WHERE is_nw_active=TRUE and filter_id=?">>},
 		{ipr_by_rule_id, <<"SELECT a.id,a.base_ip,a.subnet FROM sh_ipr AS i, sh_ipaddress AS a WHERE i.parent_rule_id=? AND i.sh_ipaddress_id=a.id">>},
+		{user_by_rule_id, <<"SELECT eu.id, eu.username FROM sh_ad_entry_user AS eu, sh_ad_cross AS c, sh_ad_entry AS e, sh_ad_group AS g, sh_ad_rule_cross AS rc WHERE rc.parent_rule_id=? AND rc.group_id=g.id AND rc.group_id=c.group_id AND c.entry_id=e.id AND c.entry_id=eu.entry_id">>},
+		%{user_by_rule_id, <<"SELECT eu.id, eu.username FROM sh_ad_entry_user AS eu, sh_ad_cross AS c, sh_ad_rule_cross AS rc WHERE rc.parent_rule_id=? AND rc.group_id=c.group_id AND c.entry_id=eu.entry_id">>},
 		{match_by_rule_id, <<"SELECT DISTINCT m.id,m.func FROM sh_match AS m, sh_func_params AS p WHERE m.parent_rule_id=? AND p.match_id=m.id AND p.param <> \"0\" ">>},
 		{params_by_match_id, <<"SELECT DISTINCT p.param FROM sh_match AS m, sh_func_params AS p WHERE m.id=? AND p.match_id=m.id AND p.param <> \"0\" ">>},
 		{file_params_by_match_id, <<"SELECT DISTINCT m.enable_shash, m.sentence_hash_count, m.sentence_hash_percentage, m.enable_bayes, m.bayes_average, m.enable_whitefile FROM sh_match AS m, sh_func_params AS p WHERE m.id=? AND p.match_id=m.id AND p.param <> \"0\" ">>},
@@ -210,6 +213,8 @@ populate_rule(Id, Action, FilterId) ->
 	Parent = {rule, Id},
 	{ok, IQ} = psq(ipr_by_rule_id, [Id]),
 	populate_iprs(IQ, Parent),
+	{ok, UQ} = psq(user_by_rule_id, [Id]),
+	populate_users(UQ, Parent),
 	{ok, MQ} = psq(match_by_rule_id, [Id]),
 	populate_matches(MQ, Parent),
 	%{ok, MGQ} = psq(mgroup_by_rule_id, [Id]),
@@ -224,6 +229,12 @@ populate_iprs([[Id, Base, Subnet]| Rows], Parent) ->
 	mydlp_mnesia:write(I),
 	populate_iprs(Rows, Parent);
 populate_iprs([], _Parent) -> ok.
+
+populate_users([[Id, Username]| Rows], Parent) ->
+	U = #m_user{id=Id, parent=Parent, username=Username},
+	mydlp_mnesia:write(U),
+	populate_users(Rows, Parent);
+populate_users([], _Parent) -> ok.
 
 int_to_ip(nil) -> nil;
 int_to_ip(N4) ->

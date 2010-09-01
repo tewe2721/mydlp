@@ -41,6 +41,12 @@
 	ipmask
 }).
 
+-record(m_user, {
+	id,
+	parent,
+	username
+}).
+
 -record(match, {
 	id,
 	orig_id,
