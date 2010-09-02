@@ -54,6 +54,9 @@ start(_Type, _Args) ->
 	% Read configuration
 	{ok, Protocols} = application:get_env(protocols),
 
+	% Load dynamic modules
+	mydlp_dynamic:load(),
+
 	% Start mydlp
 	supervisor:start_link({local, ?MODULE}, ?MODULE, [Protocols]).
 

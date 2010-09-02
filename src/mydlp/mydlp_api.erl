@@ -971,3 +971,10 @@ quarantine([File|Files]) ->
 	quarantine(File),
 	quarantine(Files);
 quarantine([]) -> ok.
+
+%%-------------------------------------------------------------------------
+%% @doc Return denied page for different formats
+%% @end
+%%-------------------------------------------------------------------------
+
+get_denied_page(html) -> mydlp_denied_page:get().

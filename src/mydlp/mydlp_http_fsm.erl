@@ -498,12 +498,7 @@ parse_multipart(#state{http_content=HttpContent, http_headers=H, http_packet=Req
 
 gen_deny_page(#state{http_packet=HttpReq}) -> 
 	{http_request, _, {_, _}, {Majorv, Minorv}} = HttpReq,
-	Body = <<
-	"<html>",
-	"<head><title>Blocked by MyDLP</title></head>",
-	"<body><center><strong>DENIED !!!</strong></center></body>",
-	"</html>"
-	>>,
+	Body = mydlp_api:get_denied_page(html),
 	[
 	"HTTP/", integer_to_list(Majorv), ".", integer_to_list(Minorv), " 403 Forbidden\r\n",
 	"Connection : keep-alive\r\n"

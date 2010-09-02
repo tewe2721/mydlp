@@ -351,10 +351,7 @@ reply(What, #state{socket=Socket, icap_request=IcapReq, http_request=HttpReq,
 				"Encapsulated: null-body=0\r\n\r\n"];
 		{block, reqmod} -> 
 				{http_request, _,  _, {HTTPMajorv, HTTPMinorv}} = HttpReq,
-				Deny = <<"<html>",
-				"<head><title>Blocked by MyDLP</title></head>",
-				"<body><center><strong>DENIED !!!</strong></center></body>",
-				"</html>">>,
+				Deny = mydlp_api:get_denied_page(html),
 				ReqModB = [httpd_util:integer_to_hexlist(size(Deny)), 
 						"\r\n", Deny, "\r\n0\r\n"],
 				ReqModH = list_to_binary(
