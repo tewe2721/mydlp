@@ -18,7 +18,7 @@
 ###    along with MyDLP.  If not, see <http://www.gnu.org/licenses/>.
 ###--------------------------------------------------------------------------
 
-AC_INIT([mydlp], [0.2.1.dev], [kerem@medra.com.tr])
+AC_INIT([mydlp], [0.2.2.dev], [kerem@medra.com.tr])
 
 AC_PREREQ([2.64])
 AC_COPYRIGHT([Copyright (C) 2010 Huseyin Kerem Cevahir])
