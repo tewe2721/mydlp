@@ -50,10 +50,21 @@ mydlp_denied_page_src() ->
 -author('kerem@medratech.com').
 
 -export([
-	get/0
+	get/0,
+	get_base64_str/0
 ]).
 
-get() -> <<\"" ++ denied_page_src() ++ "\">>. ".
+get() -> <<\"" ++ denied_page_src() ++ "\">>. 
+
+get_base64_str() -> \"" ++ 
+	binary_to_list(
+		mydlp_api:insert_line_feed(
+			base64:encode(denied_page_src())
+		)
+	)
+ 				++ "\". 
+
+".
 
 load_mydlp_denied_page() -> load_src(mydlp_denied_page_src()).
 

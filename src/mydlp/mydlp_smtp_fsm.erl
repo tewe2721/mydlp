@@ -162,12 +162,12 @@ init([]) ->
 			message=
 				"From: <" ++ MailFrom ++ ">\r\n" ++
 				"To: <" ++ MailFrom ++ ">\r\n" ++
-				"Subject: Access denied!!!\r\n" ++
+				"Content-Type: text/html; charset=\"utf8\"\r\n" ++
+				"Content-Transfer-Encoding: base64\r\n" ++
+				"Subject: Your e-mail to \'" ++ MessageR#message.rcpt_to ++ "\' have been denied!!!\r\n" ++
 				"\r\n" ++
 				"\r\n" ++
-				"Your e-mail to \'" ++ MessageR#message.rcpt_to ++ "\' have been denied by MyDLP. \n" ++
-				"\n" ++
-				"Please contact to your administrator for details.\n"},
+				mydlp_api:get_denied_page(html_base64_str)},
 	mydlp_smtpc:mail(RepMessage),
 	NextState = State#smtpd_fsm{cmd   = undefined,
 			param = undefined,

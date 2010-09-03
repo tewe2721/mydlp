@@ -977,4 +977,20 @@ quarantine([]) -> ok.
 %% @end
 %%-------------------------------------------------------------------------
 
-get_denied_page(html) -> mydlp_denied_page:get().
+get_denied_page(html) -> mydlp_denied_page:get();
+get_denied_page(html_base64_str) -> mydlp_denied_page:get_base64_str().
+
+%%-------------------------------------------------------------------------
+%% @doc Inserts line feed for long lines
+%% @end
+%%-------------------------------------------------------------------------
+
+insert_line_feed(List) when is_list(List) -> insert_line_feed(list_to_binary(List));
+insert_line_feed(Bin) when is_binary(Bin) -> insert_line_feed_76(Bin).
+
+insert_line_feed_76(Bin) when is_binary(Bin) -> insert_line_feed_76(Bin, <<>>).
+
+insert_line_feed_76(<<Line:76/binary, Rest/binary>>, Acc) -> 
+	insert_line_feed_76(Rest, <<Acc/binary, Line/binary, "\r\n">>);
+insert_line_feed_76(ShortLine, Acc) -> <<Acc/binary, ShortLine/binary>>.
+
