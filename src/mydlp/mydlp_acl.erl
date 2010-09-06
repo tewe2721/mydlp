@@ -62,7 +62,8 @@ handle_call({acl_q, {Addr, Files}}, From, State) ->
 	Worker = self(),
 	spawn_link(fun() ->
 		Rules = mydlp_mnesia:get_rules(Addr),
-		Param = {Addr, mydlp_api:df_to_files(Files)},
+		Files1 = mydlp_api:df_to_files(Files),
+		Param = {Addr, drop_nodata(Files1)},
 
 		Result = apply_rules(Rules, Param),
 		Worker ! {async_acl_q, Result, From}
@@ -176,3 +177,5 @@ is_whitefile(File) ->
 drop_whitefile(Files) -> lists:filter(fun(F) -> not is_whitefile(F) end, Files).
 
 drop_notext(Files) -> lists:filter(fun(I) -> mydlp_api:has_text(I) end, Files).
+
+drop_nodata(Files) -> lists:filter(fun(F) -> size(F#file.data) > 0 end, Files).

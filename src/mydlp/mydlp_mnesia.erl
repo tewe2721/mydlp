@@ -55,7 +55,7 @@
 	get_record_fields/1,
 	write/1,
 	wait_for_bayes_data/0,
-	truncate_all/0,
+	truncate_nondata/0,
 	stop/0]).
 
 %% gen_server callbacks
@@ -73,7 +73,15 @@
 
 %%%%%%%%%%%%%%%% Table definitions
 
--define(TABLES, [
+-define(DATA_TABLES,[
+	{file_hash, ordered_set, 
+		fun() -> mnesia:add_table_index(file_hash, md5) end},
+	{sentence_hash, ordered_set, 
+		fun() -> mnesia:add_table_index(sentence_hash, phash2) end},
+	bayes_data
+]).
+
+-define(NONDATA_TABLES, [
 	filter, 
 	rule, 
 	ipr, 
@@ -81,15 +89,12 @@
 		fun() -> mnesia:add_table_index(m_user, username) end},
 	match, 
 	match_group, 
-	{file_hash, ordered_set, 
-		fun() -> mnesia:add_table_index(file_hash, md5) end},
-	{sentence_hash, ordered_set, 
-		fun() -> mnesia:add_table_index(sentence_hash, phash2) end},
 	{mime_type, ordered_set, 
 		fun() -> mnesia:add_table_index(mime_type, mime) end},
-	regex,
-	bayes_data
+	regex
 ]).
+
+-define(TABLES, lists:append(?DATA_TABLES, ?NONDATA_TABLES)).
 
 
 get_record_fields(Record) -> 
@@ -153,7 +158,7 @@ set_gid_by_fid(FileId, GroupId) -> async_query_call({set_gid_by_fid, FileId, Gro
 write(RecordList) when is_list(RecordList) -> async_query_call({write, RecordList});
 write(Record) when is_tuple(Record) -> write([Record]).
 
-truncate_all() -> gen_server:call(?MODULE, truncate_all).
+truncate_nondata() -> gen_server:call(?MODULE, truncate_nondata).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -302,10 +307,10 @@ handle_call({async_query, Query}, From, State) ->
 	end),
 	{noreply, State, 5000};
 
-handle_call(truncate_all, From, State) ->
+handle_call(truncate_nondata, From, State) ->
 	Worker = self(),
 	spawn_link(fun() ->
-		lists:foreach(fun(T) -> mnesia:clear_table(T) end, tab_names()),
+		lists:foreach(fun(T) -> mnesia:clear_table(T) end, nondata_tab_names()),
 		Worker ! {async_reply, ok, From}
 	end),
 	{noreply, State, 15000};
@@ -466,7 +471,9 @@ get_unique_id(TableName) -> mnesia:dirty_update_counter(unique_ids, TableName, 1
 
 async_query_call(Query) -> gen_server:call(?MODULE, {async_query, Query}).
 
-tab_names() -> tab_names1(?TABLES, [unique_ids]).
+nondata_tab_names() -> tab_names1(?NONDATA_TABLES, [unique_ids]).
+
+%tab_names() -> tab_names1(?TABLES, [unique_ids]).
 
 tab_names1([{Tab,_,_}|Tabs], Returns) -> tab_names1(Tabs, [Tab|Returns]);
 tab_names1([{Tab,_}|Tabs], Returns) -> tab_names1(Tabs, [Tab|Returns]);

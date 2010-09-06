@@ -72,7 +72,7 @@ push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc) ->
 handle_call(compile_filters, From, State) ->
 	Worker = self(),
         spawn_link(fun() ->
-			mydlp_mnesia:truncate_all(),
+			mydlp_mnesia:truncate_nondata(),
 			Reply = populate(),
                         Worker ! {async_reply, Reply, From}
                 end),

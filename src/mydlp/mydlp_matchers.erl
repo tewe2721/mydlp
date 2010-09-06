@@ -217,11 +217,12 @@ shash_match(HGIs, Perc, Count, [File|Files]) ->
 	case TotalLen of 
 		0 -> shash_match(HGIs, Perc, Count, Files);
 		_Else ->
+			FilePerc = MatchLen/TotalLen,
 			case ((Perc /= undefined) and (Perc < (MatchLen/TotalLen))) or
 				((Count /= undefined) and ( Count < MatchLen)) of
 				true -> {pos, {file, File}, 
-					{misc, "count=" ++ integer_to_list(Count) ++
-					" percentage=" ++ float_to_list(float(Perc))}};
+					{misc, "count=" ++ integer_to_list(MatchLen) ++
+					" percentage=" ++ float_to_list(float(FilePerc))}};
 				false -> shash_match(HGIs, Perc, Count, Files)
 			end
 	end;
