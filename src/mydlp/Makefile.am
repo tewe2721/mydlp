@@ -56,6 +56,8 @@ dist_erl_DATA = \
 
 dist_hrl_DATA = \
 	mydlp.hrl \
+	mydlp_http.hrl \
+	mydlp_smtp.hrl \
 	mydlp_schema.hrl
 
 beam_DATA = \

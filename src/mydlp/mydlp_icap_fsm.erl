@@ -57,6 +57,7 @@
 	max_connections,
 	options_ttl,
 	path,
+	buffer,
 	tmp
 }).
 
@@ -224,14 +225,30 @@ get_body(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_impl
         ?DEBUG("~p Client connection timeout - closing.\n", [self()]),
         {stop, normal, State}.
 
-'HTTP_HEADER'({data, "\r\n"}, #state{http_headers=HttpHeaders} = State) ->
+'HTTP_HEADER'({data, Line}, #state{buffer=undefined} = State) ->
+	case lists:last(Line) of
+		$\n -> 'PARSE_HEADER'({data, Line}, State);
+		_Else -> {next_state, 'HTTP_HEADER', State#state{buffer=[Line]}, ?TIMEOUT} end;
+
+'HTTP_HEADER'({data, Line}, #state{buffer=BuffList} = State) when is_list(BuffList)->
+	case lists:last(Line) of
+		$\n -> 'PARSE_HEADER'(
+				{data, lists:append(lists:reverse([Line|BuffList]))}, 
+				State#state{buffer=undefined});
+		_Else -> {next_state, 'HTTP_HEADER', State#state{buffer=[Line|BuffList]}, ?TIMEOUT} end;
+
+'HTTP_HEADER'(timeout, State) ->
+	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+	{stop, normal, State}.
+
+'PARSE_HEADER'({data, "\r\n"}, #state{http_headers=HttpHeaders} = State) ->
 	Cookies = HttpHeaders#http_headers.cookie,
 	Others = HttpHeaders#http_headers.other,
 	HttpHeaders1 = HttpHeaders#http_headers{cookie=lists:reverse(Cookies), other=lists:reverse(Others)},
 	State1 = State#state{http_headers=HttpHeaders1},
 	get_body(State1);
 
-'HTTP_HEADER'({data, HttpHeaderLine}, #state{http_headers=HttpHeaders} = State) ->
+'PARSE_HEADER'({data, HttpHeaderLine}, #state{http_headers=HttpHeaders} = State) ->
 	{Key, Value} = case string:chr(HttpHeaderLine, $:) of
 		0 -> throw({error, {bad_header_line, HttpHeaderLine}});
 		I -> K = string:substr(HttpHeaderLine, 1, I-1),
@@ -250,11 +267,7 @@ get_body(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_impl
 				#http_header{key=Key, value=Value}|Others]}   %% misc other headers
 	end,
 		
-	{next_state, 'HTTP_HEADER', State#state{http_headers=HttpHeaders1}, ?TIMEOUT};
-
-'HTTP_HEADER'(timeout, State) ->
-	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
-	{stop, normal, State}.
+	{next_state, 'HTTP_HEADER', State#state{http_headers=HttpHeaders1}, ?TIMEOUT}.
 
 'HTTP_CC_LINE'({data, Line}, #state{http_content=_Content1} = State) ->
 	CSize = mydlp_api:hex2int(Line),
@@ -268,7 +281,23 @@ get_body(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_impl
 	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
-'HTTP_CC_CHUNK'({data, Line}, #state{http_content=Content, tmp=CSize} = State) ->
+'HTTP_CC_CHUNK'({data, Line}, #state{buffer=undefined} = State) ->
+	case lists:last(Line) of
+		$\n -> 'HTTP_CC_CHUNK_PARSE'({data, Line}, State);
+		_Else -> {next_state, 'HTTP_CC_CHUNK', State#state{buffer=[Line]}, ?TIMEOUT} end;
+
+'HTTP_CC_CHUNK'({data, Line}, #state{buffer=BuffList} = State) when is_list(BuffList)->
+	case lists:last(Line) of
+		$\n -> 'HTTP_CC_CHUNK_PARSE'(
+				{data, list_to_binary(lists:reverse([Line|BuffList]))}, 
+				State#state{buffer=undefined});
+		_Else -> {next_state, 'HTTP_CC_CHUNK', State#state{buffer=[Line|BuffList]}, ?TIMEOUT} end;
+
+'HTTP_CC_CHUNK'(timeout, State) ->
+	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+	{stop, normal, State}.
+
+'HTTP_CC_CHUNK_PARSE'({data, Line}, #state{http_content=Content, tmp=CSize} = State) ->
 	CSize1 = CSize - size(Line),
 	Content1 = [Line|Content],
 	if
@@ -278,11 +307,7 @@ get_body(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_impl
 				State#state{http_content=Content1, tmp=undefined}, ?TIMEOUT};
 		CSize1 == -2 -> {next_state, 'HTTP_CC_LINE',
 				State#state{http_content=Content1, tmp=undefined}, ?TIMEOUT}
-	end;
-
-'HTTP_CC_CHUNK'(timeout, State) ->
-	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
-	{stop, normal, State}.
+	end.
 
 'HTTP_CC_CRLF'({data, <<"\r\n">> = _CRLF}, #state{http_content=Content1} = State) ->
 	%Content1 = [CRLF|Content],
@@ -379,7 +404,8 @@ reply(What, #state{socket=Socket, icap_request=IcapReq, http_request=HttpReq,
 				http_headers=undefined,
 				http_content=[], 
 				files=[],
-				tmp=unedefined}, ?KA_TIMEOUT}.
+				buffer=undefined,
+				tmp=undefined}, ?KA_TIMEOUT}.
 
 %%-------------------------------------------------------------------------
 %% Func: handle_event/3
