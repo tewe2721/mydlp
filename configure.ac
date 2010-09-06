@@ -39,7 +39,7 @@ AC_ERLANG_CHECK_LIB([ssl])
 AC_ERLANG_CHECK_LIB([crypto])
 AC_ERLANG_CHECK_LIB([sasl])
 AC_ERLANG_CHECK_LIB([thrift])
-AC_ERLANG_SUBST_INSTALL_LIB_SUBDIR([mydlp], [0.1.0])
+AC_ERLANG_SUBST_INSTALL_LIB_SUBDIR([mydlp], [0.2.2.dev])
 
 AM_PATH_PYTHON
 AC_PATH_PROG(THRIFT, thrift, thrift, $PATH:/usr/local/bin:/usr/bin)
