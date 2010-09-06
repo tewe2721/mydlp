@@ -269,9 +269,8 @@ get_body(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_impl
 		
 	{next_state, 'HTTP_HEADER', State#state{http_headers=HttpHeaders1}, ?TIMEOUT}.
 
-'HTTP_CC_LINE'({data, Line}, #state{http_content=_Content1} = State) ->
+'HTTP_CC_LINE'({data, Line}, State) ->
 	CSize = mydlp_api:hex2int(Line),
-	%Content1 = [Line|Content],
 	case CSize of
 		0 -> {next_state, 'HTTP_CC_TCRLF', State, ?TIMEOUT};
 		_ -> {next_state, 'HTTP_CC_CHUNK', State#state{tmp=CSize}, ?TIMEOUT}
@@ -281,13 +280,20 @@ get_body(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_impl
 	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
+binary_last(Bin) when is_binary(Bin) ->
+	JunkSize = size(Bin) - 1,
+	<<_Junk:JunkSize/binary, Last/integer>> = Bin,
+	Last.
+
 'HTTP_CC_CHUNK'({data, Line}, #state{buffer=undefined} = State) ->
-	case lists:last(Line) of
+	% case binary:last(Line) of % Erlang R14 bif
+	case binary_last(Line) of
 		$\n -> 'HTTP_CC_CHUNK_PARSE'({data, Line}, State);
 		_Else -> {next_state, 'HTTP_CC_CHUNK', State#state{buffer=[Line]}, ?TIMEOUT} end;
 
 'HTTP_CC_CHUNK'({data, Line}, #state{buffer=BuffList} = State) when is_list(BuffList)->
-	case lists:last(Line) of
+	% case binary:last(Line) of % Erlang R14 bif
+	case binary_last(Line) of
 		$\n -> 'HTTP_CC_CHUNK_PARSE'(
 				{data, list_to_binary(lists:reverse([Line|BuffList]))}, 
 				State#state{buffer=undefined});
@@ -299,19 +305,17 @@ get_body(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_impl
 
 'HTTP_CC_CHUNK_PARSE'({data, Line}, #state{http_content=Content, tmp=CSize} = State) ->
 	CSize1 = CSize - size(Line),
-	Content1 = [Line|Content],
 	if
 		CSize1 > 0 -> {next_state, 'HTTP_CC_CHUNK', 
-                                State#state{http_content=Content1, tmp=CSize1}, ?TIMEOUT};
+                                State#state{http_content=[Line|Content], tmp=CSize1}, ?TIMEOUT};
 		CSize1 == 0 -> {next_state, 'HTTP_CC_CRLF',
-				State#state{http_content=Content1, tmp=undefined}, ?TIMEOUT};
+				State#state{http_content=[Line|Content], tmp=undefined}, ?TIMEOUT};
 		CSize1 == -2 -> {next_state, 'HTTP_CC_LINE',
-				State#state{http_content=Content1, tmp=undefined}, ?TIMEOUT}
+				State#state{http_content=[rm_trailing_crlf(Line)|Content], tmp=undefined}, ?TIMEOUT}
 	end.
 
-'HTTP_CC_CRLF'({data, <<"\r\n">> = _CRLF}, #state{http_content=Content1} = State) ->
-	%Content1 = [CRLF|Content],
-	{next_state, 'HTTP_CC_LINE', State#state{http_content=Content1}, ?TIMEOUT};
+'HTTP_CC_CRLF'({data, <<"\r\n">>}, State) ->
+	{next_state, 'HTTP_CC_LINE', State, ?TIMEOUT};
 
 'HTTP_CC_CRLF'(timeout, State) ->
 	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
@@ -476,11 +480,14 @@ terminate(_Reason, _StateName, #state{socket=Socket} = _State) ->
 code_change(_OldVsn, StateName, StateData, _Extra) ->
     {ok, StateName, StateData}.
 
-rm_trailing_crlf(Str) ->
+rm_trailing_crlf(Str) when is_list(Str) ->
 	StrL = string:len(Str),
-	case string:substr(Str, StrL - 1, 2) of
-		"\r\n" -> string:substr(Str, 1, StrL - 2);
-		_Else -> Str end.
+	"\r\n" = string:substr(Str, StrL - 1, 2),
+	string:substr(Str, 1, StrL - 2);
+rm_trailing_crlf(Bin) when is_binary(Bin) -> 
+	BuffSize = size(Bin) - 2,
+	<<Buff:BuffSize/binary, "\r\n">> = Bin,
+	Buff.
 
 raw_to_xciph(IpStr) -> 
 	Tokens = string:tokens(IpStr,"."),
