@@ -452,8 +452,9 @@ code_change(_OldVsn, StateName, StateData, _Extra) ->
 
 rm_trailing_crlf(Str) ->
 	StrL = string:len(Str),
-	"\r\n" = string:substr(Str, StrL - 1, 2),
-	string:substr(Str, 1, StrL - 2).
+	case string:substr(Str, StrL - 1, 2) of
+		"\r\n" -> string:substr(Str, 1, StrL - 2);
+		_Else -> Str end.
 
 raw_to_xciph(IpStr) -> 
 	Tokens = string:tokens(IpStr,"."),
