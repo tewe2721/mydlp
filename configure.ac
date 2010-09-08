@@ -44,6 +44,7 @@ AC_ERLANG_SUBST_INSTALL_LIB_SUBDIR([mydlp], [0.2.2.dev])
 AM_PATH_PYTHON
 AC_PATH_PROG(THRIFT, thrift, thrift, $PATH:/usr/local/bin:/usr/bin)
 AC_PATH_PROG(MVN, mvn, mvn, $PATH:/usr/local/bin:/usr/bin:/opt/maven/bin)
+AC_PATH_PROG(WGET, wget, wget, $PATH:/usr/local/bin:/usr/bin:/bin)
 AC_PROG_LN_S
 
 AC_CONFIG_FILES([

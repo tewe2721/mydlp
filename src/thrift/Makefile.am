@@ -84,13 +84,13 @@ $(beam_DATA): $(dist_erl_DATA)
 $(boot_DATA): $(beam_DATA)
 
 $(mydlp_erl) $(mydlp_hrl) $(pkgpython_PYTHON): mydlp.thrift
-	$(THRIFT) --gen erl --gen py $<
+	@$(THRIFT) --gen erl --gen py $<
 
 $(mydlp_ui_erl) $(mydlp_ui_hrl) $(mydlpphplib_DATA): mydlp_ui.thrift
-	$(THRIFT) --gen erl --gen php $<
+	@$(THRIFT) --gen erl --gen php $<
 
 $(mydlp_bz_erl) $(mydlp_bz_hrl): mydlp_bz.thrift
-	$(THRIFT) --gen erl --gen java $<
+	@$(THRIFT) --gen erl --gen java $<
 
 .erl.beam:
 	@echo "Compiling $<..."

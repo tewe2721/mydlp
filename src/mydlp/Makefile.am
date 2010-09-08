@@ -25,6 +25,10 @@ mydlpconf_DATA = \
 	mydlp-production.config \
 	denied_page.html
 
+resourcesdir = $(datadir)/mydlp/resources
+
+resources_DATA = mydlp_nlp_tr_kokler.txt
+
 dist_erl_DATA = \
 	dynamic_compile.erl \
 	gen_server_cluster.erl \
@@ -42,6 +46,7 @@ dist_erl_DATA = \
 	mydlp_matchers.erl \
 	mydlp_mnesia.erl \
 	mydlp_mysql.erl \
+	mydlp_nlp_tr.erl \
 	mydlp_regex.erl \
 	mydlp_smtp_fsm.erl \
 	mydlp_smtpc.erl \
@@ -62,9 +67,6 @@ dist_hrl_DATA = \
 
 beam_DATA = \
 	$(dist_erl_DATA:.erl=.beam)
-
-#dist_priv_DATA = \
-#	mydlp.conf
 
 boot_DATA = \
 	mydlp.boot \
@@ -109,6 +111,9 @@ $(boot_DATA): $(beam_DATA)
 $(html_DATA): $(dist_erl_DATA) overview.edoc 
 	@echo "Generating documentation..."
 	@$(ERL) -noshell -run edoc_run application mydlp '"."' '[{dir,"."}]'
+
+mydlp_nlp_tr_kokler.txt:
+	@$(WGET) http://zemberek.googlecode.com/svn/trunk/zemberek2/kaynaklar/tr/bilgi/duzyazi-kilavuz.txt -O mydlp_nlp_tr_kokler.txt
 
 check:
 	@echo "Running unit tests..."

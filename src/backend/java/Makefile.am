@@ -30,13 +30,13 @@ src/main/java/Mydlp_bz.java:
 target/mydlp-backend-java-0.1.0-jar-with-dependencies.jar: pom.xml \
 			src/main/java/Mydlp_bz.java src/main/java/BayessianZemberekBackend.java \
 			src/main/resources/logback.xml
-	$(MVN) assembly:assembly
+	@$(MVN) assembly:assembly
 
 # http://barelyenough.org/blog/2005/03/java-daemon/
 run: target/mydlp-backend-java-0.1.0-jar-with-dependencies.jar
 	@echo "Running application..."
-	java -Ddaemon.pidfile=/tmp/.mydlp-backend-java.pid -Dbayesdb.confidential=/tmp/.mydlp-bayes-confidential.dat -Dbayesdb.public=/tmp/.mydlp-bayes-public.dat -jar target/mydlp-backend-java-0.1.0-jar-with-dependencies.jar 
+	@java -Ddaemon.pidfile=/tmp/.mydlp-backend-java.pid -Dbayesdb.confidential=/tmp/.mydlp-bayes-confidential.dat -Dbayesdb.public=/tmp/.mydlp-bayes-public.dat -jar target/mydlp-backend-java-0.1.0-jar-with-dependencies.jar 
 
 clean-local:
-	rm -f src/main/java/Mydlp_bz.java
-	$(MVN) clean
+	@rm -f src/main/java/Mydlp_bz.java
+	@$(MVN) clean
