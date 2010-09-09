@@ -54,6 +54,7 @@
 	is_mime_of_gid/2,
 	get_record_fields/1,
 	write/1,
+	delete/1,
 	wait_for_bayes_data/0,
 	truncate_nondata/0,
 	stop/0]).
@@ -157,6 +158,8 @@ set_gid_by_fid(FileId, GroupId) -> async_query_call({set_gid_by_fid, FileId, Gro
 
 write(RecordList) when is_list(RecordList) -> async_query_call({write, RecordList});
 write(Record) when is_tuple(Record) -> write([Record]).
+
+delete(Item) -> async_query_call({delete, Item}).
 
 truncate_nondata() -> gen_server:call(?MODULE, truncate_nondata).
 
@@ -295,6 +298,9 @@ handle_query({set_gid_by_fid, FI, GI}) ->
 handle_query({write, RecordList}) when is_list(RecordList) ->
 	lists:foreach(fun(R) -> mnesia:write(R) end, RecordList);
 
+handle_query({delete, Item}) ->
+	mnesia:delete(Item);
+
 handle_query(_Query) -> error.
 
 handle_call({async_query, Query}, From, State) ->
@@ -311,6 +317,7 @@ handle_call(truncate_nondata, From, State) ->
 	Worker = self(),
 	spawn_link(fun() ->
 		lists:foreach(fun(T) -> mnesia:clear_table(T) end, nondata_tab_names()),
+		lists:foreach(fun(T) -> mydlp_mnesia:delete({unique_ids, T}) end, nondata_tab_names()),
 		Worker ! {async_reply, ok, From}
 	end),
 	{noreply, State, 15000};
