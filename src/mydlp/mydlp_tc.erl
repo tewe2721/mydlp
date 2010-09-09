@@ -35,12 +35,6 @@
 	get_mime/1,
 	is_valid_iban/1,
 	html_to_text/1,
-	bayes_score/1,
-	bayes_train_confidential/1,
-	bayes_train_public/1,
-	bayes_reset/0,
-	bayes_load_db/0,
-	bayes_persist_db/0,
 	stop/0]).
 
 %% gen_server callbacks
@@ -53,7 +47,7 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
--record(state, {backend_py, backend_java}).
+-record(state, {backend_py}).
 
 %%%%%%%%%%%%% MyDLP Thrift RPC API
 
@@ -81,26 +75,6 @@ is_valid_iban(IbanStr) ->
 html_to_text(Html) ->
 	gen_server:call(?MODULE, {thrift, py, htmlToText, [Html]}).
 
-bayes_score(Text) ->
-	gen_server:call(?MODULE, {thrift, java, score, [Text]}).
-
-bayes_train_confidential(Text) ->
-	gen_server:call(?MODULE, {thrift, java, trainConfidential, [Text]}).
-
-bayes_train_public(Text) ->
-	gen_server:call(?MODULE, {thrift, java, trainPublic, [Text]}).
-
-bayes_reset() ->
-	gen_server:call(?MODULE, {thrift, java, reset, []}).
-
-bayes_load_db() ->
-	{CDat, PDat} = mydlp_mnesia:get_bayes_data(),
-	gen_server:call(?MODULE, {thrift, java, pushDB, [CDat, PDat]}).
-
-bayes_persist_db() ->
-	[CDat, PDat] = gen_server:call(?MODULE, {thrift, java, pullDB, []}),
-	mydlp_mnesia:save_bayes_data(CDat, PDat).
-
 %%%%%%%%%%%%%% gen_server handles
 
 handle_call({thrift, py, Func, Params}, From, #state{backend_py=TS} = State) ->
@@ -111,18 +85,9 @@ handle_call({thrift, py, Func, Params}, From, #state{backend_py=TS} = State) ->
 		end),
 	{noreply, State, 15000};
 
-handle_call({thrift, java, Func, Params}, From, #state{backend_java=TS} = State) ->
-	Worker = self(),
-	spawn_link(fun() ->
-			{ok, Reply} = thrift_client:call(TS, Func, Params),
-			Worker ! {async_thrift, Reply, From}
-		end),
-	{noreply, State, 15000};
-
-handle_call(stop, _From, #state{backend_py=PY, backend_java=JAVA} = State) ->
+handle_call(stop, _From, #state{backend_py=PY} = State) ->
 	thrift_client:close(PY),
-	thrift_client:close(JAVA),
-	{stop, normalStop, State#state{backend_py=undefined, backend_java=undefined}};
+	{stop, normalStop, State#state{backend_py=undefined}};
 
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
@@ -147,8 +112,7 @@ stop() ->
 
 init([]) ->
 	{ok, PY} = thrift_client:start_link("localhost",9090, mydlp_thrift),
-	{ok, JAVA} = thrift_client:start_link("localhost",9091, mydlp_bz_thrift),
-	{ok, #state{backend_py=PY, backend_java=JAVA}}.
+	{ok, #state{backend_py=PY}}.
 
 handle_cast(_Msg, State) ->
 	{noreply, State}.

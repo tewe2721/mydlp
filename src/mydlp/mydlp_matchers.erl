@@ -1,4 +1,4 @@
-%%%
+%%
 %%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@medra.com.tr>
 %%%
 %%%--------------------------------------------------------------------------
@@ -238,7 +238,7 @@ bayes_match(Conf, {_Addr, Files}) when is_list(Conf) ->
 	bayes_match1(Threshold, Files).
 
 bayes_match1(Threshold, [File|Files]) ->
-	BayesScore = mydlp_tc:bayes_score(File#file.text),
+	BayesScore = bayeserl:score(File#file.text),
 	case (BayesScore > Threshold) of
 		true -> {pos, {file, File}, 
 			{misc, "score=" ++ float_to_list(float(BayesScore))}};

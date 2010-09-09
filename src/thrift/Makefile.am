@@ -36,24 +36,13 @@ mydlp_ui_hrl = \
 	gen-erl/mydlp_ui_constants.hrl \
 	gen-erl/mydlp_ui_types.hrl
 
-mydlp_bz_erl = \
-	gen-erl/mydlp_bz_thrift.erl \
-	gen-erl/mydlp_bz_types.erl
-
-mydlp_bz_hrl = \
-	gen-erl/mydlp_bz_thrift.hrl \
-	gen-erl/mydlp_bz_constants.hrl \
-	gen-erl/mydlp_bz_types.hrl
-
 dist_erl_DATA = \
 	$(mydlp_erl) \
-	$(mydlp_ui_erl) \
-	$(mydlp_bz_erl)
+	$(mydlp_ui_erl)
 	
 dist_hrl_DATA = \
 	$(mydlp_hrl) \
-	$(mydlp_ui_hrl) \
-	$(mydlp_bz_hrl)
+	$(mydlp_ui_hrl)
 
 beam_DATA = \
 	$(dist_erl_DATA:.erl=.beam)
@@ -89,12 +78,9 @@ $(mydlp_erl) $(mydlp_hrl) $(pkgpython_PYTHON): mydlp.thrift
 $(mydlp_ui_erl) $(mydlp_ui_hrl) $(mydlpphplib_DATA): mydlp_ui.thrift
 	@$(THRIFT) --gen erl --gen php $<
 
-$(mydlp_bz_erl) $(mydlp_bz_hrl): mydlp_bz.thrift
-	@$(THRIFT) --gen erl --gen java $<
-
 .erl.beam:
 	@echo "Compiling $<..."
 	@$(ERLC) $(ERLCFLAGS) $<
 
 clean-local:
-	rm -rf gen-erl gen-py gen-php gen-java
+	rm -rf gen-erl gen-py gen-php

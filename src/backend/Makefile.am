@@ -1,5 +1,4 @@
-SUBDIRS = py java
+SUBDIRS = py
 
 run:
 	(cd py; make run)
-	(cd java; make run)
