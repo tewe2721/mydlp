@@ -37,6 +37,7 @@ dist_erl_DATA = \
 	mydlp_api.erl \
 	mydlp_app.erl \
 	mydlp_acceptor.erl \
+	mydlp_bayeserl_store.erl \
 	mydlp_dynamic.erl \
 	mydlp_fsm.erl \
 	mydlp_http_fsm.erl \

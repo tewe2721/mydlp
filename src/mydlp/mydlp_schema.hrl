@@ -95,4 +95,19 @@
 	value
 }).
 
+-record(bayes_item_count, {
+	type,
+	count
+}).
+
+-record(bayes_positive, {
+	word_hash,
+	count
+}).
+
+-record(bayes_negative, {
+	word_hash,
+	count
+}).
+
 -endif.

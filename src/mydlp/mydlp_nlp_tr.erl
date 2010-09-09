@@ -1,4 +1,4 @@
-%%
+%
 %%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@medra.com.tr>
 %%%
 %%%--------------------------------------------------------------------------
@@ -50,7 +50,8 @@
 		word, 
 		fi=false, 
 		yum=false,
-		dus=false
+		dus=false,
+		dus_fi=false
 	}).
 
 %%%%%%%%%%%%% API
@@ -92,11 +93,19 @@ stop() ->
 	gen_server:cast(?MODULE, stop).
 
 init([]) ->
-	Kokler = case application:get_env(mydlp, nlp_tr_kokler) of
-		{ok, Path} -> Path;
-		undefined -> ?NLP_TR_KOKLER end,
-	WT = populate_word_tree(Kokler),
-	{ok, #state{wordtree=WT}}.
+	ConfList = case application:get_env(nlp_tr) of
+                {ok, CL} -> CL;
+                _Else -> ?NLP_TR
+        end,
+
+        case lists:keyfind(activate, 1, ConfList) of
+		{activate, true} ->
+        		{kokler, Kokler} = lists:keyfind(kokler, 1, ConfList),
+			WT = populate_word_tree(Kokler),
+			bayeserl:register_normalizer(mydlp_nlp_tr),
+			bayeserl:register_store(mydlp_bayeserl_store),
+			{ok, #state{wordtree=WT}};
+		_ -> {stop, normal} end.
 
 handle_cast(stop, State) ->
 	{stop, normal, State};
@@ -112,7 +121,7 @@ code_change(_OldVsn, State, _Extra) ->
 
 find_leaf(WT, Word) -> 
 	case find_leaf(WT, Word, none) of
-		none -> Word;
+		none -> erlang:phash2(Word);
 		Else -> Else end.
 
 find_leaf({{w, WHash}, Branch}, [C|Rest], _Return) ->
@@ -140,14 +149,23 @@ populate_word_tree1(Bin, WordTree) ->
 	case erlang:decode_packet(line, Bin, []) of
 		{ok, Line, Rest} -> 
 			Word = line_to_word(unicode:characters_to_list(Line)), 
-			WordTree1 = update_word_tree(WordTree, Word),
+			WordTree1 = update_wt(WordTree, Word),
 			populate_word_tree1(Rest, WordTree1);
 		_Else -> WordTree end.
 
-update_word_tree(WT, Word) ->
+update_wt(WT, W) ->
+	Words = word_to_words(W),
+	update_word_tree(WT, Words).
+
+update_word_tree(WT, [W|Ws]) ->
+	WT1 = update_word_tree(WT,W),
+	update_word_tree(WT1, Ws);
+update_word_tree(WT, []) -> WT;
+update_word_tree(WT, #word{} = Word) ->
 	WLists = word_to_wlists(Word),
-	%erlang:display({Word#word.word, WLists}),
-	update_word_tree(WT, Word#word.word, WLists).
+	%update_word_tree(WT, Word#word.word, WLists).
+	WHash = erlang:phash2(Word#word.word),
+	update_word_tree(WT, WHash, WLists).
 
 update_word_tree(WT, WHash, [WL|WLists]) -> 
 	WT1 = update_word_tree1(WT, WHash, WL),
@@ -179,30 +197,48 @@ hash_branch(WHash, {_, Branch}) -> {{w, WHash}, Branch}.
 
 empty_branch() -> {n, gb_trees:empty()}.
 
+word_to_words(#word{word=W, fi=true, yum=IsYUM, dus_fi=IsDUSFI}=Word) ->
+	WLen = string:len(W),
+	{W1, Ek} = case string:substr(W, WLen - 2) of
+		"mak" -> {string:substr(W, 1, WLen - 3), "mak"};
+		"mek" -> {string:substr(W, 1, WLen - 3), "mek"};
+		_ -> {W,""} end,
+
+	W2 = fiil_edilgen(W1, IsDUSFI, IsYUM) ++ Ek,
+
+	[Word, #word{word=W2, fi=true}];
+word_to_words(#word{} = Word) -> [Word].
+
 word_to_wlists(Word) -> word_to_wlists(Word, []).
 
-word_to_wlists(#word{word=W, fi=true}=Word, Acc) ->
+word_to_wlists(#word{word=W, fi=true, yum=IsYUM}=Word, Acc) ->
 	WLen = string:len(W),
 	W1 = case string:substr(W, WLen - 2) of
 		"mak" -> string:substr(W, 1, WLen - 3);
 		"mek" -> string:substr(W, 1, WLen - 3);
 		_ -> W end,
-	word_to_wlists(Word#word{word=W1, fi=false}, Acc);
+	AccAdd = [W, 
+			string:substr(W, 1, WLen - 1),
+			fiil_simdiki_zaman(W1, IsYUM)
+	],
+	
+	word_to_wlists(Word#word{word=W1, fi=false}, AccAdd ++ Acc);
 word_to_wlists(#word{word=W, yum=true, dus=true} = Word, Acc) ->
 	WLen = string:len(W),
 	WP = string:substr(W, 1, WLen - 1),
-	L = lists:map(fun(C) -> WP ++ [C] end, to_yum(string:substr(W, WLen, 1))),
+	L = lists:map(fun(C) -> WP ++ [C] end, to_yums(string:substr(W, WLen, 1))),
 	L2 = lists:map(fun(C) -> unlu_dusur(C) end, L),
 	word_to_wlists(Word#word{yum=false, dus=false}, lists:append([L, L2, Acc]));
 word_to_wlists(#word{word=W, yum=true}= Word, Acc) ->
 	WLen = string:len(W),
 	WP = string:substr(W, 1, WLen - 1),
-	L = lists:map(fun(C) -> WP ++ [C] end, to_yum(string:substr(W, WLen, 1))),
+	L = lists:map(fun(C) -> WP ++ [C] end, to_yums(string:substr(W, WLen, 1))),
 	word_to_wlists(Word#word{yum=false}, lists:append(L, Acc));
 word_to_wlists(#word{word=W, dus=true} = Word, Acc) ->
 	WD = unlu_dusur(W),
 	word_to_wlists(Word#word{dus=false}, [WD|Acc]);
-word_to_wlists(#word{word=W}, Acc) -> lists:usort([W|Acc]).
+word_to_wlists(#word{word=W}, Acc) -> word_to_wlists(return, [W|Acc]);
+word_to_wlists(return, Acc) -> lists:usort(Acc).
 
 line_to_word(Line) -> line_to_word(Line, #word{}, [], []).
 
@@ -219,16 +255,108 @@ line_to_word([], Word, Tags, []) ->
 	FI = lists:member("FI", Tags),
 	YUM = lists:member("YUM", Tags),
 	DUS = lists:member("DUS", Tags),
-	Word#word{fi=FI, yum=YUM, dus=DUS}.
+	DUS_FI = lists:member("DUS_FI", Tags),
+	Word#word{fi=FI, yum=YUM, dus=DUS, dus_fi=DUS_FI}.
 
-to_yum([C]) -> to_yum(C);
+unlu_daralt_ve_yor_ekle(Word) ->
+	WLen = string:len(Word),
+	Word1 = string:substr(Word, 1, WLen - 1),
+	kaynastir_ve_yor_ekle(Word1).
 
-to_yum(231) -> [$c, 231];
-to_yum($g) -> [$g, 287];
-to_yum($k) -> [$k, 287];
-to_yum($p) -> [$b, $p];
-to_yum($t) -> [$d, $t];
-to_yum(C) -> [C].
+yumusat(Word) ->
+	LC = lists:last(Word),
+	WLen = string:len(Word),
+	Word1 = string:substr(Word, 1, WLen - 1),
+	lists:append([Word1, [to_yum(LC)]]).
+
+yumusat_ve_yor_ekle(Word) ->
+	Word1 = yumusat(Word),
+	kaynastir_ve_yor_ekle(Word1).
+
+kaynastir_ve_yor_ekle(Word) ->
+	KU = kaynastirma_unlusu(Word),
+	lists:append([Word, [KU], "yor"]).
+
+fiil_simdiki_zaman(Word, IsYUM) ->
+	LC = lists:last(Word),
+	case is_unlu(LC) of 
+		true -> case LC of
+			$a -> unlu_daralt_ve_yor_ekle(Word);
+			$e -> unlu_daralt_ve_yor_ekle(Word);
+			_Else -> Word ++ "yor" end;
+		false -> case IsYUM of
+			true -> yumusat_ve_yor_ekle(Word);
+			false -> kaynastir_ve_yor_ekle(Word) end end.
+
+kaynastir_ve_edilgen_ekle(Word) ->
+	LC = lists:last(Word),
+	KU = kaynastirma_unlusu(Word),
+	ED = case LC of 
+		$l -> $n;
+		_Elese -> $l end,
+	lists:append([Word, [KU], [ED]]).
+
+fiil_edilgen(Word, IsDUSFI, IsYUM) ->
+	LC = lists:last(Word),
+	case is_unlu(LC) of 
+		true -> Word ++ "n";
+		false -> 
+			Word1 = case  IsYUM of
+				true -> yumusat(Word);
+				false -> Word end,
+			Word2 = case IsDUSFI of
+				true -> unlu_dusur(Word1);
+				false -> Word1 end,
+			kaynastir_ve_edilgen_ekle(Word2) end.
+
+to_yums([C]) -> to_yums(C);
+
+to_yums(C) ->
+	case is_yum(C) of
+		true -> [C, to_yum(C)];
+		false -> [C] end.
+
+to_yum(231) -> $c;
+to_yum($g) -> 287;
+to_yum($k) -> 287;
+to_yum($p) -> $b;
+to_yum($t) -> $d.
+
+is_yum(231) -> true;
+is_yum($g) -> true;
+is_yum($k) -> true;
+is_yum($p) -> true;
+is_yum($t) -> true;
+is_yum(_) -> false.
+
+kaynastirma_unlusu(Word) ->
+	case son_unluyu_bul(Word) of
+		$a -> 305;
+		$e -> $i;
+		305 -> 305;
+		$i -> $i;
+		$o -> $u;
+		246 -> 252;
+		$u -> $u;
+		252 -> 252 end.
+
+son_unluyu_bul(Str) -> son_unluyu_bul1(lists:reverse(Str)).
+
+son_unluyu_bul1([C|Rest]) ->
+	case is_unlu(C) of
+		true -> C;
+		false -> son_unluyu_bul1(Rest) end;
+son_unluyu_bul1([]) -> $a.
+
+is_unlu($a) -> true;
+is_unlu($e) -> true;
+is_unlu(305) -> true;
+is_unlu($i) -> true;
+is_unlu($o) -> true;
+is_unlu(246) -> true;
+is_unlu($u) -> true;
+is_unlu(252) -> true;
+is_unlu(_) -> false.
 
 unlu_dusur(Str) -> unlu_dusur(lists:reverse(Str),[]).
 

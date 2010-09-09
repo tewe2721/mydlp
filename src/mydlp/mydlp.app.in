@@ -32,6 +32,7 @@
         mydlp_api,
         mydlp_app,
         mydlp_acceptor,
+	mydlp_bayeserl_store,
         mydlp_dynamic,
         mydlp_fsm,
         mydlp_http_fsm,
@@ -41,6 +42,7 @@
         mydlp_matchers,
         mydlp_mnesia,
         mydlp_mysql,
+        mydlp_nlp_tr,
         mydlp_regex,
         mydlp_smtp_fsm,
         mydlp_smtpc,
@@ -54,7 +56,7 @@
         smtpc_fsm
     ]},
   {registered,   []},
-  {applications, [kernel, stdlib]},
+  {applications, [kernel, stdlib, sasl, bayeserl]},
   %%
   %% mod: Specify the module name to start the application, plus args
   %%
@@ -68,6 +70,7 @@
           {mydlp_tc, start_link,[]}, 
           {mydlp_acl, start_link,[]}, 
           {mydlp_smtpc, start_link,[]}, 
+          {mydlp_nlp_tr, start_link,[]},
           {mydlp_trainer, start_link,[]},
           {mydlp_ts, start_link,[]}
          ]},

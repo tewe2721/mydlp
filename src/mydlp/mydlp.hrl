@@ -38,7 +38,10 @@
 		{keyfile, "/etc/mydlp/ssl/private.pem"}
          ]).
 -define(DENIED_PAGE, "denied_page.html").
--define(NLP_TR_KOKLER, "mydlp_nlp_tr_kokler.txt").
+-define(NLP_TR, [ 
+          {activate, true},
+          {kokler, "mydlp_nlp_tr_kokler.txt"}
+         ]).
 -define(MYSQL, [
 		{host, "localhost"},
 		{port, 3306},

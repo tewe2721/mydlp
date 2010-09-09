@@ -57,6 +57,7 @@
 	delete/1,
 	wait_for_bayes_data/0,
 	truncate_nondata/0,
+	truncate_bayes/0,
 	stop/0]).
 
 %% gen_server callbacks
@@ -74,13 +75,21 @@
 
 %%%%%%%%%%%%%%%% Table definitions
 
--define(DATA_TABLES,[
+-define(OTHER_DATA_TABLES,[
 	{file_hash, ordered_set, 
 		fun() -> mnesia:add_table_index(file_hash, md5) end},
 	{sentence_hash, ordered_set, 
 		fun() -> mnesia:add_table_index(sentence_hash, phash2) end},
 	bayes_data
 ]).
+
+-define(BAYES_TABLES, [
+	{bayes_item_count, set},
+	{bayes_positive, set},
+	{bayes_negative, set}
+]).
+
+-define(DATA_TABLES, lists:append(?OTHER_DATA_TABLES, ?BAYES_TABLES)).
 
 -define(NONDATA_TABLES, [
 	filter, 
@@ -111,7 +120,10 @@ get_record_fields(Record) ->
 		sentence_hash -> record_info(fields, sentence_hash);
 		mime_type -> record_info(fields, mime_type);
 		regex -> record_info(fields, regex);
-		bayes_data -> record_info(fields, bayes_data)
+		bayes_data -> record_info(fields, bayes_data);
+		bayes_item_count -> record_info(fields, bayes_item_count);
+		bayes_positive -> record_info(fields, bayes_positive);
+		bayes_negative -> record_info(fields, bayes_negative)
 	end.
 
 %%%%%%%%%%%%% MyDLP Mnesia API
@@ -162,6 +174,8 @@ write(Record) when is_tuple(Record) -> write([Record]).
 delete(Item) -> async_query_call({delete, Item}).
 
 truncate_nondata() -> gen_server:call(?MODULE, truncate_nondata).
+
+truncate_bayes() -> gen_server:call(?MODULE, truncate_bayes).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -322,6 +336,14 @@ handle_call(truncate_nondata, From, State) ->
 	end),
 	{noreply, State, 15000};
 
+handle_call(truncate_bayes, From, State) ->
+	Worker = self(),
+	spawn_link(fun() ->
+		lists:foreach(fun(T) -> mnesia:clear_table(T) end, bayes_tab_names()),
+		Worker ! {async_reply, ok, From}
+	end),
+	{noreply, State, 15000};
+
 handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
 
@@ -478,7 +500,9 @@ get_unique_id(TableName) -> mnesia:dirty_update_counter(unique_ids, TableName, 1
 
 async_query_call(Query) -> gen_server:call(?MODULE, {async_query, Query}).
 
-nondata_tab_names() -> tab_names1(?NONDATA_TABLES, [unique_ids]).
+nondata_tab_names() -> tab_names1(?NONDATA_TABLES, []).
+
+bayes_tab_names() -> tab_names1(?BAYES_TABLES, []).
 
 %tab_names() -> tab_names1(?TABLES, [unique_ids]).
 
