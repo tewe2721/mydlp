@@ -27,5 +27,7 @@ service Mydlp_ui {
 	oneway void removeFile(1: i32 Fileid)
 	oneway void removeGroup(1: i32 Groupid)
 
+	oneway void removeFileFromGroup(1: i32 Fileid, 2: i32 Groupid)
+
 	void compileFilters()
 }

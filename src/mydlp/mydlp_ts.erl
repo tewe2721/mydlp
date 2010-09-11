@@ -40,6 +40,7 @@
 	trainPublic/2,
 	removeFile/1,
 	removeGroup/1,
+	removeFileFromGroup/2,
 	compileFilters/0
 	]).
 
@@ -65,13 +66,11 @@ setConfidentialGroup(Fileid, Groupid) -> mydlp_mnesia:set_gid_by_fid(Fileid, Gro
 
 trainPublic(Data, Fileid) -> mydlp_trainer:public(Data, Fileid).
 
-removeFile(Fileid) -> 
-	mydlp_mnesia:remove_fhash(Fileid),
-	mydlp_mnesia:remove_shash(Fileid).
+removeFile(Fileid) -> mydlp_mnesia:remove_file_entry(Fileid).
 
-removeGroup(Groupid) ->
-	mydlp_mnesia:remove_fhash_group(Groupid),
-	mydlp_mnesia:remove_shash_group(Groupid).
+removeGroup(Groupid) ->	mydlp_mnesia:remove_group(Groupid).
+
+removeFileFromGroup(Fileid, Groupid) -> mydlp_mnesia:remove_file_from_group(Fileid, Groupid).
 
 compileFilters() -> mydlp_mysql:compile_filters().
 

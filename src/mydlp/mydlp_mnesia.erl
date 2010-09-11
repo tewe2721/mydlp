@@ -40,12 +40,11 @@
 	get_rules/1,
 	get_rules_by_user/1,
 	get_regexes/1,
+	remove_file_entry/1,
+	remove_group/1,
+	remove_file_from_group/2,
 	add_fhash/3,
-	remove_fhash/1,
-	remove_fhash_group/1,
 	add_shash/3,
-	remove_shash/1,
-	remove_shash_group/1,
 	set_gid_by_fid/2,
 	is_fhash_of_gid/2,
 	is_shash_of_gid/2,
@@ -76,7 +75,9 @@
 	{file_hash, ordered_set, 
 		fun() -> mnesia:add_table_index(file_hash, md5) end},
 	{sentence_hash, ordered_set, 
-		fun() -> mnesia:add_table_index(sentence_hash, phash2) end}
+		fun() -> mnesia:add_table_index(sentence_hash, phash2) end},
+	{file_group, ordered_set, 
+		fun() -> mnesia:add_table_index(file_group, file_id) end}
 ]).
 
 -define(BAYES_TABLES, [
@@ -114,6 +115,7 @@ get_record_fields(Record) ->
 		match_group -> record_info(fields, match_group);
 		file_hash -> record_info(fields, file_hash);
 		sentence_hash -> record_info(fields, sentence_hash);
+		file_group -> record_info(fields, file_group);
 		mime_type -> record_info(fields, mime_type);
 		regex -> record_info(fields, regex);
 		bayes_item_count -> record_info(fields, bayes_item_count);
@@ -133,12 +135,14 @@ get_rules_by_user(Who) -> async_query_call({get_rules_by_user, Who}).
 
 get_regexes(GroupId) ->	async_query_call({get_regexes, GroupId}).
 
+remove_file_entry(FileId) -> async_query_call({remove_file_entry, FileId}).
+
+remove_group(GroupId) -> async_query_call({remove_group, GroupId}).
+
+remove_file_from_group(FileId, GroupId) -> async_query_call({remove_file_from_group, FileId, GroupId}).
+
 add_fhash(Hash, FileId, GroupId) when is_binary(Hash) -> 
 	async_query_call({add_fhash, Hash, FileId, GroupId}).
-
-remove_fhash(FileId) -> async_query_call({remove_fhash, FileId}).
-
-remove_fhash_group(GroupId) -> async_query_call({remove_fhash_group, GroupId}).
 
 is_fhash_of_gid(Hash, GroupIds) -> 
 	async_query_call({is_fhash_of_gid, Hash, GroupIds}).
@@ -146,10 +150,6 @@ is_fhash_of_gid(Hash, GroupIds) ->
 add_shash(Hash, FileId, GroupId) when is_integer(Hash) -> add_shash([Hash], FileId, GroupId);
 add_shash(HList, FileId, GroupId) when is_list(HList) -> 
 	async_query_call({add_shl, HList, FileId, GroupId}).
-
-remove_shash(FileId) -> async_query_call({remove_shash, FileId}).
-
-remove_shash_group(GroupId) -> async_query_call({remove_shash_group, GroupId}).
 
 is_shash_of_gid(Hash, GroupIds) -> 
 	async_query_call({is_shash_of_gid, Hash, GroupIds}).
@@ -206,61 +206,75 @@ handle_query({get_regexes, GroupId}) ->
 		]),
 	qlc:e(Q);
 
-handle_query({add_fhash, Hash, FI, GI}) ->
-	NewId = get_unique_id(file_hash),
-	FileHash = #file_hash{id=NewId, file_id=FI, group_id=GI, md5=Hash},
-	mnesia:write(FileHash);
-
-handle_query({remove_fhash, FI}) ->
+handle_query({remove_file_entry, FI}) ->
 	Q = qlc:q([H#file_hash.id ||
 		H <- mnesia:table(file_hash),
 		H#file_hash.file_id == FI
 		]),
-	FIDs = qlc:e(Q),
-	lists:foreach(fun(Id) -> mnesia:delete({file_hash, Id}) end, FIDs);
+	FHIs = qlc:e(Q),
 
-handle_query({remove_fhash_group, GI}) ->
-	Q = qlc:q([H#file_hash.id ||
-		H <- mnesia:table(file_hash),
-		H#file_hash.group_id == GI 
+	Q2 = qlc:q([H#sentence_hash.id ||
+		H <- mnesia:table(sentence_hash),
+		H#sentence_hash.file_id == FI
 		]),
-	FIDs = qlc:e(Q),
-	lists:foreach(fun(Id) -> mnesia:delete({file_hash, Id}) end, FIDs);
+	SHIs = qlc:e(Q2),
+
+	Q3 = qlc:q([G#file_group.id ||	
+		G <- mnesia:table(file_group),
+		G#file_group.file_id == FI
+		]),
+	FGIs = qlc:e(Q3),
+
+	lists:foreach(fun(Id) -> mnesia:delete({file_hash, Id}) end, FHIs),
+	lists:foreach(fun(Id) -> mnesia:delete({sentence_hash, Id}) end, SHIs),
+	lists:foreach(fun(Id) -> mnesia:delete({file_group, Id}) end, FGIs);
+
+handle_query({remove_group, GI}) ->
+	Q = qlc:q([G#file_group.id ||
+		G <- mnesia:table(file_group),
+		G#file_group.group_id == GI 
+		]),
+	FGIs = qlc:e(Q),
+	lists:foreach(fun(Id) -> mnesia:delete({file_group, Id}) end, FGIs);
+
+handle_query({remove_file_from_group, FI, GI}) ->
+	Q = qlc:q([G#file_group.id ||
+		G <- mnesia:table(file_group),
+		G#file_group.file_id == FI,
+		G#file_group.group_id == GI
+		]),
+	FGIs = qlc:e(Q),
+	lists:foreach(fun(Id) -> mnesia:delete({file_group, Id}) end, FGIs);
+
+handle_query({add_fhash, Hash, FI, GI}) ->
+	NewId = get_unique_id(file_hash),
+	FileHash = #file_hash{id=NewId, file_id=FI, md5=Hash},
+	mnesia:write(FileHash),
+	add_file_group(FI, GI);
 
 handle_query({is_fhash_of_gid, Hash, _HGIs}) ->
-	Q = qlc:q([H#file_hash.group_id ||
+	Q = qlc:q([G#file_group.group_id ||
 		H <- mnesia:table(file_hash),
-		H#file_hash.md5 == Hash
+		G <- mnesia:table(file_group),
+		H#file_hash.md5 == Hash,
+		H#file_hash.file_id == G#file_group.file_id
 		]),
 	qlc:e(Q);
 
 handle_query({add_shl, HList, FI, GI}) ->
 	lists:foreach(fun(Hash) ->
 		NewId = get_unique_id(sentence_hash),
-		SentenceHash = #sentence_hash{id=NewId, file_id=FI, group_id=GI, phash2=Hash},
-		mnesia:write(SentenceHash) 
+		SentenceHash = #sentence_hash{id=NewId, file_id=FI, phash2=Hash},
+		mnesia:write(SentenceHash),
+		add_file_group(FI, GI)
 	end, HList);
 
-handle_query({remove_shash, FI}) ->
-	Q = qlc:q([H#sentence_hash.id ||
-		H <- mnesia:table(sentence_hash),
-		H#sentence_hash.file_id == FI
-		]),
-	FIDs = qlc:e(Q),
-	lists:foreach(fun(Id) -> mnesia:delete({sentence_hash, Id}) end, FIDs);
-
-handle_query({remove_shash_group, GI}) ->
-	Q = qlc:q([H#sentence_hash.id ||
-		H <- mnesia:table(sentence_hash),
-		H#sentence_hash.group_id == GI 
-		]),
-	FIDs = qlc:e(Q),
-	lists:foreach(fun(Id) -> mnesia:delete({sentence_hash, Id}) end, FIDs);
-
 handle_query({is_shash_of_gid, Hash, _HGIs}) ->
-	Q = qlc:q([H#sentence_hash.group_id ||
+	Q = qlc:q([G#file_group.group_id ||
 		H <- mnesia:table(sentence_hash),
-		H#sentence_hash.phash2 == Hash
+		G <- mnesia:table(file_group),
+		H#sentence_hash.phash2 == Hash,
+		H#sentence_hash.file_id == G#file_group.file_id
 		]),
 	qlc:e(Q);
 
@@ -271,17 +285,7 @@ handle_query({is_mime_of_gid, Mime, _MGIs}) ->
 		]),
 	qlc:e(Q);
 
-handle_query({set_gid_by_fid, FI, GI}) ->
-	Q = qlc:q([H#sentence_hash{group_id=GI} ||	
-		H <- mnesia:table(sentence_hash),
-		H#sentence_hash.file_id == FI ]),
-	SHs = qlc:e(Q),
-	Q2 = qlc:q([H#file_hash{group_id=GI} ||	
-		H <- mnesia:table(file_hash),
-		H#file_hash.file_id == FI ]),
-	SH2s = qlc:e(Q2),
-	lists:foreach(fun(H) -> mnesia:write(H) end, SHs),
-	lists:foreach(fun(H) -> mnesia:write(H) end, SH2s);
+handle_query({set_gid_by_fid, FI, GI}) -> add_file_group(FI, GI);
 
 handle_query({write, RecordList}) when is_list(RecordList) ->
 	lists:foreach(fun(R) -> mnesia:write(R) end, RecordList);
@@ -482,3 +486,16 @@ tab_names1([{Tab,_}|Tabs], Returns) -> tab_names1(Tabs, [Tab|Returns]);
 tab_names1([Tab|Tabs], Returns) when is_atom(Tab) ->  tab_names1(Tabs, [Tab|Returns]);
 tab_names1([], Returns) -> lists:reverse(Returns).
 
+%% File Group functions
+
+add_file_group(FI, GI) ->
+	Q = qlc:q([G#file_group.id ||	
+		G <- mnesia:table(file_group),
+		G#file_group.file_id == FI,
+		G#file_group.group_id == GI 
+		]),
+	case qlc:e(Q) of
+		[] -> 	NewId = get_unique_id(file_hash),
+			FG = #file_group{id=NewId, file_id=FI, group_id=GI},
+			mnesia:write(FG);
+		_Else -> ok end.

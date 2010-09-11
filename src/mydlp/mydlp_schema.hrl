@@ -61,13 +61,6 @@
 	name
 }).
 
--record(file_hash, {
-	id,
-	file_id,
-	group_id,
-	md5
-}).
-
 -record(regex, {
 	id,
 	group_id,
@@ -76,11 +69,22 @@
 	error
 }).
 
+-record(file_hash, {
+	id,
+	file_id,
+	md5
+}).
+
 -record(sentence_hash, {
 	id,
 	file_id,
-	group_id,
 	phash2
+}).
+
+-record(file_group, {
+	id,
+	file_id,
+	group_id
 }).
 
 -record(mime_type, {
