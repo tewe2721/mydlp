@@ -33,7 +33,8 @@
 %% API
 -export([start_link/0,
 	normalize/1,
-	kok_ozeti_bul/1,
+	safe_norm/1,
+	to_lower/1,
 	stop/0]).
 
 %% gen_server callbacks
@@ -55,12 +56,18 @@
 	}).
 
 %%%%%%%%%%%%% API
-
 normalize(Word) -> kok_ozeti_bul(Word).
+
+safe_norm(Word) ->  kok_ozeti_bul2(Word).
 
 kok_ozeti_bul(Word) -> 
 	Pid = pg2:get_closest_pid(?MODULE),
 	gen_server:call(Pid, {kob, Word}).
+
+kok_ozeti_bul2(Word) -> 
+	case pg2:get_closest_pid(?MODULE) of
+		{error, _} -> erlang:phash2(to_lower(Word));
+		Pid -> gen_server:call(Pid, {kob, Word}) end.
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -571,10 +578,9 @@ to_lower([195|Rest], Acc) -> to_lower(Rest, [$a|Acc]); % ozel A
 to_lower([194|Rest], Acc) -> to_lower(Rest, [$a|Acc]); % ozel A
 to_lower([193|Rest], Acc) -> to_lower(Rest, [$a|Acc]); % ozel A
 to_lower([192|Rest], Acc) -> to_lower(Rest, [$a|Acc]); % ozel A
+to_lower([$-|Rest], Acc) -> to_lower(Rest, [$-|Acc]); % i-
 to_lower([73|Rest], Acc) -> to_lower(Rest, [305|Acc]); % i-
-to_lower([C|Rest], Acc) ->
-	C1 = case ( C >= 65) and ( 90 >= C ) of
-		true -> C + 32;
-		false -> C end,
-	to_lower(Rest, [C1|Acc]);
+to_lower([C|Rest], Acc) when C >= 97 , C =< 122; C >= 48 , C =< 57 -> to_lower(Rest, [C|Acc]); % a-z 0-9
+to_lower([C|Rest], Acc) when C >= 65 , C =< 90 -> to_lower(Rest, [C+32|Acc]); % A-Z -> a-z
+to_lower([_C|Rest], Acc) -> to_lower(Rest, Acc);
 to_lower([], Acc) -> lists:reverse(Acc).

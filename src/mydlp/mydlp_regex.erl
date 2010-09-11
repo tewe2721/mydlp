@@ -170,7 +170,8 @@ init([]) ->
 		{trid, rec("(?:\\d[ -]{0,2}){11}")},
 		{ssn, rec("(?:\\d{3} ?-? ?\\d{2} ?-? ?\\d{4})")},
 		{nonwc, rec("[^A-Za-z0-9]+")},
-		{sentence, rec("[\\n\\r\\t\\.!?]+\\s{0,1}\\){0,1}\\s+")}
+		{sentence, rec("[\\n\\r\\t\\.!?]+\\s{0,1}\\){0,1}\\s+")},
+		{word, rec("\\d*(?:[.,]\\d+)+|[\\w\\p{L}]+-[\\w\\p{L}]+|[\\w\\p{L}]+")}
 	],
 	BT = insert_all(BInREs, gb_trees:empty()),
 
