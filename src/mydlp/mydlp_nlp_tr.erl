@@ -66,7 +66,7 @@ kok_ozeti_bul(Word) ->
 
 kok_ozeti_bul2(Word) -> 
 	case pg2:get_closest_pid(?MODULE) of
-		{error, _} -> erlang:phash2(to_lower(Word));
+		{error, _} -> erlang:phash2(to_lower(string:to_lower(Word))); % workaround because of I char
 		Pid -> gen_server:call(Pid, {kob, Word}) end.
 
 %%%%%%%%%%%%%% gen_server handles
