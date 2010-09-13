@@ -34,7 +34,7 @@
 -export([start_link/0,
 	normalize/1,
 	safe_norm/1,
-	to_lower/1,
+	to_ulower/1,
 	stop/0]).
 
 %% gen_server callbacks
@@ -61,25 +61,19 @@ normalize(Word) -> kok_ozeti_bul(Word).
 safe_norm(Word) ->  kok_ozeti_bul2(Word).
 
 kok_ozeti_bul(Word) -> 
+	Word1 = to_ulower(Word),
 	Pid = pg2:get_closest_pid(?MODULE),
-	gen_server:call(Pid, {kob, Word}).
+	gen_server:call(Pid, {kob, Word1}).
 
 kok_ozeti_bul2(Word) -> 
+	Word1 = to_ulower(Word),
 	case pg2:get_closest_pid(?MODULE) of
-		{error, _} -> erlang:phash2(to_lower(string:to_lower(Word))); % workaround because of I char
+		{error, _} -> erlang:phash2(Word1); % workaround because of I char
 		Pid -> gen_server:call(Pid, {kob, Word}) end.
 
 %%%%%%%%%%%%%% gen_server handles
 
-handle_call({kob, Word}, _From, #state{wordtree = WT} = State) ->
-%	Worker = self(),
-%	spawn_link(fun() ->
-%			LowerWord = to_lower(Word),
-%			Reply = find_leaf(WT, LowerWord),
-%			Worker ! {async_reply, Reply, From}
-%		end),
-%	{noreply, State, 15000};
-	LowerWord = to_lower(Word),
+handle_call({kob, LowerWord}, _From, #state{wordtree = WT} = State) ->
 	Reply = find_leaf(WT, LowerWord),
 	{reply, Reply, State, 15000};
 
@@ -117,10 +111,6 @@ start_link() ->
 
 			ok;
 		_ -> ok end,
-%	case gen_server:start_link({local, ?MODULE}, ?MODULE, [], []) of
-%		{ok, Pid} -> {ok, Pid};
-%		{error, {already_started, Pid}} -> {ok, Pid}
-%	end.
 	ignore.
 
 stop() ->
@@ -390,7 +380,15 @@ unlu_dusur([252|Rest], Acc) -> lists:reverse(Rest) ++ Acc;
 unlu_dusur([C|Rest], Acc) -> unlu_dusur(Rest, [C|Acc]);
 unlu_dusur([], Acc) -> Acc.
 
-to_lower(Str) -> to_lower(Str, []).
+to_ulower(Str) -> 
+	Str1 = case unicode:characters_to_list(list_to_binary(Str)) of
+		{error, _, _} -> Str;
+		{incomplete, _, _} -> Str;
+		Else -> Else end,
+	to_lower(Str1).
+
+to_lower(Str) -> 
+	to_lower(Str, []).
 
 to_lower([382|Rest], Acc) -> to_lower(Rest, [$z|Acc]); % ozel z
 to_lower([381|Rest], Acc) -> to_lower(Rest, [$z|Acc]); % ozel Z

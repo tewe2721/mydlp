@@ -175,13 +175,13 @@ to_lowerchar(C) ->
 %% @doc Extracts Texts from MS Office 97 - 2003 Files 
 %% @end
 %%----------------------------------------------------------------------
--define(DOC, {"/usr/bin/catdoc", ["-wx"]}).
+-define(DOC, {"/usr/bin/catdoc", ["-wx", "-dutf-8"]}).
 -define(PPT, {"/usr/bin/catppt", []}).
 -define(XLS, {"/usr/bin/xls2csv", ["-x"]}).
 
 office_to_text(#file{filename = Filename, data = Data}) ->
 	StrLen = case is_list(Filename) of
-		true -> string:len(Filename),
+		true -> string:len(Filename);
 		false -> 0 end,
 
 	case StrLen >= 4 of
@@ -283,8 +283,7 @@ get_text(_File) -> {error, unsupported_type}.
 xml_to_txt(Data) when is_binary(Data)-> xml_to_txt(binary_to_list(Data));
 xml_to_txt(Data) when is_list(Data) -> 
 	RetList = xml_to_txt1(xmerl_scan:string(Data)),
-	RetList1 = lists:filter(fun(I) -> (I >= 0) and (I < 256) end, RetList), 
-	list_to_binary(RetList1).
+	unicode:characters_to_binary(RetList).
 
 xml_to_txt1(List) when is_list(List) -> xml_to_txt1(List, []);
 %xml_to_txt1(#xmlElement{attributes=Attrs, content=Conts}) ->
