@@ -180,10 +180,12 @@ to_lowerchar(C) ->
 -define(XLS, {"/usr/bin/xls2csv", ["-x"]}).
 
 office_to_text(#file{filename = Filename, data = Data}) ->
-	StrLen = string:len(Filename),
+	StrLen = case is_list(Filename) of
+		true -> string:len(Filename),
+		false -> 0 end,
+
 	case StrLen >= 4 of
-		true ->
-			Ext = string:sub_string(Filename, StrLen - 3, StrLen),
+		true ->	Ext = string:sub_string(Filename, StrLen - 3, StrLen),
 			case Ext of
 % catppt always returns 0, should resolve this bug before uncommenting these.
 %				".doc" -> office_to_text(Data, [?DOC, ?XLS, ?PPT]);
@@ -192,10 +194,8 @@ office_to_text(#file{filename = Filename, data = Data}) ->
 				".doc" -> office_to_text(Data, [?DOC, ?XLS]);
 				".xls" -> office_to_text(Data, [?XLS, ?DOC]);
 				".ppt" -> office_to_text(Data, [?PPT, ?DOC, ?XLS]);
-				_ -> office_to_text(Data, [?DOC, ?XLS, ?PPT])
-			end;
-		false -> office_to_text(Data, [?DOC, ?XLS, ?PPT])
-	end.
+				_ -> office_to_text(Data, [?DOC, ?XLS, ?PPT]) end;
+		false -> office_to_text(Data, [?DOC, ?XLS, ?PPT]) end.
 
 office_to_text(Data, [Prog|Progs]) ->
 	{Exec, Args} = Prog,
