@@ -59,7 +59,7 @@ get_mime(Data) when is_list(Data) ->
 		true -> lists:sublist(Data, ?MMLEN);
 		false -> Data
 	end,
-	gen_server:call(?MODULE, {thrift, py, getMagicMime, [Data1]});
+	call_pool({thrift, py, getMagicMime, [Data1]});
 
 get_mime(Data) when is_binary(Data) ->
 	S = size(Data),
@@ -67,23 +67,19 @@ get_mime(Data) when is_binary(Data) ->
 		true -> <<D:?MMLEN/binary, _/binary>> = Data, D;
 		false -> Data
 	end,
-	gen_server:call(?MODULE, {thrift, py, getMagicMime, [Data1]}).
+	call_pool({thrift, py, getMagicMime, [Data1]}).
 
 is_valid_iban(IbanStr) ->
-	gen_server:call(?MODULE, {thrift, py, isValidIban, [IbanStr]}).
+	call_pool({thrift, py, isValidIban, [IbanStr]}).
 
 html_to_text(Html) ->
-	gen_server:call(?MODULE, {thrift, py, htmlToText, [Html]}).
+	call_pool({thrift, py, htmlToText, [Html]}).
 
 %%%%%%%%%%%%%% gen_server handles
 
-handle_call({thrift, py, Func, Params}, From, #state{backend_py=TS} = State) ->
-	Worker = self(),
-	spawn_link(fun() ->
-			{ok, Reply} = thrift_client:call(TS, Func, Params),
-			Worker ! {async_thrift, Reply, From}
-		end),
-	{noreply, State, 15000};
+handle_call({thrift, py, Func, Params}, _From, #state{backend_py=TS} = State) ->
+	{TS1, {ok, Reply}} = thrift_client:call(TS, Func, Params),
+	{reply, Reply, State#state{backend_py=TS1}, 15000};
 
 handle_call(stop, _From, #state{backend_py=PY} = State) ->
 	thrift_client:close(PY),
@@ -102,16 +98,24 @@ handle_info(_Info, State) ->
 %%%%%%%%%%%%%%%% Implicit functions
 
 start_link() ->
-	case gen_server:start_link({local, ?MODULE}, ?MODULE, [], []) of
-		{ok, Pid} -> {ok, Pid};
-		{error, {already_started, Pid}} -> {ok, Pid}
-	end.
+	ConfList = case application:get_env(thrift) of
+                {ok, CL} -> CL;
+                _Else -> ?THRIFTCONF
+        end,
+
+	{client_pool_size, CPS} = lists:keyfind(client_pool_size, 1, ConfList),
+
+	PL = [ gen_server:start_link(?MODULE, [], []) || _I <- lists:seq(1, CPS)],
+	pg2:create(?MODULE),
+	[pg2:join(?MODULE, P) || {ok, P} <- PL],
+
+	ignore.
 
 stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
-	{ok, PY} = thrift_client:start_link("localhost",9090, mydlp_thrift),
+	{ok, PY} = thrift_client_util:new("localhost",9090, mydlp_thrift, []),
 	{ok, #state{backend_py=PY}}.
 
 handle_cast(_Msg, State) ->
@@ -123,3 +127,6 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 
+call_pool(Req) ->
+	Pid = pg2:get_closest_pid(?MODULE),
+	gen_server:call(Pid, Req).

@@ -43,6 +43,9 @@
           {pool_size, 2},
           {kokler, "mydlp_nlp_tr_kokler.txt"}
          ]).
+-define(THRIFTCONF, [
+          {client_pool_size, 4}
+         ]).
 -define(MYSQL, [
 		{host, "localhost"},
 		{port, 3306},
