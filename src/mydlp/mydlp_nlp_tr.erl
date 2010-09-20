@@ -32,6 +32,7 @@
 
 %% API
 -export([start_link/0,
+	pre_init/1,
 	normalize/1,
 	safe_norm/1,
 	to_ulower/1,
@@ -89,29 +90,31 @@ handle_info(_Info, State) ->
 
 %%%%%%%%%%%%%%%% Implicit functions
 
-start_link() ->
-	ConfList = case application:get_env(nlp_tr) of
+get_conf_list() -> 
+	case application:get_env(nlp_tr) of
                 {ok, CL} -> CL;
                 _Else -> ?NLP_TR
-        end,
+        end.
+
+pre_init(_Args) ->
+	ConfList = get_conf_list(),
+
+        case lists:keyfind(activate, 1, ConfList) of
+		{activate, true} ->
+			bayeserl:register_normalizer(mydlp_nlp_tr),
+			bayeserl:register_store(mydlp_bayeserl_store),
+			ok;
+		_ -> ok end.
+
+start_link() ->
+	ConfList = get_conf_list(),
 
         case lists:keyfind(activate, 1, ConfList) of
 		{activate, true} ->
         		{kokler, Kokler} = lists:keyfind(kokler, 1, ConfList),
-        		{pool_size, PS} = lists:keyfind(pool_size, 1, ConfList),
-
 			WT = populate_word_tree(Kokler),
-
-			PL = [ gen_server:start_link(?MODULE, [WT], []) || _I <- lists:seq(1, PS)],
-			pg2:create(?MODULE),
-			[pg2:join(?MODULE, P) || {ok, P} <- PL],
-
-			bayeserl:register_normalizer(mydlp_nlp_tr),
-			bayeserl:register_store(mydlp_bayeserl_store),
-
-			ok;
-		_ -> ok end,
-	ignore.
+			mydlp_pg_sup:start_link(?MODULE, [WT], []);
+		_ -> ignore end.
 
 stop() ->
 	gen_server:cast(?MODULE, stop).

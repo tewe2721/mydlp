@@ -36,6 +36,24 @@
 init([Workers]) ->
 	init(Workers, []).
 
+init([{pg, Worker, ProcessCount}|Workers], ChildSpecs) ->
+	{Module, _, _} = Worker,
+	PgSupName = list_to_atom(atom_to_list(Module) ++ "_pg_sup"),
+
+	init (Workers,
+		[
+			{ PgSupName,                                                    % Id       = internal id
+				{supervisor, start_link,
+					[{local, PgSupName}, mydlp_pg_sup, [Worker, ProcessCount]]
+				},                                                                            % StartFun = {M, F, A}
+				permanent,                                                            % Restart  = permanent | transient | temporary
+				infinity,                                                                     % Shutdown = brutal_kill | int() >= 0 | infinity
+				supervisor,                                                           % Type   = worker | supervisor
+				[mydlp_pg_sup]                                            % Modules  = [Module] | dynamic
+			}
+		|ChildSpecs]
+	);
+
 init([Worker|Workers], ChildSpecs) ->
 	{Module, _Func, _Args} = Worker,
 	init (Workers,

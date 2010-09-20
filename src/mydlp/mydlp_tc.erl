@@ -1,4 +1,4 @@
-%%
+%%%
 %%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@medra.com.tr>
 %%%
 %%%--------------------------------------------------------------------------
@@ -32,6 +32,7 @@
 
 %% API
 -export([start_link/0,
+	pre_init/1,
 	get_mime/1,
 	is_valid_iban/1,
 	html_to_text/1,
@@ -105,19 +106,10 @@ handle_info(_Info, State) ->
 
 %%%%%%%%%%%%%%%% Implicit functions
 
+pre_init(_Args) -> ok.
+
 start_link() ->
-	ConfList = case application:get_env(thrift) of
-                {ok, CL} -> CL;
-                _Else -> ?THRIFTCONF
-        end,
-
-	{client_pool_size, CPS} = lists:keyfind(client_pool_size, 1, ConfList),
-
-	PL = [ gen_server:start_link(?MODULE, [], []) || _I <- lists:seq(1, CPS)],
-	pg2:create(?MODULE),
-	[pg2:join(?MODULE, P) || {ok, P} <- PL],
-
-	ignore.
+	mydlp_pg_sup:start_link(?MODULE, [], []).
 
 stop() ->
 	gen_server:call(?MODULE, stop).

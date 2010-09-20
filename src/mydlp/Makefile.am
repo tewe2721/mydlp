@@ -48,6 +48,7 @@ dist_erl_DATA = \
 	mydlp_mnesia.erl \
 	mydlp_mysql.erl \
 	mydlp_nlp_tr.erl \
+	mydlp_pg_sup.erl \
 	mydlp_regex.erl \
 	mydlp_smtp_fsm.erl \
 	mydlp_smtpc.erl \
