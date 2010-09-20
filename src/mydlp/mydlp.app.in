@@ -43,6 +43,7 @@
         mydlp_mnesia,
         mydlp_mysql,
         mydlp_nlp_tr,
+        mydlp_pg_sup,
         mydlp_regex,
         mydlp_smtp_fsm,
         mydlp_smtpc,
