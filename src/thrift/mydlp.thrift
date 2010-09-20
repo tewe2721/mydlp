@@ -18,9 +18,12 @@
  *     along with MyDLP.  If not, see <http://www.gnu.org/licenses/>.
  ***************************************************************************/
 
+exception GeneralException {
+	1: string why
+}
+
 service Mydlp {
-    // returns mimetype of binary
-    string getMagicMime(1 : binary Data)
-    bool isValidIban(1 : string IbanStr)
-    binary htmlToText(1 : binary Data)
+	string getMagicMime(1 : binary Data) throws (1: GeneralException ge)
+	bool isValidIban(1 : string IbanStr)
+	binary htmlToText(1 : binary Data) throws (1: GeneralException ge)
 }

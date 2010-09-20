@@ -19,6 +19,7 @@
 ###--------------------------------------------------------------------------
 
 python_PYTHON = \
+	sitecustomize.py \
 	MyDLPBackendServer.py \
 	daemon.py \
 	iban.py

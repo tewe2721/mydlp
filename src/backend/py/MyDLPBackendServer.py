@@ -43,21 +43,34 @@ class MydlpHandler:
 		self.mime.load()
 
 	def getMagicMime(self, data):
-		mtype = self.mime.buffer(data)
-		sc = mtype.find(';')
-		if sc == -1:
-			return mtype
-		else:
-			return mtype[0:sc]
+		try:
+			mtype = self.mime.buffer(data)
+			sc = mtype.find(';')
+			if sc == -1:
+				return mtype
+			else:
+				return mtype[0:sc]
+		except:
+			ge = GeneralException()
+			ge.why = "Python backend internal error..."
+			raise ge
 
 	def isValidIban(self, iban_str):
-		myIBAN = iban.IBAN(iban_str)
-		return myIBAN.is_valid()
+		try:
+			myIBAN = iban.IBAN(iban_str)
+			return myIBAN.is_valid()
+		except:
+			return False
 
 	def htmlToText(self, html):
-		soup = BeautifulSoup(html)
-		text_parts = soup.findAll(text=True)
-		return ''.join(text_parts)
+		try:
+			soup = BeautifulSoup(html)
+			text_parts = soup.findAll(text=True)
+			return ''.join(text_parts)
+		except:
+			ge = GeneralException()
+			ge.why = "Python backend internal error..."
+			raise ge
 
 class MyDLPBackendServer(daemon.Daemon):
 	def run(self):
@@ -82,5 +95,8 @@ if len(sys.argv) > 1:
 	pidfile = sys.argv[1]
 
 s = MyDLPBackendServer(pidfile)
+
 s.start()
+#s.run()
+
 

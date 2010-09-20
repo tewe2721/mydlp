@@ -59,7 +59,7 @@ get_mime(Data) when is_list(Data) ->
 		true -> lists:sublist(Data, ?MMLEN);
 		false -> Data
 	end,
-	call_pool({thrift, py, getMagicMime, [Data1]});
+	get_mime(list_to_binary(Data1));
 
 get_mime(Data) when is_binary(Data) ->
 	S = size(Data),
@@ -67,7 +67,10 @@ get_mime(Data) when is_binary(Data) ->
 		true -> <<D:?MMLEN/binary, _/binary>> = Data, D;
 		false -> Data
 	end,
-	call_pool({thrift, py, getMagicMime, [Data1]}).
+	try
+		call_pool({thrift, py, getMagicMime, [Data1]})
+	catch _Exception ->
+		unknown_type end.
 
 is_valid_iban(IbanStr) ->
 	call_pool({thrift, py, isValidIban, [IbanStr]}).
@@ -78,7 +81,12 @@ html_to_text(Html) ->
 %%%%%%%%%%%%%% gen_server handles
 
 handle_call({thrift, py, Func, Params}, _From, #state{backend_py=TS} = State) ->
-	{TS1, {ok, Reply}} = thrift_client:call(TS, Func, Params),
+	{TS1, Reply} = try
+		thrift_client:call(TS, Func, Params)
+	catch throw:{TSE, _Exception} ->
+		?DEBUG("Error in thrift backend. \n", []),
+		{TSE, {error, exception_at_backend}} end,
+		
 	{reply, Reply, State#state{backend_py=TS1}, 15000};
 
 handle_call(stop, _From, #state{backend_py=PY} = State) ->
@@ -129,4 +137,7 @@ code_change(_OldVsn, State, _Extra) ->
 
 call_pool(Req) ->
 	Pid = pg2:get_closest_pid(?MODULE),
-	gen_server:call(Pid, Req).
+	case gen_server:call(Pid, Req) of
+		{ok, Ret} -> Ret;
+		{error, Reason} -> throw({error, Reason}) end.
+
