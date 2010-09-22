@@ -36,9 +36,12 @@
     'ICAP_REQ_LINE'/2,
     'ICAP_HEADER'/2,
     'HTTP_REQ_LINE'/2,
+    'PARSE_REQ_LINE'/2,
     'HTTP_HEADER'/2,
+    'PARSE_HEADER'/2,
     'HTTP_CC_LINE'/2,
     'HTTP_CC_CHUNK'/2,
+    'PARSE_CC_CHUNK'/2,
     'HTTP_CC_CRLF'/2,
     'HTTP_CC_TCRLF'/2
 ]).
@@ -199,8 +202,14 @@ get_body(#state{icap_rencap=[{res_hdr, _BI}|_Rest]}) -> throw({error, {not_imple
 get_body(#state{icap_rencap=[{res_body, _BI}|_Rest]}) -> throw({error, {not_implemented, res_body}});
 get_body(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_implemented, opt_body}}).
 
-'HTTP_REQ_LINE'({data, Line}, State) ->
-	[MethodS, Uri, VersionS] = string:tokens(Line, " "),
+'HTTP_REQ_LINE'({data, Line}, State) -> read_line(Line, State, 'HTTP_REQ_LINE', 'PARSE_REQ_LINE');
+
+'HTTP_REQ_LINE'(timeout, State) ->
+        ?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+        {stop, normal, State}.
+
+'PARSE_REQ_LINE'({data, ReqLine}, State) ->
+	[MethodS, Uri, VersionS] = string:tokens(ReqLine, " "),
 
 	Method = case http_util:to_lower(MethodS) of
 		"options" -> 'OPTIONS';
@@ -219,23 +228,9 @@ get_body(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_impl
 	MinorVersion = MinorVersionC - $0,
         {next_state, 'HTTP_HEADER', State#state{http_request=#http_request{
 			method=Method, path=Uri, version={MajorVersion, MinorVersion}}
-			, http_headers=#http_headers{}}, ?TIMEOUT};
+			, http_headers=#http_headers{}}, ?TIMEOUT}.
 
-'HTTP_REQ_LINE'(timeout, State) ->
-        ?DEBUG("~p Client connection timeout - closing.\n", [self()]),
-        {stop, normal, State}.
-
-'HTTP_HEADER'({data, Line}, #state{buffer=undefined} = State) ->
-	case lists:last(Line) of
-		$\n -> 'PARSE_HEADER'({data, Line}, State);
-		_Else -> {next_state, 'HTTP_HEADER', State#state{buffer=[Line]}, ?TIMEOUT} end;
-
-'HTTP_HEADER'({data, Line}, #state{buffer=BuffList} = State) when is_list(BuffList)->
-	case lists:last(Line) of
-		$\n -> 'PARSE_HEADER'(
-				{data, lists:append(lists:reverse([Line|BuffList]))}, 
-				State#state{buffer=undefined});
-		_Else -> {next_state, 'HTTP_HEADER', State#state{buffer=[Line|BuffList]}, ?TIMEOUT} end;
+'HTTP_HEADER'({data, Line}, State) -> read_line(Line, State, 'HTTP_HEADER', 'PARSE_HEADER');
 
 'HTTP_HEADER'(timeout, State) ->
 	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
@@ -280,30 +275,13 @@ get_body(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_impl
 	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
-binary_last(Bin) when is_binary(Bin) ->
-	JunkSize = size(Bin) - 1,
-	<<_Junk:JunkSize/binary, Last/integer>> = Bin,
-	Last.
-
-'HTTP_CC_CHUNK'({data, Line}, #state{buffer=undefined} = State) ->
-	% case binary:last(Line) of % Erlang R14 bif
-	case binary_last(Line) of
-		$\n -> 'HTTP_CC_CHUNK_PARSE'({data, Line}, State);
-		_Else -> {next_state, 'HTTP_CC_CHUNK', State#state{buffer=[Line]}, ?TIMEOUT} end;
-
-'HTTP_CC_CHUNK'({data, Line}, #state{buffer=BuffList} = State) when is_list(BuffList)->
-	% case binary:last(Line) of % Erlang R14 bif
-	case binary_last(Line) of
-		$\n -> 'HTTP_CC_CHUNK_PARSE'(
-				{data, list_to_binary(lists:reverse([Line|BuffList]))}, 
-				State#state{buffer=undefined});
-		_Else -> {next_state, 'HTTP_CC_CHUNK', State#state{buffer=[Line|BuffList]}, ?TIMEOUT} end;
+'HTTP_CC_CHUNK'({data, Line}, State) -> read_line(Line, State, 'HTTP_CC_CHUNK', 'PARSE_CC_CHUNK');
 
 'HTTP_CC_CHUNK'(timeout, State) ->
 	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
-'HTTP_CC_CHUNK_PARSE'({data, Line}, #state{http_content=Content, tmp=CSize} = State) ->
+'PARSE_CC_CHUNK'({data, Line}, #state{http_content=Content, tmp=CSize} = State) ->
 	CSize1 = CSize - size(Line),
 	if
 		CSize1 > 0 -> {next_state, 'HTTP_CC_CHUNK', 
@@ -536,3 +514,34 @@ get_path("icap://" ++ Str) ->
 		0 -> "/";
 		I2 -> string:substr(Str, I2) end;
 get_path(Uri) -> throw({error, {bad_uri, Uri}}).
+
+binary_last(Bin) when is_binary(Bin) ->
+	JunkSize = size(Bin) - 1,
+	<<_Junk:JunkSize/binary, Last/integer>> = Bin,
+	Last.
+
+read_line(Line, #state{buffer=undefined} = State, FSMState, ParseFunc) when is_list(Line) ->
+	case lists:last(Line) of
+		$\n -> ?MODULE:ParseFunc({data, Line}, State);
+		_Else -> {next_state, FSMState, State#state{buffer=[Line]}, ?TIMEOUT} end;
+
+read_line(Line, #state{buffer=BuffList} = State, FSMState, ParseFunc) when is_list(Line) ->
+	case lists:last(Line) of
+		$\n -> ?MODULE:ParseFunc(
+				{data, lists:append(lists:reverse([Line|BuffList]))}, 
+				State#state{buffer=undefined});
+		_Else -> {next_state, FSMState, State#state{buffer=[Line|BuffList]}, ?TIMEOUT} end;
+
+read_line(Line, #state{buffer=undefined} = State, FSMState, ParseFunc) when is_binary(Line) ->
+	% case binary:last(Line) of % Erlang R14 bif
+	case binary_last(Line) of
+		$\n -> ?MODULE:ParseFunc({data, Line}, State);
+		_Else -> {next_state, FSMState, State#state{buffer=[Line]}, ?TIMEOUT} end;
+
+read_line(Line, #state{buffer=BuffList} = State, FSMState, ParseFunc) when is_binary(Line) ->
+	% case binary:last(Line) of % Erlang R14 bif
+	case binary_last(Line) of
+		$\n -> ?MODULE:ParseFunc(
+				{data, list_to_binary(lists:reverse([Line|BuffList]))}, 
+				State#state{buffer=undefined});
+		_Else -> {next_state, FSMState, State#state{buffer=[Line|BuffList]}, ?TIMEOUT} end.
