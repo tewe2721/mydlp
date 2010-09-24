@@ -61,6 +61,10 @@
 	options_ttl,
 	path,
 	buffer,
+	cache_http_h=false,
+	cache_http_b=false,
+	cache_data_http_h=[],
+	cache_data_http_b=[],
 	tmp
 }).
 
@@ -73,6 +77,7 @@
 
 -record(icap_headers, {
 	allow,
+	allow204=false,
 	connection,
 	encapsulated,
 	x_client_ip,
@@ -176,7 +181,9 @@ init([]) ->
                 "connection" -> IcapHeaders#icap_headers{connection=Value};
                 "encapsulated" -> IcapHeaders#icap_headers{encapsulated=raw_to_encapsulatedh(Value)};
                 "x-client-ip" -> IcapHeaders#icap_headers{x_client_ip=raw_to_xciph(Value)};
-                "allow" -> IcapHeaders#icap_headers{allow=raw_to_allowh(Value)};
+                "allow" ->	AllowH = raw_to_allowh(Value),
+				IcapHeaders#icap_headers{allow=AllowH, 
+					allow204=lists:member("204",AllowH)};
                 _ -> Others = IcapHeaders#icap_headers.other, IcapHeaders#icap_headers{
 				other=[#http_header{key=Key, value=Value}|Others]}   %% misc other headers
         end,
@@ -191,12 +198,23 @@ get_body(#state{icap_rencap=[]} = State) -> 'READ_FILES'(State);
 get_body(#state{icap_rencap=undefined} = State) -> 'READ_FILES'(State);
 get_body(#state{icap_rencap=[{null_body, _Val}]} = State) -> 'READ_FILES'(State);
 
-get_body(#state{icap_rencap=[{req_hdr, _BI}|Rest]} = State) -> 
-	{next_state, 'HTTP_REQ_LINE', State#state{icap_rencap=Rest}, ?TIMEOUT};
+get_body(#state{icap_rencap=[{req_hdr, _BI}|Rest], 
+		icap_headers=#icap_headers{allow204=false}} = State) -> 
+	{next_state, 'HTTP_REQ_LINE', State#state{icap_rencap=Rest, cache_http_h=true}, ?TIMEOUT};
 
-get_body(#state{socket=Socket, icap_rencap=[{req_body, _BI}|Rest]} = State) -> 
+get_body(#state{icap_rencap=[{req_hdr, _BI}|Rest], 
+		icap_headers=#icap_headers{allow204=true}} = State) -> 
+	{next_state, 'HTTP_REQ_LINE', State#state{icap_rencap=Rest, cache_http_h=false}, ?TIMEOUT};
+
+get_body(#state{socket=Socket, icap_rencap=[{req_body, _BI}|Rest],
+		icap_headers=#icap_headers{allow204=false}} = State) -> 
 	inet:setopts(Socket, [{packet, line}, binary]),
-	{next_state, 'HTTP_CC_LINE', State#state{icap_rencap=Rest}, ?TIMEOUT};
+	{next_state, 'HTTP_CC_LINE', State#state{icap_rencap=Rest, cache_http_b=true}, ?TIMEOUT};
+
+get_body(#state{socket=Socket, icap_rencap=[{req_body, _BI}|Rest],
+		icap_headers=#icap_headers{allow204=true}} = State) -> 
+	inet:setopts(Socket, [{packet, line}, binary]),
+	{next_state, 'HTTP_CC_LINE', State#state{icap_rencap=Rest, cache_http_b=false}, ?TIMEOUT};
 
 get_body(#state{icap_rencap=[{res_hdr, _BI}|_Rest]}) -> throw({error, {not_implemented, res_hdr}});
 get_body(#state{icap_rencap=[{res_body, _BI}|_Rest]}) -> throw({error, {not_implemented, res_body}});
@@ -240,7 +258,7 @@ get_body(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_impl
 	Cookies = HttpHeaders#http_headers.cookie,
 	Others = HttpHeaders#http_headers.other,
 	HttpHeaders1 = HttpHeaders#http_headers{cookie=lists:reverse(Cookies), other=lists:reverse(Others)},
-	State1 = State#state{http_headers=HttpHeaders1},
+	State1 = State#state{http_headers=HttpHeaders1, cache_http_h=false},
 	get_body(State1);
 
 'PARSE_HEADER'({data, HttpHeaderLine}, #state{http_headers=HttpHeaders} = State) ->
@@ -300,7 +318,7 @@ get_body(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_impl
 	{stop, normal, State}.
 
 'HTTP_CC_TCRLF'({data, <<"\r\n">>}, #state{http_content=Content1} = State) ->
-	get_body(State#state{http_content=lists:reverse(Content1)});
+	get_body(State#state{http_content=lists:reverse(Content1), cache_http_b=false});
 
 'HTTP_CC_TCRLF'(timeout, State) ->
 	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
@@ -338,6 +356,8 @@ get_body(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_impl
 'BLOCK_REQ'(block, State) -> reply(block, State).
 
 reply(What, #state{socket=Socket, icap_request=IcapReq, http_request=HttpReq,
+		icap_headers=#icap_headers{allow204=Allow204},
+		cache_data_http_h=CacheDataH, cache_data_http_b=CacheDataB,
 		max_connections=MC, options_ttl=OT} = State) ->
 	IcapVer = ["ICAP/", integer_to_list(IcapReq#icap_request.major_version), ".", 
 		integer_to_list(IcapReq#icap_request.minor_version)],
@@ -345,18 +365,27 @@ reply(What, #state{socket=Socket, icap_request=IcapReq, http_request=HttpReq,
 		"Service: MyDLP ICAP Server\r\n", 
 		"Connection: keep-alive\r\n", 
 		"ISTag: \"mydlp-icap-rocks\"\r\n"],
-	Reply = case {What, IcapReq#icap_request.method} of
-		{ok, options} -> [IcapVer, " 200 OK\r\n",
+
+	Reply = case {What, Allow204, IcapReq#icap_request.method} of
+		{ok, _, options} -> [IcapVer, " 200 OK\r\n",
 				StdIH,
 				"Methods: REQMOD\r\n",
 				"Max-Connections: ", integer_to_list(MC), "\r\n",
 				"Options-TTL: ", integer_to_list(OT), "\r\n",
 				"Encapsulated: null-body=0\r\n",
 				"Allow: 204\r\n\r\n"];
-		{ok, reqmod} -> [IcapVer, " 204 No Content\r\n",
+		{ok, true, reqmod} -> [IcapVer, " 204 No Content\r\n",
 				StdIH,
 				"Encapsulated: null-body=0\r\n\r\n"];
-		{block, reqmod} -> 
+		{ok, false, reqmod} -> 
+				ReqH = list_to_binary(lists:reverse(CacheDataH)),
+				ReqB = lists:reverse(CacheDataB),
+				[IcapVer, " 200 OK\r\n",
+				StdIH,
+				"Encapsulated: req-hdr=0",
+					", req-body=", integer_to_list(size(ReqH)),"\r\n\r\n",
+				ReqH, ReqB, "\r\n"];
+		{block, _, reqmod} -> 
 				{http_request, _,  _, {HTTPMajorv, HTTPMinorv}} = HttpReq,
 				Deny = mydlp_api:get_denied_page(html),
 				ReqModB = [httpd_util:integer_to_hexlist(size(Deny)), 
@@ -374,6 +403,7 @@ reply(What, #state{socket=Socket, icap_request=IcapReq, http_request=HttpReq,
 				ReqModH, ReqModB, "\r\n"] end,
 
 	%io:format("~s~n",[binary_to_list(list_to_binary(Reply))]),
+
 	gen_tcp:send(Socket, Reply),
 	inet:setopts(Socket, [{packet, line}, list]),
 
@@ -387,6 +417,10 @@ reply(What, #state{socket=Socket, icap_request=IcapReq, http_request=HttpReq,
 				http_content=[], 
 				files=[],
 				buffer=undefined,
+				cache_http_h=false,
+				cache_http_b=false,
+				cache_data_http_h=[],
+				cache_data_http_b=[],
 				tmp=undefined}, ?KA_TIMEOUT}.
 
 %%-------------------------------------------------------------------------
@@ -421,10 +455,21 @@ handle_sync_event(Event, _From, StateName, StateData) ->
 %%          {stop, Reason, NewStateData}
 %% @private
 %%-------------------------------------------------------------------------
-handle_info({http, Socket, HttpData}, StateName, #state{socket=Socket} = StateData) ->
+handle_info({tcp, Socket, _Bin}, _StateName, #state{socket=Socket,
+		cache_http_h=true, cache_http_b=true}) ->
+	throw({error, should_not_cache_both_http_h_and_b});
+
+handle_info({tcp, Socket, Bin}, StateName, #state{socket=Socket,
+		cache_http_h=true, cache_data_http_h=CacheH} = StateData) ->
 	% Flow control: enable forwarding of next TCP message
 	inet:setopts(Socket, [{active, once}]),
-	?MODULE:StateName({http, HttpData}, StateData);
+	?MODULE:StateName({data, Bin}, StateData#state{cache_data_http_h=[Bin|CacheH]});
+
+handle_info({tcp, Socket, Bin}, StateName, #state{socket=Socket,
+		cache_http_b=true, cache_data_http_b=CacheB} = StateData) ->
+	% Flow control: enable forwarding of next TCP message
+	inet:setopts(Socket, [{active, once}]),
+	?MODULE:StateName({data, Bin}, StateData#state{cache_data_http_b=[Bin|CacheB]});
 
 handle_info({tcp, Socket, Bin}, StateName, #state{socket=Socket} = StateData) ->
 	% Flow control: enable forwarding of next TCP message
