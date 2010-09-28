@@ -328,10 +328,10 @@ get_body(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_impl
 'READ_FILES'(#state{http_headers=undefined} = State) -> 'REQ_OK'(State);
 'READ_FILES'(#state{http_headers=HttpHeaders} = State) ->
 %	when HttpHeaders#http_headers.content_type == ''->
-	Files = case mydlp_api:starts_with(HttpHeaders#http_headers.content_type, "multipart/form-data") of
-		true ->	parse_multipart(State);
-		false -> []
-	end,
+	Files = case HttpHeaders#http_headers.content_type of 
+			"multipart/form-data" ++ _Tail -> parse_multipart(State);
+			"application/x-www-form-urlencoded" ++ _Tail -> parse_urlencoded(State);
+			_Else -> [] end,
 
 	'REQ_OK'(State#state{files=Files}).
 
@@ -539,7 +539,10 @@ raw_to_encapsulatedh(EncapStr) ->
 	end, Tokens).
 
 parse_multipart(#state{http_content=HttpContent, http_headers=H, http_request=Req}) ->
-	mydlp_api:parse_multipart(HttpContent, H, Req).
+	mydlp_api:parse_multipart(list_to_binary(HttpContent), H, Req).
+
+parse_urlencoded(#state{http_content=HttpContent}) ->
+	mydlp_api:uenc_to_file(list_to_binary(HttpContent)).
 
 df_to_files(Data, Files) ->
         case length(Files) of

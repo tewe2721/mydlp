@@ -728,7 +728,7 @@ parse_multipart(HttpContent, H, Req) ->
 				"multipart/form-data"++Line ->
 					LineArgs = parse_arg_line(Line),
 					{value, {_, Boundary}} = lists:keysearch(boundary, 1, LineArgs),
-					parse_multipart(binary_to_list(un_partial(list_to_binary(HttpContent))), Boundary);
+					parse_multipart(binary_to_list(un_partial(HttpContent)), Boundary);
 				_Other ->
 					?DEBUG("Can't parse multipart if we "
 						"find no multipart/form-data",[]), []
@@ -975,4 +975,40 @@ insert_line_feed_76(Bin) when is_binary(Bin) -> insert_line_feed_76(Bin, <<>>).
 insert_line_feed_76(<<Line:76/binary, Rest/binary>>, Acc) -> 
 	insert_line_feed_76(Rest, <<Acc/binary, Line/binary, "\r\n">>);
 insert_line_feed_76(ShortLine, Acc) -> <<Acc/binary, ShortLine/binary>>.
+
+%%-------------------------------------------------------------------------
+%% @doc Converts url encoded data to file
+%% @end
+%%-------------------------------------------------------------------------
+
+uenc_to_file(Bin) ->
+	do_parse_spec(Bin, []).
+
+do_parse_spec(<<$%, Hi:8, Lo:8, Tail/binary>>, Cur) when Hi /= $u ->
+	Hex = hex2int([Hi, Lo]),
+	do_parse_spec(Tail, [ Hex | Cur]);
+               
+do_parse_spec(<<$&, Tail/binary>>, Cur) ->
+	do_parse_spec(Tail, [ $\n | Cur]);
+
+do_parse_spec(<<$+, Tail/binary>>, Cur) ->
+	do_parse_spec(Tail, [ $\s | Cur]);
+
+do_parse_spec(<<$=, Tail/binary>>, Cur) ->
+	do_parse_spec(Tail, [ <<": ">> | Cur]);
+
+do_parse_spec(<<$%, $u, A:8, B:8,C:8,D:8, Tail/binary>>, Cur) ->
+	%% non-standard encoding for Unicode characters: %uxxxx,		     
+	Hex = hex2int([A,B,C,D]),
+	BinRep = unicode:characters_to_binary(Hex),
+	do_parse_spec(Tail, [ BinRep | Cur]);
+
+do_parse_spec(<<H:8, Tail/binary>>, Cur) ->
+	do_parse_spec(Tail, [H|Cur]);
+
+do_parse_spec(<<>>, Cur) ->
+	[#file{name="urlencoded-data", data=list_to_binary(lists:reverse(Cur))}];
+
+do_parse_spec(undefined,_) -> [].
+
 
