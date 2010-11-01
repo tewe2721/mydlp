@@ -141,9 +141,9 @@ get_cgid() -> -1.
 
 get_pgid() -> -2.
 
-get_dcid() -> -3.
+get_dcid() -> 1.
 
-get_drid() -> -4.
+get_drid() -> 0.
 
 get_rules(Who) -> async_query_call({get_rules, Who}).
 

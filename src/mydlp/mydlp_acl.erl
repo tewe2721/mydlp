@@ -80,8 +80,10 @@ handle_call({acl_q, SAddr, {Addr, Files}}, From, #state{is_multisite=true} = Sta
 handle_call({acl_q, _Site, {Addr, Files}}, From, #state{is_multisite=false} = State) ->
 	Worker = self(),
 	spawn_link(fun() ->
-		Rules = mydlp_mnesia:get_rules(Addr),
-		Result = acl_exec(Rules, [{cid, mydlp_mnesia:get_dcid()}, {addr, Addr}], Files),
+		%Rules = mydlp_mnesia:get_rules(Addr),
+		CustomerId = mydlp_mnesia:get_dcid(),
+		Rules = mydlp_mnesia:get_rules_for_cid(CustomerId, Addr),
+		Result = acl_exec(Rules, [{cid, CustomerId}, {addr, Addr}], Files),
 		Worker ! {async_acl_q, Result, From}
 	end),
 	{noreply, State, 60000};
