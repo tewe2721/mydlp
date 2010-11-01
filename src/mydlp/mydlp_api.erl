@@ -384,8 +384,12 @@ is_valid_iban(IbanStr) ->
 %%----------------------------------------------------------------------
 is_valid_trid(TrIdStr) ->
 	Clean = remove_chars(TrIdStr, " -"),
+	is_valid_trid1(Clean).
+
+is_valid_trid1("00000000000") -> false;
+is_valid_trid1(TrIdStr) ->
 	[I0,I1,I2,I3,I4,I5,I6,I7,I8,I9,I10] = 
-		lists:map(fun(I) -> I - $0 end, Clean),
+		lists:map(fun(I) -> I - $0 end, TrIdStr),
 	S1 = (((I0 + I2 + I4 + I6 + I8)*7) - (I1 + I3 + I5 + I7)) rem 10,
 	S2 = ((I0 + I1 + I2 + I3 + I4 + I5 + I6 + I7 + I8 + I9) rem 10),
 	(S1 == I9) and (S2 == I10).
@@ -412,6 +416,17 @@ is_valid_ssn(SSNStr) ->
 			end;
 		_Else -> false
 	end.
+
+%%--------------------------------------------------------------------
+%% @doc Checks whether string is a valid Canada SIN Number
+%% @end
+%%----------------------------------------------------------------------
+is_valid_sin(SINStr) ->
+	Clean = remove_chars(SINStr, " -"),
+	is_valid_sin1(Clean).
+
+is_valid_sin1("000000000") -> false;
+is_valid_sin1(SINStr) -> check_luhn(SINStr).
 
 %%% imported from tsuraan tempfile module http://www.erlang.org/cgi-bin/ezmlm-cgi/4/41649
 
