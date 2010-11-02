@@ -48,6 +48,8 @@
 	ssn_match/2,
 	sin_match/0,
 	sin_match/2,
+	insee_match/0,
+	insee_match/2,
 	e_file_match/0,
 	e_file_match/2,
 	e_archive_match/0,
@@ -188,6 +190,26 @@ sin_match1(Count, [File|Files]) ->
 		false -> sin_match1(Count, Files)
 	end;
 sin_match1(_Count, []) -> neg.
+
+insee_match() -> text.
+
+insee_match(Conf, {_Addr, Files}) when is_list(Conf) ->
+	Count = case lists:keyfind(count, 1, Conf) of
+		{count, C} -> C;
+		false -> 5
+	end,
+	insee_match1(Count, Files).
+
+insee_match1(Count, [File|Files]) ->
+	Res = mydlp_regex:match_bin(
+	 	insee, 
+		File#file.text),
+	
+	case mydlp_api:more_than_count(fun(I) -> mydlp_api:is_valid_insee(I) end, Count, Res) of
+		true -> {pos, {file, File}};
+		false -> insee_match1(Count, Files)
+	end;
+insee_match1(_Count, []) -> neg.
 
 e_archive_match() -> analyzed.
 

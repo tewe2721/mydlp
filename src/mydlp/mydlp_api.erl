@@ -428,6 +428,38 @@ is_valid_sin(SINStr) ->
 is_valid_sin1("000000000") -> false;
 is_valid_sin1(SINStr) -> check_luhn(SINStr).
 
+%%--------------------------------------------------------------------
+%% @doc Checks whether string is a valid France INSEE code
+%% @end
+%%----------------------------------------------------------------------
+is_valid_insee(INSEEStr) ->
+	Clean = remove_chars(INSEEStr, " -"),
+	case string:len(Clean) of 
+		15 ->
+			SexN = list_to_integer(string:substr(Clean,1,1)),
+			YearN = list_to_integer(string:substr(Clean,2,2)),
+			MonthN = list_to_integer(string:substr(Clean,4,2)),
+			RestN = list_to_integer(string:substr(Clean,6,8)),
+			ControlN = list_to_integer(string:substr(Clean,14,2)),
+			is_valid_insee1(SexN, YearN, MonthN, RestN, ControlN);
+		_Else -> false
+	end.
+
+is_valid_insee1(SexN, YearN, MonthN, RestN, ControlN) 
+		when SexN == 1; SexN == 2 -> 
+	is_valid_insee2(SexN, YearN, MonthN, RestN, ControlN);
+is_valid_insee1(_,_,_,_,_) -> false.
+
+is_valid_insee2(SexN, YearN, MonthN, RestN, ControlN) 
+		when 0 < MonthN, MonthN < 13  -> 
+	NumToControl =  
+		1000000000000*SexN +
+		10000000000*YearN +
+		100000000*MonthN + 
+		RestN,
+	ControlN == 97 - (NumToControl rem 97);
+is_valid_insee2(_,_,_,_,_) -> false.
+
 %%% imported from tsuraan tempfile module http://www.erlang.org/cgi-bin/ezmlm-cgi/4/41649
 
 %%--------------------------------------------------------------------
