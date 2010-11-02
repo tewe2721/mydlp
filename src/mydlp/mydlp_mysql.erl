@@ -195,7 +195,7 @@ init([]) ->
 		{regexes_by_cid, <<"SELECT r.id, c.group_id, r.regex FROM sh_regex_cross AS c, sh_regex r WHERE c.regex_id=r.id and r.customer_id=?">>},
 		{customer_by_id, <<"SELECT id,static_ip FROM sh_customer WHERE id=?">>},
 		{app_type, <<"SELECT type FROM app_type">>},
-		{defaultrule_by_cid, <<"SELECT cc_count, ssn_count, iban_count FROM sh_defaultrule_predefined WHERE enabled <> 0 and customer_id=?">>},
+		{defaultrule_by_cid, <<"SELECT cc_count, ssn_count, iban_count, canada_sin_count, france_insee_count, uk_nino_count, tr_tck_count FROM sh_defaultrule_predefined WHERE enabled <> 0 and customer_id=?">>},
 		{dr_fhash_by_cid, <<"SELECT hash FROM sh_defaultrule_filehash WHERE customer_id=?">>},
 		{dr_wfhash_by_cid, <<"SELECT hash FROM sh_defaultrule_white_filehash WHERE customer_id=?">>},
 		{insert_incident, <<"INSERT INTO log_incedent (id, customer_id, rule_id, protocol, src_ip, src_user, destination, action, matcher, filename, misc) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)">>}
@@ -251,7 +251,7 @@ populate_filters([[Id, Name]|Rows], CustomerId) ->
 populate_filters([], _CustomerId) -> ok.
 
 populate_default_rule([], _CustomerId) -> ok;
-populate_default_rule([[CCCount, SSNCount, IBANCount]], CustomerId) ->
+populate_default_rule([[CCCount, SSNCount, IBANCount, SINCount, INSEECount, NINOCount, TRIDCount]], CustomerId) ->
 	DefaultRuleId = {dr, CustomerId},
 	% Id, Action, [Matchers]	
 	% {Func, FuncParams}
@@ -265,8 +265,30 @@ populate_default_rule([[CCCount, SSNCount, IBANCount]], CustomerId) ->
 	IBANMatch = case IBANCount of
 		0 -> [];
 		Count3 -> [{iban_match, [{count, Count3}]}] end,
+	SINMatch = case SINCount of
+		0 -> [];
+		Count4 -> [{sin_match, [{count, Count4}]}] end,
+	INSEEMatch = case INSEECount of
+		0 -> [];
+		Count5 -> [{insee_match, [{count, Count5}]}] end,
+	NINOMatch = case NINOCount of
+		0 -> [];
+		Count6 -> [{nino_match, [{count, Count6}]}] end,
+	TRIDMatch = case TRIDCount of
+		0 -> [];
+		Count7 -> [{trid_match, [{count, Count7}]}] end,
 	MD5Match = [{md5_dr_match, []}],
-	Matchers = lists:append([WFMatch, CCMatch, SSNMatch, IBANMatch, MD5Match]),
+
+	Matchers = lists:append([WFMatch,
+				CCMatch, 
+				SSNMatch, 
+				IBANMatch, 
+				SINMatch,
+				INSEEMatch,
+				NINOMatch,
+				TRIDMatch,
+				MD5Match]),
+
 	ResolvedRule = {DefaultRuleId, block, Matchers},
 	DR = #default_rule{customer_id=CustomerId, resolved_rule=ResolvedRule},
 	mnesia:write(DR).
@@ -462,8 +484,8 @@ populate_regexes1([[Id, GroupId, Regex]|Rows], CustomerId) ->
 	populate_regexes1(Rows, CustomerId);
 populate_regexes1([], _CustomerId) -> ok.
 
-populate_site_desc([[Id, _StaticIp]]) ->
-	IpAddr = {1,1,1,1}, % TODO: refine this
+populate_site_desc([[Id, StaticIpI]]) ->
+	IpAddr = int_to_ip(StaticIpI),
 	S = #site_desc{customer_id=Id, ipaddr=IpAddr},
 	mydlp_mnesia:write(S), ok.
 

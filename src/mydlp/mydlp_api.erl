@@ -61,6 +61,8 @@ is_tspecial(_) -> false.
 is_digit(X) when X >= $0 , X =< $9 -> true;
 is_digit(_) -> false.
 
+is_all_digit(Str) when is_list(Str) -> lists:all(fun(C) -> is_digit(C) end, Str).
+
 %%--------------------------------------------------------------------
 %% @doc Check if a byte is alphanumeric.
 %% @end
@@ -459,6 +461,46 @@ is_valid_insee2(SexN, YearN, MonthN, RestN, ControlN)
 		RestN,
 	ControlN == 97 - (NumToControl rem 97);
 is_valid_insee2(_,_,_,_,_) -> false.
+
+%%--------------------------------------------------------------------
+%% @doc Checks whether string is a valid UK NINO number
+%% @end
+%%----------------------------------------------------------------------
+is_valid_nino(SINStr) ->
+	Clean = remove_chars(SINStr, " -"),
+	Clean1 = string:to_lower(Clean),
+	case string:len(Clean1) of
+		9 -> is_valid_nino1(Clean1);
+		8 -> is_valid_nino1(Clean1);
+		_Else -> false end.
+
+is_valid_nino1([$d |_]) -> false;
+is_valid_nino1([$f |_]) -> false;
+is_valid_nino1([$i |_]) -> false;
+is_valid_nino1([$q |_]) -> false;
+is_valid_nino1([$u |_]) -> false;
+is_valid_nino1([$v |_]) -> false;
+is_valid_nino1([_, $d |_]) -> false;
+is_valid_nino1([_, $f |_]) -> false;
+is_valid_nino1([_, $i |_]) -> false;
+is_valid_nino1([_, $o |_]) -> false;
+is_valid_nino1([_, $q |_]) -> false;
+is_valid_nino1([_, $u |_]) -> false;
+is_valid_nino1([_, $v |_]) -> false;
+is_valid_nino1([$g, $b |_]) -> false;
+is_valid_nino1([$n, $k |_]) -> false;
+is_valid_nino1([$t, $n |_]) -> false;
+is_valid_nino1([$z, $z |_]) -> false;
+
+is_valid_nino1([_, _ |Rest]) ->
+	case string:len(Rest) of
+		6 -> is_all_digit(Rest);
+		7 -> 	DigitPart = string:substr(Rest,1,6),
+			LastChar = lists:last(Rest),
+			is_all_digit(DigitPart) and 
+				( LastChar >= $a ) and
+				( $d >= LastChar );
+		_Else -> false end.
 
 %%% imported from tsuraan tempfile module http://www.erlang.org/cgi-bin/ezmlm-cgi/4/41649
 
