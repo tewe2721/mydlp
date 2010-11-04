@@ -50,6 +50,8 @@
 	sin_match/2,
 	insee_match/0,
 	insee_match/2,
+	nino_match/0,
+	nino_match/2,
 	e_file_match/0,
 	e_file_match/2,
 	e_archive_match/0,
@@ -210,6 +212,26 @@ insee_match1(Count, [File|Files]) ->
 		false -> insee_match1(Count, Files)
 	end;
 insee_match1(_Count, []) -> neg.
+
+nino_match() -> text.
+
+nino_match(Conf, {_Addr, Files}) when is_list(Conf) ->
+	Count = case lists:keyfind(count, 1, Conf) of
+		{count, C} -> C;
+		false -> 5
+	end,
+	nino_match1(Count, Files).
+
+nino_match1(Count, [File|Files]) ->
+	Res = mydlp_regex:match_bin(
+	 	nino, 
+		File#file.text),
+	
+	case mydlp_api:more_than_count(fun(I) -> mydlp_api:is_valid_nino(I) end, Count, Res) of
+		true -> {pos, {file, File}};
+		false -> nino_match1(Count, Files)
+	end;
+nino_match1(_Count, []) -> neg.
 
 e_archive_match() -> analyzed.
 
