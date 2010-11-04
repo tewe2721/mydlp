@@ -262,7 +262,7 @@ handle_query({get_cid, SIpAddr}) ->
 handle_query({get_default_rule, CustomerId}) ->
 	Q = qlc:q([D#default_rule.resolved_rule ||
 		D <- mnesia:table(default_rule),
-		D#default_rule.resolved_rule == CustomerId
+		D#default_rule.customer_id == CustomerId
 		]),
 	qlc:e(Q);
 
