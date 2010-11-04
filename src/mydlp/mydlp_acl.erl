@@ -179,6 +179,7 @@ apply_m(Func, [FuncParams, {Addr, Files}]) ->
 	apply(mydlp_matchers, Func, Args).
 
 get_matcher_req(whitefile) -> raw;
+get_matcher_req(whitefile_dr) -> raw;
 get_matcher_req(Func) -> apply(mydlp_matchers, Func, []).
 
 pl_text(Files) -> pl_text(Files, []).
