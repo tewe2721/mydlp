@@ -268,14 +268,15 @@ md5_dr_match(_Conf, {Source, Files}) ->
 		{cid, C} -> C;
 		false -> mydlp_mnesia:get_dcid()
 	end,
-	md5_dr_match(CustomerId, Files);
-md5_dr_match(CustomerId, [File|Files]) ->
+	CustomerKey = {bl, CustomerId},
+	md5_dr_match(CustomerKey, Files);
+md5_dr_match(CustomerKey, [File|Files]) ->
 	Hash = erlang:md5(File#file.data),
-	case mydlp_mnesia:is_dr_fh_of_fid(Hash, CustomerId) of
+	case mydlp_mnesia:is_dr_fh_of_fid(Hash, CustomerKey) of
 		true -> {pos, {file, File}};
-		false -> md5_dr_match({bl, CustomerId}, Files)
+		false -> md5_dr_match(CustomerKey, Files)
 	end;
-md5_dr_match(_HGIs, []) -> neg.
+md5_dr_match(_CustomerKey, []) -> neg.
 
 shash_match() -> text.
 
