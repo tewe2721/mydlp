@@ -410,7 +410,7 @@ handle_query({write, RecordList}) when is_list(RecordList) ->
 handle_query({delete, Item}) ->
 	mnesia:delete(Item);
 
-handle_query(_Query) -> error.
+handle_query(Query) -> throw({error,{unhandled_query,Query}}).
 
 handle_call({async_query, Query}, From, State) ->
 	Worker = self(),
