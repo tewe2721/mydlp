@@ -291,7 +291,7 @@ populate_default_rule([[CCCount, SSNCount, IBANCount, SINCount, INSEECount, NINO
 
 	ResolvedRule = {DefaultRuleId, block, Matchers},
 	DR = #default_rule{customer_id=CustomerId, resolved_rule=ResolvedRule},
-	mnesia:write(DR).
+	mydlp_mnesia:write(DR).
 
 
 populate_rules([[Id, <<"quarantine">>]|Rows], FilterId) ->
