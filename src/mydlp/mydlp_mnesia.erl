@@ -147,7 +147,7 @@ get_drid() -> 0.
 
 get_rules(Who) -> async_query_call({get_rules, Who}).
 
-get_rules_for_cid(CustomerId, Who) -> async_query_call({get_rules, CustomerId, Who}).
+get_rules_for_cid(CustomerId, Who) -> async_query_call({get_rules_for_cid, CustomerId, Who}).
 
 get_rules_by_user(Who) -> async_query_call({get_rules_by_user, Who}).
 
