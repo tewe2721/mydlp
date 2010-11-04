@@ -493,7 +493,7 @@ populate_file_hashes([[Hash]|Rows], Tag, CustomerId) ->
 	F = #file_hash{id=mydlp_mnesia:get_unique_id(file_hash),
 			file_id={Tag, CustomerId},
 			md5=mydlp_api:hex2bytelist(Hash) },
-	mnesia:write(F),
+	mydlp_mnesia:write(F),
 	populate_file_hashes(Rows, Tag, CustomerId);
 populate_file_hashes([], _Tag, _CustomerId) -> ok.
 
