@@ -639,6 +639,7 @@ acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, File, Misc) ->
 	case Action of
 		log -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
 		block -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
+		quaratine -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
 		_Else -> ok
 	end.
 
