@@ -109,7 +109,7 @@ handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
 % INSERT INTO log_incedent (id, rule_id, protocol, src_ip, destination, action, matcher, filename, misc)
-handle_cast({push_log, {Proto, CustomerId, RuleId, Action, Ip, User, To, Matcher, FileS, Misc}}, State) ->
+handle_cast({push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc}}, State) ->
 	spawn_link(fun() ->
 		{CustomerId, RuleId1} = case RuleId of
 			{dr, CId} -> {CId, 0};
