@@ -47,6 +47,7 @@ AM_PATH_PYTHON
 AC_PATH_PROG(THRIFT, thrift, thrift, $PATH:/usr/local/bin:/usr/bin)
 AC_PATH_PROG(MVN, mvn, mvn, $PATH:/usr/local/bin:/usr/bin:/opt/maven/bin)
 AC_PATH_PROG(WGET, wget, wget, $PATH:/usr/local/bin:/usr/bin:/bin)
+AC_PROG_CC
 AC_PROG_LN_S
 
 AC_CONFIG_FILES([
@@ -59,6 +60,7 @@ AC_CONFIG_FILES([
 		src/thrift/Makefile
 		src/backend/Makefile
 		src/backend/py/Makefile
+		src/beacon/Makefile
 		src/ui/Makefile
 		src/ui/web/Makefile
 	])

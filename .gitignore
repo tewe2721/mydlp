@@ -6,6 +6,7 @@ config.log
 config.status
 configure
 configure.lineno
+depcomp
 erl_crash.dump
 py-compile
 install-sh
