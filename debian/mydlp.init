@@ -28,6 +28,8 @@ SERV=/usr/sbin/service
 MYSQLC=/usr/bin/mysql
 MYSQLADM=/usr/bin/mysqladmin
 
+BEACON=/usr/sbin/mydlp-beacon
+
 . /lib/lsb/init-functions
 
 check_piddir() {
@@ -105,7 +107,7 @@ cleanpids() {
 
 start_backend_py() {
 	log_daemon_msg "Starting MyDLP Python Backend" "mydlp"
-        if (PYTHONPATH=/usr/lib/python2.6/site-packages/ start-stop-daemon --start --quiet --oknodo --pidfile $PIDFILE2 --exec $PYTHON -- /usr/lib/python2.6/dist-packages/MyDLPBackendServer.py); then
+        if PYTHONPATH=/usr/lib/python2.6/site-packages/ start-stop-daemon --start --quiet --oknodo --pidfile $PIDFILE2 --exec $PYTHON -- /usr/lib/python2.6/dist-packages/MyDLPBackendServer.py; then
             log_end_msg 0
         else
             log_end_msg 1
@@ -125,17 +127,42 @@ status_backend_py() {
         status_of_proc -p $PIDFILE2 mydlp "MyDLP Python Backend" 2>&1 > /dev/null 
 }
 
+start_beacon() {
+	log_daemon_msg "Starting MyDLP Beacon" "mydlp"
+        if start-stop-daemon --start --quiet --oknodo --exec $BEACON ; then
+            log_end_msg 0
+        else
+            log_end_msg 1
+        fi
+}
+
+stop_beacon() {
+	log_daemon_msg "Stopping MyDLP Beacon" "mydlp"
+        if start-stop-daemon --stop --quiet --oknodo --exec $BEACON; then
+            rm -f /var/lock/subsys/mydlp-beacon
+            log_end_msg 0
+        else
+            log_end_msg 1
+        fi
+}
+
+status_beacon() {
+        status_of_proc $BEACON mydlp "MyDLP Beacon" 2>&1 > /dev/null 
+}
+
 case "$1" in
   start)
 	check_piddir
 	cleanpids
 	start_backend_py
 	start_mydlp
+	start_beacon
 	cleanpids
 	;;
   stop)
 	check_piddir
 	cleanpids
+	stop_beacon
 	stop_mydlp
 	stop_backend_py
 	cleanpids
@@ -147,11 +174,13 @@ case "$1" in
   restart)
 	check_piddir
 	cleanpids
+	stop_beacon
 	stop_mydlp
 	stop_backend_py
 	cleanpids
 	start_backend_py
 	start_mydlp
+	start_beacon
 	cleanpids
 	;;
 
