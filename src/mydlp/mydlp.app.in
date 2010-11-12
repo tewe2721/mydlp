@@ -84,7 +84,7 @@
 	  {icap, {acceptor, {1344, plain, icap} },
                  {workers, []}
 	  },
-	  {smtp, {acceptor, {10025, plain, smtp} },
+	  {smtp, {acceptor, {10026, plain, smtp} },
                  {workers, [
 			  {mydlp_smtpc, start_link,[]} 
 			]}
