@@ -88,7 +88,7 @@ handle_call({thrift, py, Func, Params}, _From, #state{backend_py=TS} = State) ->
 		?DEBUG("Error in thrift backend. \n", []),
 		{TSE, {error, exception_at_backend}} end,
 		
-	{reply, Reply, State#state{backend_py=TS1}, 15000};
+	{reply, Reply, State#state{backend_py=TS1}};
 
 handle_call(stop, _From, #state{backend_py=PY} = State) ->
 	thrift_client:close(PY),
@@ -129,7 +129,7 @@ code_change(_OldVsn, State, _Extra) ->
 
 call_pool(Req) ->
 	Pid = pg2:get_closest_pid(?MODULE),
-	case gen_server:call(Pid, Req) of
+	case gen_server:call(Pid, Req, 15000) of
 		{ok, Ret} -> Ret;
 		{error, Reason} -> throw({error, Reason}) end.
 
