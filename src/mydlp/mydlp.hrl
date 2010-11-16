@@ -61,6 +61,10 @@
           {options_ttl, 3600}
          ]).
 
+-define(AUTO_DIST, [
+          {activate, false}
+         ]).
+
 -define(ACL_LOG(Proto, RuleId, Action, Ip, User, To, Matcher, File, Misc), 
 	mydlp_api:acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, File, Misc)).
 
