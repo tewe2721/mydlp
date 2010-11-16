@@ -467,10 +467,9 @@ init([]) ->
 	mnesia:create_schema([node()]),
 	mnesia:start(),
 
-	start_table({unique_ids, set}),
-	start_tables(?TABLES),
-
-	consistency_chk(),
+	case mydlp_disributor:is_distributed() of
+		true -> start_distributed();
+		false -> start_single() end,
 
 	{ok, #state{}}.
 
@@ -485,13 +484,39 @@ code_change(_OldVsn, State, _Extra) ->
 
 %%%%%%%%%%%%%%%%%
 
+start_single() ->
+	start_table({unique_ids, set}),
+	start_tables(?TABLES),
+
+	consistency_chk(),
+	ok.
+
+is_mnesia_distributed() ->
+	ThisNode = node(),
+	case mnesia:system_info(db_nodes) of
+		[ThisNode] -> false;
+		DBNodeList -> lists:member(ThisNode, DBNodeList) end.
+
+start_distributed() ->
+	case is_distributed of
+		true -> ok,
+		false -> mnesia:change_table_copy_type(schema, node(), disc_copies),
+			AuthorNode = mydlp_distributor:find_authority(),
+			mnesia:change_config(extra_db_nodes, [AuthorNode]) end,
+	start_single(),
+	ok.
+
 start_table(RecordAtom) when is_atom(RecordAtom) ->
 	start_table({RecordAtom, ordered_set});
 
 start_table({RecordAtom, TableType}) ->
 	start_table({RecordAtom, TableType, fun() -> ok end});
 
-start_table({RecordAtom, TableType, InitFun}) ->
+start_table(Table) ->
+	
+
+
+init_table({RecordAtom, TableType, InitFun}) ->
 	try
 		mnesia:table_info(RecordAtom, type)
 	catch
