@@ -69,7 +69,7 @@ handle_call(find_authority, _From, #state{priority=Priority, init_epoch=InitEpoc
 	Reply = case nodes() of
 		[] -> none;
 		Nodes -> {Replies, _BadNodes} = gen_server:multi_call(Nodes, ?MODULE, 
-				{are_you_my_authority, Priority, InitEpoch}),
+					{are_you_my_authority, Priority, InitEpoch}),
 			case replies_to_nodes(Replies) of 
 				[] -> none ;
 				NodeList -> RandomMax = length(NodeList),
@@ -107,7 +107,8 @@ handle_info(_Info, State) ->
 %%%%%%%%%%%%%%%% Implicit functions
 
 start_link() ->
-	ConfList = case application:get_env(auto_distribution) of
+
+	ConfList = case application:get_env(mydlp, auto_distribution) of
 		{ok, CL} -> CL;
 		_Else -> ?AUTO_DIST
 	end,

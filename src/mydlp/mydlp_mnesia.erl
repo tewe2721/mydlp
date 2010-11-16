@@ -464,10 +464,7 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
-	mnesia:create_schema([node()]),
-	mnesia:start(),
-
-	case mydlp_disributor:is_distributed() of
+	case mydlp_distributor:is_distributed() of
 		true -> start_distributed();
 		false -> start_single() end,
 
@@ -485,11 +482,37 @@ code_change(_OldVsn, State, _Extra) ->
 %%%%%%%%%%%%%%%%%
 
 start_single() ->
-	start_table({unique_ids, set}),
-	start_tables(?TABLES),
-
-	consistency_chk(),
+	start_mnesia_simple(),
+	start_tables(false),
 	ok.
+
+start_distributed() ->
+	IsAlreadyDistributed = is_mnesia_distributed(),
+	case pre_start_tables(IsAlreadyDistributed) of
+		ok -> start_tables(true);
+		{error, _} -> start_tables(false) end,
+	ok.
+
+pre_start_tables(true = _IsAlreadyDistributed) -> 
+	start_mnesia_simple(),
+	ok;
+
+pre_start_tables(false = _IsAlreadyDistributed) -> 
+	case mydlp_distributor:find_authority() of
+		none -> start_mnesia_simple(), {error, cannot_find_an_authority};
+		AuthorNode -> start_mnesia_with_author(AuthorNode) end.
+
+start_mnesia_simple() ->
+	mnesia:create_schema([node()]), 
+	mnesia:start().
+
+start_mnesia_with_author(AuthorNode) ->
+	mnesia:delete_schema([node()]),
+	mnesia:start(),
+	case mnesia:change_config(extra_db_nodes, [AuthorNode]) of
+		{ok, []} -> {error, cannot_connect_to_any_other_node};
+		{ok, [_|_]} -> mnesia:change_table_copy_type(schema, node(), disc_copies), ok;
+		Else -> {error, Else} end.
 
 is_mnesia_distributed() ->
 	ThisNode = node(),
@@ -497,24 +520,26 @@ is_mnesia_distributed() ->
 		[ThisNode] -> false;
 		DBNodeList -> lists:member(ThisNode, DBNodeList) end.
 
-start_distributed() ->
-	case is_distributed of
-		true -> ok,
-		false -> mnesia:change_table_copy_type(schema, node(), disc_copies),
-			AuthorNode = mydlp_distributor:find_authority(),
-			mnesia:change_config(extra_db_nodes, [AuthorNode]) end,
-	start_single(),
+start_tables(IsDistributionInit) ->
+	start_table(IsDistributionInit, {unique_ids, set}),
+	start_tables(IsDistributionInit, ?TABLES),
+
+	consistency_chk(),
 	ok.
 
-start_table(RecordAtom) when is_atom(RecordAtom) ->
-	start_table({RecordAtom, ordered_set});
+start_table(IsDistributionInit, RecordAtom) when is_atom(RecordAtom) ->
+	start_table(IsDistributionInit, {RecordAtom, ordered_set});
 
-start_table({RecordAtom, TableType}) ->
-	start_table({RecordAtom, TableType, fun() -> ok end});
+start_table(IsDistributionInit, {RecordAtom, TableType}) ->
+	start_table(IsDistributionInit, {RecordAtom, TableType, fun() -> ok end});
 
-start_table(Table) ->
-	
+start_table(false = _IsDistributionInit, Table) -> init_table(Table);
 
+start_table(true = _IsDistributionInit, {RecordAtom, _, _}) -> 
+	LocalTables = mnesia:system_info(local_tables),
+	case lists:member(RecordAtom, LocalTables) of
+		false -> mnesia:add_table_copy(RecordAtom, node(), disc_copies);
+		true -> ok end, ok.
 
 init_table({RecordAtom, TableType, InitFun}) ->
 	try
@@ -530,10 +555,10 @@ init_table({RecordAtom, TableType, InitFun}) ->
 			transaction(InitFun)
 	end.
 
-start_tables([RecordAtom|RAList]) ->
-	start_table(RecordAtom),
-	start_tables(RAList);
-start_tables([]) -> ok.
+start_tables(IsDistributionInit, [RecordAtom|RAList]) ->
+	start_table(IsDistributionInit, RecordAtom),
+	start_tables(IsDistributionInit, RAList);
+start_tables(_IsDistributionInit, []) -> ok.
 
 %get_unique_id(TableName) ->
 %	mnesia:dirty_update_counter(unique_ids, TableName, 1).
