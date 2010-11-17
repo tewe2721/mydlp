@@ -39,7 +39,6 @@
          ]).
 -define(DENIED_PAGE, "denied_page.html").
 -define(NLP_TR, [ 
-%          {activate, true},
           {activate, false},
           {kokler, "mydlp_nlp_tr_kokler.txt"}
          ]).
@@ -63,6 +62,8 @@
          ]).
 
 -define(SMB_DISCOVER, [ 
+          {activate, false},
+          {script_path, "/usr/sbin/mydlp-smb-discover"},
           {interval, 3600}
          ]).
 
