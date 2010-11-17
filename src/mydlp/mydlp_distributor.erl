@@ -46,7 +46,7 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
--record(state, {priority, init_epoch=0, nodes_in_conf}).
+-record(state, {priority, init_epoch=unknown, nodes_in_conf}).
 
 %%%%%%%%%%%%% API
 
@@ -85,6 +85,11 @@ handle_call({are_you_my_authority, PeerPriority, _PeerInitEpoch},
 handle_call({are_you_my_authority, PeerPriority, _PeerInitEpoch}, 
 		_From, #state{priority=Priority} = State) 
 		when Priority < PeerPriority ->
+	{reply, no, State};
+
+handle_call({are_you_my_authority, _PeerPriority, PeerInitEpoch}, 
+		_From, #state{init_epoch=InitEpoch} = State) 
+		when InitEpoch == unknown ; PeerInitEpoch == unknown->
 	{reply, no, State};
 
 handle_call({are_you_my_authority, _PeerPriority, PeerInitEpoch}, 
@@ -131,7 +136,12 @@ stop() ->
 
 init([Priority, AllNodes]) ->
 	net_adm:world_list(AllNodes),
-	{ok, #state{priority=Priority, nodes_in_conf=AllNodes}}.
+	InitEpoch = case file:read_file("/var/lib/mydlp/init_epoch") of
+		{ok, Bin} -> list_to_integer(binary_to_list(Bin));
+		_Else -> unknown end,
+
+	erlang:display(InitEpoch),
+	{ok, #state{priority=Priority, init_epoch=InitEpoch, nodes_in_conf=AllNodes}}.
 
 handle_cast(_Msg, State) ->
 	{noreply, State}.

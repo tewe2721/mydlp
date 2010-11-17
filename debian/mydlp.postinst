@@ -21,6 +21,9 @@
 OPENSSL=/usr/bin/openssl
 SSLDIR=/etc/mydlp/ssl
 
+DATEBIN=/bin/date
+INIT_EPOCH=/var/lib/mydlp/init_epoch
+
 # Generates SSL keys
 generate_keys() {
 	mkdir -p $SSLDIR || exit 1
@@ -38,8 +41,13 @@ configure_apache() {
 	/usr/sbin/a2ensite mydlp-site
 }
 
+generate_init_epoch() {
+	/bin/echo -n "$($DATEBIN +%s)" > $INIT_EPOCH
+}
+
 case "$1" in
     configure)
+	generate_init_epoch
 	generate_keys
 	configure_apache
 	;;
