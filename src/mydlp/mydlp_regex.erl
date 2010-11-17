@@ -70,8 +70,7 @@ match([GI|GIs], Data) ->
 	end;
 match([], _Data) -> false.
 
-match1(GroupId, Data) ->
-	gen_server:call(?MODULE, {match, GroupId, Data}).
+match1(GroupId, Data) -> async_re_call({match, GroupId}, Data).
 
 %clean() -> gen_server:cast(?MODULE, {clean}).
 %clean(GroupId) -> gen_server:cast(?MODULE, {clean, GroupId}).
