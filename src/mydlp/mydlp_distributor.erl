@@ -89,7 +89,7 @@ handle_call({are_you_my_authority, PeerPriority, _PeerInitEpoch},
 
 handle_call({are_you_my_authority, _PeerPriority, PeerInitEpoch}, 
 		_From, #state{init_epoch=InitEpoch} = State) 
-		when InitEpoch == unknown ; PeerInitEpoch == unknown->
+		when InitEpoch == unknown ; PeerInitEpoch == unknown ->
 	{reply, no, State};
 
 handle_call({are_you_my_authority, _PeerPriority, PeerInitEpoch}, 
@@ -140,7 +140,6 @@ init([Priority, AllNodes]) ->
 		{ok, Bin} -> list_to_integer(binary_to_list(Bin));
 		_Else -> unknown end,
 
-	erlang:display(InitEpoch),
 	{ok, #state{priority=Priority, init_epoch=InitEpoch, nodes_in_conf=AllNodes}}.
 
 handle_cast(_Msg, State) ->
