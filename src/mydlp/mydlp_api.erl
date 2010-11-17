@@ -660,7 +660,7 @@ acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, File, Misc) ->
 	case Action of
 		log -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
 		block -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
-		quaratine -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
+		quarantine -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
 		_Else -> ok
 	end.
 
@@ -1061,16 +1061,21 @@ heads_to_file([], File) ->
 %% @end
 %%-------------------------------------------------------------------------
 quarantine(#file{} = File) ->
-	FN = case File#file.filename of
-		"" -> integer_to_list(erlang:phash2(File#file.data));
-		undefined -> integer_to_list(erlang:phash2(File#file.data));
-		Else -> Else end,
-	Path = ?QUARANTINE_DIR ++ FN,
-	file:write_file(Path, File#file.data, [raw]), ok;
+	Hash = md5_hex(File#file.data),
+	L1Dir = string:substr(Hash, 1, 1) ++ "/",
+	L2Dir = string:substr(Hash, 2, 2) ++ "/",
+	Path = ?QUARANTINE_DIR ++ L1Dir ++ L2Dir ++ Hash,
+	ok = filelib:ensure_dir(Path),
+	case filelib:is_file(Path) of
+		true -> ok;
+		false -> file:write_file(Path, File#file.data, [raw]) end,
+	ok;
 quarantine([File|Files]) ->
 	quarantine(File),
 	quarantine(Files);
 quarantine([]) -> ok.
+	
+
 
 %%-------------------------------------------------------------------------
 %% @doc Return denied page for different formats
