@@ -110,7 +110,8 @@
 		fun() -> mnesia:add_table_index(mime_type, mime) end},
 	site_desc,
 	default_rule,
-	regex
+	{regex, ordered_set, 
+		fun() -> mnesia:add_table_index(regex, group_id) end}
 ]).
 
 -define(TABLES, lists:append(?DATA_TABLES, ?NONDATA_TABLES)).

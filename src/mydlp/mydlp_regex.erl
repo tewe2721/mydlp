@@ -51,17 +51,17 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
--record(state, {cache_tree, builtin_tree, builtin_suite_tree}).
+-record(state, {builtin_tree, builtin_suite_tree, u304}).
 
 %%%%%%%%%%%%% MyDLP Thrift RPC API
 
-replace_bin(BInKey, Data, Replace) -> gen_server:call(?MODULE, {rbin, BInKey, Data, Replace}).
+replace_bin(BInKey, Data, Replace) -> async_re_call({rbin, BInKey, Replace}, Data).
 
-match_bin(BInKey, Data) -> gen_server:call(?MODULE, {mbin, BInKey, Data}).
+match_bin(BInKey, Data) -> async_re_call({mbin, BInKey}, Data).
 
-split_bin(BInKey, Data) -> gen_server:call(?MODULE, {sbin, BInKey, Data}).
+split_bin(BInKey, Data) -> async_re_call({sbin, BInKey}, Data).
 
-score_suite(BInKey, Data) -> gen_server:call(?MODULE, {score_suite, BInKey, Data}).
+score_suite(BInKey, Data) -> async_re_call({score_suite, BInKey}, Data).
 
 match([GI|GIs], Data) -> 
 	case match1(GI, Data) of
@@ -78,58 +78,14 @@ match1(GroupId, Data) ->
 
 %%%%%%%%%%%%%% gen_server handles
 
-handle_call({match, GroupId, Data}, From, #state{cache_tree=RT} = State) ->
+handle_call({async_re, Call, Data}, From, State) ->
 	Worker = self(),
-	spawn_link(fun() ->
-			{CID, Regexes} = case gb_trees:lookup(GroupId, RT) of
-				{value, Rs} -> {nochange, Rs};
-				none -> 
-					Rs = mydlp_mnesia:get_regexes(GroupId),
-					{{add, GroupId, Rs}, Rs}
-			end,
-			Result = matches_any(Regexes, Data),
-			Reply = {Result, CID},
-			Worker ! {async_match, Reply, From}
-		end),
-	{noreply, State, 15000};
-
-handle_call({mbin, BInKey, Data}, From, #state{builtin_tree=BT} = State) ->
-	Worker = self(),
-	spawn_link(fun() ->
-			RE = gb_trees:get(BInKey, BT),
-			case re:run(Data, RE, [global, {capture, all, list}]) of
-				nomatch -> Worker ! {async_reply, [], From};
-				{match, Captured} -> Worker ! {async_reply, lists:append(Captured), From}
-			end
-		end),
-	{noreply, State, 15000};
-
-handle_call({sbin, BInKey, Data}, From, #state{builtin_tree=BT} = State) ->
-	Worker = self(),
-	spawn_link(fun() ->
-			RE = gb_trees:get(BInKey, BT),
-			Ret = re:split(Data, RE, [{return, list}, trim]),
+	spawn_link(fun() -> 
+			Data1 = preregex(Data, State),
+			Ret = handle_re(Call, Data1, State),
 			Worker ! {async_reply, Ret, From}
 		end),
-	{noreply, State, 15000};
-
-handle_call({rbin, BInKey, Data, Replace}, From, #state{builtin_tree=BT} = State) ->
-	Worker = self(),
-	spawn_link(fun() ->
-			RE = gb_trees:get(BInKey, BT),
-			Ret = re:replace(Data, RE, Replace, [global, {return, list}]),
-			Worker ! {async_reply, Ret, From}
-		end),
-	{noreply, State, 15000};
-
-handle_call({score_suite, BInKey, Data}, From, #state{builtin_suite_tree=BST} = State) ->
-	Worker = self(),
-	spawn_link(fun() ->
-			RES = gb_trees:get(BInKey, BST),
-			Score = score_regex_suite(RES, Data),
-			Worker ! {async_reply, Score, From}
-		end),
-	{noreply, State, 15000};
+	{noreply, State};
 
 handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
@@ -137,16 +93,33 @@ handle_call(stop, _From, State) ->
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
+handle_re({match, GroupId}, Data, _State) ->
+	Regexes = mydlp_mnesia:get_regexes(GroupId),
+	matches_any(Regexes, Data);
+
+handle_re({mbin, BInKey}, Data, #state{builtin_tree=BT}) ->
+	RE = gb_trees:get(BInKey, BT),
+	case re:run(Data, RE, [global, {capture, all, list}]) of
+		nomatch -> [];
+		{match, Captured} -> lists:append(Captured) end;
+
+handle_re({sbin, BInKey}, Data, #state{builtin_tree=BT}) ->
+	RE = gb_trees:get(BInKey, BT),
+	re:split(Data, RE, [{return, list}, trim]);
+
+handle_re({rbin, BInKey, Replace}, Data, #state{builtin_tree=BT}) ->
+	RE = gb_trees:get(BInKey, BT),
+	re:replace(Data, RE, Replace, [global, {return, list}]);
+
+handle_re({score_suite, BInKey}, Data, #state{builtin_suite_tree=BST}) ->
+	RES = gb_trees:get(BInKey, BST),
+	score_regex_suite(RES, Data);
+
+handle_re(Call, _Data, _State) -> throw({error,{unhandled_re_call,Call}}).
+
 handle_info({async_reply, Reply, From}, State) ->
 	gen_server:reply(From, Reply),
 	{noreply, State};
-
-handle_info({async_match, {Result, CID}, From}, #state{cache_tree=RT} = State) ->
-	gen_server:reply(From, Result),
-	case CID of
-		nochange -> {noreply, State};
-		{add, GroupId, Rs} -> {noreply, State#state{cache_tree=gb_trees:enter(GroupId, Rs, RT)}}
-	end;
 
 handle_info(_Info, State) ->
 	{noreply, State}.
@@ -245,7 +218,9 @@ init([]) ->
 	],
 	BST = insert_all(BInS, gb_trees:empty()),
 
-	{ok, #state{cache_tree=gb_trees:empty(), builtin_tree=BT, builtin_suite_tree=BST}}.
+	U304 = rec("\x{0130}"),
+
+	{ok, #state{builtin_tree=BT, builtin_suite_tree=BST, u304=U304}}.
 
 handle_cast(_Msg, State) ->
 	{noreply, State}.
@@ -256,18 +231,14 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 
-matches_any(RS, Data) -> 
-	% Refine this. We need to convert unicode 304 char to $i .
-	UList = unicode:characters_to_list(Data),
-	RUList = lists:map(fun(I) -> case I of 304 -> $i; _ -> I end end, UList),
-	RData = unicode:characters_to_binary(RUList),
-	matches_any1(RS, RData).
+preregex(Data, #state{u304=U304}) ->
+	re:replace(Data, U304, <<"i">>, [global, {return, binary}]).
 
-matches_any1([R|RS], Data) ->
+matches_any([R|RS], Data) ->
 	case re:run(Data, R) of
 		{match, _Captured} -> true;
-		nomatch -> matches_any1(RS, Data) end;
-matches_any1([], _Data) -> false.
+		nomatch -> matches_any(RS, Data) end;
+matches_any([], _Data) -> false.
 
 insert_all([{Key, Val}|Rest], Tree) -> insert_all(Rest, gb_trees:enter(Key, Val, Tree));
 insert_all([], Tree) -> Tree.
@@ -284,3 +255,5 @@ score_regex_suite([{RE,Weight}|Regexes], Data, Score) ->
 
 score_regex_suite([], _Data, Score) -> Score.
 	
+async_re_call(Query, Data) -> gen_server:call(?MODULE, {async_re, Query, Data}, 15000).
+
