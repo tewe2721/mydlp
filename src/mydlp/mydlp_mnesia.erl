@@ -33,6 +33,8 @@
 
 %% API
 -export([start_link/0,
+	new_authority/1,
+	get_mnesia_nodes/0,
 	get_unique_id/1,
 	compile_regex/0,
 	get_cgid/0,
@@ -190,9 +192,12 @@ write(Record) when is_tuple(Record) -> write([Record]).
 
 delete(Item) -> async_query_call({delete, Item}).
 
-truncate_nondata() -> gen_server:call(?MODULE, truncate_nondata).
+truncate_nondata() -> gen_server:call(?MODULE, truncate_nondata, 15000).
 
-truncate_bayes() -> gen_server:call(?MODULE, truncate_bayes).
+truncate_bayes() -> gen_server:call(?MODULE, truncate_bayes, 15000).
+
+new_authority(Node) -> gen_server:call(?MODULE, {new_authority, Node}, 30000).
+
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -439,6 +444,13 @@ handle_call(truncate_bayes, From, State) ->
 	end),
 	{noreply, State, 15000};
 
+handle_call({new_authority, AuthorNode}, _From, State) ->
+	MnesiaNodes = get_mnesia_nodes(),
+	case lists:member(AuthorNode, MnesiaNodes) of
+		false -> force_author(AuthorNode);
+		true -> ok end,
+	{reply, ok, State};
+
 handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
 
@@ -481,6 +493,8 @@ code_change(_OldVsn, State, _Extra) ->
 
 %%%%%%%%%%%%%%%%%
 
+get_mnesia_nodes() -> mnesia:system_info(db_nodes).
+
 start_single() ->
 	start_mnesia_simple(),
 	start_tables(false),
@@ -488,16 +502,25 @@ start_single() ->
 
 start_distributed() ->
 	IsAlreadyDistributed = is_mnesia_distributed(),
-	case pre_start_tables(IsAlreadyDistributed) of
+	case start_mnesia_distributed(IsAlreadyDistributed) of
+		ok -> start_tables(true);
+		{error, _} -> start_tables(false) end,
+	MnesiaNodes = get_mnesia_nodes(),
+	mydlp_distributor:bcast_cluster(MnesiaNodes),
+	ok.
+
+force_author(AuthorNode) -> 
+	mnesia:stop(),
+	case start_mnesia_with_author(AuthorNode) of
 		ok -> start_tables(true);
 		{error, _} -> start_tables(false) end,
 	ok.
 
-pre_start_tables(true = _IsAlreadyDistributed) -> 
+start_mnesia_distributed(true = _IsAlreadyDistributed) -> 
 	start_mnesia_simple(),
 	ok;
 
-pre_start_tables(false = _IsAlreadyDistributed) -> 
+start_mnesia_distributed(false = _IsAlreadyDistributed) -> 
 	case mydlp_distributor:find_authority() of
 		none -> start_mnesia_simple(), {error, cannot_find_an_authority};
 		AuthorNode -> start_mnesia_with_author(AuthorNode) end.
@@ -640,7 +663,7 @@ compile_regex([], Ret) -> lists:reverse(Ret).
 
 get_unique_id(TableName) -> mnesia:dirty_update_counter(unique_ids, TableName, 1).
 
-async_query_call(Query) -> gen_server:call(?MODULE, {async_query, Query}).
+async_query_call(Query) -> gen_server:call(?MODULE, {async_query, Query}, 5000).
 
 nondata_tab_names() -> tab_names1(?NONDATA_TABLES, []).
 

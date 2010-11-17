@@ -42,7 +42,7 @@ configure_apache() {
 }
 
 generate_init_epoch() {
-	/bin/echo -n "$($DATEBIN +%s)" > $INIT_EPOCH
+	[ -e "$INIT_EPOCH" ] || ( /bin/echo -n "$($DATEBIN +%s)" > $INIT_EPOCH )
 }
 
 case "$1" in
