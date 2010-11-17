@@ -27,9 +27,12 @@ mydlpconf_DATA = \
 
 resourcesdir = $(datadir)/mydlp/resources
 
-resources_DATA = mydlp_nlp_tr_kokler.txt
+resources_DATA = \
+	mydlp_nlp_tr_kokler.txt
 
-sbin_SCRIPTS = mydlp-reset-db
+sbin_SCRIPTS = \
+	mydlp-reset-db \
+	mydlp-smb-discover
 
 dist_erl_DATA = \
 	dynamic_compile.erl \

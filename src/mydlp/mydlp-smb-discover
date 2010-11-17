@@ -1,0 +1,36 @@
+#!/bin/bash
+PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games"
+
+MYNETWORKS="10.0.0.0/24 192.168.0.0/24"
+
+ENABLE_UDP=yes
+ENABLE_FULLDISCOVERY=yes
+ENABLE_FINDNETWORKS=yes
+
+NOPT_SCANSPEED="-T3"
+
+NOPT_SCRIPT="--script=smb-enum-shares"
+NOPT_PORTS="-p T:139,T:445"
+NOPT_PING="-PS139,445"
+NOPT_MISC="-n --open"
+
+if [ "$ENABLE_UDP" == "yes" ]; then
+	NOPT_PORTS="-p U:137,T:139,T:445"
+	NOPT_PING="-PS139,445 -PU137"
+fi
+
+if [ "$ENABLE_FULLDISCOVERY" == "yes" ]; then
+	NOPT_SCRIPT="--script=smb-os-discovery,smb-security-mode,smb-enum-shares"
+fi
+
+if [ "$ENABLE_FINDNETWORKS" == "yes" ]; then
+	MYNETWORKS=$(ip addr |grep -e "^    inet "|awk '{print $2}'|grep -ve '^127\.')
+fi
+
+TEMPFILE=$(tempfile)
+
+nmap $NOPT_MISC $NOPT_SCANSPEED $NOPT_PORTS $NOPT_PING $NOPT_SCRIPT $MYNETWORKS -oX $TEMPFILE 2>&1 >/dev/null
+
+cat $TEMPFILE
+rm -f $TEMPFILE
+
