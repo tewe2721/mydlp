@@ -76,12 +76,6 @@
           {mydlp_ts, start_link,[]}
          ]},
     {protocols, [
-%	  {http, {acceptor, {8080, plain, http} },
-%                 {workers, []}
-%	  },
-%	  {https, {acceptor, {8443, ssl, http} },
-%                 {workers, []}
-%	  },
 	  {icap, {acceptor, {1344, plain, icap} },
                  {workers, []}
 	  },
