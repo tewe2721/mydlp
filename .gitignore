@@ -23,6 +23,7 @@ src/mydlp/*.html
 src/mydlp/*.log
 src/mydlp/*.pid
 src/mydlp/example/*.html
+src/mydlp/deprecated/*.html
 src/mydlp/edoc-info
 src/mydlp/erlang.png
 src/mydlp/stylesheet.css
