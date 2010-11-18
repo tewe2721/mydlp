@@ -34,6 +34,7 @@
 -export([start_link/0,
 	is_distributed/0,
 	find_authority/0,
+	bcast_self/0,
 	stop/0]).
 
 %% gen_server callbacks
@@ -54,6 +55,9 @@ is_distributed() -> lists:member(?MODULE, registered()).
 
 find_authority() ->
 	gen_server:call(?MODULE, find_authority, 15000).
+
+bcast_self() ->
+	gen_server:cast(?MODULE, bcast_self).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -77,33 +81,31 @@ handle_call(find_authority, _From, #state{priority=Priority, init_epoch=InitEpoc
 					lists:nth(N, NodeList) end end,
 	{reply, Reply, State};
 
-handle_call({are_you_my_authority, PeerPriority, _PeerInitEpoch}, 
-		_From, #state{priority=Priority} = State) 
-		when Priority > PeerPriority ->
-	{reply, yes, State};
-
-handle_call({are_you_my_authority, PeerPriority, _PeerInitEpoch}, 
-		_From, #state{priority=Priority} = State) 
-		when Priority < PeerPriority ->
-	{reply, no, State};
-
-handle_call({are_you_my_authority, _PeerPriority, PeerInitEpoch}, 
-		_From, #state{init_epoch=InitEpoch} = State) 
-		when InitEpoch == unknown ; PeerInitEpoch == unknown ->
-	{reply, no, State};
-
-handle_call({are_you_my_authority, _PeerPriority, PeerInitEpoch}, 
-		_From, #state{init_epoch=InitEpoch} = State) 
-		when InitEpoch < PeerInitEpoch ->
-	{reply, yes, State};
-
-handle_call({are_you_my_authority, _PeerPriority, _PeerInitEpoch}, _From,  State) ->
-	{reply, no, State};
+handle_call({are_you_my_authority, PeerPriority, PeerInitEpoch}, 
+		_From, #state{priority=Priority, init_epoch=InitEpoch} = State) ->
+	Reply = is_authority({Priority, InitEpoch}, {PeerPriority, PeerInitEpoch}),
+	{reply, Reply, State};
 
 handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
 
 handle_call(_Msg, _From, State) ->
+	{noreply, State}.
+
+handle_cast(bcast_self, #state{priority=Priority, init_epoch=InitEpoch} = State) ->
+	Nodes = nodes(),
+	ThisNode = node(),
+	gen_server:abcast(Nodes, ?MODULE, {i_am_up, ThisNode, Priority, InitEpoch}),
+	{noreply, State};
+
+handle_cast({i_am_up, Node, PeerPriority, PeerInitEpoch}, 
+		#state{priority=Priority, init_epoch=InitEpoch} = State) ->
+	case is_authority({Priority, InitEpoch}, {PeerPriority, PeerInitEpoch}) of
+		true -> mydlp_mnesia:new_authority(Node);
+		false -> ok end,
+	{noreply, State};
+
+handle_cast(_Msg, State) ->
 	{noreply, State}.
 
 handle_info(_Info, State) ->
@@ -142,12 +144,17 @@ init([Priority, AllNodes]) ->
 
 	{ok, #state{priority=Priority, init_epoch=InitEpoch, nodes_in_conf=AllNodes}}.
 
-handle_cast(_Msg, State) ->
-	{noreply, State}.
-
 terminate(_Reason, _State) ->
 	ok.
 
 code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
+
+%%%% implicit
+
+is_authority({Priority, _InitEpoch}, {PeerPriority, _PeerInitEpoch}) when Priority > PeerPriority -> yes;
+is_authority({Priority, _InitEpoch}, {PeerPriority, _PeerInitEpoch}) when Priority < PeerPriority -> no;
+is_authority({_Priority, InitEpoch}, {_PeerPriority, PeerInitEpoch}) when InitEpoch == unknown; PeerInitEpoch == unknown -> no;
+is_authority({_Priority, InitEpoch}, {_PeerPriority, PeerInitEpoch}) when InitEpoch < PeerInitEpoch -> yes;
+is_authority({_Priority, _InitEpoch}, {_PeerPriority, _PeerInitEpoch}) -> no.
 
