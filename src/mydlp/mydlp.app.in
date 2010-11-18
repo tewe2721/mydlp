@@ -35,7 +35,6 @@
 	mydlp_bayeserl_store,
         mydlp_dynamic,
         mydlp_fsm,
-        mydlp_http_fsm,
         mydlp_icap_fsm,
         mydlp_loglevel,
         mydlp_logger_h,
