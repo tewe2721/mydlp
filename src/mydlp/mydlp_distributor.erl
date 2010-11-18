@@ -34,7 +34,7 @@
 -export([start_link/0,
 	is_distributed/0,
 	find_authority/0,
-	bcast_self/0,
+	bcast_cluster/1,
 	stop/0]).
 
 %% gen_server callbacks
@@ -56,29 +56,13 @@ is_distributed() -> lists:member(?MODULE, registered()).
 find_authority() ->
 	gen_server:call(?MODULE, find_authority, 15000).
 
-bcast_self() ->
-	gen_server:cast(?MODULE, bcast_self).
+bcast_cluster(ClusterNodes) ->
+	gen_server:cast(?MODULE, {bcast_cluster, ClusterNodes}).
 
 %%%%%%%%%%%%%% gen_server handles
 
-replies_to_nodes(Replies) -> replies_to_nodes(Replies, []).
-
-replies_to_nodes([{Node,yes}|Replies], Nodes) -> 
-	replies_to_nodes(Replies, [Node|Nodes]);
-replies_to_nodes([{_Node,no}|Replies], Nodes) -> 
-	replies_to_nodes(Replies, Nodes);
-replies_to_nodes([], Nodes) -> Nodes.
-
 handle_call(find_authority, _From, #state{priority=Priority, init_epoch=InitEpoch} = State) ->
-	Reply = case nodes() of
-		[] -> none;
-		Nodes -> {Replies, _BadNodes} = gen_server:multi_call(Nodes, ?MODULE, 
-					{are_you_my_authority, Priority, InitEpoch}),
-			case replies_to_nodes(Replies) of 
-				[] -> none ;
-				NodeList -> RandomMax = length(NodeList),
-					N = random:uniform(RandomMax),
-					lists:nth(N, NodeList) end end,
+	Reply = find_an_authority(nodes(), Priority, InitEpoch),
 	{reply, Reply, State};
 
 handle_call({are_you_my_authority, PeerPriority, PeerInitEpoch}, 
@@ -92,21 +76,34 @@ handle_call(stop, _From, State) ->
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-handle_cast(bcast_self, #state{priority=Priority, init_epoch=InitEpoch} = State) ->
-	Nodes = nodes(),
-	ThisNode = node(),
-	gen_server:abcast(Nodes, ?MODULE, {i_am_up, ThisNode, Priority, InitEpoch}),
+handle_cast({bcast_cluster, ClusterNodes}, #state{priority=Priority, init_epoch=InitEpoch} = State) ->
+	OtherClusterNodes = ClusterNodes -- [node()],
+	OtherNodes = nodes() -- OtherClusterNodes,
+	case OtherNodes of 
+		[] -> ok;
+		_ -> case find_an_authority(OtherClusterNodes, Priority, InitEpoch) of
+			none -> gen_server:abcast(OtherNodes, ?MODULE, 
+					{we_are_up, ClusterNodes, Priority, InitEpoch});
+			AuthorNode -> gen_server:abcast([AuthorNode], ?MODULE, 
+					{bcast_cluster, ClusterNodes}) end end,
 	{noreply, State};
 
-handle_cast({i_am_up, Node, PeerPriority, PeerInitEpoch}, 
-		#state{priority=Priority, init_epoch=InitEpoch} = State) ->
-	case is_authority({Priority, InitEpoch}, {PeerPriority, PeerInitEpoch}) of
-		true -> mydlp_mnesia:new_authority(Node);
-		false -> ok end,
+handle_cast({we_are_up, ClusterNodes, PeerPriority, PeerInitEpoch}, 
+			#state{priority=Priority, init_epoch=InitEpoch} = State) ->
+	MnesiaNodes = mydlp_mnesia:get_mnesia_nodes(),
+	case lists:any(fun(N) -> lists:member(N, MnesiaNodes) end, ClusterNodes) of 
+		true -> ok;
+		false -> case is_authority({PeerPriority, PeerInitEpoch}, 
+					   {Priority, InitEpoch}) of
+			yes -> mydlp_mnesia:new_authority(select_random(ClusterNodes));
+			no -> case is_authority({Priority, InitEpoch}, 
+						{PeerPriority, PeerInitEpoch}) of 
+				yes -> bcast_cluster(MnesiaNodes);
+				no -> ok end end end,
 	{noreply, State};
 
 handle_cast(_Msg, State) ->
-	{noreply, State}.
+        {noreply, State}.
 
 handle_info(_Info, State) ->
 	{noreply, State}.
@@ -158,3 +155,25 @@ is_authority({_Priority, InitEpoch}, {_PeerPriority, PeerInitEpoch}) when InitEp
 is_authority({_Priority, InitEpoch}, {_PeerPriority, PeerInitEpoch}) when InitEpoch < PeerInitEpoch -> yes;
 is_authority({_Priority, _InitEpoch}, {_PeerPriority, _PeerInitEpoch}) -> no.
 
+
+replies_to_nodes(Replies) -> replies_to_nodes(Replies, []).
+
+replies_to_nodes([{Node,yes}|Replies], Nodes) -> 
+	replies_to_nodes(Replies, [Node|Nodes]);
+replies_to_nodes([{_Node,no}|Replies], Nodes) -> 
+	replies_to_nodes(Replies, Nodes);
+replies_to_nodes([], Nodes) -> Nodes.
+
+select_random(List) ->
+	RandomMax = length(List),
+	N = random:uniform(RandomMax),
+	lists:nth(N, List).
+
+find_an_authority(Nodes, Priority, InitEpoch) ->
+	case Nodes of
+		[] -> none;
+		Nodes -> {Replies, _BadNodes} = gen_server:multi_call(Nodes, ?MODULE, 
+					{are_you_my_authority, Priority, InitEpoch}),
+			case replies_to_nodes(Replies) of 
+				[] -> none ;
+				NodeList -> select_random(NodeList) end end.

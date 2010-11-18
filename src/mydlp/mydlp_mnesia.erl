@@ -34,6 +34,7 @@
 %% API
 -export([start_link/0,
 	new_authority/1,
+	get_mnesia_nodes/0,
 	get_unique_id/1,
 	compile_regex/0,
 	get_cgid/0,
@@ -444,7 +445,7 @@ handle_call(truncate_bayes, From, State) ->
 	{noreply, State, 15000};
 
 handle_call({new_authority, AuthorNode}, _From, State) ->
-	MnesiaNodes = mnesia:system_info(db_nodes),
+	MnesiaNodes = get_mnesia_nodes(),
 	case lists:member(AuthorNode, MnesiaNodes) of
 		false -> force_author(AuthorNode);
 		true -> ok end,
@@ -492,6 +493,8 @@ code_change(_OldVsn, State, _Extra) ->
 
 %%%%%%%%%%%%%%%%%
 
+get_mnesia_nodes() -> mnesia:system_info(db_nodes).
+
 start_single() ->
 	start_mnesia_simple(),
 	start_tables(false),
@@ -502,6 +505,8 @@ start_distributed() ->
 	case start_mnesia_distributed(IsAlreadyDistributed) of
 		ok -> start_tables(true);
 		{error, _} -> start_tables(false) end,
+	MnesiaNodes = get_mnesia_nodes(),
+	mydlp_distributor:bcast_cluster(MnesiaNodes),
 	ok.
 
 force_author(AuthorNode) -> 
