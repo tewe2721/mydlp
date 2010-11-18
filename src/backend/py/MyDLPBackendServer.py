@@ -34,8 +34,7 @@ import magic
 import iban
 import daemon
 
-from BeautifulSoup import BeautifulSoup
-
+import lxml.html
 
 class MydlpHandler:
 	def __init__(self):
@@ -64,9 +63,8 @@ class MydlpHandler:
 
 	def htmlToText(self, html):
 		try:
-			soup = BeautifulSoup(html)
-			text_parts = soup.findAll(text=True)
-			return ''.join(text_parts)
+			t = lxml.html.fromstring(html)
+			return  t.text_content().encode('utf-8', 'ignore')
 		except:
 			ge = GeneralException()
 			ge.why = "Python backend internal error..."
