@@ -65,16 +65,6 @@ is_multisite() -> gen_server:call(?MODULE, is_multisite, 60000).
 
 %%%%%%%%%%%%%% gen_server handles
 
-psq(PreparedKey) when is_atom(PreparedKey) ->
-	psq(PreparedKey, []).
-
-psq(PreparedKey, Params) when is_atom(PreparedKey), is_list(Params) ->
-	case mysql:execute(p, PreparedKey, Params) of
-		{data,{mysql_result,_,Result,_,_}} -> {ok, Result};
-		Else -> {error, Else}
-	end.
-
-
 push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc) ->
 	gen_server:cast(?MODULE, {push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc}}).
 
@@ -143,15 +133,17 @@ handle_cast({push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Fil
 	spawn_link(fun() ->
 		{ok, Path} = mydlp_api:quarantine(File),
 		{CustomerId, RuleId1, Ip1, User1} = pre_push_log(RuleId, Ip, User),
-		psq(insert_incident, [CustomerId, RuleId1, Proto, Ip1, User1, To, Action, Matcher, FileS, Misc]),
-		psq(insert_incident_file, [Path])
+		transaction( fun() ->
+			psqt(insert_incident, [CustomerId, RuleId1, Proto, Ip1, User1, To, Action, Matcher, FileS, Misc]),
+			psqt(insert_incident_file, [Path]) end)
 	end),
 	{noreply, State};
 
 handle_cast({push_smb_discover, XMLResult}, State) ->
 	spawn_link(fun() ->
-		psq(delete_all_smb_discover),
-		psq(insert_smb_discover, [mydlp_mnesia:get_dcid(), XMLResult])
+		transaction( fun() ->
+			psqt(delete_all_smb_discover),
+			psqt(insert_smb_discover, [mydlp_mnesia:get_dcid(), XMLResult]) end )
 	end),
 	{noreply, State};
 
@@ -242,6 +234,27 @@ terminate(_Reason, _State) ->
 
 code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
+
+%%%%%%%%%%%% internal api
+
+psq(PreparedKey) when is_atom(PreparedKey) ->
+	psq(PreparedKey, []).
+
+psq(PreparedKey, Params) when is_atom(PreparedKey), is_list(Params) ->
+	case mysql:execute(p, PreparedKey, Params) of
+		{data,{mysql_result,_,Result,_,_}} -> {ok, Result};
+		Else -> {error, Else}
+	end.
+
+transaction(Fun) -> mysql:transaction(p, Fun).
+
+psqt(PreparedKey) when is_atom(PreparedKey) -> psqt(PreparedKey, []).
+
+psqt(PreparedKey, Params) when is_atom(PreparedKey), is_list(Params) ->
+	case mysql:execute(PreparedKey, Params) of
+		{data,{mysql_result,_,Result,_,_}} -> {ok, Result};
+		Else -> {error, Else}
+	end.
 
 %%%%%%%%%%%% internal
 
