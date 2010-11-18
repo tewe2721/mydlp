@@ -1126,7 +1126,7 @@ do_parse_spec(<<$=, Tail/binary>>, Cur) ->
 do_parse_spec(<<$%, $u, A:8, B:8,C:8,D:8, Tail/binary>>, Cur) ->
 	%% non-standard encoding for Unicode characters: %uxxxx,		     
 	Hex = hex2int([A,B,C,D]),
-	BinRep = unicode:characters_to_binary(Hex),
+	BinRep = unicode:characters_to_binary([Hex]),
 	do_parse_spec(Tail, [ BinRep | Cur]);
 
 do_parse_spec(<<H:8, Tail/binary>>, Cur) ->
