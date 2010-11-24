@@ -29,6 +29,8 @@ resourcesdir = $(datadir)/mydlp/resources
 
 resources_DATA = mydlp_nlp_tr_kokler.txt
 
+sbin_PROGRAMS = mydlp-reset-db
+
 dist_erl_DATA = \
 	dynamic_compile.erl \
 	gen_server_cluster.erl \
