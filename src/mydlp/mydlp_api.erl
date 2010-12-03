@@ -441,26 +441,47 @@ is_valid_insee(INSEEStr) ->
 			SexN = list_to_integer(string:substr(Clean,1,1)),
 			YearN = list_to_integer(string:substr(Clean,2,2)),
 			MonthN = list_to_integer(string:substr(Clean,4,2)),
-			RestN = list_to_integer(string:substr(Clean,6,8)),
+			BirthPlaceN = list_to_integer(string:substr(Clean,6,2)),
+			RestN = list_to_integer(string:substr(Clean,8,6)),
 			ControlN = list_to_integer(string:substr(Clean,14,2)),
-			is_valid_insee1(SexN, YearN, MonthN, RestN, ControlN);
+			is_valid_insee1(SexN, YearN, MonthN, BirthPlaceN, RestN, ControlN);
+		13 ->
+			SexN = list_to_integer(string:substr(Clean,1,1)),
+			YearN = list_to_integer(string:substr(Clean,2,2)),
+			MonthN = list_to_integer(string:substr(Clean,4,2)),
+			BirthPlaceN = list_to_integer(string:substr(Clean,6,2)),
+			RestN = list_to_integer(string:substr(Clean,8,6)),
+			is_valid_insee1(SexN, YearN, MonthN, BirthPlaceN, RestN);
 		_Else -> false
 	end.
 
-is_valid_insee1(SexN, YearN, MonthN, RestN, ControlN) 
-		when SexN == 1; SexN == 2 -> 
-	is_valid_insee2(SexN, YearN, MonthN, RestN, ControlN);
-is_valid_insee1(_,_,_,_,_) -> false.
+is_valid_insee1(SexN, YearN, MonthN, BirthPlaceN, RestN) ->
+	is_valid_insee1(SexN, YearN, MonthN, BirthPlaceN, RestN, none).
 
-is_valid_insee2(SexN, YearN, MonthN, RestN, ControlN) 
+is_valid_insee1(SexN, YearN, MonthN, BirthPlaceN, RestN, ControlN) 
+		when SexN == 1; SexN == 2 -> 
+	is_valid_insee2(SexN, YearN, MonthN, BirthPlaceN, RestN, ControlN);
+is_valid_insee1(_,_,_,_,_,_) -> false.
+
+is_valid_insee2(SexN, YearN, MonthN, BirthPlaceN, RestN, ControlN) 
 		when 0 < MonthN, MonthN < 13  -> 
+	is_valid_insee3(SexN, YearN, MonthN, BirthPlaceN, RestN, ControlN);
+is_valid_insee2(_,_,_,_,_,_) -> false.
+
+is_valid_insee3(SexN, YearN, MonthN, BirthPlaceN, RestN, ControlN) 
+		when 0 < BirthPlaceN, BirthPlaceN < 100  -> 
+	is_valid_inseeF(SexN, YearN, MonthN, BirthPlaceN, RestN, ControlN);
+is_valid_insee3(_,_,_,_,_,_) -> false.
+
+is_valid_inseeF(_,_,_,_,_, none) -> true;
+is_valid_inseeF(SexN, YearN, MonthN, BirthPlaceN, RestN, ControlN) ->
 	NumToControl =  
 		1000000000000*SexN +
 		10000000000*YearN +
 		100000000*MonthN + 
+		1000000*BirthPlaceN + 
 		RestN,
-	ControlN == 97 - (NumToControl rem 97);
-is_valid_insee2(_,_,_,_,_) -> false.
+	ControlN == 97 - (NumToControl rem 97).
 
 %%--------------------------------------------------------------------
 %% @doc Checks whether string is a valid UK NINO number
