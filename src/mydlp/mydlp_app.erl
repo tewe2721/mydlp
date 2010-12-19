@@ -71,7 +71,17 @@ init([Protocols]) ->
 		supervisor,                                                           % Type   = worker | supervisor
 		[mydlp_worker_sup]                                            % Modules  = [Module] | dynamic
 	},
-	init(Protocols, [SWSpec]).
+	{ok, Agents} = application:get_env(agents),
+	ASpec = { agent_sup,                                                    % Id       = internal id
+		{supervisor, start_link,
+			[{local, agent_sup}, mydlp_worker_sup, [Agents]]
+		},                                                                            % StartFun = {M, F, A}
+		permanent,                                                            % Restart  = permanent | transient | temporary
+		infinity,                                                                     % Shutdown = brutal_kill | int() >= 0 | infinity
+		supervisor,                                                           % Type   = worker | supervisor
+		[mydlp_worker_sup]                                            % Modules  = [Module] | dynamic
+	},
+	init(Protocols, [SWSpec, ASpec]).
 
 init([ProtoConf| Protocols], ChildSpecs) ->
 	{Proto, _, _} = ProtoConf,

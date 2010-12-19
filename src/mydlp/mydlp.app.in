@@ -90,6 +90,9 @@
 			  {mydlp_smtpc, start_link,[]} 
 			]}
 	  }
+	 ]},
+    {agents, [
+%          {mydlp_smb_discover, start_link,[]} 
 	 ]}
    ]}
  ]

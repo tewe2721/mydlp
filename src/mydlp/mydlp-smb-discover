@@ -3,7 +3,7 @@ PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games"
 
 MYNETWORKS="10.0.0.0/24 192.168.0.0/24"
 
-ENABLE_UDP=yes
+ENABLE_UDP=no
 ENABLE_FULLDISCOVERY=yes
 ENABLE_FINDNETWORKS=yes
 
@@ -13,6 +13,15 @@ NOPT_SCRIPT="--script=smb-enum-shares"
 NOPT_PORTS="-p T:139,T:445"
 NOPT_PING="-PS139,445"
 NOPT_MISC="-n --open"
+
+OUTFILE=""
+IS_TEMP="false"
+
+if [ -n "$1" ]; then
+	OUTFILE=$1
+else
+	IS_TEMP="true"
+fi
 
 if [ "$ENABLE_UDP" == "yes" ]; then
 	NOPT_PORTS="-p U:137,T:139,T:445"
@@ -27,10 +36,19 @@ if [ "$ENABLE_FINDNETWORKS" == "yes" ]; then
 	MYNETWORKS=$(ip addr |grep -e "^    inet "|awk '{print $2}'|grep -ve '^127\.')
 fi
 
-TEMPFILE=$(tempfile)
 
-nmap $NOPT_MISC $NOPT_SCANSPEED $NOPT_PORTS $NOPT_PING $NOPT_SCRIPT $MYNETWORKS -oX $TEMPFILE 2>&1 >/dev/null
+if [ "$IS_TEMP" == "true" ]; then
+	OUTFILE=$(/bin/mktemp --tmpdir=/var/tmp mydlp.XXXXXXXXXX)
+fi
 
-cat $TEMPFILE
-rm -f $TEMPFILE
+nmap $NOPT_MISC $NOPT_SCANSPEED $NOPT_PORTS $NOPT_PING $NOPT_SCRIPT $MYNETWORKS -oX $OUTFILE 2>&1 >/dev/null
+
+RETVAL=$?
+
+if [ "$IS_TEMP" == "true" ]; then
+	cat $OUTFILE
+	rm -f $OUTFILE
+fi
+
+exit $RETVAL
 

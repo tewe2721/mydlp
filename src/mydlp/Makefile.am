@@ -56,6 +56,7 @@ dist_erl_DATA = \
 	mydlp_nlp_tr.erl \
 	mydlp_pg_sup.erl \
 	mydlp_regex.erl \
+	mydlp_smb_discover.erl \
 	mydlp_smtp_fsm.erl \
 	mydlp_smtpc.erl \
 	mydlp_sup.erl \

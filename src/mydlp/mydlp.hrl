@@ -62,6 +62,10 @@
           {options_ttl, 3600}
          ]).
 
+-define(SMB_DISCOVER, [ 
+          {interval, 3600}
+         ]).
+
 -define(AUTO_DIST, [
           {activate, false}
          ]).

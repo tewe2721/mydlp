@@ -36,6 +36,7 @@
 	compile_filters/0,
 	compile_customer/1,
 	push_log/9,
+	push_smb_discover/1,
 	is_multisite/0,
 	stop/0]).
 
@@ -75,6 +76,9 @@ psq(PreparedKey, Params) when is_atom(PreparedKey), is_list(Params) ->
 
 push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc) ->
 	gen_server:cast(?MODULE, {push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc}}).
+
+push_smb_discover(XMLResult) ->
+	gen_server:cast(?MODULE, {push_smb_discover, XMLResult}).
 
 handle_call({compile_customer, CustomerId}, From, State) ->
 	Worker = self(),
@@ -124,6 +128,13 @@ handle_cast({push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Mis
 		end,
 		psq(insert_incident, 
 			[CustomerId, RuleId1, Proto, Ip1, User1, To, Action, Matcher, FileS, Misc])
+	end),
+	{noreply, State};
+
+handle_cast({push_smb_discover, XMLResult}, State) ->
+	spawn_link(fun() ->
+		psq(delete_all_smb_discover),
+		psq(insert_smb_discover, [mydlp_mnesia:get_dcid(), XMLResult])
 	end),
 	{noreply, State};
 
@@ -198,7 +209,9 @@ init([]) ->
 		{defaultrule_by_cid, <<"SELECT action, cc_count, ssn_count, iban_count, canada_sin_count, france_insee_count, uk_nino_count, tr_tck_count FROM sh_defaultrule_predefined WHERE enabled <> 0 and customer_id=?">>},
 		{dr_fhash_by_cid, <<"SELECT hash FROM sh_defaultrule_filehash WHERE customer_id=?">>},
 		{dr_wfhash_by_cid, <<"SELECT hash FROM sh_defaultrule_white_filehash WHERE customer_id=?">>},
-		{insert_incident, <<"INSERT INTO log_incedent (id, customer_id, rule_id, protocol, src_ip, src_user, destination, action, matcher, filename, misc) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)">>}
+		{insert_incident, <<"INSERT INTO log_incedent (id, customer_id, rule_id, protocol, src_ip, src_user, destination, action, matcher, filename, misc) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)">>},
+		{delete_all_smb_discover, <<"DELETE FROM log_shared_folder">>},
+		{insert_smb_discover, <<"INSERT INTO log_shared_folder (id, customer_id, result) VALUES (NULL, ?, ?)">>}
 	]],
 
 	{ok, #state{host=Host, port=Port, 
