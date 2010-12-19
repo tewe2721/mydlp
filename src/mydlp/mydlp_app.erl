@@ -81,7 +81,7 @@ init([Protocols]) ->
 		supervisor,                                                           % Type   = worker | supervisor
 		[mydlp_worker_sup]                                            % Modules  = [Module] | dynamic
 	},
-	init(Protocols, [SWSpec, ASpec]).
+	init(Protocols, [ASpec, SWSpec]).
 
 init([ProtoConf| Protocols], ChildSpecs) ->
 	{Proto, _, _} = ProtoConf,
