@@ -32,7 +32,6 @@
 
 %% API
 -export([start_link/0,
-	discover_smb/0,
 	stop/0]).
 
 %% gen_server callbacks
@@ -45,7 +44,7 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
--record(state, {interval}).
+-record(state, {interval, script_path}).
 
 handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
@@ -56,8 +55,8 @@ handle_call(_Msg, _From, State) ->
 handle_cast(_Msg, State) ->
 	{noreply, State}.
 
-handle_info(discover_now, #state{interval=Interval} = State) ->
-	case discover_smb() of
+handle_info(discover_now, #state{interval=Interval, script_path=ScriptPath} = State) ->
+	case discover_smb(ScriptPath) of
 		{ok, XMLResult} -> mydlp_mysql:push_smb_discover(XMLResult);
 		{error, {retcode, R}} -> ?DEBUG("SMB DISCOVER: Error: Nmap return code: ~p\n", [R]);
 		{error, Err} -> ?DEBUG("SMB DISCOVER: Error: ~p\n", [Err]) end,
@@ -76,19 +75,25 @@ start_link() ->
 		_Else -> ?SMB_DISCOVER
 	end,
 
-	{interval, Interval} = lists:keyfind(interval, 1, ConfList),
+	{activate, Activate} = lists:keyfind(activate, 1, ConfList),
+	case Activate of 
+		true ->
+			{interval, Interval} = lists:keyfind(interval, 1, ConfList),
+			{script_path, ScriptPath} = lists:keyfind(script_path, 1, ConfList),
 		
-	case gen_server:start_link({local, ?MODULE}, ?MODULE, [Interval], []) of
-		{ok, Pid} -> {ok, Pid};
-		{error, {already_started, Pid}} -> {ok, Pid}
-	end.
+			case gen_server:start_link({local, ?MODULE}, ?MODULE, 
+						[ScriptPath, Interval], []) of
+				{ok, Pid} -> {ok, Pid};
+				{error, {already_started, Pid}} -> {ok, Pid} end;
+		false -> ignore end.
+
 
 stop() ->
 	gen_server:call(?MODULE, stop).
 
-init([Interval]) ->
+init([ScriptPath, Interval]) ->
 	call_random(Interval),
-	{ok, #state{interval=Interval}}.
+	{ok, #state{interval=Interval, script_path=ScriptPath}}.
 
 terminate(_Reason, _State) ->
 	ok.
@@ -101,10 +106,10 @@ call_random(Interval) ->
 	WaitMS = WaitS * 1000,
 	timer:send_after(WaitMS, discover_now).
 
-discover_smb() ->
+discover_smb(ScriptPath) ->
 	{ok, ResultFN} = mydlp_api:mktempfile(),
 	Port = open_port({spawn_executable, "/bin/bash"}, 
-			[{args, ["/usr/bin/mydlp-smb-discover", ResultFN]},
+			[{args, [ScriptPath, ResultFN]},
 			use_stdio,
 			exit_status,
 			stderr_to_stdout]),
