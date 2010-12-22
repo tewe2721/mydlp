@@ -114,12 +114,10 @@ handle_call(_Msg, _From, State) ->
 
 % INSERT INTO log_incedent (id, rule_id, protocol, src_ip, destination, action, matcher, filename, misc)
 handle_cast({push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc}}, State) ->
-	erlang:display({bikbik, RuleId}),
 	spawn_link(fun() ->
 		{CustomerId, RuleId1} = case RuleId of
 			{dr, CId} -> {CId, 0};
 			RId when is_integer(RId) -> {get_rule_cid(RId), RId} end,
-		erlang:display({CustomerId, RuleId1}),
 		User1 = case User of
 			nil -> null;
 			Else -> Else
