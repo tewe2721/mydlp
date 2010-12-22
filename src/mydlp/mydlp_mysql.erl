@@ -114,10 +114,12 @@ handle_call(_Msg, _From, State) ->
 
 % INSERT INTO log_incedent (id, rule_id, protocol, src_ip, destination, action, matcher, filename, misc)
 handle_cast({push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc}}, State) ->
+	erlang:display({bikbik, RuleId}),
 	spawn_link(fun() ->
 		{CustomerId, RuleId1} = case RuleId of
 			{dr, CId} -> {CId, 0};
 			RId when is_integer(RId) -> {get_rule_cid(RId), RId} end,
+		erlang:display({CustomerId, RuleId1}),
 		User1 = case User of
 			nil -> null;
 			Else -> Else
@@ -193,7 +195,7 @@ init([]) ->
 		{filters, <<"SELECT id,name FROM sh_filter WHERE is_active=TRUE">>},
 		{filters_by_cid, <<"SELECT id,name FROM sh_filter WHERE is_active=TRUE and customer_id=?">>},
 		{rules_by_fid, <<"SELECT id,action FROM sh_rule WHERE is_nw_active=TRUE and filter_id=?">>},
-		{cid_of_rule_by_id, <<"SELECT customer_id FROM sh_rule WHERE id=?">>},
+		{cid_of_rule_by_id, <<"SELECT f.customer_id FROM sh_rule AS r, sh_filter AS f WHERE r.filter_id=f.id AND r.id=?">>},
 		{ipr_by_rule_id, <<"SELECT a.id,a.customer_id,a.base_ip,a.subnet FROM sh_ipr AS i, sh_ipaddress AS a WHERE i.parent_rule_id=? AND i.sh_ipaddress_id=a.id">>},
 		{user_by_rule_id, <<"SELECT eu.id, eu.username FROM sh_ad_entry_user AS eu, sh_ad_cross AS c, sh_ad_entry AS e, sh_ad_group AS g, sh_ad_rule_cross AS rc WHERE rc.parent_rule_id=? AND rc.group_id=g.id AND rc.group_id=c.group_id AND c.entry_id=e.id AND c.entry_id=eu.entry_id">>},
 		%{user_by_rule_id, <<"SELECT eu.id, eu.username FROM sh_ad_entry_user AS eu, sh_ad_cross AS c, sh_ad_rule_cross AS rc WHERE rc.parent_rule_id=? AND rc.group_id=c.group_id AND c.entry_id=eu.entry_id">>},
