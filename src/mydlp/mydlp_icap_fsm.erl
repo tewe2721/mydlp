@@ -337,8 +337,9 @@ get_body(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_impl
 
 % {Action, {{rule, Id}, {file, File}, {matcher, Func}, {misc, Misc}}}
 'REQ_OK'(#state{icap_request=#icap_request{method=options} } = State) -> 'REPLY_OK'(State);
-'REQ_OK'(#state{files=Files, addr=SAddr, http_content=HttpContent, icap_headers=#icap_headers{x_client_ip=CAddr} } = State) ->
-	case mydlp_acl:q(SAddr, CAddr, dest, df_to_files(list_to_binary(HttpContent), Files)) of
+'REQ_OK'(#state{files=Files, addr=SAddr, http_request=#http_request{path=Uri}, 
+		http_content=HttpContent, icap_headers=#icap_headers{x_client_ip=CAddr} } = State) ->
+	case mydlp_acl:q(SAddr, CAddr, dest, df_to_files(Uri, list_to_binary(HttpContent), Files)) of
 		pass -> 'REPLY_OK'(State);
 		{quarantine, AclR} -> log_req(State, quarantine, AclR),
 					mydlp_api:quarantine(Files),
@@ -545,12 +546,17 @@ parse_multipart(#state{http_content=HttpContent, http_headers=H, http_request=Re
 parse_urlencoded(#state{http_content=HttpContent}) ->
 	mydlp_api:uenc_to_file(list_to_binary(HttpContent)).
 
-df_to_files(Data, Files) ->
-        case length(Files) of
-                0 ->    DFile = #file{name= "post-data", data=Data},
-                        [DFile];
-                _ ->    Files
-        end.
+df_to_files(Uri, Data, Files) ->
+	UFile = case mydlp_api:uri_to_hr_file(Uri) of
+		none -> [];
+		F -> [F] end,
+
+	OFiles = case length(Files) of
+		0 ->    DFile = #file{name= "post-data", data=Data},
+			[DFile];
+		_ ->    Files end,
+
+	lists:append(UFile, OFiles).
 
 log_req(#state{icap_headers=#icap_headers{x_client_ip=Addr}, 
 		http_headers=(#http_headers{host=DestHost})}, Action, 

@@ -1100,6 +1100,14 @@ insert_line_feed_76(ShortLine, Acc) -> <<Acc/binary, ShortLine/binary>>.
 %%-------------------------------------------------------------------------
 
 uenc_to_file(Bin) ->
+	case parse_uenc_data(Bin) of
+		none -> [];
+		{ok, RData} when is_list(RData) -> 
+			[ #file{name="urlencoded-data",
+			data=list_to_binary(RData)} ] end.
+
+parse_uenc_data(Bin) when is_list(Bin) -> parse_uenc_data(list_to_binary(Bin));
+parse_uenc_data(Bin) when is_binary(Bin) ->
 	do_parse_spec(Bin, []).
 
 do_parse_spec(<<$%, Hi:8, Lo:8, Tail/binary>>, Cur) when Hi /= $u ->
@@ -1124,9 +1132,33 @@ do_parse_spec(<<$%, $u, A:8, B:8,C:8,D:8, Tail/binary>>, Cur) ->
 do_parse_spec(<<H:8, Tail/binary>>, Cur) ->
 	do_parse_spec(Tail, [H|Cur]);
 
-do_parse_spec(<<>>, Cur) ->
-	[#file{name="urlencoded-data", data=list_to_binary(lists:reverse(Cur))}];
+do_parse_spec(<<>>, Cur) -> {ok, lists:reverse(Cur)};
 
-do_parse_spec(undefined,_) -> [].
+do_parse_spec(undefined,_) -> none.
+
+parse_uenc_data1(D) ->
+	case parse_uenc_data(D) of 
+		none -> []; 
+		{ok, R} -> R end.
+
+uri_to_hr_str(Uri) when is_binary(Uri) -> uri_to_hr_str(binary_to_list(Uri));
+uri_to_hr_str(Uri) when is_list(Uri) ->
+	{_Path, QueryStr} = httpd_util:split_path(Uri),
+	case QueryStr of
+		[] -> [];
+		_Else -> Tokens = string:tokens(QueryStr, "?=;&"),
+			Cleans = lists:map(fun(I) -> parse_uenc_data1(I) end, Tokens),
+			string:join(Cleans, " ") end.
+
+uri_to_hr_file(Uri) ->
+	RData = uri_to_hr_str(Uri),
+	case RData of
+		[] -> none;
+		_Else -> #file{name="uri-data", data=list_to_binary([RData])} end.
+	
+
+
+
+
 
 
