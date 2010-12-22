@@ -256,12 +256,18 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 
-matches_any([R|RS], Data) ->
+matches_any(RS, Data) -> 
+	% Refine this. We need to convert unicode 304 char to $i .
+	UList = unicode:characters_to_list(Data),
+	RUList = lists:map(fun(I) -> case I of 304 -> $i; _ -> I end end, UList),
+	RData = unicode:characters_to_binary(RUList),
+	matches_any1(RS, RData).
+
+matches_any1([R|RS], Data) ->
 	case re:run(Data, R) of
 		{match, _Captured} -> true;
-		nomatch -> matches_any(RS, Data)
-	end;
-matches_any([], _Data) -> false.
+		nomatch -> matches_any1(RS, Data) end;
+matches_any1([], _Data) -> false.
 
 insert_all([{Key, Val}|Rest], Tree) -> insert_all(Rest, gb_trees:enter(Key, Val, Tree));
 insert_all([], Tree) -> Tree.
