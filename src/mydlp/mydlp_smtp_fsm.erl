@@ -144,7 +144,7 @@ init([]) ->
 	case mydlp_acl:qu(list_to_binary([MailFrom]), dest, Files) of
 		pass -> 'CONNECT_REMOTE'(connect, State);
 		{quarantine, AclR} -> log_req(State, quarantine, AclR),
-					mydlp_api:quarantine(Files),
+					%mydlp_api:quarantine(Files),
 					'BLOCK_REQ'(block, State);
 		{block, AclR} -> log_req(State, block, AclR),
 					'BLOCK_REQ'(block, State);

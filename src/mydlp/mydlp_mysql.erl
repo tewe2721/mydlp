@@ -36,6 +36,7 @@
 	compile_filters/0,
 	compile_customer/1,
 	push_log/9,
+	push_log/10,
 	push_smb_discover/1,
 	is_multisite/0,
 	stop/0]).
@@ -77,6 +78,9 @@ psq(PreparedKey, Params) when is_atom(PreparedKey), is_list(Params) ->
 push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc) ->
 	gen_server:cast(?MODULE, {push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc}}).
 
+push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, #file{} = File, Misc) ->
+	gen_server:cast(?MODULE, {push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, File, Misc}}).
+
 push_smb_discover(XMLResult) ->
 	gen_server:cast(?MODULE, {push_smb_discover, XMLResult}).
 
@@ -112,22 +116,35 @@ handle_call(stop, _From,  State) ->
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
+pre_push_log(RuleId, Ip, User) -> 
+	{CustomerId, RuleId1} = case RuleId of
+		{dr, CId} -> {CId, 0};
+		RId when is_integer(RId) -> {get_rule_cid(RId), RId} end,
+	User1 = case User of
+		nil -> null;
+		Else -> Else
+	end,
+	Ip1 = case ip_to_int(Ip) of
+		nil -> null;
+		Else2 -> Else2
+	end,
+	{CustomerId, RuleId1, Ip1, User1}.
+
 % INSERT INTO log_incedent (id, rule_id, protocol, src_ip, destination, action, matcher, filename, misc)
 handle_cast({push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc}}, State) ->
 	spawn_link(fun() ->
-		{CustomerId, RuleId1} = case RuleId of
-			{dr, CId} -> {CId, 0};
-			RId when is_integer(RId) -> {get_rule_cid(RId), RId} end,
-		User1 = case User of
-			nil -> null;
-			Else -> Else
-		end,
-		Ip1 = case ip_to_int(Ip) of
-			nil -> null;
-			Else2 -> Else2
-		end,
+		{CustomerId, RuleId1, Ip1, User1} = pre_push_log(RuleId, Ip, User),
 		psq(insert_incident, 
 			[CustomerId, RuleId1, Proto, Ip1, User1, To, Action, Matcher, FileS, Misc])
+	end),
+	{noreply, State};
+
+handle_cast({push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, File, Misc}}, State) ->
+	spawn_link(fun() ->
+		{ok, Path} = mydlp_api:quarantine(File),
+		{CustomerId, RuleId1, Ip1, User1} = pre_push_log(RuleId, Ip, User),
+		psq(insert_incident, [CustomerId, RuleId1, Proto, Ip1, User1, To, Action, Matcher, FileS, Misc]),
+		psq(insert_incident_file, [Path])
 	end),
 	{noreply, State};
 
@@ -210,6 +227,7 @@ init([]) ->
 		{dr_fhash_by_cid, <<"SELECT hash FROM sh_defaultrule_filehash WHERE customer_id=?">>},
 		{dr_wfhash_by_cid, <<"SELECT hash FROM sh_defaultrule_white_filehash WHERE customer_id=?">>},
 		{insert_incident, <<"INSERT INTO log_incedent (id, customer_id, rule_id, protocol, src_ip, src_user, destination, action, matcher, filename, misc) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)">>},
+		{insert_incident_file, <<"INSERT INTO log_incedent_file (id, log_incedent_id, path) VALUES (NULL, last_insert_id(), ?)">>},
 		{delete_all_smb_discover, <<"DELETE FROM log_shared_folder">>},
 		{insert_smb_discover, <<"INSERT INTO log_shared_folder (id, customer_id, result) VALUES (NULL, ?, ?)">>}
 	]],

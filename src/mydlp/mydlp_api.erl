@@ -658,9 +658,12 @@ acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, File, Misc) ->
 	acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
 
 	case Action of
-		log -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
-		block -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
-		quarantine -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
+		%log -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
+		%block -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
+		%quarantine -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
+		log -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, File, Misc);
+		block -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, File, Misc);
+		quarantine -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, File, Misc);
 		_Else -> ok
 	end.
 
@@ -1069,13 +1072,7 @@ quarantine(#file{} = File) ->
 	case filelib:is_file(Path) of
 		true -> ok;
 		false -> file:write_file(Path, File#file.data, [raw]) end,
-	ok;
-quarantine([File|Files]) ->
-	quarantine(File),
-	quarantine(Files);
-quarantine([]) -> ok.
-	
-
+	{ok, Path}.
 
 %%-------------------------------------------------------------------------
 %% @doc Return denied page for different formats

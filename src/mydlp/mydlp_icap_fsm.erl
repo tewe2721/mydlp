@@ -342,7 +342,7 @@ get_body(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_impl
 	case mydlp_acl:q(SAddr, CAddr, dest, df_to_files(Uri, list_to_binary(HttpContent), Files)) of
 		pass -> 'REPLY_OK'(State);
 		{quarantine, AclR} -> log_req(State, quarantine, AclR),
-					mydlp_api:quarantine(Files),
+					%mydlp_api:quarantine(Files),
 					'BLOCK_REQ'(block, State);
 		{block, AclR} -> log_req(State, block, AclR),
 					'BLOCK_REQ'(block, State);
