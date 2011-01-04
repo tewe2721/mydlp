@@ -1,1 +1,2 @@
 mydlp-sql-1.patch: 0.5.2.dev-15 -> 0.5.2.dev-16
+mydlp-sql-2.patch: 0.5.2.dev-18 -> 0.5.2.dev-19
