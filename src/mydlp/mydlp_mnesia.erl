@@ -42,6 +42,7 @@
 	get_dcid/0,
 	get_drid/0,
 	get_rules/1,
+	get_all_rules/0,
 	get_rules_for_cid/2,
 	get_rules_by_user/1,
 	get_regexes/1,
@@ -150,6 +151,8 @@ get_drid() -> 0.
 
 get_rules(Who) -> async_query_call({get_rules, Who}).
 
+get_all_rules() -> async_query_call(get_all_rules).
+
 get_rules_for_cid(CustomerId, Who) -> async_query_call({get_rules_for_cid, CustomerId, Who}).
 
 get_rules_by_user(Who) -> async_query_call({get_rules_by_user, Who}).
@@ -237,6 +240,13 @@ handle_query({get_rules, Who}) ->
 	Q = qlc:q([I#ipr.parent || I <- mnesia:table(ipr),
 			ip_band(I#ipr.ipbase, I#ipr.ipmask) == ip_band(Who, I#ipr.ipmask)
 			]),
+	Parents = qlc:e(Q),
+	Parents1 = lists:usort(Parents),
+	Rules = resolve_rules(Parents1),
+	resolve_funcs(Rules);
+
+handle_query(get_all_rules) ->
+	Q = qlc:q([{rule, R#rule.id} || R <- mnesia:table(rule)]),
 	Parents = qlc:e(Q),
 	Parents1 = lists:usort(Parents),
 	Rules = resolve_rules(Parents1),

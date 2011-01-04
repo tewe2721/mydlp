@@ -658,12 +658,10 @@ acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, File, Misc) ->
 	acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
 
 	case Action of
-		%log -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
-		%block -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
-		%quarantine -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
-		log -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, File, Misc);
-		block -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, File, Misc);
-		quarantine -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, File, Misc);
+		{log, {cc,false} } -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
+		{block, {cc,false} } -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
+		{log, {cc,true} } -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, File, Misc);
+		{block, {cc,true} } -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, File, Misc);
 		_Else -> ok
 	end.
 

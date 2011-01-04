@@ -49,6 +49,7 @@
 	socket      = [],
 	addr        = [],
 	relay       = false,
+	enable_for_all = false,
 	options     = [],
 	buff        = <<>>,
 	line        = [],

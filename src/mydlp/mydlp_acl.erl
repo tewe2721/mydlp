@@ -34,6 +34,7 @@
 -export([start_link/0,
 	q/4,
 	qu/3,
+	qa/2,
 	stop/0]).
 
 %% gen_server callbacks
@@ -55,6 +56,9 @@ q(Site, Addr, _Dest, Files) ->
 
 qu(User, _Dest, Files) ->
 	gen_server:call(?MODULE, {acl_qu, site, {User, Files}}, 60000).
+
+qa(_Dest, Files) ->
+	gen_server:call(?MODULE, {acl_qa, site, {Files}}, 60000).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -94,6 +98,15 @@ handle_call({acl_qu, _Site, {User, Files}}, From, State) ->
 	spawn_link(fun() ->
 		Rules = mydlp_mnesia:get_rules_by_user(User),
 		Result = acl_exec(Rules, [{cid, mydlp_mnesia:get_dcid()}, {user, User}], Files),
+		Worker ! {async_acl_q, Result, From}
+	end),
+	{noreply, State, 60000};
+
+handle_call({acl_qa, _Site, {Files}}, From, State) ->
+	Worker = self(),
+	spawn_link(fun() ->
+		Rules = mydlp_mnesia:get_all_rules(),
+		Result = acl_exec(Rules, [{cid, mydlp_mnesia:get_dcid()}], Files),
 		Worker ! {async_acl_q, Result, From}
 	end),
 	{noreply, State, 60000};

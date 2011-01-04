@@ -59,7 +59,7 @@
 %%%------------------------------------------------------------------------
 
 start_link() ->
-    gen_fsm:start_link(?MODULE, [], []).
+	gen_fsm:start_link(?MODULE, [], []).
 
 %%%------------------------------------------------------------------------
 %%% Callback functions from gen_server
@@ -74,8 +74,14 @@ start_link() ->
 %% @private
 %%-------------------------------------------------------------------------
 init([]) ->
-    process_flag(trap_exit, true),
-    {ok, 'WAIT_FOR_SOCKET', #smtpd_fsm{}}.
+	process_flag(trap_exit, true),
+	ConfList = case application:get_env(smtp) of
+		{ok, CL} -> CL;
+		_Else -> ?SMTP
+	end,
+
+	{enable_for_all, EFA} = lists:keyfind(enable_for_all, 1, ConfList),
+	{ok, 'WAIT_FOR_SOCKET', #smtpd_fsm{enable_for_all=EFA}}.
 
 %%-------------------------------------------------------------------------
 %% Func: StateName/2
@@ -140,7 +146,20 @@ init([]) ->
 
 
 % {Action, {{rule, Id}, {file, File}, {matcher, Func}, {misc, Misc}}}
-'REQ_OK'(#smtpd_fsm{files=Files, message_record=#message{mail_from=MailFrom}} = State) ->
+'REQ_OK'(#smtpd_fsm{enable_for_all=true, files=Files} = State) ->
+	case mydlp_acl:qa(dest, Files) of
+		pass -> 'CONNECT_REMOTE'(connect, State);
+		{quarantine, AclR} -> log_req(State, quarantine, AclR),
+					%mydlp_api:quarantine(Files),
+					'BLOCK_REQ'(block, State);
+		{block, AclR} -> log_req(State, block, AclR),
+					'BLOCK_REQ'(block, State);
+		{log, AclR} -> log_req(State, log, AclR),
+					'CONNECT_REMOTE'(connect, State);
+		{pass, AclR} -> log_req(State, pass, AclR),
+					'CONNECT_REMOTE'(connect, State)
+	end;
+'REQ_OK'(#smtpd_fsm{enable_for_all=false, files=Files, message_record=#message{mail_from=MailFrom}} = State) ->
 	case mydlp_acl:qu(list_to_binary([MailFrom]), dest, Files) of
 		pass -> 'CONNECT_REMOTE'(connect, State);
 		{quarantine, AclR} -> log_req(State, quarantine, AclR),

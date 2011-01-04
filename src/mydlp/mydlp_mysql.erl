@@ -201,7 +201,7 @@ init([]) ->
 	[ mysql:prepare(Key, Query) || {Key, Query} <- [
 		{filters, <<"SELECT id,name FROM sh_filter WHERE is_active=TRUE">>},
 		{filters_by_cid, <<"SELECT id,name FROM sh_filter WHERE is_active=TRUE and customer_id=?">>},
-		{rules_by_fid, <<"SELECT id,action FROM sh_rule WHERE is_nw_active=TRUE and filter_id=?">>},
+		{rules_by_fid, <<"SELECT id,action,keep_carbon_copy FROM sh_rule WHERE is_nw_active=TRUE and filter_id=?">>},
 		{cid_of_rule_by_id, <<"SELECT f.customer_id FROM sh_rule AS r, sh_filter AS f WHERE r.filter_id=f.id AND r.id=?">>},
 		{ipr_by_rule_id, <<"SELECT a.id,a.customer_id,a.base_ip,a.subnet FROM sh_ipr AS i, sh_ipaddress AS a WHERE i.parent_rule_id=? AND i.sh_ipaddress_id=a.id">>},
 		{user_by_rule_id, <<"SELECT eu.id, eu.username FROM sh_ad_entry_user AS eu, sh_ad_cross AS c, sh_ad_entry AS e, sh_ad_group AS g, sh_ad_rule_cross AS rc WHERE rc.parent_rule_id=? AND rc.group_id=g.id AND rc.group_id=c.group_id AND c.entry_id=e.id AND c.entry_id=eu.entry_id">>},
@@ -215,7 +215,7 @@ init([]) ->
 		{regexes_by_cid, <<"SELECT r.id, c.group_id, r.regex FROM sh_regex_cross AS c, sh_regex r WHERE c.regex_id=r.id and r.customer_id=?">>},
 		{customer_by_id, <<"SELECT id,static_ip FROM sh_customer WHERE id=?">>},
 		{app_type, <<"SELECT type FROM app_type">>},
-		{defaultrule_by_cid, <<"SELECT action, cc_count, ssn_count, iban_count, canada_sin_count, france_insee_count, uk_nino_count, tr_tck_count FROM sh_defaultrule_predefined WHERE enabled <> 0 and customer_id=?">>},
+		{defaultrule_by_cid, <<"SELECT action, keep_carbon_copy, cc_count, ssn_count, iban_count, canada_sin_count, france_insee_count, uk_nino_count, tr_tck_count FROM sh_defaultrule_predefined WHERE enabled <> 0 and customer_id=?">>},
 		{dr_fhash_by_cid, <<"SELECT hash FROM sh_defaultrule_filehash WHERE customer_id=?">>},
 		{dr_wfhash_by_cid, <<"SELECT hash FROM sh_defaultrule_white_filehash WHERE customer_id=?">>},
 		{insert_incident, <<"INSERT INTO log_incedent (id, customer_id, rule_id, protocol, src_ip, src_user, destination, action, matcher, filename, misc) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)">>},
@@ -294,13 +294,12 @@ populate_filters([[Id, Name]|Rows], CustomerId) ->
 	populate_filters(Rows, CustomerId);
 populate_filters([], _CustomerId) -> ok.
 
-
 % Id, Action, [Matchers]	
 % {Func, FuncParams}
 populate_default_rule([], _CustomerId) -> ok;
-populate_default_rule([[ActionS, CCCount, SSNCount, IBANCount, SINCount, INSEECount, NINOCount, TRIDCount]], CustomerId) ->
+populate_default_rule([[ActionS, CC, CCCount, SSNCount, IBANCount, SINCount, INSEECount, NINOCount, TRIDCount]], CustomerId) ->
 	DefaultRuleId = {dr, CustomerId},
-	Action = case ActionS of <<"log">> -> log; <<"block">> -> block end,
+	Action = rule_action_to_tuple(ActionS, CC),
 
 	WFMatch = [{whitefile_dr, []}],
 	CCMatch = case CCCount of
@@ -340,18 +339,12 @@ populate_default_rule([[ActionS, CCCount, SSNCount, IBANCount, SINCount, INSEECo
 	DR = #default_rule{customer_id=CustomerId, resolved_rule=ResolvedRule},
 	mydlp_mnesia:write(DR).
 
-
-populate_rules([[Id, <<"quarantine">>]|Rows], FilterId) ->
-	populate_rule(Id, quarantine, FilterId),
-	populate_rules(Rows, FilterId);
-populate_rules([[Id, <<"block">>]|Rows], FilterId) ->
-	populate_rule(Id, block, FilterId),
-	populate_rules(Rows, FilterId);
-populate_rules([[Id, <<"log">>]|Rows], FilterId) ->
-	populate_rule(Id, log, FilterId),
-	populate_rules(Rows, FilterId);
-populate_rules([[Id, <<"pass">>]|Rows], FilterId) ->
+populate_rules([[Id, <<"pass">>, _CC] |Rows], FilterId) ->
 	populate_rule(Id, pass, FilterId),
+	populate_rules(Rows, FilterId);
+populate_rules([[Id, ActionS, CC ] |Rows], FilterId) ->
+	Action = rule_action_to_tuple(ActionS, CC),
+	populate_rule(Id, Action, FilterId),
 	populate_rules(Rows, FilterId);
 populate_rules([], _FilterId) -> ok.
 
@@ -548,3 +541,11 @@ get_rule_cid(RuleId) ->
 	case psq(cid_of_rule_by_id, [RuleId]) of
 		{ok, [[CustomerId]]} -> CustomerId;
 		_Else -> 0 end.
+
+rule_action_to_tuple(ActionS, CC) ->
+	case {ActionS, CC} of 
+		{<<"log">>, 1} -> {log, {cc,true}}; 
+		{<<"log">>, 0} -> {log, {cc,false}}; 
+		{<<"block">>, 1} -> {block, {cc,true}}; 
+		{<<"block">>, 0} -> {block, {cc,false}} end.
+
