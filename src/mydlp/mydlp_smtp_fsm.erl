@@ -149,12 +149,9 @@ init([]) ->
 'REQ_OK'(#smtpd_fsm{enable_for_all=true, files=Files} = State) ->
 	case mydlp_acl:qa(dest, Files) of
 		pass -> 'CONNECT_REMOTE'(connect, State);
-		{quarantine, AclR} -> log_req(State, quarantine, AclR),
-					%mydlp_api:quarantine(Files),
+		{Block = {block, _ }, AclR} -> log_req(State, Block, AclR),
 					'BLOCK_REQ'(block, State);
-		{block, AclR} -> log_req(State, block, AclR),
-					'BLOCK_REQ'(block, State);
-		{log, AclR} -> log_req(State, log, AclR),
+		{Log = {log, _ }, AclR} -> log_req(State, Log, AclR),
 					'CONNECT_REMOTE'(connect, State);
 		{pass, AclR} -> log_req(State, pass, AclR),
 					'CONNECT_REMOTE'(connect, State)
@@ -162,12 +159,9 @@ init([]) ->
 'REQ_OK'(#smtpd_fsm{enable_for_all=false, files=Files, message_record=#message{mail_from=MailFrom}} = State) ->
 	case mydlp_acl:qu(list_to_binary([MailFrom]), dest, Files) of
 		pass -> 'CONNECT_REMOTE'(connect, State);
-		{quarantine, AclR} -> log_req(State, quarantine, AclR),
-					%mydlp_api:quarantine(Files),
+		{Block = {block, _ }, AclR} -> log_req(State, Block, AclR),
 					'BLOCK_REQ'(block, State);
-		{block, AclR} -> log_req(State, block, AclR),
-					'BLOCK_REQ'(block, State);
-		{log, AclR} -> log_req(State, log, AclR),
+		{Log = {log, _ }, AclR} -> log_req(State, Log, AclR),
 					'CONNECT_REMOTE'(connect, State);
 		{pass, AclR} -> log_req(State, pass, AclR),
 					'CONNECT_REMOTE'(connect, State)
