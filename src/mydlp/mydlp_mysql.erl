@@ -106,7 +106,7 @@ handle_call(stop, _From,  State) ->
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-pre_push_log(RuleId, Ip, User) -> 
+pre_push_log(RuleId, Action, Ip, User) -> 
 	{CustomerId, RuleId1} = case RuleId of
 		{dr, CId} -> {CId, 0};
 		RId when is_integer(RId) -> {get_rule_cid(RId), RId} end,
@@ -118,23 +118,29 @@ pre_push_log(RuleId, Ip, User) ->
 		nil -> null;
 		Else2 -> Else2
 	end,
-	{CustomerId, RuleId1, Ip1, User1}.
+	Action1 = case Action of
+                {block, _} -> block;
+                {log, _} -> log;
+                block -> block;
+                pass -> pass;
+                log -> log end,
+	{CustomerId, RuleId1, Action1, Ip1, User1}.
 
 % INSERT INTO log_incedent (id, rule_id, protocol, src_ip, destination, action, matcher, filename, misc)
 handle_cast({push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc}}, State) ->
 	spawn_link(fun() ->
-		{CustomerId, RuleId1, Ip1, User1} = pre_push_log(RuleId, Ip, User),
+		{CustomerId, RuleId1, Action1, Ip1, User1} = pre_push_log(RuleId, Action, Ip, User),
 		psq(insert_incident, 
-			[CustomerId, RuleId1, Proto, Ip1, User1, To, Action, Matcher, FileS, Misc])
+			[CustomerId, RuleId1, Proto, Ip1, User1, To, Action1, Matcher, FileS, Misc])
 	end),
 	{noreply, State};
 
 handle_cast({push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, File, Misc}}, State) ->
 	spawn_link(fun() ->
 		{ok, Path} = mydlp_api:quarantine(File),
-		{CustomerId, RuleId1, Ip1, User1} = pre_push_log(RuleId, Ip, User),
+		{CustomerId, RuleId1, Action1, Ip1, User1} = pre_push_log(RuleId, Action, Ip, User),
 		transaction( fun() ->
-			psqt(insert_incident, [CustomerId, RuleId1, Proto, Ip1, User1, To, Action, Matcher, FileS, Misc]),
+			psqt(insert_incident, [CustomerId, RuleId1, Proto, Ip1, User1, To, Action1, Matcher, FileS, Misc]),
 			psqt(insert_incident_file, [Path]) end)
 	end),
 	{noreply, State};
