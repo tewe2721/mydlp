@@ -32,6 +32,7 @@
 -record(rule, {
 	id,
 	filter_id,
+	trusted_domains=[],
 	action
 }).
 

@@ -57,8 +57,8 @@ q(Site, Addr, _Dest, Files) ->
 qu(User, _Dest, Files) ->
 	gen_server:call(?MODULE, {acl_qu, site, {User, Files}}, 60000).
 
-qa(_Dest, Files) ->
-	gen_server:call(?MODULE, {acl_qa, site, {Files}}, 60000).
+qa(Dest, Files) ->
+	gen_server:call(?MODULE, {acl_qa, site, {Dest, Files}}, 60000).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -69,6 +69,7 @@ acl_exec(Rules, Source, Files) ->
 	DRules = mydlp_mnesia:get_default_rule(CustomerId),
 	apply_rules(lists:append(DRules, Rules), Param).
 
+%% it needs refactoring for trusted domains
 handle_call({acl_q, SAddr, {Addr, Files}}, From, #state{is_multisite=true} = State) ->
 	Worker = self(),
 	spawn_link(fun() ->
@@ -93,6 +94,7 @@ handle_call({acl_q, _Site, {Addr, Files}}, From, #state{is_multisite=false} = St
 	{noreply, State, 60000};
 
 %% now this is used for only SMTP, and in SMTP domain part of, mail adresses itself a siteid for customer.
+%% it needs refactoring for both multisite and trusted domains
 handle_call({acl_qu, _Site, {User, Files}}, From, State) ->
 	Worker = self(),
 	spawn_link(fun() ->
@@ -102,10 +104,10 @@ handle_call({acl_qu, _Site, {User, Files}}, From, State) ->
 	end),
 	{noreply, State, 60000};
 
-handle_call({acl_qa, _Site, {Files}}, From, State) ->
+handle_call({acl_qa, _Site, {Dest, Files}}, From, State) ->
 	Worker = self(),
 	spawn_link(fun() ->
-		Rules = mydlp_mnesia:get_all_rules(),
+		Rules = mydlp_mnesia:get_all_rules(Dest),
 		Result = acl_exec(Rules, [{cid, mydlp_mnesia:get_dcid()}], Files),
 		Worker ! {async_acl_q, Result, From}
 	end),

@@ -208,6 +208,7 @@ init([]) ->
 		{filters, <<"SELECT id,name FROM sh_filter WHERE is_active=TRUE">>},
 		{filters_by_cid, <<"SELECT id,name FROM sh_filter WHERE is_active=TRUE and customer_id=?">>},
 		{rules_by_fid, <<"SELECT id,action,keep_carbon_copy FROM sh_rule WHERE is_nw_active=TRUE and filter_id=?">>},
+		{tdomains_by_rid, <<"SELECT domain_name FROM nw_rule_white_domain WHERE rule_id=?">>},
 		{cid_of_rule_by_id, <<"SELECT f.customer_id FROM sh_rule AS r, sh_filter AS f WHERE r.filter_id=f.id AND r.id=?">>},
 		{ipr_by_rule_id, <<"SELECT a.id,a.customer_id,a.base_ip,a.subnet FROM sh_ipr AS i, sh_ipaddress AS a WHERE i.parent_rule_id=? AND i.sh_ipaddress_id=a.id">>},
 		{user_by_rule_id, <<"SELECT eu.id, eu.username FROM sh_ad_entry_user AS eu, sh_ad_cross AS c, sh_ad_entry AS e, sh_ad_group AS g, sh_ad_rule_cross AS rc WHERE rc.parent_rule_id=? AND rc.group_id=g.id AND rc.group_id=c.group_id AND c.entry_id=e.id AND c.entry_id=eu.entry_id">>},
@@ -364,7 +365,9 @@ populate_rule(Id, Action, FilterId) ->
 	populate_matches(MQ, Parent),
 	%{ok, MGQ} = psq(mgroup_by_rule_id, [Id]),
 	%populate_matchGroups(MGQ, Parent),
-	R = #rule{id=Id, action=Action, filter_id=FilterId},
+	{ok, TDQ} = psq(tdomains_by_rid, [Id]),
+	TDs = lists:flatten(TDQ),
+	R = #rule{id=Id, action=Action, filter_id=FilterId, trusted_domains=TDs},
 	mydlp_mnesia:write(R).
 
 populate_iprs([[Id, CustomerId, Base, Subnet]| Rows], Parent) ->

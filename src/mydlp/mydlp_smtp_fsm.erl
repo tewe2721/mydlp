@@ -148,8 +148,8 @@ init([]) ->
 
 
 % {Action, {{rule, Id}, {file, File}, {matcher, Func}, {misc, Misc}}}
-'REQ_OK'(#smtpd_fsm{enable_for_all=true, files=Files} = State) ->
-	case mydlp_acl:qa(dest, Files) of
+'REQ_OK'(#smtpd_fsm{enable_for_all=true, files=Files, message_record=MessageR} = State) ->
+	case mydlp_acl:qa(get_dest_domains(MessageR), Files) of
 		pass -> 'CONNECT_REMOTE'(connect, State);
 		{Block = {block, _ }, AclR} -> log_req(State, Block, AclR),
 					'BLOCK_REQ'(block, State);
@@ -158,8 +158,9 @@ init([]) ->
 		{pass, AclR} -> log_req(State, pass, AclR),
 					'CONNECT_REMOTE'(connect, State)
 	end;
-'REQ_OK'(#smtpd_fsm{enable_for_all=false, files=Files, message_record=#message{mail_from=MailFrom}} = State) ->
-	case mydlp_acl:qu(list_to_binary([MailFrom]), dest, Files) of
+'REQ_OK'(#smtpd_fsm{enable_for_all=false, files=Files, 
+		message_record=(#message{mail_from=MailFrom} = MessageR)} = State) ->
+	case mydlp_acl:qu(list_to_binary([MailFrom]), get_dest_domains(MessageR), Files) of
 		pass -> 'CONNECT_REMOTE'(connect, State);
 		{Block = {block, _ }, AclR} -> log_req(State, Block, AclR),
 					'BLOCK_REQ'(block, State);
@@ -372,6 +373,12 @@ log_req(#smtpd_fsm{message_record=MessageR}, Action,
 			["bcc: <" ++ A#addr.username ++ "@" ++ A#addr.domainname ++ ">"|| A <- MessageR#message.bcc],
 	Dest = string:join(DestList, ", "),
         ?ACL_LOG(smtp, RuleId, Action, nil, Src, Dest, Matcher, File, Misc).
+
+get_dest_domains(#message{rcpt_to=RcptTo, to=ToH, cc=CCH, bcc=BCCH})->
+	RcptToA = lists:map(fun(S) -> mime_util:dec_addr(S) end, RcptTo),
+	DestList = RcptToA ++ ToH ++ CCH ++ BCCH,
+	Domains = [list_to_binary(A#addr.domainname) || A <- DestList],
+	lists:usort(Domains).
 
 -include_lib("eunit/include/eunit.hrl").
 
