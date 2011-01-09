@@ -155,7 +155,8 @@ split(Part) when is_binary(Part) ->
 	case re:run(Part, ?D_CRLF_BIN, [{capture,first}]) of
 		nomatch ->
 			case re:run(Part, <<"\n\n">>, [{capture,first}]) of
-				nomatch -> {error,no_break_found};
+				%nomatch -> {error,no_break_found};
+				nomatch -> #mime{header_text= <<>>, body_text = Part};
 				{match,[{Pos,2}]} -> 
 					HeaderSize = Pos + 2,
 					<<Header:HeaderSize/binary, Body/binary>> = Part,
