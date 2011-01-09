@@ -593,40 +593,17 @@ unrar(Bin) when is_binary(Bin) ->
 	Ret.
 
 %%--------------------------------------------------------------------
-%% @doc bunzips an Erlang binary 
+%% @doc Un7zs an Erlang binary, this can be used for ZIP, CAB, ARJ, GZIP, BZIP2, TAR, CPIO, RPM and DEB formats.
 %% @end
 %%----------------------------------------------------------------------
 
-bunzip2(Bin) when is_binary(Bin) -> 
-	{ok, BzFN} = mktempfile(),
-	BunzFN = BzFN ++ ".out",
-	ok = file:write_file(BzFN, Bin, [raw]),
-	Port = open_port({spawn_executable, "/bin/bunzip2"}, 
-			[{args, ["-qdk",BzFN]},
-			use_stdio,
-			exit_status,
-			stderr_to_stdout]),
-	
-	Ret = case get_port_resp(Port) of
-		ok -> 	{ok, BUData} = file:read_file(BunzFN),
-			ok = file:delete(BunzFN),
-			{ok, BUData};
-		Else -> Else end,
-	ok = file:delete(BzFN),
-	Ret.
-
-%%--------------------------------------------------------------------
-%% @doc Untars an Erlang binary 
-%% @end
-%%----------------------------------------------------------------------
-
-untar(Bin) when is_binary(Bin) -> 
-	{ok, TarFN} = mktempfile(),
-	ok = file:write_file(TarFN, Bin, [raw]),
+un7z(Bin) when is_binary(Bin) -> 
+	{ok, ZFN} = mktempfile(),
+	ok = file:write_file(ZFN, Bin, [raw]),
 	{ok, WorkDir} = mktempdir(),
 	WorkDir1 = WorkDir ++ "/",
-	Port = open_port({spawn_executable, "/bin/tar"}, 
-			[{args, ["-C",WorkDir1,"-xf",TarFN]},
+	Port = open_port({spawn_executable, "/usr/bin/7z"}, 
+			[{args, ["-p","-y","-bd","-o" ++ WorkDir1,"x",ZFN]},
 			use_stdio,
 			exit_status,
 			stderr_to_stdout]),
@@ -634,53 +611,7 @@ untar(Bin) when is_binary(Bin) ->
 	Ret = case get_port_resp(Port) of
 		ok -> {ok, rr_files(WorkDir1)};
 		Else -> rmrf_dir(WorkDir1), Else end,
-	ok = file:delete(TarFN),
-	Ret.
-
-%%--------------------------------------------------------------------
-%% @doc Unars an Erlang binary 
-%% @end
-%%----------------------------------------------------------------------
-
-unar(Bin) when is_binary(Bin) -> 
-	{ok, ArFN} = mktempfile(),
-	ok = file:write_file(ArFN, Bin, [raw]),
-	{ok, WorkDir} = mktempdir(),
-	WorkDir1 = WorkDir ++ "/",
-	Port = open_port({spawn_executable, "/usr/bin/ar"}, 
-			[{args, ["x",ArFN]},
-			{cd, WorkDir1},
-			use_stdio,
-			exit_status,
-			stderr_to_stdout]),
-
-	Ret = case get_port_resp(Port) of
-		ok -> {ok, rr_files(WorkDir1)};
-		Else -> rmrf_dir(WorkDir1), Else end,
-	ok = file:delete(ArFN),
-	Ret.
-
-%%--------------------------------------------------------------------
-%% @doc Uncpios an Erlang binary 
-%% @end
-%%----------------------------------------------------------------------
-
-uncpio(Bin) when is_binary(Bin) -> 
-	{ok, CpioFN} = mktempfile(),
-	ok = file:write_file(CpioFN, Bin, [raw]),
-	{ok, WorkDir} = mktempdir(),
-	WorkDir1 = WorkDir ++ "/",
-	Port = open_port({spawn_executable, "/bin/cpio"}, 
-			[{args, ["--quiet","-id","-F",CpioFN]},
-			{cd, WorkDir1},
-			use_stdio,
-			exit_status,
-			stderr_to_stdout]),
-
-	Ret = case get_port_resp(Port) of
-		ok -> {ok, rr_files(WorkDir1)};
-		Else -> rmrf_dir(WorkDir1), Else end,
-	ok = file:delete(CpioFN),
+	ok = file:delete(ZFN),
 	Ret.
 
 %%--------------------------------------------------------------------
@@ -883,52 +814,61 @@ comp_to_files([#file{mime_type= <<"application/x-rar">>, is_encrypted=false} = F
 		{error, _ShouldBeLogged} -> 
 			comp_to_files(Files, [File#file{is_encrypted=true}|Returns])
 	end;
-comp_to_files([#file{mime_type= <<"application/x-tar">>, is_encrypted=false} = File|Files], Returns) -> 
-	case untar(File#file.data) of
-		{ok, Ext} -> 
-			ExtFiles = ext_to_file(Ext),
-			comp_to_files(Files, [df_to_files(ExtFiles)|Returns]);
-		{error, _ShouldBeLogged} -> 
-			comp_to_files(Files, [File#file{is_encrypted=true}|Returns])
-	end;
-comp_to_files([#file{mime_type= <<"application/x-gzip">>, is_encrypted=false} = File|Files], Returns) -> 
-	try 
-		GUData = zlib:gunzip(File#file.data),
-		ExtFiles = ext_to_file([{File#file.filename, GUData}]),
-		comp_to_files(Files, [df_to_files(ExtFiles)|Returns])
-	catch _:_Ex ->
-		comp_to_files(Files, [File#file{is_encrypted=true}|Returns])
-	end;
-comp_to_files([#file{mime_type= <<"application/x-bzip2">>, is_encrypted=false} = File|Files], Returns) -> 
-	case bunzip2(File#file.data) of
-		{ok, BUData} -> 
-			ExtFiles = ext_to_file([{File#file.filename, BUData}]),
-			comp_to_files(Files, [df_to_files(ExtFiles)|Returns]);
-		{error, _ShouldBeLogged} -> 
-			comp_to_files(Files, [File#file{is_encrypted=true}|Returns])
-	end;
-comp_to_files([#file{mime_type= <<"application/x-archive">>, is_encrypted=false} = File|Files], Returns) -> 
-	case unar(File#file.data) of
-		{ok, Ext} -> 
-			ExtFiles = ext_to_file(Ext),
-			comp_to_files(Files, [df_to_files(ExtFiles)|Returns]);
-		{error, _ShouldBeLogged} -> 
-			comp_to_files(Files, [File#file{is_encrypted=true}|Returns])
-	end;
+comp_to_files([#file{mime_type= <<"application/x-tar">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
+comp_to_files([#file{mime_type= <<"application/x-gzip">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
+	%try 
+	%	GUData = zlib:gunzip(File#file.data),
+	%	ExtFiles = ext_to_file([{File#file.filename, GUData}]),
+	%	comp_to_files(Files, [df_to_files(ExtFiles)|Returns])
+	%catch _:_Ex ->
+	%	comp_to_files(Files, [File#file{is_encrypted=true}|Returns])
+	%end;
+comp_to_files([#file{mime_type= <<"application/x-bzip2">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
+comp_to_files([#file{mime_type= <<"application/x-gtar">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
+comp_to_files([#file{mime_type= <<"application/x-archive">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
+comp_to_files([#file{mime_type= <<"application/x-rpm">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
+comp_to_files([#file{mime_type= <<"application/x-arj">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
+comp_to_files([#file{mime_type= <<"application/arj">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
+comp_to_files([#file{mime_type= <<"application/x-7z-compressed">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
+comp_to_files([#file{mime_type= <<"application/x-7z">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
+comp_to_files([#file{mime_type= <<"application/x-compress">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
+comp_to_files([#file{mime_type= <<"application/x-compressed">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
+comp_to_files([#file{mime_type= <<"application/x-iso9660-image">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
+comp_to_files([#file{mime_type= <<"application/x-lzop">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
+comp_to_files([#file{mime_type= <<"application/x-lzip">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
+comp_to_files([#file{mime_type= <<"application/x-lzma">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
+comp_to_files([#file{mime_type= <<"application/x-xz">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
+comp_to_files([#file{mime_type= <<"application/x-winzip">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
+comp_to_files([#file{mime_type= <<"application/vnd.ms-cab-compressed">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
 comp_to_files([#file{mime_type= <<"application/vnd.oasis.opendocument.text">>}|_] = Files, Returns) -> % Needs refinement for better ODF handling
 	try_unzip(Files, Returns);
 comp_to_files([#file{mime_type= <<"application/octet-stream">>}|_] = Files, Returns) -> % Needs refinement for better ODF handling
-	try_unzip(Files, Returns);
+	%try_unzip(Files, Returns);
+	try_un7z(Files, Returns);
 comp_to_files([File|Files], Returns) -> comp_to_files(Files, [File|Returns]);
 comp_to_files([], Returns) -> lists:reverse(Returns).
+
+use_un7z([File|Files], Returns) ->
+	case un7z(File#file.data) of
+		{ok, Ext} -> 
+			ExtFiles = ext_to_file(Ext),
+			comp_to_files(Files, [df_to_files(ExtFiles)|Returns]);
+		{error, _ShouldBeLogged} -> 
+			comp_to_files(Files, [File#file{is_encrypted=true}|Returns]) end.
 
 try_unzip([File|Files], Returns) ->
 	case zip:extract(File#file.data, [memory]) of
 		{ok, Ext} -> 
 			ExtFiles = ext_to_file(Ext),
 			comp_to_files(Files, [df_to_files(ExtFiles)|Returns]);
-		{error, _ShouldBeLogged} -> comp_to_files(Files, [File|Returns])
-	end.
+		{error, _ShouldBeLogged} -> comp_to_files(Files, [File|Returns]) end.
+
+try_un7z([File|Files], Returns) ->
+	case un7z(File#file.data) of
+		{ok, Ext} -> 
+			ExtFiles = ext_to_file(Ext),
+			comp_to_files(Files, [df_to_files(ExtFiles)|Returns]);
+		{error, _ShouldBeLogged} -> comp_to_files(Files, [File|Returns]) end.
 
 ext_to_file(Ext) ->
 	[#file{name= "extracted file", 
