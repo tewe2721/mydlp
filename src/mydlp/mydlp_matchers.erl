@@ -237,16 +237,23 @@ e_archive_match() -> analyzed.
 
 e_archive_match(_, {_Addr, Files}) -> e_archive_match(Files).
 
-e_archive_match([#file{mime_type= <<"application/zip">>, is_encrypted=true} = File|_Files]) -> {pos, {file, File}};
-e_archive_match([#file{mime_type= <<"application/x-rar">>, is_encrypted=true} = File|_Files]) -> {pos, {file, File}};
+e_archive_match([#file{mime_type=MimeType, is_encrypted=true} = File|Files]) -> 
+	case mydlp_api:is_compression_mime(MimeType) of
+		true -> {pos, {file, File}};
+		false -> e_archive_match(Files) end;
 e_archive_match([_File|Files]) -> e_archive_match(Files);
 e_archive_match([]) -> neg.
+
+-define(EFILE_MINSIZE, 256).
 
 e_file_match() -> analyzed.
 
 e_file_match(_, {_Addr, Files}) -> e_file_match(Files).
 
-e_file_match([#file{is_encrypted=true} = File|_Files]) -> {pos, {file, File}};
+e_file_match([#file{data=Data, is_encrypted=true} = File|Files]) -> 
+	case size(Data) > ?EFILE_MINSIZE of
+		true -> {pos, {file, File}};
+		false -> e_file_match(Files) end;
 e_file_match([_File|Files]) -> e_file_match(Files);
 e_file_match([]) -> neg.
 

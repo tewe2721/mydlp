@@ -819,8 +819,7 @@ comp_to_files([#file{mime_type= <<"application/x-rar">>, is_encrypted=false} = F
 		{error, _ShouldBeLogged} -> 
 			comp_to_files(Files, [File#file{is_encrypted=true}|Returns])
 	end;
-comp_to_files([#file{mime_type= <<"application/x-tar">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
-comp_to_files([#file{mime_type= <<"application/x-gzip">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
+%comp_to_files([#file{mime_type= <<"application/x-gzip">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
 	%try 
 	%	GUData = zlib:gunzip(File#file.data),
 	%	ExtFiles = ext_to_file([{File#file.filename, GUData}]),
@@ -828,28 +827,15 @@ comp_to_files([#file{mime_type= <<"application/x-gzip">>, is_encrypted=false} |_
 	%catch _:_Ex ->
 	%	comp_to_files(Files, [File#file{is_encrypted=true}|Returns])
 	%end;
-comp_to_files([#file{mime_type= <<"application/x-bzip2">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
-comp_to_files([#file{mime_type= <<"application/x-gtar">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
-comp_to_files([#file{mime_type= <<"application/x-archive">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
-comp_to_files([#file{mime_type= <<"application/x-rpm">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
-comp_to_files([#file{mime_type= <<"application/x-arj">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
-comp_to_files([#file{mime_type= <<"application/arj">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
-comp_to_files([#file{mime_type= <<"application/x-7z-compressed">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
-comp_to_files([#file{mime_type= <<"application/x-7z">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
-comp_to_files([#file{mime_type= <<"application/x-compress">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
-comp_to_files([#file{mime_type= <<"application/x-compressed">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
-comp_to_files([#file{mime_type= <<"application/x-iso9660-image">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
-comp_to_files([#file{mime_type= <<"application/x-lzop">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
-comp_to_files([#file{mime_type= <<"application/x-lzip">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
-comp_to_files([#file{mime_type= <<"application/x-lzma">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
-comp_to_files([#file{mime_type= <<"application/x-xz">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
-comp_to_files([#file{mime_type= <<"application/x-winzip">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
-comp_to_files([#file{mime_type= <<"application/vnd.ms-cab-compressed">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
 comp_to_files([#file{mime_type= <<"application/vnd.oasis.opendocument.text">>}|_] = Files, Returns) -> % Needs refinement for better ODF handling
 	try_unzip(Files, Returns);
 comp_to_files([#file{mime_type= <<"application/octet-stream">>}|_] = Files, Returns) -> % Needs refinement for better ODF handling
 	%try_unzip(Files, Returns);
 	try_un7z(Files, Returns);
+comp_to_files([#file{mime_type= MimeType, is_encrypted=false} = File |_] = Files, Returns) -> 
+		case is_compression_mime(MimeType) of
+			true -> use_un7z(Files, Returns);
+			false -> comp_to_files(Files, [File|Returns]) end;
 comp_to_files([File|Files], Returns) -> comp_to_files(Files, [File|Returns]);
 comp_to_files([], Returns) -> lists:reverse(Returns).
 
@@ -1286,6 +1272,34 @@ normalize_fn([C|FN], Acc) ->
 		true -> normalize_fn(FN, [C|Acc]);
 		false -> normalize_fn(FN, [$_|Acc]) end;
 normalize_fn([], Acc) -> lists:reverse(Acc).
+
+%%-------------------------------------------------------------------------
+%% @doc Returns whether given mime type belongs to a compression format or not.
+%% @end
+%%-------------------------------------------------------------------------
+is_compression_mime(<<"application/zip">>) -> true;
+is_compression_mime(<<"application/x-rar">>) -> true;
+is_compression_mime(<<"application/x-tar">>) -> true;
+is_compression_mime(<<"application/x-gzip">>) -> true;
+is_compression_mime(<<"application/x-bzip2">>) -> true;
+is_compression_mime(<<"application/x-gtar">>) -> true;
+is_compression_mime(<<"application/x-archive">>) -> true;
+is_compression_mime(<<"application/x-rpm">>) -> true;
+is_compression_mime(<<"application/x-arj">>) -> true;
+is_compression_mime(<<"application/arj">>) -> true;
+is_compression_mime(<<"application/x-7z-compressed">>) -> true;
+is_compression_mime(<<"application/x-7z">>) -> true;
+is_compression_mime(<<"application/x-compress">>) -> true;
+is_compression_mime(<<"application/x-compressed">>) -> true;
+is_compression_mime(<<"application/x-iso9660-image">>) -> true;
+is_compression_mime(<<"application/x-lzop">>) -> true;
+is_compression_mime(<<"application/x-lzip">>) -> true;
+is_compression_mime(<<"application/x-lzma">>) -> true;
+is_compression_mime(<<"application/x-xz">>) -> true;
+is_compression_mime(<<"application/x-winzip">>) -> true;
+is_compression_mime(<<"application/vnd.ms-cab-compressed">>) -> true;
+is_compression_mime(_Else) -> false.
+
 
 -include_lib("eunit/include/eunit.hrl").
 
