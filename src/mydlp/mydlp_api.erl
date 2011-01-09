@@ -832,10 +832,10 @@ comp_to_files([#file{mime_type= <<"application/vnd.oasis.opendocument.text">>}|_
 comp_to_files([#file{mime_type= <<"application/octet-stream">>}|_] = Files, Returns) -> % Needs refinement for better ODF handling
 	%try_unzip(Files, Returns);
 	try_un7z(Files, Returns);
-comp_to_files([#file{mime_type= MimeType, is_encrypted=false} = File |_] = Files, Returns) -> 
+comp_to_files([#file{mime_type= MimeType, is_encrypted=false} = File | Rest ] = Files, Returns) -> 
 		case is_compression_mime(MimeType) of
 			true -> use_un7z(Files, Returns);
-			false -> comp_to_files(Files, [File|Returns]) end;
+			false -> comp_to_files(Rest, [File|Returns]) end;
 comp_to_files([File|Files], Returns) -> comp_to_files(Files, [File|Returns]);
 comp_to_files([], Returns) -> lists:reverse(Returns).
 
