@@ -237,7 +237,8 @@ get_body(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_impl
 		"put" -> 'PUT';
 		"delete" -> 'DELETE';
 		"trace" -> 'TRACE';
-		"connect" -> 'CONNECT';
+		"propfind" -> 'PROPFIND';
+%		"connect" -> 'CONNECT';
 		_Else -> throw({error, bad_method}) end,
 
 	[$h, $t, $t, $p, $/, MajorVersionC, $., MinorVersionC, $\r, $\n ] = 
