@@ -273,18 +273,16 @@ code_change(_OldVsn, StateName, StateData, _Extra) ->
     {ok, StateName, StateData}.
 
 end_of_cmd(Bin) ->
-	List = binary_to_list(Bin),
-	case string:str(List,?CRLF) of
-		0 -> 0;
-		Pos -> Pos - 1
-	end.
+	% Refine this with compiled version for %20 performance improvement
+	case re:run(Bin, ?CRLF_BIN, [{capture,first}]) of
+		{match,[{Pos,2}]} -> Pos;
+		nomatch -> 0 end.
 
 end_of_data(Bin) ->
-	List = binary_to_list(Bin),
-	case string:str(List,?SMTP_DATA_END) of
-		0 -> 0;
-		Pos -> Pos - 1
-	end.
+	% Refine this with compiled version for %20 performance improvement
+	case re:run(Bin, ?SMTP_DATA_END_BIN, [{capture,first}]) of
+		{match,[{Pos,5}]} -> Pos;
+		nomatch -> 0 end.
 
 heads_to_file(Headers) -> heads_to_file(Headers, #file{}).
 
@@ -372,4 +370,20 @@ log_req(#smtpd_fsm{message_record=MessageR}, Action,
 			["bcc: <" ++ A#addr.username ++ "@" ++ A#addr.domainname ++ ">"|| A <- MessageR#message.bcc],
 	Dest = string:join(DestList, ", "),
         ?ACL_LOG(smtp, RuleId, Action, nil, Src, Dest, Matcher, File, Misc).
+
+-include_lib("eunit/include/eunit.hrl").
+
+end_of_cmd_test_() -> [
+	?_assertEqual(12, end_of_cmd(<<"hello world!\r\nhello">>)),
+	?_assertEqual(7, end_of_cmd(<<"goodbye\r\nbye\r\nbye">>)),
+	?_assertEqual(0, end_of_cmd(<<"humbara rumbara rumbamba!!!">>))
+	].
+
+end_of_data_test_() -> [
+	?_assertEqual(12, end_of_data(<<"hello world!\r\n.\r\nhello">>)),
+	?_assertEqual(13, end_of_data(<<"hello\r\nworld!\r\n.\r\nhello">>)),
+	?_assertEqual(7, end_of_data(<<"goodbye\r\n.\r\nbye\r\n.\r\nbye">>)),
+	?_assertEqual(0, end_of_data(<<"humbara\r\nrumbara\r\nrumbamba!!!">>)),
+	?_assertEqual(0, end_of_data(<<"humbara rumbara rumbamba!!!">>))
+	].
 

@@ -1157,8 +1157,34 @@ uri_to_hr_file(Uri) ->
 		_Else -> #file{name="uri-data", data=list_to_binary([RData])} end.
 	
 
+%%-------------------------------------------------------------------------
+%% @doc Escapes regex special chars
+%% @end
+%%-------------------------------------------------------------------------
+escape_regex(Str) -> escape_regex(Str, []).
 
+escape_regex([$\\ |Str], Acc) -> escape_regex(Str, [$\\ ,$\\ |Acc]);
+escape_regex([$^ |Str], Acc) -> escape_regex(Str, [$^, $\\ |Acc]);
+escape_regex([$$ |Str], Acc) -> escape_regex(Str, [$$ ,$\\ |Acc]);
+escape_regex([$. |Str], Acc) -> escape_regex(Str, [$., $\\ |Acc]);
+escape_regex([$[ |Str], Acc) -> escape_regex(Str, [$[, $\\ |Acc]);
+escape_regex([$| |Str], Acc) -> escape_regex(Str, [$|, $\\ |Acc]);
+escape_regex([$( |Str], Acc) -> escape_regex(Str, [$(, $\\ |Acc]);
+escape_regex([$) |Str], Acc) -> escape_regex(Str, [$), $\\ |Acc]);
+escape_regex([$? |Str], Acc) -> escape_regex(Str, [$?, $\\ |Acc]);
+escape_regex([$* |Str], Acc) -> escape_regex(Str, [$*, $\\ |Acc]);
+escape_regex([$+ |Str], Acc) -> escape_regex(Str, [$+, $\\ |Acc]);
+escape_regex([${ |Str], Acc) -> escape_regex(Str, [${, $\\ |Acc]);
+escape_regex([C|Str], Acc) -> escape_regex(Str, [C|Acc]);
+escape_regex([], Acc) -> lists:reverse(Acc).
 
+-include_lib("eunit/include/eunit.hrl").
+
+escape_regex_test_() -> [
+	?_assertEqual("\\^testov\\(ic\\)\\?\\$", escape_regex("^testov(ic)?$")),
+	?_assertEqual("\\\\n \\\\r \\\\n", escape_regex("\\n \\r \\n")),
+	?_assertEqual("\\[a-Z]\\{0-9}", escape_regex("[a-Z]{0-9}"))
+].
 
 
 
