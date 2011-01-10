@@ -585,12 +585,11 @@ unrar(Bin) when is_binary(Bin) ->
 			exit_status,
 			stderr_to_stdout]),
 
-	ok = file:delete(RarFN),
-
-	case get_port_resp(Port) of
+	Ret = case get_port_resp(Port) of
 		ok -> {ok, rr_files(WorkDir1)};
-		Else -> Else
-	end.
+		Else -> Else end,
+	ok = file:delete(RarFN),
+	Ret.
 
 %%--------------------------------------------------------------------
 %% @doc bunzips an Erlang binary 
@@ -611,9 +610,30 @@ bunzip2(Bin) when is_binary(Bin) ->
 		ok -> 	{ok, BUData} = file:read_file(BunzFN),
 			ok = file:delete(BunzFN),
 			{ok, BUData};
-		Else -> Else
-	end,
+		Else -> Else end,
 	ok = file:delete(BzFN),
+	Ret.
+
+%%--------------------------------------------------------------------
+%% @doc Untars an Erlang binary 
+%% @end
+%%----------------------------------------------------------------------
+
+untar(Bin) when is_binary(Bin) -> 
+	{ok, TarFN} = mktempfile(),
+	ok = file:write_file(TarFN, Bin, [raw]),
+	{ok, WorkDir} = mktempdir(),
+	WorkDir1 = WorkDir ++ "/",
+	Port = open_port({spawn_executable, "/bin/tar"}, 
+			[{args, ["-C",WorkDir1,"-xf",TarFN]},
+			use_stdio,
+			exit_status,
+			stderr_to_stdout]),
+
+	Ret = case get_port_resp(Port) of
+		ok -> {ok, rr_files(WorkDir1)};
+		Else -> Else end,
+	ok = file:delete(TarFN),
 	Ret.
 
 %%--------------------------------------------------------------------
@@ -622,17 +642,29 @@ bunzip2(Bin) when is_binary(Bin) ->
 %%----------------------------------------------------------------------
 
 rr_files(WorkDir) when is_list(WorkDir) ->
-	{ok, FileNames} = file:list_dir(WorkDir),
-	Return = rr_files(FileNames, WorkDir, []),
-	ok = file:del_dir(WorkDir),
+	WorkDir1 = case lists:last(WorkDir) of
+		$/ -> WorkDir;
+		_Else -> WorkDir ++ "/" end,
+	{ok, FileNames} = file:list_dir(WorkDir1),
+	Return = rr_files(FileNames, WorkDir1, []),
+	ok = file:del_dir(WorkDir1),
 	Return.
 
 rr_files([FN|FNs], WorkDir, Ret) -> 
 	AbsPath = WorkDir ++ FN,
-	{ok, Bin}  = file:read_file(AbsPath),
-	ok = file:delete(AbsPath),
-	rr_files(FNs, WorkDir, [{FN, Bin}|Ret]);
-rr_files([], _WorkDir, Ret) -> lists:reverse(Ret).
+	case file:read_link(AbsPath) of
+		{ok, _Filename} ->	ok = file:delete(AbsPath),
+					rr_files(FNs, WorkDir, Ret);
+		{error, _Reason} -> case filelib:is_regular(AbsPath) of
+			true -> {ok, Bin}  = file:read_file(AbsPath),
+				ok = file:delete(AbsPath),
+				rr_files(FNs, WorkDir, [{FN, Bin}|Ret]);
+			false -> case filelib:is_dir(AbsPath) of
+				true -> Ret1 = rr_files(AbsPath),
+					rr_files(FNs, WorkDir, [Ret1|Ret]);
+				false -> catch file:delete(AbsPath),
+					rr_files(FNs, WorkDir, Ret) end end end;
+rr_files([], _WorkDir, Ret) -> lists:flatten(lists:reverse(Ret)).
 
 %%--------------------------------------------------------------------
 %% @doc Extracts Text from PostScript files
@@ -778,6 +810,14 @@ comp_to_files([#file{mime_type= <<"application/zip">>, is_encrypted=false} = Fil
 	end;
 comp_to_files([#file{mime_type= <<"application/x-rar">>, is_encrypted=false} = File|Files], Returns) -> 
 	case unrar(File#file.data) of
+		{ok, Ext} -> 
+			ExtFiles = ext_to_file(Ext),
+			comp_to_files(Files, [df_to_files(ExtFiles)|Returns]);
+		{error, _ShouldBeLogged} -> 
+			comp_to_files(Files, [File#file{is_encrypted=true}|Returns])
+	end;
+comp_to_files([#file{mime_type= <<"application/x-tar">>, is_encrypted=false} = File|Files], Returns) -> 
+	case untar(File#file.data) of
 		{ok, Ext} -> 
 			ExtFiles = ext_to_file(Ext),
 			comp_to_files(Files, [df_to_files(ExtFiles)|Returns]);
