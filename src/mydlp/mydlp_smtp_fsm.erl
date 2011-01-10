@@ -180,7 +180,7 @@ init([]) ->
 				"To: <" ++ MailFrom ++ ">\r\n" ++
 				"Content-Type: text/html; charset=\"utf8\"\r\n" ++
 				"Content-Transfer-Encoding: base64\r\n" ++
-				"Subject: Your e-mail to \'" ++ MessageR#message.rcpt_to ++ "\' had been denied!!!\r\n" ++
+				"Subject: Your e-mail to \'" ++ MessageR#message.rcpt_to ++ "\' has been denied!!!\r\n" ++
 				"\r\n" ++
 				"\r\n" ++
 				mydlp_api:get_denied_page(html_base64_str)},
