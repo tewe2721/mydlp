@@ -587,7 +587,8 @@ unrar(Bin) when is_binary(Bin) ->
 
 	Ret = case get_port_resp(Port) of
 		ok -> {ok, rr_files(WorkDir1)};
-		Else -> Else end,
+		Else -> rmrf_dir(WorkDir1), Else end,
+
 	ok = file:delete(RarFN),
 	Ret.
 
@@ -632,42 +633,12 @@ untar(Bin) when is_binary(Bin) ->
 
 	Ret = case get_port_resp(Port) of
 		ok -> {ok, rr_files(WorkDir1)};
-		Else -> Else end,
+		Else -> rmrf_dir(WorkDir1), Else end,
 	ok = file:delete(TarFN),
 	Ret.
 
 %%--------------------------------------------------------------------
-%% @doc Reads and removes files in WorkDir. Files will be returned as binaries.
-%% @end
-%%----------------------------------------------------------------------
-
-rr_files(WorkDir) when is_list(WorkDir) ->
-	WorkDir1 = case lists:last(WorkDir) of
-		$/ -> WorkDir;
-		_Else -> WorkDir ++ "/" end,
-	{ok, FileNames} = file:list_dir(WorkDir1),
-	Return = rr_files(FileNames, WorkDir1, []),
-	ok = file:del_dir(WorkDir1),
-	Return.
-
-rr_files([FN|FNs], WorkDir, Ret) -> 
-	AbsPath = WorkDir ++ FN,
-	case file:read_link(AbsPath) of
-		{ok, _Filename} ->	ok = file:delete(AbsPath),
-					rr_files(FNs, WorkDir, Ret);
-		{error, _Reason} -> case filelib:is_regular(AbsPath) of
-			true -> {ok, Bin}  = file:read_file(AbsPath),
-				ok = file:delete(AbsPath),
-				rr_files(FNs, WorkDir, [{FN, Bin}|Ret]);
-			false -> case filelib:is_dir(AbsPath) of
-				true -> Ret1 = rr_files(AbsPath),
-					rr_files(FNs, WorkDir, [Ret1|Ret]);
-				false -> catch file:delete(AbsPath),
-					rr_files(FNs, WorkDir, Ret) end end end;
-rr_files([], _WorkDir, Ret) -> lists:flatten(lists:reverse(Ret)).
-
-%%--------------------------------------------------------------------
-%% @doc Unrars an Erlang binary 
+%% @doc Unars an Erlang binary 
 %% @end
 %%----------------------------------------------------------------------
 
@@ -685,9 +656,82 @@ unar(Bin) when is_binary(Bin) ->
 
 	Ret = case get_port_resp(Port) of
 		ok -> {ok, rr_files(WorkDir1)};
-		Else -> Else end,
+		Else -> rmrf_dir(WorkDir1), Else end,
 	ok = file:delete(ArFN),
 	Ret.
+
+%%--------------------------------------------------------------------
+%% @doc Uncpios an Erlang binary 
+%% @end
+%%----------------------------------------------------------------------
+
+uncpio(Bin) when is_binary(Bin) -> 
+	{ok, CpioFN} = mktempfile(),
+	ok = file:write_file(CpioFN, Bin, [raw]),
+	{ok, WorkDir} = mktempdir(),
+	WorkDir1 = WorkDir ++ "/",
+	Port = open_port({spawn_executable, "/bin/cpio"}, 
+			[{args, ["--quiet","-id","-F",CpioFN]},
+			{cd, WorkDir1},
+			use_stdio,
+			exit_status,
+			stderr_to_stdout]),
+
+	Ret = case get_port_resp(Port) of
+		ok -> {ok, rr_files(WorkDir1)};
+		Else -> rmrf_dir(WorkDir1), Else end,
+	ok = file:delete(CpioFN),
+	Ret.
+
+%%--------------------------------------------------------------------
+%% @doc Removes files in Dir. 
+%% @end
+%%----------------------------------------------------------------------
+rmrf_dir(Dir) when is_list(Dir) ->
+	Dir1 = case lists:last(Dir) of
+		$/ -> Dir;
+		_Else -> Dir ++ "/" end,
+	{ok, FileNames} = file:list_dir(Dir1),
+	rmrf_dir(FileNames, Dir1),
+	file:del_dir(Dir1), ok.
+
+rmrf_dir([FN|FNs], Dir) -> 
+	AbsPath = Dir ++ FN,
+	case filelib:is_dir(AbsPath) of
+		true -> rmrf_dir(AbsPath);
+		false -> catch file:delete(AbsPath),
+			rmrf_dir(FNs, Dir) end;
+rmrf_dir([], _Dir) -> ok.
+
+%%--------------------------------------------------------------------
+%% @doc Reads and removes files in WorkDir. Files will be returned as binaries.
+%% @end
+%%----------------------------------------------------------------------
+
+rr_files(WorkDir) when is_list(WorkDir) ->
+	WorkDir1 = case lists:last(WorkDir) of
+		$/ -> WorkDir;
+		_Else -> WorkDir ++ "/" end,
+	{ok, FileNames} = file:list_dir(WorkDir1),
+	Return = rr_files(FileNames, WorkDir1, []),
+	file:del_dir(WorkDir1),
+	Return.
+
+rr_files([FN|FNs], WorkDir, Ret) -> 
+	AbsPath = WorkDir ++ FN,
+	case file:read_link(AbsPath) of
+		{ok, _Filename} ->	ok = file:delete(AbsPath),
+					rr_files(FNs, WorkDir, Ret);
+		{error, _Reason} -> case filelib:is_regular(AbsPath) of
+			true -> {ok, Bin}  = file:read_file(AbsPath),
+				ok = file:delete(AbsPath),
+				rr_files(FNs, WorkDir, [{FN, Bin}|Ret]);
+			false -> case filelib:is_dir(AbsPath) of
+				true -> Ret1 = rr_files(AbsPath),
+					rr_files(FNs, WorkDir, [Ret1|Ret]);
+				false -> catch file:delete(AbsPath),
+					rr_files(FNs, WorkDir, Ret) end end end;
+rr_files([], _WorkDir, Ret) -> lists:flatten(lists:reverse(Ret)).
 
 %%--------------------------------------------------------------------
 %% @doc Extracts Text from PostScript files
