@@ -667,6 +667,29 @@ rr_files([FN|FNs], WorkDir, Ret) ->
 rr_files([], _WorkDir, Ret) -> lists:flatten(lists:reverse(Ret)).
 
 %%--------------------------------------------------------------------
+%% @doc Unrars an Erlang binary 
+%% @end
+%%----------------------------------------------------------------------
+
+unar(Bin) when is_binary(Bin) -> 
+	{ok, ArFN} = mktempfile(),
+	ok = file:write_file(ArFN, Bin, [raw]),
+	{ok, WorkDir} = mktempdir(),
+	WorkDir1 = WorkDir ++ "/",
+	Port = open_port({spawn_executable, "/usr/bin/ar"}, 
+			[{args, ["x",ArFN]},
+			{cd, WorkDir1},
+			use_stdio,
+			exit_status,
+			stderr_to_stdout]),
+
+	Ret = case get_port_resp(Port) of
+		ok -> {ok, rr_files(WorkDir1)};
+		Else -> Else end,
+	ok = file:delete(ArFN),
+	Ret.
+
+%%--------------------------------------------------------------------
 %% @doc Extracts Text from PostScript files
 %% @end
 %%----------------------------------------------------------------------
@@ -836,6 +859,14 @@ comp_to_files([#file{mime_type= <<"application/x-bzip2">>, is_encrypted=false} =
 	case bunzip2(File#file.data) of
 		{ok, BUData} -> 
 			ExtFiles = ext_to_file([{File#file.filename, BUData}]),
+			comp_to_files(Files, [df_to_files(ExtFiles)|Returns]);
+		{error, _ShouldBeLogged} -> 
+			comp_to_files(Files, [File#file{is_encrypted=true}|Returns])
+	end;
+comp_to_files([#file{mime_type= <<"application/x-archive">>, is_encrypted=false} = File|Files], Returns) -> 
+	case unar(File#file.data) of
+		{ok, Ext} -> 
+			ExtFiles = ext_to_file(Ext),
 			comp_to_files(Files, [df_to_files(ExtFiles)|Returns]);
 		{error, _ShouldBeLogged} -> 
 			comp_to_files(Files, [File#file{is_encrypted=true}|Returns])
