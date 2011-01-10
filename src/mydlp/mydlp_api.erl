@@ -593,6 +593,30 @@ unrar(Bin) when is_binary(Bin) ->
 	end.
 
 %%--------------------------------------------------------------------
+%% @doc bunzips an Erlang binary 
+%% @end
+%%----------------------------------------------------------------------
+
+bunzip2(Bin) when is_binary(Bin) -> 
+	{ok, BzFN} = mktempfile(),
+	BunzFN = BzFN ++ ".out",
+	ok = file:write_file(BzFN, Bin, [raw]),
+	Port = open_port({spawn_executable, "/bin/bunzip2"}, 
+			[{args, ["-qdk",BzFN]},
+			use_stdio,
+			exit_status,
+			stderr_to_stdout]),
+	
+	Ret = case get_port_resp(Port) of
+		ok -> 	{ok, BUData} = file:read_file(BunzFN),
+			ok = file:delete(BunzFN),
+			{ok, BUData};
+		Else -> Else
+	end,
+	ok = file:delete(BzFN),
+	Ret.
+
+%%--------------------------------------------------------------------
 %% @doc Reads and removes files in WorkDir. Files will be returned as binaries.
 %% @end
 %%----------------------------------------------------------------------
@@ -767,6 +791,14 @@ comp_to_files([#file{mime_type= <<"application/x-gzip">>, is_encrypted=false} = 
 		comp_to_files(Files, [df_to_files(ExtFiles)|Returns])
 	catch _:_Ex ->
 		comp_to_files(Files, [File#file{is_encrypted=true}|Returns])
+	end;
+comp_to_files([#file{mime_type= <<"application/x-bzip2">>, is_encrypted=false} = File|Files], Returns) -> 
+	case bunzip2(File#file.data) of
+		{ok, BUData} -> 
+			ExtFiles = ext_to_file([{File#file.filename, BUData}]),
+			comp_to_files(Files, [df_to_files(ExtFiles)|Returns]);
+		{error, _ShouldBeLogged} -> 
+			comp_to_files(Files, [File#file{is_encrypted=true}|Returns])
 	end;
 comp_to_files([#file{mime_type= <<"application/vnd.oasis.opendocument.text">>}|_] = Files, Returns) -> % Needs refinement for better ODF handling
 	try_unzip(Files, Returns);
