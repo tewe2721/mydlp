@@ -258,7 +258,7 @@ smtp_cmd({data,Message}, _From, State) ->
     write(State#smtpc.socket, Msg),
     case read(State#smtpc.socket) of
 	{354, _Resp} -> 
-	    write(State#smtpc.socket, Message ++ ?SMTP_DATA_END),
+	    write(State#smtpc.socket, [Message, ?SMTP_DATA_END] ),
     	case read(State#smtpc.socket) of
 			{250, _DataResp} -> 
 				%gen_fsm:reply(_From,{250,DataResp}),

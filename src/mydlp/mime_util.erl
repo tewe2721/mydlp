@@ -46,7 +46,8 @@
 %% @doc Recursively decodes a string into a #mime{} record.
 %% @end
 %%-------------------------------------------------------------------------
-decode(Message) -> 
+decode(Message) when is_list(Message) -> decode(list_to_binary(Message));
+decode(Message) when is_binary(Message) -> 
 	MIME = split(Message),
 	Headers = headers(MIME#mime.header_text),
 	case lists:keysearch('content-type',1,Headers) of
@@ -56,12 +57,16 @@ decode(Message) ->
 					Pos = string:chr(Value,61),
 					{_,B} = lists:split(Pos,Value),
 					Boundary = string:strip(B,both,34),
-					Content = case string:str(MIME#mime.body_text, Boundary) of
-						0 -> [];
-						1 -> [];
-						2 -> [];
-						3 -> [];
-						I -> string:substr(MIME#mime.body_text, 1, I-3)
+					Content = case re:run(MIME#mime.body_text, 
+							mydlp_api:escape_regex(Boundary), 
+							[{capture,first}] ) of
+						nomatch -> [];
+						{match,[{0,_}]} -> [];
+						{match,[{1,_}]} -> [];
+						{match,[{2,_}]} -> [];
+						{match,[{I,_}]} -> 
+							CSize = I - 2,
+							<<C:CSize/binary, _/binary>> = MIME#mime.body_text, C 
 					end,
 					Parts = split_multipart(Boundary,MIME#mime.body_text),
 					MIMEParts = lists:map(fun(P) ->
@@ -73,8 +78,6 @@ decode(Message) ->
 		_ -> MIME#mime{header = Headers, content = MIME#mime.body_text}
 		%_ -> MIME#mime{header = Headers, body = MIME#mime.body_text, message = Message}
 	end.
-
-
 
 dec_addrs(AddrList) ->
 	List = string:tokens(AddrList,[44]),
@@ -101,7 +104,8 @@ dec_addr2(Address,Addr) ->
 %% @doc Parses HeaderText into a Key/Value list
 %% @end
 %%-------------------------------------------------------------------------
-headers(HeaderText) ->
+headers(HeaderText) when is_binary(HeaderText) -> headers(binary_to_list(HeaderText));
+headers(HeaderText) when is_list(HeaderText) ->
 	%{ok,H,_Lines} = regexp:gsub(HeaderText,"\r\n[\t ]"," "),
 	H = re:replace(HeaderText,"\r\n[\t ]"," ", [global, {return, list}]),
 	Tokens = string:tokens(H,[13,10]),
@@ -146,20 +150,20 @@ strip(Value,[H|T]) ->
 %%      this way.
 %% @end
 %%-------------------------------------------------------------------------
-split(Part) ->
-	case string:str(Part,?CRLF ++ ?CRLF) of
-		0 ->
-			case string:str(Part,"\n\n") of
-				0 -> {error,no_break_found};
-				Pos ->
-					{Header,Body} = lists:split(Pos+1,Part),
-					#mime{header_text=Header, body_text = Body}
-			end;
-		Pos -> 
-			{Header,Body} = lists:split(Pos+3,Part),
-			#mime{header_text=Header, body_text = Body}
-	end.
-
+split(Part) when is_list(Part) -> split(list_to_binary(Part));
+split(Part) when is_binary(Part) ->
+	case re:run(Part, ?D_CRLF_BIN, [{capture,first}]) of
+		nomatch ->
+			case re:run(Part, <<"\n\n">>, [{capture,first}]) of
+				nomatch -> {error,no_break_found};
+				{match,[{Pos,2}]} -> 
+					HeaderSize = Pos + 2,
+					<<Header:HeaderSize/binary, Body/binary>> = Part,
+					#mime{header_text=Header, body_text = Body} end;
+		{match,[{Pos,4}]} -> 
+			HeaderSize = Pos + 4,
+			<<Header:HeaderSize/binary, Body/binary>> = Part,
+			#mime{header_text=Header, body_text = Body} end.
 
 %%-------------------------------------------------------------------------
 %% @spec (Boundary::string(),Body::start()) -> Parts::list()
@@ -173,20 +177,20 @@ split_multipart(Boundary,Body) -> split_multipart(Boundary,Body,[]).
 %% @hidden
 %% @end
 %%-------------------------------------------------------------------------
-split_multipart(_Boundary,[],Acc) -> lists:reverse(Acc);
-split_multipart(Boundary,Body,Acc) -> 
-	%case regexp:match(Body,Boundary) of
-	Length = string:len(Boundary),
-	case string:str(Body,Boundary) of
-		0 -> split_multipart(Boundary,[],Acc);
-		Start when is_integer(Start) ->
-			{_Pre,New} = lists:split(Start + Length,Body),
+split_multipart(_Boundary,<<>>,Acc) -> lists:reverse(Acc);
+split_multipart(Boundary,Body,Acc) when is_binary(Body)-> 
+	case re:run(Body, mydlp_api:escape_regex(Boundary), [{capture,first}]) of
+		nomatch -> split_multipart(Boundary,<<>>,Acc);
+		{match,[{Start,Length}]} when is_integer(Start) ->
+			JSize = Start + Length + 1,
+			<<_Pre:JSize/binary, New/binary>> = Body,
 			%case regexp:match(New,Boundary) of
-			case string:str(New,Boundary) of
-				0 -> split_multipart(Boundary,[],Acc);
-				Start2 when is_integer(Start2) ->
-					{Part,Next} = lists:split(Start2 - 4,New),
-					 split_multipart(Boundary,Next,[Part|Acc])
+			case re:run(New, mydlp_api:escape_regex(Boundary), [{capture,first}]) of
+				nomatch -> split_multipart(Boundary,<<>>,Acc);
+				{match, [{Start2, _Length2}]} when is_integer(Start2) ->
+					PSize = Start2 - 3,
+					<<Part:PSize/binary, Next/binary>> = New,
+					split_multipart(Boundary,Next,[Part|Acc])
 			end
 	end.
 
@@ -200,14 +204,16 @@ get_header(Key,Header,Default) ->
 		_ -> Default
 	end.
 
-quoted_to_raw(EncContent) when is_binary(EncContent) -> quoted_to_raw(binary_to_list(EncContent));
-quoted_to_raw(EncContent) when is_list(EncContent) -> quoted_to_raw(EncContent, []).
+quoted_to_raw(EncContent) when is_list(EncContent) -> quoted_to_raw(list_to_binary(EncContent));
+quoted_to_raw(EncContent) when is_binary(EncContent) -> quoted_to_raw(EncContent, <<>>).
 
-quoted_to_raw([$=, 13, 10| Rest], Acc ) -> quoted_to_raw(Rest, Acc);
-quoted_to_raw([$=, 10| Rest], Acc ) -> quoted_to_raw(Rest, Acc);
-quoted_to_raw([$=, H1, H2| Rest], Acc ) -> quoted_to_raw(Rest, [mydlp_api:hex2int([H1,H2])| Acc]);
-quoted_to_raw([C| Rest], Acc ) -> quoted_to_raw(Rest, [C|Acc]);
-quoted_to_raw([], Acc ) -> lists:reverse(Acc).
+quoted_to_raw(<<$=, 13, 10, Rest/binary>>, Acc ) -> quoted_to_raw(Rest, Acc);
+quoted_to_raw(<<$=, 10, Rest/binary>>, Acc ) -> quoted_to_raw(Rest, Acc);
+quoted_to_raw(<<$=, H1, H2, Rest/binary>>, Acc ) -> 
+	I = mydlp_api:hex2int([H1,H2]),
+	quoted_to_raw(Rest, <<Acc/binary, I/integer>>);
+quoted_to_raw(<<C/integer, Rest/binary>>, Acc ) -> quoted_to_raw(Rest, <<Acc/binary, C/integer>>);
+quoted_to_raw(<<>>, Acc ) -> Acc.
 
 decode_content("7bit", EncContent) -> decode_content('7bit', EncContent);
 decode_content('7bit', EncContent) -> list_to_binary([EncContent]);
@@ -218,12 +224,34 @@ decode_content('binary', EncContent) -> list_to_binary([EncContent]);
 decode_content("base64", EncContent) -> decode_content('base64', EncContent);
 decode_content('base64', EncContent) -> base64:decode(EncContent);
 decode_content("quoted-printable", EncContent) -> decode_content('quoted-printable', EncContent);
-decode_content('quoted-printable', EncContent) -> list_to_binary(quoted_to_raw(EncContent));
+decode_content('quoted-printable', EncContent) -> quoted_to_raw(EncContent);
 decode_content(_Other, EncContent) -> decode_content('7bit', EncContent).
 
+-include_lib("eunit/include/eunit.hrl").
 
+quoted_test() ->
+	QuotedStr = <<"If you believe that truth=3Dbeauty, then surely=20=\nmathematics is the most beautiful branch of philosophy.">>,
+	CleanStr = <<"If you believe that truth=beauty, then surely mathematics is the most beautiful branch of philosophy.">>,
+	?assertEqual(CleanStr, decode_content('quoted-printable',QuotedStr) ).
 
-
-
-
-
+multipart_test() ->
+	RawMessage = <<"Subject: ugh\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"frontier\"\r\n\r\nThis is a message with multiple parts in MIME format.\r\n--frontier\r\nContent-Type: text/plain\r\n\r\nThis is the body of the message.\r\n--frontier\r\nContent-Type: application/octet-stream\r\nContent-Transfer-Encoding: base64\r\n\r\nPGh0bWw+CiAgPGhlYWQ+CiAgPC9oZWFkPgogIDxib2R5PgogICAgPHA+VGhpcyBpcyB0aGUg\r\nYm9keSBvZiB0aGUgbWVzc2FnZS48L3A+CiAgPC9ib2R5Pgo8L2h0bWw+Cg==\r\n--frontier-x1 -\r\n">>,
+	ParsedMessage = {mime,[{subject,"ugh"},
+       {'mime-version',"1.0"},
+       {'content-type',"multipart/mixed; boundary=\"frontier\""}],
+      <<"Subject: ugh\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"frontier\"\r\n\r\n">>,
+      [{mime,[{'content-type',"text/plain"}],
+             <<"\nContent-Type: text/plain\r\n\r\n">>,[],
+             <<"This is the body of the message.\r">>,
+             <<"This is the body of the message.\r">>,[]},
+       {mime,[{'content-type',"application/octet-stream"},
+              {'content-transfer-encoding',"base64"}],
+             <<"\nContent-Type: application/octet-stream\r\nContent-Transfer-Encoding: base64\r\n\r\n">>,
+             [],
+             <<"PGh0bWw+CiAgPGhlYWQ+CiAgPC9oZWFkPgogIDxib2R5PgogICAgPHA+VGhpcyBpcyB0aGUg\r\nYm9keSBvZiB0aGUgbWVzc2FnZS48L3A+CiAgPC9ib2R5Pgo8L2h0bWw+Cg==\r">>,
+             <<"PGh0bWw+CiAgPGhlYWQ+CiAgPC9oZWFkPgogIDxib2R5PgogICAgPHA+VGhpcyBpcyB0aGUg\r\nYm9keSBvZiB0aGUgbWVzc2FnZS48L3A+CiAgPC9ib2R5Pgo8L2h0bWw+Cg==\r">>,
+             []}],
+      <<"This is a message with multiple parts in MIME format.\r\n--frontier\r\nContent-Type: text/plain\r\n\r\nThis is the body of the message.\r\n--frontier\r\nContent-Type: application/octet-stream\r\nContent-Transfer-Encoding: base64\r\n\r\nPGh0bWw+CiAgPGhlYWQ+CiAgPC9oZWFkPgogIDxib2R5PgogICAgPHA+VGhpcyBpcyB0aGUg\r\nYm9keSBvZiB0aGUgbWVzc2FnZS48L3A+CiAgPC9ib2R5Pgo8L2h0bWw+Cg==\r\n--frontier-x1 -\r\n">>,
+      <<"This is a message with multiple parts in MIME format.\r\n">>,
+      []},
+	?assertEqual(ParsedMessage, decode(RawMessage)).

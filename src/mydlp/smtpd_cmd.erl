@@ -136,12 +136,12 @@ command({Command,Param},State) ->
 
 %% @todo cehck relay state and store messages according to local or outgoing status. Only real differene is in the message name.
 
-read_message(Message,State) when is_binary(Message) -> read_message(binary_to_list(Message),State);
+read_message(Message,State) when is_list(Message) -> read_message(list_to_binary(Message),State);
 read_message(#message{} = Message,State) ->
 	MIME = mime_util:decode(Message#message.message),
         NewMessage = expand(Message,MIME),
 	State#smtpd_fsm{message_record=NewMessage, message_mime=MIME};
-read_message(Message,#smtpd_fsm{mail=From, rcpt=To} = State) ->
+read_message(Message,#smtpd_fsm{mail=From, rcpt=To} = State) when is_binary(Message)->
 	read_message(#message{
 		mail_from=From,
 		rcpt_to=lists:reverse(To),
@@ -213,7 +213,7 @@ expand(#message{cc = []} = Message,MIME,[cc | Rest]) ->
 expand(#message{bcc = []} = Message,MIME,[bcc | Rest]) ->
 	expand(Message#message{bcc = mime_util:get_header(bcc,MIME)},MIME,Rest);
 expand(#message{size = 0} = Message,MIME,[size | Rest]) ->
-	expand(Message#message{size = length(Message#message.message)},MIME,Rest);
+	expand(Message#message{size = size(Message#message.message)},MIME,Rest);
 expand(#message{internaldate = []} = Message,MIME,[internaldate | Rest]) ->
 	expand(Message#message{internaldate={date(),time()}},MIME,Rest);
 expand(Message,MIME,[_Unknown | Rest]) ->

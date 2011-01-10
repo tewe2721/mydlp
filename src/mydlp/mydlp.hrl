@@ -52,7 +52,7 @@
          ]).
 -define(SMTP, [ 
           {helo_name, "mydlp.org"},
-          {next_hop, {"localhost", 10026}},
+          {next_hop, {"localhost", 10027}},
           {enable_for_all, true}
          ]).
 

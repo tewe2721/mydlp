@@ -26,17 +26,17 @@
 -ifndef(D).
 -define(D(X), ?DEBUG("DEBUG ~p:~p ~p~n",[?MODULE, ?LINE, X])).
 -endif.
--ifndef(CRLF).
+
 -define(CRLF,[13,10]).
--endif.
--ifndef(CRLF_BIN).
 -define(CRLF_BIN, <<13,10>>).
--endif.
+
+-define(D_CRLF_BIN, <<13,10,13,10>>).
 
 
 -define(SMTPD_PORT,25).
 -define(SMTPD_MAX_CONN,25).
 -define(SMTP_DATA_END, [13,10,46,13,10]). % End of data command "\r\n.\r\n"
+-define(SMTP_DATA_END_BIN, <<13,10,46,13,10>>). % End of data command "\r\n.\r\n"
 
 -record(smtpc,{
 	socket = [],
