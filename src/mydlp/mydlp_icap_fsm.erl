@@ -135,7 +135,10 @@ init([]) ->
 
 %% Notification event coming from client
 'ICAP_REQ_LINE'({data, Line}, #state{path=Path} = State) ->
-	[MethodS, Uri, VersionS] = string:tokens(Line, " "),
+	Line1 = case Line of
+		L when is_list(L) -> Line;
+		L when is_binary(L) -> binary_to_list(Line) end,
+	[MethodS, Uri, VersionS] = string:tokens(Line1, " "),
 	case get_path(Uri) of
 		Path -> ok;
 		Else -> throw({error, {path_does_not_match, {Path, Else}}}) end,
