@@ -70,7 +70,7 @@ get_mime(Data) when is_binary(Data) ->
 	end,
 	try
 		call_pool({thrift, py, getMagicMime, [Data1]})
-	catch _Exception ->
+	catch _:_Exception ->
 		unknown_type end.
 
 is_valid_iban(IbanStr) ->
@@ -84,7 +84,7 @@ html_to_text(Html) ->
 handle_call({thrift, py, Func, Params}, _From, #state{backend_py=TS} = State) ->
 	{TS1, Reply} = try
 		thrift_client:call(TS, Func, Params)
-	catch throw:{TSE, _Exception} ->
+	catch _:{TSE, _Exception} ->
 		?DEBUG("Error in thrift backend. \n", []),
 		{TSE, {error, exception_at_backend}} end,
 		

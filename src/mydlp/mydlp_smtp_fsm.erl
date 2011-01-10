@@ -52,6 +52,8 @@
     'WAIT_FOR_CMD'/2
 ]).
 
+-compile(export_all).
+
 
 
 %%%------------------------------------------------------------------------
@@ -280,7 +282,7 @@ end_of_cmd(Bin) ->
 
 end_of_data(Bin) ->
 	% Refine this with compiled version for %20 performance improvement
-	case re:run(Bin, ?SMTP_DATA_END_BIN, [{capture,first}]) of
+	case re:run(Bin, ?SMTP_DATA_END_REGEX, [{capture,first}]) of
 		{match,[{Pos,5}]} -> Pos;
 		nomatch -> 0 end.
 
@@ -382,6 +384,7 @@ end_of_cmd_test_() -> [
 end_of_data_test_() -> [
 	?_assertEqual(12, end_of_data(<<"hello world!\r\n.\r\nhello">>)),
 	?_assertEqual(13, end_of_data(<<"hello\r\nworld!\r\n.\r\nhello">>)),
+	?_assertEqual(13, end_of_data(<<"hello\r\nw\r\nld!\r\n.\r\nhello">>)),
 	?_assertEqual(7, end_of_data(<<"goodbye\r\n.\r\nbye\r\n.\r\nbye">>)),
 	?_assertEqual(0, end_of_data(<<"humbara\r\nrumbara\r\nrumbamba!!!">>)),
 	?_assertEqual(0, end_of_data(<<"humbara rumbara rumbamba!!!">>))

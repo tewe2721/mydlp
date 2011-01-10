@@ -600,7 +600,7 @@ start_tables(_IsDistributionInit, []) -> ok.
 transaction(F) ->
 	try {atomic, mnesia:activity(transaction, F)}
 	catch
-		exit:Reason ->
+		_:Reason ->
 			{aborted, Reason}
 	end.
 
