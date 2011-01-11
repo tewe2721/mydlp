@@ -20,11 +20,11 @@
 
 %%%-------------------------------------------------------------------
 %%% @author H. Kerem Cevahir <kerem@medratech.com>
-%%% @copyright 2009, H. Kerem Cevahir
+%%% @copyright 2011, H. Kerem Cevahir
 %%% @doc Worker for mydlp.
 %%% @end
 %%%-------------------------------------------------------------------
--module(mydlp_tc).
+-module(mydlp_quarantine).
 -author("kerem@medra.com.tr").
 -behaviour(gen_server).
 
@@ -32,10 +32,7 @@
 
 %% API
 -export([start_link/0,
-	pre_init/1,
-	get_mime/1,
-	is_valid_iban/1,
-	html_to_text/1,
+	s/1,
 	stop/0]).
 
 %% gen_server callbacks
@@ -46,86 +43,78 @@
 	terminate/2,
 	code_change/3]).
 
--include_lib("eunit/include/eunit.hrl").
+-record(state, {quarantine_dir, quarantine_uid, quarantine_gid}).
 
--record(state, {backend_py}).
-
-%%%%%%%%%%%%% MyDLP Thrift RPC API
-
--define(MMLEN, 4096).
-
-get_mime(Data) when is_list(Data) ->
-	L = length(Data),
-	Data1 = case L > ?MMLEN of
-		true -> lists:sublist(Data, ?MMLEN);
-		false -> Data
-	end,
-	get_mime(list_to_binary(Data1));
-
-get_mime(Data) when is_binary(Data) ->
-	S = size(Data),
-	Data1 = case S > ?MMLEN of
-		true -> <<D:?MMLEN/binary, _/binary>> = Data, D;
-		false -> Data
-	end,
-	try
-		call_pool({thrift, py, getMagicMime, [Data1]})
-	catch _:_Exception ->
-		unknown_type end.
-
-is_valid_iban(IbanStr) ->
-	call_pool({thrift, py, isValidIban, [IbanStr]}).
-
-html_to_text(Html) ->
-	call_pool({thrift, py, htmlToText, [Html]}).
+s(Data) -> gen_server:call(?MODULE, {s, Data}, 15000).
 
 %%%%%%%%%%%%%% gen_server handles
 
-handle_call({thrift, py, Func, Params}, _From, #state{backend_py=TS} = State) ->
-	{TS1, Reply} = try
-		thrift_client:call(TS, Func, Params)
-	catch _:{TSE, _Exception} ->
-		?DEBUG("Error in thrift backend. \n", []),
-		{TSE, {error, exception_at_backend}} end,
-		
-	{reply, Reply, State#state{backend_py=TS1}};
+handle_call({s, Data}, From, #state{quarantine_dir=Dir, quarantine_uid=Uid, quarantine_gid=Gid} = State) ->
+	Worker = self(),
+	spawn_link(fun() ->
+		Hash = mydlp_api:md5_hex(Data),
 
-handle_call(stop, _From, #state{backend_py=PY} = State) ->
-	thrift_client:close(PY),
-	{stop, normalStop, State#state{backend_py=undefined}};
+		L1Dir = Dir ++ string:substr(Hash, 1, 1),
+		case filelib:is_regular(L1Dir) of
+			false -> file:make_dir(L1Dir),
+				file:change_owner(L1Dir, Uid, Gid);
+			true -> ok end,
+
+		L2Dir = L1Dir ++ "/" ++ string:substr(Hash, 2, 2),
+		case filelib:is_regular(L2Dir) of
+			false -> file:make_dir(L2Dir),
+				file:change_owner(L2Dir, Uid, Gid);
+			true -> ok end,
+
+		FilePath = L2Dir ++ "/" ++ Hash,
+		case filelib:is_file(FilePath) of
+			true -> ok;
+			false -> file:write_file(FilePath, Data, [raw]), 
+				file:change_owner(FilePath, Uid, Gid) end,
+
+		Worker ! {async_reply, {ok, FilePath}, From}
+	end),
+	
+	{noreply, State};
+
+handle_call(stop, _From, State) ->
+	{stop, normalStop, State};
 
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
+
+handle_cast(_Msg, State) ->
+	{noreply, State}.
+
+handle_info({async_reply, Reply, From}, State) ->
+	gen_server:reply(From, Reply),
+	{noreply, State};
 
 handle_info(_Info, State) ->
 	{noreply, State}.
 
 %%%%%%%%%%%%%%%% Implicit functions
 
-pre_init(_Args) -> ok.
-
 start_link() ->
-	mydlp_pg_sup:start_link(?MODULE, [], []).
+	case gen_server:start_link({local, ?MODULE}, ?MODULE, [], []) of
+		{ok, Pid} -> {ok, Pid};
+		{error, {already_started, Pid}} -> {ok, Pid} end.
 
-stop() ->
-	gen_server:call(?MODULE, stop).
+stop() -> gen_server:call(?MODULE, stop).
 
 init([]) ->
-	{ok, PY} = thrift_client_util:new("localhost",9090, mydlp_thrift, []),
-	{ok, #state{backend_py=PY}}.
+	ConfList = case application:get_env(quarantine) of
+		{ok, CL} -> CL;
+		_Else -> ?QUARANTINE end,
 
-handle_cast(_Msg, State) ->
-	{noreply, State}.
+	{dir, Dir} = lists:keyfind(dir, 1, ConfList),
+	{uid, Uid} = lists:keyfind(uid, 1, ConfList),
+	{gid, Gid} = lists:keyfind(gid, 1, ConfList),
+	{ok, #state{quarantine_dir=Dir, quarantine_uid=Uid, quarantine_gid=Gid}}.
 
 terminate(_Reason, _State) ->
 	ok.
 
 code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
-
-call_pool(Req) ->
-	Pid = pg2:get_closest_pid(?MODULE),
-	case gen_server:call(Pid, Req, 15000) of
-		{ok, Ret} -> Ret;
-		{error, Reason} -> throw({error, Reason}) end.
 

@@ -597,8 +597,11 @@ unrar(Bin) when is_binary(Bin) ->
 %% @end
 %%----------------------------------------------------------------------
 
-un7z(Bin) when is_binary(Bin) -> 
-	{ok, ZFN} = mktempfile(),
+un7z(Bin) when is_binary(Bin) -> un7z(Bin, "nofilename").
+
+un7z(Bin, Filename) when is_binary(Bin) -> 
+	{ok, ZFNDir} = mktempdir(),
+	ZFN = ZFNDir ++ "/" ++ normalize_fn(Filename),
 	ok = file:write_file(ZFN, Bin, [raw]),
 	{ok, WorkDir} = mktempdir(),
 	WorkDir1 = WorkDir ++ "/",
@@ -611,7 +614,7 @@ un7z(Bin) when is_binary(Bin) ->
 	Ret = case get_port_resp(Port) of
 		ok -> {ok, rr_files(WorkDir1)};
 		Else -> rmrf_dir(WorkDir1), Else end,
-	ok = file:delete(ZFN),
+	ok = rmrf_dir(ZFNDir),
 	Ret.
 
 %%--------------------------------------------------------------------
@@ -742,12 +745,14 @@ files_to_str([File|Files], Returns) ->
 files_to_str([], Returns) -> 
 	lists:reverse(Returns).
 
-file_to_str(#file{name=undefined, filename=undefined}) -> "data";
-file_to_str(#file{name=Name, filename=undefined}) -> Name;
-file_to_str(#file{name=undefined, filename=Filename}) -> Filename;
-file_to_str(#file{name="extracted file", filename=Filename}) -> "extracted file: " ++ Filename;
-file_to_str(#file{filename=Filename}) -> Filename;
-file_to_str(_File) -> "data".
+file_to_str(File) -> normalize_fn(file_to_str1(File)).
+
+file_to_str1(#file{name=undefined, filename=undefined}) -> "data";
+file_to_str1(#file{name=Name, filename=undefined}) -> Name;
+file_to_str1(#file{name=undefined, filename=Filename}) -> Filename;
+file_to_str1(#file{name="extracted file", filename=Filename}) -> "extracted file: " ++ Filename;
+file_to_str1(#file{filename=Filename}) -> Filename;
+file_to_str1(_File) -> "data".
 
 %%--------------------------------------------------------------------
 %% @doc Returns whether given term has text
@@ -849,7 +854,7 @@ comp_to_files([File|Files], Returns) -> comp_to_files(Files, [File|Returns]);
 comp_to_files([], Returns) -> lists:reverse(Returns).
 
 use_un7z([File|Files], Returns) ->
-	case un7z(File#file.data) of
+	case un7z(File#file.data, File#file.filename) of
 		{ok, Ext} -> 
 			ExtFiles = ext_to_file(Ext),
 			comp_to_files(Files, [df_to_files(ExtFiles)|Returns]);
@@ -864,7 +869,7 @@ try_unzip([File|Files], Returns) ->
 		{error, _ShouldBeLogged} -> comp_to_files(Files, [File|Returns]) end.
 
 try_un7z([File|Files], Returns) ->
-	case un7z(File#file.data) of
+	case un7z(File#file.data, File#file.filename) of
 		{ok, Ext} -> 
 			ExtFiles = ext_to_file(Ext),
 			comp_to_files(Files, [df_to_files(ExtFiles)|Returns]);
@@ -1156,16 +1161,7 @@ heads_to_file([], File) ->
 %% @doc Writes files to quarantine directory.
 %% @end
 %%-------------------------------------------------------------------------
-quarantine(#file{} = File) ->
-	Hash = md5_hex(File#file.data),
-	L1Dir = string:substr(Hash, 1, 1) ++ "/",
-	L2Dir = string:substr(Hash, 2, 2) ++ "/",
-	Path = ?QUARANTINE_DIR ++ L1Dir ++ L2Dir ++ Hash,
-	ok = filelib:ensure_dir(Path),
-	case filelib:is_file(Path) of
-		true -> ok;
-		false -> file:write_file(Path, File#file.data, [raw]) end,
-	{ok, Path}.
+quarantine(#file{data=Data}) -> mydlp_quarantine:s(Data).
 
 %%-------------------------------------------------------------------------
 %% @doc Return denied page for different formats
@@ -1273,6 +1269,22 @@ escape_regex([${ |Str], Acc) -> escape_regex(Str, [${, $\\ |Acc]);
 escape_regex([C|Str], Acc) -> escape_regex(Str, [C|Acc]);
 escape_regex([], Acc) -> lists:reverse(Acc).
 
+%%-------------------------------------------------------------------------
+%% @doc Normalizes filenames.
+%% @end
+%%-------------------------------------------------------------------------
+normalize_fn([_|_] = FN) -> normalize_fn(FN, []);
+normalize_fn(FN) when is_binary(FN) -> normalize_fn(binary_to_list(FN));
+normalize_fn(FN) when is_integer(FN) -> normalize_fn(integer_to_list(FN));
+normalize_fn(FN) when is_atom(FN) -> normalize_fn(atom_to_list(FN));
+normalize_fn(_FN) -> "nofilename".
+
+normalize_fn([C|FN], Acc) ->
+	case is_uuri_char(C) of
+		true -> normalize_fn(FN, [C|Acc]);
+		false -> normalize_fn(FN, [$_|Acc]) end;
+normalize_fn([], Acc) -> lists:reverse(Acc).
+
 -include_lib("eunit/include/eunit.hrl").
 
 escape_regex_test_() -> [
@@ -1281,5 +1293,15 @@ escape_regex_test_() -> [
 	?_assertEqual("\\[a-Z]\\{0-9}", escape_regex("[a-Z]{0-9}"))
 ].
 
+normalize_fn_test_() -> [
+	?_assertEqual("hello_world_", normalize_fn("hello world!")),
+	?_assertEqual("hello_world_", normalize_fn("hello:world/")),
+	?_assertEqual("h-w_d", normalize_fn(<<"h-w_d">>)),
+	?_assertEqual("helloworld", normalize_fn(helloworld)),
+	?_assertEqual("helloworld62", normalize_fn(helloworld62)),
+	?_assertEqual("62", normalize_fn(62)),
+	?_assertEqual("nofilename", normalize_fn("")),
+	?_assertEqual("hello_world_", normalize_fn("hello|world>"))
+].
 
 

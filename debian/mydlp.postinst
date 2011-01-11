@@ -24,6 +24,9 @@ SSLDIR=/etc/mydlp/ssl
 DATEBIN=/bin/date
 INIT_EPOCH=/var/lib/mydlp/init_epoch
 
+CHOWN=/bin/chown
+QUARANTINE_DIR=/var/lib/mydlp/quarantine/
+
 # Generates SSL keys
 generate_keys() {
 	mkdir -p $SSLDIR || exit 1
@@ -45,11 +48,16 @@ generate_init_epoch() {
 	[ -e "$INIT_EPOCH" ] || ( /bin/echo -n "$($DATEBIN +%s)" > $INIT_EPOCH )
 }
 
+chown_quarantine() {
+	$CHOWN -R 33.33 $QUARANTINE_DIR
+}
+
 case "$1" in
     configure)
 	generate_init_epoch
 	generate_keys
 	configure_apache
+	chown_quarantine
 	;;
 
     abort-upgrade|abort-deconfigure|abort-remove)

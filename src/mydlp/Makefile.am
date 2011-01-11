@@ -54,6 +54,7 @@ dist_erl_DATA = \
 	mydlp_mysql.erl \
 	mydlp_nlp_tr.erl \
 	mydlp_pg_sup.erl \
+	mydlp_quarantine.erl \
 	mydlp_regex.erl \
 	mydlp_smb_discover.erl \
 	mydlp_smtp_fsm.erl \

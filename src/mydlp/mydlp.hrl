@@ -29,19 +29,24 @@
 
 %% ---------------------------------
 %% Logging mechanism
-
 %% imported from http://github.com/processone/ejabberd/blob/master/src/ejabberd.hrl
+
 -define(LOG_PATH, "mydlp.log").
+
 -define(PID_FILE, "mydlp.pid").
+
 -define(SSL_FILES, [
 		{certfile, "/etc/mydlp/ssl/public.pem"},
 		{keyfile, "/etc/mydlp/ssl/private.pem"}
          ]).
+
 -define(DENIED_PAGE, "denied_page.html").
+
 -define(NLP_TR, [ 
           {activate, false},
           {kokler, "mydlp_nlp_tr_kokler.txt"}
          ]).
+
 -define(MYSQL, [
 		{host, "localhost"},
 		{port, 3306},
@@ -50,6 +55,13 @@
 		{database, "mydlp"},
 		{pool_size, 2}
          ]).
+
+-define(QUARANTINE, [
+          {dir, "/var/lib/mydlp/quarantine/"},
+          {uid, 33},
+          {gid, 33}
+         ]).
+
 -define(SMTP, [ 
           {helo_name, "mydlp.org"},
           {next_hop, {"localhost", 10027}},
@@ -92,7 +104,5 @@
 		text,
 		is_encrypted = false
         }).
-
--define(QUARANTINE_DIR, "/var/lib/mydlp/quarantine/").
 
 -endif.
