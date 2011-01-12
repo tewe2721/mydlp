@@ -179,20 +179,28 @@ split_multipart(Boundary,Body) -> split_multipart(Boundary,Body,[]).
 %%-------------------------------------------------------------------------
 split_multipart(_Boundary,<<>>,Acc) -> lists:reverse(Acc);
 split_multipart(Boundary,Body,Acc) when is_binary(Body)-> 
-	case re:run(Body, mydlp_api:escape_regex(Boundary), [{capture,first}]) of
+	EBoundary = mydlp_api:escape_regex(Boundary),
+	case re:run(Body, EBoundary, [{capture,first}]) of
 		nomatch -> split_multipart(Boundary,<<>>,Acc);
 		{match,[{Start,Length}]} when is_integer(Start) ->
-			JSize = Start + Length + 1,
+			JSize = Start + Length + 2,
 			<<_Pre:JSize/binary, New/binary>> = Body,
-			%case regexp:match(New,Boundary) of
-			case re:run(New, mydlp_api:escape_regex(Boundary), [{capture,first}]) of
+			case re:run(New, EBoundary, [{capture,first}]) of
 				nomatch -> split_multipart(Boundary,<<>>,Acc);
 				{match, [{Start2, _Length2}]} when is_integer(Start2) ->
-					PSize = Start2 - 3,
+					PSize = Start2 - 4,
 					<<Part:PSize/binary, Next/binary>> = New,
-					split_multipart(Boundary,Next,[Part|Acc])
+					case is_invalid_part(Part) of
+						true -> split_multipart(Boundary,Next, Acc);
+						false -> split_multipart(Boundary,Next,[Part|Acc])
+					end
 			end
 	end.
+
+is_invalid_part(<<$\r, Rest/binary>>) -> is_invalid_part(Rest);
+is_invalid_part(<<$\n, Rest/binary>>) -> is_invalid_part(Rest);
+is_invalid_part(<<>>) -> true;
+is_invalid_part(_Else) -> false.
 
 get_header(Key, #mime{} = MIME) -> get_header(Key,MIME#mime.header,[]);
 get_header(Key,Header) -> get_header(Key,Header,[]).
@@ -241,15 +249,15 @@ multipart_test() ->
        {'content-type',"multipart/mixed; boundary=\"frontier\""}],
       <<"Subject: ugh\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"frontier\"\r\n\r\n">>,
       [{mime,[{'content-type',"text/plain"}],
-             <<"\nContent-Type: text/plain\r\n\r\n">>,[],
-             <<"This is the body of the message.\r">>,
-             <<"This is the body of the message.\r">>,[]},
+             <<"Content-Type: text/plain\r\n\r\n">>,[],
+             <<"This is the body of the message.">>,
+             <<"This is the body of the message.">>,[]},
        {mime,[{'content-type',"application/octet-stream"},
               {'content-transfer-encoding',"base64"}],
-             <<"\nContent-Type: application/octet-stream\r\nContent-Transfer-Encoding: base64\r\n\r\n">>,
+             <<"Content-Type: application/octet-stream\r\nContent-Transfer-Encoding: base64\r\n\r\n">>,
              [],
-             <<"PGh0bWw+CiAgPGhlYWQ+CiAgPC9oZWFkPgogIDxib2R5PgogICAgPHA+VGhpcyBpcyB0aGUg\r\nYm9keSBvZiB0aGUgbWVzc2FnZS48L3A+CiAgPC9ib2R5Pgo8L2h0bWw+Cg==\r">>,
-             <<"PGh0bWw+CiAgPGhlYWQ+CiAgPC9oZWFkPgogIDxib2R5PgogICAgPHA+VGhpcyBpcyB0aGUg\r\nYm9keSBvZiB0aGUgbWVzc2FnZS48L3A+CiAgPC9ib2R5Pgo8L2h0bWw+Cg==\r">>,
+             <<"PGh0bWw+CiAgPGhlYWQ+CiAgPC9oZWFkPgogIDxib2R5PgogICAgPHA+VGhpcyBpcyB0aGUg\r\nYm9keSBvZiB0aGUgbWVzc2FnZS48L3A+CiAgPC9ib2R5Pgo8L2h0bWw+Cg==">>,
+             <<"PGh0bWw+CiAgPGhlYWQ+CiAgPC9oZWFkPgogIDxib2R5PgogICAgPHA+VGhpcyBpcyB0aGUg\r\nYm9keSBvZiB0aGUgbWVzc2FnZS48L3A+CiAgPC9ib2R5Pgo8L2h0bWw+Cg==">>,
              []}],
       <<"This is a message with multiple parts in MIME format.\r\n--frontier\r\nContent-Type: text/plain\r\n\r\nThis is the body of the message.\r\n--frontier\r\nContent-Type: application/octet-stream\r\nContent-Transfer-Encoding: base64\r\n\r\nPGh0bWw+CiAgPGhlYWQ+CiAgPC9oZWFkPgogIDxib2R5PgogICAgPHA+VGhpcyBpcyB0aGUg\r\nYm9keSBvZiB0aGUgbWVzc2FnZS48L3A+CiAgPC9ib2R5Pgo8L2h0bWw+Cg==\r\n--frontier-x1 -\r\n">>,
       <<"This is a message with multiple parts in MIME format.\r\n">>,
