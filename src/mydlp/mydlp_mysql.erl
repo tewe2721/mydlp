@@ -161,14 +161,15 @@ handle_info({async_reply, Reply, From}, State) ->
 	{noreply, State};
 
 handle_info({'DOWN', _, _, MPid , _}, #state{master_pid=MPid} = State) ->
-	{stop, normal, State};
+	{stop, normalStop, State};
 
 handle_info({'DOWN', _, _, Pid , _}, #state{host=Host,
 		user=User, password=Password, database=DB, 
 		pool_pids=PoolPids} = State) ->
 	PoolPids1 = lists:delete(Pid, PoolPids),
-	{ok,NewPid} = mysql:connect(p, Host, undefined, User, Password, DB, true),
-	{stop, normal, State#state{pool_pids=[NewPid|PoolPids1]}};
+	case mysql:connect(p, Host, undefined, User, Password, DB, true) of
+		{ok,NewPid} -> {noreply, State#state{pool_pids=[NewPid|PoolPids1]}};
+		_Else -> {stop, normalStop, State#state{pool_pids=PoolPids1}} end;
 
 handle_info(_Info, State) ->
 	{noreply, State}.
