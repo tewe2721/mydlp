@@ -609,7 +609,10 @@ transaction(F) ->
 ip_band({A1,B1,C1,D1}, {A2,B2,C2,D2}) -> {A1 band A2, B1 band B2, C1 band C2, D1 band D2}.
 
 resolve_rules(PS) -> resolve_rules(PS,[]).
-resolve_rules([P|PS], Rules) -> resolve_rules(PS, [resolve_rule(P)| Rules]);
+resolve_rules([P|PS], Rules) -> 
+	case resolve_rule(P) of
+		none -> resolve_rules(PS, Rules);
+		Rule -> resolve_rules(PS, [Rule| Rules]) end;
 resolve_rules([], Rules) -> lists:reverse(Rules).
 
 resolve_rule({mgroup, Id}) ->
@@ -617,8 +620,9 @@ resolve_rule({mgroup, Id}) ->
 			MG <- mnesia:table(match_group),
 			MG#match_group.id == Id
 			]),
-	[Parent] = qlc:e(Q),
-	resolve_rule(Parent);
+	case qlc:e(Q) of
+		[Parent] -> resolve_rule(Parent);
+		_Else -> none end;
 resolve_rule({rule, Id}) ->
 	Q = qlc:q([{R#rule.id, R#rule.action} || 
 			R <- mnesia:table(rule), 
@@ -626,7 +630,9 @@ resolve_rule({rule, Id}) ->
 			R#rule.id == Id,
 			F#filter.id == R#rule.filter_id
 			]),
-	[Rule] = qlc:e(Q), Rule.
+	case qlc:e(Q) of
+		[Rule] -> Rule;
+		_Else -> none end.
 	
 resolve_funcs(Rules) -> resolve_funcs(Rules,[]).
 resolve_funcs([{Id,Action}|Rules], Results) -> 
