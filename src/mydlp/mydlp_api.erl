@@ -802,23 +802,27 @@ df_to_files1([File|Files], Returns) ->
 	df_to_files1(Files, [File|Returns]);
 df_to_files1([], Returns) -> lists:reverse(Returns).
 
+ctf_ok(Files, File, ExtFiles, Returns) -> 
+	comp_to_files(Files, [File#file{compressed_copy=true}, df_to_files(ExtFiles)|Returns]).
+
+ctf_err_enc(Files, File, Returns) -> 
+	comp_to_files(Files, [File#file{is_encrypted=true}|Returns]).
+
 comp_to_files(Files) -> comp_to_files(Files, []).
-comp_to_files([#file{mime_type= <<"application/zip">>, is_encrypted=false} = File|Files], Returns) -> 
+comp_to_files([#file{mime_type= <<"application/zip">>, compressed_copy=false, is_encrypted=false} = File|Files], Returns) -> 
 	case zip:extract(File#file.data, [memory]) of
 		{ok, Ext} -> 
 			ExtFiles = ext_to_file(Ext),
-			comp_to_files(Files, [df_to_files(ExtFiles)|Returns]);
+			ctf_ok(Files, File, ExtFiles, Returns);
 		{error, _ShouldBeLogged} -> 
-			comp_to_files(Files, [File#file{is_encrypted=true}|Returns])
-	end;
-comp_to_files([#file{mime_type= <<"application/x-rar">>, is_encrypted=false} = File|Files], Returns) -> 
+			ctf_err_enc(Files, File, Returns) end;
+comp_to_files([#file{mime_type= <<"application/x-rar">>, compressed_copy=false, is_encrypted=false} = File|Files], Returns) -> 
 	case unrar(File#file.data) of
 		{ok, Ext} -> 
 			ExtFiles = ext_to_file(Ext),
-			comp_to_files(Files, [df_to_files(ExtFiles)|Returns]);
+			ctf_ok(Files, File, ExtFiles, Returns);
 		{error, _ShouldBeLogged} -> 
-			comp_to_files(Files, [File#file{is_encrypted=true}|Returns])
-	end;
+			ctf_err_enc(Files, File, Returns) end;
 %comp_to_files([#file{mime_type= <<"application/x-gzip">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
 	%try 
 	%	GUData = zlib:gunzip(File#file.data),
@@ -832,7 +836,7 @@ comp_to_files([#file{mime_type= <<"application/vnd.oasis.opendocument.text">>}|_
 comp_to_files([#file{mime_type= <<"application/octet-stream">>}|_] = Files, Returns) -> % Needs refinement for better ODF handling
 	%try_unzip(Files, Returns);
 	try_un7z(Files, Returns);
-comp_to_files([#file{mime_type= MimeType, is_encrypted=false} = File | Rest ] = Files, Returns) -> 
+comp_to_files([#file{mime_type= MimeType, compressed_copy=false, is_encrypted=false} = File | Rest ] = Files, Returns) -> 
 		case is_compression_mime(MimeType) of
 			true -> use_un7z(Files, Returns);
 			false -> comp_to_files(Rest, [File|Returns]) end;
@@ -843,22 +847,22 @@ use_un7z([File|Files], Returns) ->
 	case un7z(File#file.data, File#file.filename) of
 		{ok, Ext} -> 
 			ExtFiles = ext_to_file(Ext),
-			comp_to_files(Files, [df_to_files(ExtFiles)|Returns]);
+			ctf_ok(Files, File, ExtFiles, Returns);
 		{error, _ShouldBeLogged} -> 
-			comp_to_files(Files, [File#file{is_encrypted=true}|Returns]) end.
+			ctf_err_enc(Files, File, Returns) end.
 
 try_unzip([File|Files], Returns) ->
 	case zip:extract(File#file.data, [memory]) of
 		{ok, Ext} -> 
 			ExtFiles = ext_to_file(Ext),
-			comp_to_files(Files, [df_to_files(ExtFiles)|Returns]);
+			ctf_ok(Files, File, ExtFiles, Returns);
 		{error, _ShouldBeLogged} -> comp_to_files(Files, [File|Returns]) end.
 
 try_un7z([File|Files], Returns) ->
 	case un7z(File#file.data, File#file.filename) of
 		{ok, Ext} -> 
 			ExtFiles = ext_to_file(Ext),
-			comp_to_files(Files, [df_to_files(ExtFiles)|Returns]);
+			ctf_ok(Files, File, ExtFiles, Returns);
 		{error, _ShouldBeLogged} -> comp_to_files(Files, [File|Returns]) end.
 
 ext_to_file(Ext) ->
@@ -1293,6 +1297,15 @@ is_compression_mime(<<"application/x-xz">>) -> true;
 is_compression_mime(<<"application/x-winzip">>) -> true;
 is_compression_mime(<<"application/vnd.ms-cab-compressed">>) -> true;
 is_compression_mime(_Else) -> false.
+
+%%-------------------------------------------------------------------------
+%% @doc Returns whether given mime type belongs to a C/C++ object or not.
+%% @end
+%%-------------------------------------------------------------------------
+is_cobject_mime(<<"application/x-executable">>) -> true;
+is_cobject_mime(<<"application/x-sharedlib">>) -> true;
+is_cobject_mime(<<"application/x-object">>) -> true;
+is_cobject_mime(_Else) -> false.
 
 
 -include_lib("eunit/include/eunit.hrl").

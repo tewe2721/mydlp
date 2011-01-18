@@ -447,6 +447,14 @@ populate_match(Id, <<"e_file">>, Parent) ->
 	Func = e_file_match,
 	new_match(Id, Parent, Func);
 
+populate_match(Id, <<"i_archive">>, Parent) ->
+	Func = i_archive_match,
+	new_match(Id, Parent, Func);
+
+populate_match(Id, <<"i_binary">>, Parent) ->
+	Func = i_binary_match,
+	new_match(Id, Parent, Func);
+
 populate_match(Id, <<"trid">>, Parent) ->
 	Func = trid_match,
 	[CountS] = get_func_params(Id),

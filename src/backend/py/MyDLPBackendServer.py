@@ -33,6 +33,7 @@ import magic
 
 import iban
 import daemon
+import BCFileIntegrity
 
 import lxml.html
 
@@ -40,6 +41,7 @@ class MydlpHandler:
 	def __init__(self):
 		self.mime = magic.open(magic.MAGIC_MIME)
 		self.mime.load()
+		self.bcfi = BCFileIntegrity.BCFileIntegrity()
 
 	def getMagicMime(self, data):
 		try:
@@ -69,6 +71,18 @@ class MydlpHandler:
 			ge = GeneralException()
 			ge.why = "Python backend internal error..."
 			raise ge
+
+	def checkBinaryIntegrity(self, file_path):
+		try:
+			return self.bcfi.checkBinarySize(file_path)
+		except:
+			return False	
+
+	def checkArchiveIntegrity(self, file_path):
+		try:
+			return self.bcfi.checkArchiveSize(file_path)
+		except:
+			return False	
 
 class MyDLPBackendServer(daemon.Daemon):
 	def run(self):

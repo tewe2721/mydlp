@@ -56,6 +56,10 @@
 	e_file_match/2,
 	e_archive_match/0,
 	e_archive_match/2,
+	i_binary_match/0,
+	i_binary_match/2,
+	i_archive_match/0,
+	i_archive_match/2,
 	shash_match/0,
 	shash_match/2,
 	bayes_match/0,
@@ -260,6 +264,28 @@ e_file_match([#file{data=Data, is_encrypted=true} = File|Files]) ->
 		false -> e_file_match(Files) end;
 e_file_match([_File|Files]) -> e_file_match(Files);
 e_file_match([]) -> neg.
+
+i_binary_match() -> raw.
+
+i_binary_match(_Conf, {_Addr, Files}) -> i_binary_match(Files).
+i_binary_match([#file{mime_type=MimeType, data=Data} = File|Files]) ->
+	case mydlp_api:is_cobject_mime(MimeType) of
+		true -> case mydlp_tc:check_binary_integrity(Data) of
+			false -> {pos, {file, File}};
+			true -> i_binary_match(Files) end;
+		false -> i_binary_match(Files) end;
+i_binary_match([]) -> neg.
+
+i_archive_match() -> raw.
+
+i_archive_match(_Conf, {_Addr, Files}) -> i_archive_match(Files).
+i_archive_match([#file{mime_type=MimeType, data=Data} = File|Files]) ->
+	case mydlp_api:is_compression_mime(MimeType) of
+		true -> case mydlp_tc:check_archive_integrity(Data) of
+			false -> {pos, {file, File}};
+			true -> i_archive_match(Files) end;
+		false -> i_archive_match(Files) end;
+i_archive_match([]) -> neg.
 
 md5_match() -> raw.
 

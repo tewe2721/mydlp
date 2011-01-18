@@ -102,6 +102,7 @@
                 given_type,
                 data,
 		text,
+		compressed_copy = false,
 		is_encrypted = false
         }).
 

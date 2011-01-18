@@ -26,4 +26,6 @@ service Mydlp {
 	string getMagicMime(1 : binary Data) throws (1: GeneralException ge)
 	bool isValidIban(1 : string IbanStr)
 	binary htmlToText(1 : binary Data) throws (1: GeneralException ge)
+	bool checkBinaryIntegrity(1 : string FilePath)
+	bool checkArchiveIntegrity(1 : string FilePath)
 }

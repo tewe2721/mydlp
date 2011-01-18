@@ -36,6 +36,8 @@
 	get_mime/1,
 	is_valid_iban/1,
 	html_to_text/1,
+	check_binary_integrity/1,
+	check_archive_integrity/1,
 	stop/0]).
 
 %% gen_server callbacks
@@ -78,6 +80,20 @@ is_valid_iban(IbanStr) ->
 
 html_to_text(Html) ->
 	call_pool({thrift, py, htmlToText, [Html]}).
+
+check_binary_integrity(FileData) ->
+	{ok, FilePath} = mydlp_api:mktempfile(),
+	ok = file:write_file(FilePath, FileData, [raw]),
+	Ret = call_pool({thrift, py, checkBinaryIntegrity, [FilePath]}),
+	ok = file:delete(FilePath),
+	Ret.
+
+check_archive_integrity(FileData) ->
+	{ok, FilePath} = mydlp_api:mktempfile(),
+	ok = file:write_file(FilePath, FileData, [raw]),
+	Ret = call_pool({thrift, py, checkArchiveIntegrity, [FilePath]}),
+	ok = file:delete(FilePath),
+	Ret.
 
 %%%%%%%%%%%%%% gen_server handles
 

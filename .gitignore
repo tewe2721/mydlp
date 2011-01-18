@@ -2,13 +2,17 @@ Makefile
 Makefile.in
 aclocal.m4
 autom4te.cache
+config.guess
 config.log
 config.status
+config.sub
 configure
 configure.lineno
 configure.tmp
 depcomp
 erl_crash.dump
+libtool
+ltmain.sh
 py-compile
 install-sh
 missing
