@@ -31,7 +31,7 @@ libbfi_la_LDFLAGS = -no-undefined -version-info 0:0:0
 
 LIBS = -lelf -lmagic 
 
-run:
+run: libbfi.la
 	@echo "Running application..."
 	PYTHONPATH="/usr/lib/python2.6/site-packages:../../thrift/gen-py" python MyDLPBackendServer.py /tmp/.mydlp-backend-py.pid
 

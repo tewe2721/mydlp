@@ -35,6 +35,7 @@
 	replace_bin/3,
 	split_bin/2,
 	match_bin/2,
+	is_match_bin/2,
 	score_suite/2,
 	match/2,
 %	clean/1,
@@ -58,6 +59,8 @@
 replace_bin(BInKey, Data, Replace) -> async_re_call({rbin, BInKey, Replace}, Data).
 
 match_bin(BInKey, Data) -> async_re_call({mbin, BInKey}, Data).
+
+is_match_bin(BInKey, Data) -> async_re_call({i_mbin, BInKey}, Data).
 
 split_bin(BInKey, Data) -> async_re_call({sbin, BInKey}, Data).
 
@@ -101,6 +104,12 @@ handle_re({mbin, BInKey}, Data, #state{builtin_tree=BT}) ->
 	case re:run(Data, RE, [global, {capture, all, list}]) of
 		nomatch -> [];
 		{match, Captured} -> lists:append(Captured) end;
+
+handle_re({i_mbin, BInKey}, Data, #state{builtin_tree=BT}) ->
+	RE = gb_trees:get(BInKey, BT),
+	case re:run(Data, RE, [{capture, first}]) of
+		nomatch -> false;
+		{match, _Range} -> true end;
 
 handle_re({sbin, BInKey}, Data, #state{builtin_tree=BT}) ->
 	RE = gb_trees:get(BInKey, BT),
@@ -149,7 +158,9 @@ init([]) ->
 		%{nino, rec("(?:[A-Za-z]{2} ?-? ?\\d{2} ?-? ?\\d{2} ?-? ?\\d{2} ?-? ?[A-Za-z]{0,1})")},
 		{nonwc, rec("[^A-Za-z0-9]+")},
 		{sentence, rec("[\\n\\r\\t\\.!?]+\\s{0,1}\\){0,1}\\s+")},
-		{word, rec("\\d*(?:[.,]\\d+)+|[\\w\\p{L}]+-[\\w\\p{L}]+|[\\w\\p{L}]+")}
+		{word, rec("\\d*(?:[.,]\\d+)+|[\\w\\p{L}]+-[\\w\\p{L}]+|[\\w\\p{L}]+")},
+		{hexencoded, rec("[a-fA-F0-9\\r\\n]{512,}")},
+		{base64encoded, rec("[\\+/a-zA-Z0-9\\r\\n]{256,}(?:={1,}|[\\r\\n])")}
 	],
 	BT = insert_all(BInREs, gb_trees:empty()),
 

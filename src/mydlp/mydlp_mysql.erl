@@ -455,6 +455,10 @@ populate_match(Id, <<"i_binary">>, Parent) ->
 	Func = i_binary_match,
 	new_match(Id, Parent, Func);
 
+populate_match(Id, <<"p_text">>, Parent) ->
+	Func = p_text_match,
+	new_match(Id, Parent, Func);
+
 populate_match(Id, <<"trid">>, Parent) ->
 	Func = trid_match,
 	[CountS] = get_func_params(Id),

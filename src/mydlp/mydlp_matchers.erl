@@ -60,6 +60,8 @@
 	i_binary_match/2,
 	i_archive_match/0,
 	i_archive_match/2,
+	p_text_match/0,
+	p_text_match/2,
 	shash_match/0,
 	shash_match/2,
 	bayes_match/0,
@@ -286,6 +288,29 @@ i_archive_match([#file{mime_type=MimeType, data=Data} = File|Files]) ->
 			true -> i_archive_match(Files) end;
 		false -> i_archive_match(Files) end;
 i_archive_match([]) -> neg.
+
+p_text_match() -> analyzed.
+
+is_hex_or_base_encoded(Data) when is_binary(Data) ->
+	case mydlp_regex:is_match_bin(hexencoded, Data) of
+		true -> true;
+		false -> is_hex_or_base_encoded1(Data) end;
+is_hex_or_base_encoded(_Data) -> false.
+
+is_hex_or_base_encoded1(Data) ->  mydlp_regex:is_match_bin(base64encoded, Data).
+
+
+p_text_match(_Conf, {_Addr, Files}) -> p_text_match(Files).
+p_text_match([#file{mime_type=MimeType, data=Data} = File|Files]) ->
+	case mydlp_api:is_cobject_mime(MimeType) of
+		true -> case is_hex_or_base_encoded(Data) of
+			true -> {pos, {file, File}};
+			false -> p_text_match(Files) end;
+%		false -> case is_hex_or_base_encoded(Text) of
+%			true -> {pos, {file, File}};
+%			false -> p_text_match(Files) end end;
+		false -> p_text_match(Files) end;
+p_text_match([]) -> neg.
 
 md5_match() -> raw.
 
