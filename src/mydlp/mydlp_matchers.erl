@@ -233,13 +233,17 @@ nino_match1(Count, [File|Files]) ->
 	end;
 nino_match1(_Count, []) -> neg.
 
+-define(CFILE_MINSIZE, 128).
+
 e_archive_match() -> analyzed.
 
 e_archive_match(_, {_Addr, Files}) -> e_archive_match(Files).
 
-e_archive_match([#file{mime_type=MimeType, is_encrypted=true} = File|Files]) -> 
-	case mydlp_api:is_compression_mime(MimeType) of
-		true -> {pos, {file, File}};
+e_archive_match([#file{mime_type=MimeType, data=Data, is_encrypted=true} = File|Files]) -> 
+	case size(Data) > ?CFILE_MINSIZE of
+		true -> case mydlp_api:is_compression_mime(MimeType) of
+			true -> {pos, {file, File}};
+			false -> e_archive_match(Files) end;
 		false -> e_archive_match(Files) end;
 e_archive_match([_File|Files]) -> e_archive_match(Files);
 e_archive_match([]) -> neg.
