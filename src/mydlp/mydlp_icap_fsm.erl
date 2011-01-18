@@ -242,6 +242,8 @@ get_body(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_impl
 		"trace" -> 'TRACE';
 		"propfind" -> 'PROPFIND';
 		"pull" -> 'PULL';
+		"poll" -> 'POLL';
+		"search" -> 'SEARCH';
 		"lock" -> 'LOCK';
 %		"connect" -> 'CONNECT';
 		_Else -> throw({error, bad_method}) end,
