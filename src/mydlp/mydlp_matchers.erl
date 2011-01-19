@@ -260,9 +260,12 @@ e_file_match() -> analyzed.
 
 e_file_match(_, {_Addr, Files}) -> e_file_match(Files).
 
-e_file_match([#file{data=Data, is_encrypted=true} = File|Files]) -> 
+e_file_match([#file{data=Data, mime_type=MimeType, is_encrypted=true} = File|Files]) -> 
 	case size(Data) > ?EFILE_MINSIZE of
-		true -> {pos, {file, File}};
+		% compressed files which are marked as encrypted, should not be handled here. (fun e_archive_match)
+		true -> case mydlp_api:is_compression_mime(MimeType) of 
+			true -> e_file_match(Files);
+			false -> {pos, {file, File}} end;
 		false -> e_file_match(Files) end;
 e_file_match([_File|Files]) -> e_file_match(Files);
 e_file_match([]) -> neg.
