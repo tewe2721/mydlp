@@ -283,7 +283,12 @@ get_text(#file{mime_type= <<"application/postscript">>, data=Data}) ->
 	ps_to_text(Data);
 get_text(#file{mime_type= <<"text/",_Rest/binary>>, data=Data}) -> {ok, Data};
 get_text(#file{mime_type=undefined}) -> {error, unknown_type};
-get_text(_File) -> {error, unsupported_type}.
+get_text(#file{mime_type=MimeType}) -> 
+	case is_cobject_mime(MimeType) of
+		true -> {error, cobject};
+		false -> case is_compression_mime(MimeType) of
+			true -> {error, compression};
+			false -> {error, unsupported_type} end end.
 
 %%--------------------------------------------------------------------
 %% @doc Extracts Text from XML string
