@@ -54,9 +54,9 @@ decode(Message) when is_binary(Message) ->
 		{value,{'content-type',Value}} ->
 			case lists:prefix("multipart",http_util:to_lower(Value)) of
 				true -> 
-					Pos = string:chr(Value,61),
-					{_,B} = lists:split(Pos,Value),
-					Boundary = string:strip(B,both,34),
+					Boundary = case re:run(Value, ?MP_BOUNDARY_KEY, [{capture,first}]) of
+						nomatch -> get_wo_quote_after(Value);
+						{match,[{S,9}]} -> get_wo_quote_after(Value, S+10) end,
 					Content = case re:run(MIME#mime.body_text, 
 							mydlp_api:escape_regex(Boundary), 
 							[{capture,first}] ) of
@@ -66,8 +66,7 @@ decode(Message) when is_binary(Message) ->
 						{match,[{2,_}]} -> [];
 						{match,[{I,_}]} -> 
 							CSize = I - 2,
-							<<C:CSize/binary, _/binary>> = MIME#mime.body_text, C 
-					end,
+							<<C:CSize/binary, _/binary>> = MIME#mime.body_text, C end,
 					Parts = split_multipart(Boundary,MIME#mime.body_text),
 					MIMEParts = lists:map(fun(P) ->
 							decode(P)
@@ -184,13 +183,21 @@ split_multipart(Boundary,Body,Acc) when is_binary(Body)->
 	case re:run(Body, EBoundary, [{capture,first}]) of
 		nomatch -> split_multipart(Boundary,<<>>,Acc);
 		{match,[{Start,Length}]} when is_integer(Start) ->
-			JSize = Start + Length + 2,
-			<<_Pre:JSize/binary, New/binary>> = Body,
+			JSize = Start + Length,
+			New = case Body of 
+				<<_Pre:JSize/binary, "\r\n", N1/binary>> -> Body, N1;
+				<<_Pre:JSize/binary, "\n", N2/binary>> -> Body, N2;
+				<<_Pre:JSize/binary, N2/binary>> -> Body, N2;
+				_Else -> <<>> end,
 			case re:run(New, EBoundary, [{capture,first}]) of
 				nomatch -> split_multipart(Boundary,<<>>,Acc);
 				{match, [{Start2, _Length2}]} when is_integer(Start2) ->
 					PSize = Start2 - 4,
-					<<Part:PSize/binary, Next/binary>> = New,
+					<<P1:PSize/binary, Nx1/binary>> = New,
+					{Part, Next} = case Nx1 of
+						<<"\r\n--", _/binary>> -> {P1, Nx1};
+						<<PS:1/binary, Nx2/binary>> -> {<<P1/binary, PS/binary>>, Nx2};
+						_Else2 -> {P1, Nx1} end,
 					case is_invalid_part(Part) of
 						true -> split_multipart(Boundary,Next, Acc);
 						false -> split_multipart(Boundary,Next,[Part|Acc])
@@ -235,6 +242,16 @@ decode_content('base64', EncContent) -> base64:decode(EncContent);
 decode_content("quoted-printable", EncContent) -> decode_content('quoted-printable', EncContent);
 decode_content('quoted-printable', EncContent) -> quoted_to_raw(EncContent);
 decode_content(_Other, EncContent) -> decode_content('7bit', EncContent).
+
+get_wo_quote_after(Value) ->
+	Pos = string:chr(Value,61),
+	get_wo_quote_after(Value, Pos).
+
+get_wo_quote_after(Value, Pos) ->
+	{_,B} = lists:split(Pos,Value),
+	string:strip(B,both,34).
+
+%%%%%%%%%%%%%%%%%%%%%%% Unit tests
 
 -include_lib("eunit/include/eunit.hrl").
 

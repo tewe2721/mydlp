@@ -39,6 +39,8 @@
 -define(SMTP_DATA_END_BIN, <<13,10,46,13,10>>). % End of data command "\r\n.\r\n"
 -define(SMTP_DATA_END_REGEX, <<13,10,92,46,13,10>>). % End of data command "\r\n\.\r\n"
 
+-define(MP_BOUNDARY_KEY, <<"boundary=">>).
+
 -record(smtpc,{
 	socket = [],
 	features = [],
