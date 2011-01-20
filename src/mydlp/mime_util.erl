@@ -185,9 +185,9 @@ split_multipart(Boundary,Body,Acc) when is_binary(Body)->
 		{match,[{Start,Length}]} when is_integer(Start) ->
 			JSize = Start + Length,
 			New = case Body of 
-				<<_Pre:JSize/binary, "\r\n", N1/binary>> -> Body, N1;
-				<<_Pre:JSize/binary, "\n", N2/binary>> -> Body, N2;
-				<<_Pre:JSize/binary, N2/binary>> -> Body, N2;
+				<<_Pre:JSize/binary, "\r\n", N1/binary>> -> N1;
+				<<_Pre:JSize/binary, "\n", N1/binary>> -> N1;
+				<<_Pre:JSize/binary, N1/binary>> -> N1;
 				_Else -> <<>> end,
 			case re:run(New, EBoundary, [{capture,first}]) of
 				nomatch -> split_multipart(Boundary,<<>>,Acc);
