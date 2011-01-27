@@ -106,7 +106,8 @@ dec_addr2(Address,Addr) ->
 headers(HeaderText) when is_binary(HeaderText) -> headers(binary_to_list(HeaderText));
 headers(HeaderText) when is_list(HeaderText) ->
 	%{ok,H,_Lines} = regexp:gsub(HeaderText,"\r\n[\t ]"," "),
-	H = re:replace(HeaderText,"\r\n[\t ]"," ", [global, {return, list}]),
+	%H = re:replace(HeaderText,"\r\n[\t ]+"," ", [global, {return, list}]),
+	H = re:replace(HeaderText,"\r?\n[\t ]+"," ", [global, {return, list}]),
 	Tokens = string:tokens(H,[13,10]),
 	headers(Tokens,[]).
 %%-------------------------------------------------------------------------
@@ -156,10 +157,14 @@ split(Part) when is_binary(Part) ->
 			case re:run(Part, <<"\n\n">>, [{capture,first}]) of
 				%nomatch -> {error,no_break_found};
 				nomatch -> #mime{header_text= <<>>, body_text = Part};
+				{match,[{0,2}]} -> 
+					<<_Junk:2/binary, Rest/binary>> = Part, split(Rest);
 				{match,[{Pos,2}]} -> 
 					HeaderSize = Pos + 2,
 					<<Header:HeaderSize/binary, Body/binary>> = Part,
 					#mime{header_text=Header, body_text = Body} end;
+		{match,[{0,4}]} -> 
+			<<_Junk:4/binary, Rest/binary>> = Part, split(Rest);
 		{match,[{Pos,4}]} -> 
 			HeaderSize = Pos + 4,
 			<<Header:HeaderSize/binary, Body/binary>> = Part,
