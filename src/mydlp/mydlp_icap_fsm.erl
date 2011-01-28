@@ -470,18 +470,18 @@ handle_info({tcp, Socket, Bin}, StateName, #state{socket=Socket,
 		cache_http_h=true, cache_data_http_h=CacheH} = StateData) ->
 	% Flow control: enable forwarding of next TCP message
 	inet:setopts(Socket, [{active, once}]),
-	?MODULE:StateName({data, Bin}, StateData#state{cache_data_http_h=[Bin|CacheH]});
+	fsm_call(StateName, {data, Bin}, StateData#state{cache_data_http_h=[Bin|CacheH]});
 
 handle_info({tcp, Socket, Bin}, StateName, #state{socket=Socket,
 		cache_http_b=true, cache_data_http_b=CacheB} = StateData) ->
 	% Flow control: enable forwarding of next TCP message
 	inet:setopts(Socket, [{active, once}]),
-	?MODULE:StateName({data, Bin}, StateData#state{cache_data_http_b=[Bin|CacheB]});
+	fsm_call(StateName, {data, Bin}, StateData#state{cache_data_http_b=[Bin|CacheB]});
 
 handle_info({tcp, Socket, Bin}, StateName, #state{socket=Socket} = StateData) ->
 	% Flow control: enable forwarding of next TCP message
 	inet:setopts(Socket, [{active, once}]),
-	?MODULE:StateName({data, Bin}, StateData);
+	fsm_call(StateName, {data, Bin}, StateData);
 
 handle_info({tcp_closed, Socket}, _StateName, #state{socket=Socket, addr=_Addr} = StateData) ->
 	%error_logger:info_msg("~p Client ~p disconnected.\n", [self(), Addr]),
@@ -489,6 +489,14 @@ handle_info({tcp_closed, Socket}, _StateName, #state{socket=Socket, addr=_Addr} 
 
 handle_info(_Info, StateName, StateData) ->
 	{noreply, StateName, StateData}.
+
+fsm_call(StateName, Args, StateData) -> 
+	try ?MODULE:StateName(Args, StateData)
+	catch Class:Error ->
+		?ERROR_LOG("Error occured on FSM (~w) call (~w). Class: [~w]. Error: [~w].~nStack trace: ~w~n",
+				[?MODULE, StateName, Class, Error, erlang:get_stacktrace()]),
+		%(catch 'REPLY_OK'(StateData)),
+		{stop, normalStop, StateData} end.
 
 %%-------------------------------------------------------------------------
 %% Func: terminate/3

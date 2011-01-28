@@ -34,6 +34,7 @@
 %% API
 -export([start_link/0,
 	mail/1,
+	mail/3,
 	stop/0]).
 
 %% gen_server callbacks
@@ -53,6 +54,9 @@
 mail(Message) ->
 	gen_server:cast(?MODULE, {mail, Message}).
 
+mail(From, Rcpt, MessageS) ->
+	gen_server:cast(?MODULE, {mail, From, Rcpt, MessageS}).
+
 %%%%%%%%%%%%%% gen_server handles
 
 handle_call(stop, _From,  State) ->
@@ -63,6 +67,11 @@ handle_call(_Msg, _From, State) ->
 
 % INSERT INTO log_incedent (id, rule_id, protocol, src_ip, destination, action, matcher, filename, misc)
 handle_cast({mail, #message{mail_from=From, rcpt_to=Rcpt, message=MessageS}}, 
+		#state{smtp_helo_name=Helo, smtp_dest_host=DHost, smtp_dest_port=DPort} = State) ->
+	spawn_link(fun() -> smtpc:sendmail(DHost, DPort, Helo, From, Rcpt, MessageS) end),
+	{noreply, State};
+
+handle_cast({mail, From, Rcpt, MessageS}, 
 		#state{smtp_helo_name=Helo, smtp_dest_host=DHost, smtp_dest_port=DPort} = State) ->
 	spawn_link(fun() -> smtpc:sendmail(DHost, DPort, Helo, From, Rcpt, MessageS) end),
 	{noreply, State};

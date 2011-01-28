@@ -53,6 +53,7 @@
 	addr        = [],
 	relay       = false,
 	enable_for_all = false,
+	bypass_on_fail = false,
 	options     = [],
 	buff        = <<>>,
 	line        = [],
@@ -65,6 +66,7 @@
 	messagename = undefined,
 	message_record = undefined,
 	message_mime = undefined,
+	message_bin = undefined,
 	files       = [],
 	data        = undefined
 	}).

@@ -83,7 +83,8 @@ init([]) ->
 	end,
 
 	{enable_for_all, EFA} = lists:keyfind(enable_for_all, 1, ConfList),
-	{ok, 'WAIT_FOR_SOCKET', #smtpd_fsm{enable_for_all=EFA}}.
+	{bypass_on_fail, BOF} = lists:keyfind(bypass_on_fail, 1, ConfList),
+	{ok, 'WAIT_FOR_SOCKET', #smtpd_fsm{enable_for_all=EFA, bypass_on_fail=BOF}}.
 
 %%-------------------------------------------------------------------------
 %% Func: StateName/2
@@ -133,14 +134,17 @@ init([]) ->
 		0 -> {next_state, 'WAIT_FOR_DATA', State#smtpd_fsm{buff = NewBuff}, ?TIMEOUT};
 		Pos -> % wait for end of data and return data in state.
 			<<Message:Pos/binary,13,10,46,13,10,NextBuff/binary>> = NewBuff,
-			NewState = smtpd_cmd:read_message(Message,State),
-			smtpd_cmd:send(NewState,250),
-			'READ_FILES'(NewState#smtpd_fsm{buff=NextBuff})
-	end;
+			gen_fsm:send_all_state_event(self(), ok),
+			{next_state, 'PROCESS_DATA', State#smtpd_fsm{message_bin=Message, buff=NextBuff}, ?TIMEOUT} end;
 
 'WAIT_FOR_DATA'(timeout, State) ->
     ?DEBUG("~p Client connection timeout - closing.\n", [self()]),
     {stop, normal, State}.
+
+'PROCESS_DATA'(ok, #smtpd_fsm{message_bin=Message} = State) ->
+	NewState = smtpd_cmd:read_message(Message,State),
+	smtpd_cmd:send(NewState,250),
+	'READ_FILES'(NewState).
 
 'READ_FILES'(#smtpd_fsm{message_mime=MIME} = State) ->
 	Files = mime_to_files(MIME),
@@ -185,30 +189,12 @@ init([]) ->
 				"\r\n" ++
 				mydlp_api:get_denied_page(html_base64_str)},
 	mydlp_smtpc:mail(RepMessage),
-	NextState = State#smtpd_fsm{cmd   = undefined,
-			param = undefined,
-			mail  = undefined,
-			rcpt  = undefined,
-			to    = undefined,
-			messagename = undefined,
-			message_record = undefined,
-		        message_mime = undefined,
-		        files       = [],
-			data  = undefined},
+	NextState = reset_statedata(State),
 	{next_state, 'WAIT_FOR_CMD', NextState, ?TIMEOUT}.
 
 'CONNECT_REMOTE'(connect, #smtpd_fsm{message_record=MessageR} = State) ->
 	mydlp_smtpc:mail(MessageR),
-	NextState = State#smtpd_fsm{cmd   = undefined,
-			param = undefined,
-			mail  = undefined,
-			rcpt  = undefined,
-			to    = undefined,
-			messagename = undefined,
-			message_record = undefined,
-		        message_mime = undefined,
-		        files       = [],
-			data  = undefined},
+	NextState = reset_statedata(State),
 	{next_state, 'WAIT_FOR_CMD', NextState, ?TIMEOUT}.
 
 %%-------------------------------------------------------------------------
@@ -218,10 +204,14 @@ init([]) ->
 %%          {stop, Reason, NewStateData}
 %% @private
 %%-------------------------------------------------------------------------
+handle_event(ok, 'PROCESS_DATA' = StateName, StateData) ->
+	fsm_call(StateName, ok, StateData);
+
 handle_event(stop, _StateName, State) ->
 	{stop, normal, State};
+
 handle_event(Event, StateName, StateData) ->
-    {stop, {StateName, undefined_event, Event}, StateData}.
+	{stop, {StateName, undefined_event, Event}, StateData}.
 
 %%-------------------------------------------------------------------------
 %% Func: handle_sync_event/4
@@ -246,7 +236,7 @@ handle_sync_event(Event, _From, StateName, StateData) ->
 handle_info({tcp, Socket, Bin}, StateName, #smtpd_fsm{socket=Socket} = StateData) ->
     % Flow control: enable forwarding of next TCP message
     inet:setopts(Socket, [{active, once}]),
-    ?MODULE:StateName({data, Bin}, StateData);
+    fsm_call(StateName, {data, Bin}, StateData);
 
 handle_info({tcp_closed, Socket}, _StateName, #smtpd_fsm{socket=Socket, addr=_Addr} = StateData) ->
 %    error_logger:info_msg("~p Client ~p disconnected.\n", [self(), Addr]),
@@ -254,6 +244,27 @@ handle_info({tcp_closed, Socket}, _StateName, #smtpd_fsm{socket=Socket, addr=_Ad
 
 handle_info(_Info, StateName, StateData) ->
     {noreply, StateName, StateData}.
+
+fsm_call(StateName, Args, StateData) -> 
+	try ?MODULE:StateName(Args, StateData)
+	catch Class:Error ->
+		?ERROR_LOG("Error occured on FSM (~w) call (~w). Class: [~w]. Error: [~w].~nStack trace: ~w~n",
+				[?MODULE, StateName, Class, Error, erlang:get_stacktrace()]),
+		(catch case is_bypassable(StateData) of
+			true -> deliver_raw(StateData),
+				NextStateData = reset_statedata(StateData),
+				{next_state, 'WAIT_FOR_CMD', NextStateData, ?TIMEOUT};
+			false -> {stop, normal, StateData} end) end.
+
+is_bypassable(#smtpd_fsm{bypass_on_fail=false}) -> false;
+is_bypassable(#smtpd_fsm{bypass_on_fail=undefined}) -> false;
+is_bypassable(#smtpd_fsm{mail=undefined}) -> false;
+is_bypassable(#smtpd_fsm{rcpt=undefined}) -> false;
+is_bypassable(#smtpd_fsm{message_bin=undefined}) -> false;
+is_bypassable(#smtpd_fsm{}) -> true.
+
+deliver_raw(#smtpd_fsm{mail=From, rcpt=Rcpt, message_bin=MessageS}) -> 
+	mydlp_smtpc:mail(From, Rcpt, MessageS).
 
 %%-------------------------------------------------------------------------
 %% Func: terminate/3
@@ -286,6 +297,19 @@ end_of_data(Bin) ->
 	case re:run(Bin, ?SMTP_DATA_END_REGEX, [{capture,first}]) of
 		{match,[{Pos,5}]} -> Pos;
 		nomatch -> 0 end.
+
+reset_statedata(#smtpd_fsm{} = State) ->
+	State#smtpd_fsm{cmd   = undefined,
+			param = undefined,
+			mail  = undefined,
+			rcpt  = undefined,
+			to    = undefined,
+			messagename = undefined,
+			message_record = undefined,
+		        message_mime = undefined,
+		        message_bin = undefined,
+		        files       = [],
+			data  = undefined}.
 
 heads_to_file(Headers) -> heads_to_file(Headers, #file{}).
 

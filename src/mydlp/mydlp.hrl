@@ -22,7 +22,7 @@
 -define(_MYDLP_HRL, true).
 
 -define(MAX_RESTART, 5).
--define(MAX_TIME, 60).
+-define(MAX_TIME, 20).
 -define(KILL_TIMEOUT, 2000).
 
 -define(TIMEOUT, 120000).
@@ -65,6 +65,7 @@
 -define(SMTP, [ 
           {helo_name, "mydlp.org"},
           {next_hop, {"localhost", 10027}},
+          {bypass_on_fail, true},
           {enable_for_all, true}
          ]).
 

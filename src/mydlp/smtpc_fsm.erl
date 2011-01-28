@@ -292,7 +292,7 @@ smtp_cmd({info,Info}, _From, State) ->
 		features -> State#smtpc.features;
 		state -> State#smtpc.state;
 		type -> State#smtpc.type;
-		scoket -> State#smtpc.socket;
+		socket -> State#smtpc.socket;
 		_Other -> State
 	end,
 	{reply,Reply,smtp_cmd,State}.
