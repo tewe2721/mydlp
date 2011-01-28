@@ -133,7 +133,15 @@ handle_cast(_Msg, State) ->
 %% @end
 %% @private
 %%-------------------------------------------------------------------------
-handle_info(_Info, State) ->
+handle_info({'EXIT', ListSock, Reason}, 
+		#state{socket_sup=FSMName, listener=ListSock} = State) ->
+	?ERROR_LOG("Socket closed for FSM (~w). Reason: [~w] ~nStack trace: ~w", 
+			[FSMName, Reason, erlang:get_stacktrace()]),
+	{stop, normalStop, State};
+
+handle_info(Info, #state{socket_sup=FSMName} = State) ->
+	?ERROR_LOG("Unhandled message for acceptor (~w). Message: [~w]",
+			[FSMName, Info]),
 	{noreply, State}.
 
 %%-------------------------------------------------------------------------
