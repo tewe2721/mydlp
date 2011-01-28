@@ -155,7 +155,9 @@ apply_rules([{Id, Action, Matchers}|Rules], Params) ->
 	case execute_matchers(Matchers, Params) of
 		{pos, {file, File}, {matcher, Func}, {misc, Misc}} -> 
 			{Action, {{rule, Id}, {file, File}, {matcher, Func}, {misc, Misc}}};
-		neg -> apply_rules(Rules, Params)
+		{neg, NewParams} -> apply_rules(Rules, NewParams)
+			% If neg is return, params may be modified because of whitefile matchers.
+			% So, we should updated params.
 	end;
 apply_rules([], _Params) -> pass.
 
@@ -172,9 +174,11 @@ execute_matchers([{Func,_}|_] = Matchers, {Addr, Files} = Params, false) ->
 execute_matchers([], Params, PLT) -> apply_f([], Params, PLT).
 
 apply_f([{whitefile, _FuncParams}|Matchers], {Addr, Files}, PLT) ->
+	% Droping whitefiles to prevent execution of matchers with them
 	execute_matchers(Matchers, {Addr, drop_whitefile(Files)}, PLT);
 apply_f([{whitefile_dr, _FuncParams}|Matchers], {Source, Files}, PLT) ->
 	[{cid, CustomerId}|_] = Source,
+	% Droping whitefiles to prevent execution of matchers with them
 	execute_matchers(Matchers, {Source, drop_whitefile_dr(Files, CustomerId)}, PLT);
 apply_f([{Func, FuncParams}|Matchers], Params, PLT) ->
 	case apply_m(Func, [FuncParams, Params]) of
@@ -183,7 +187,7 @@ apply_f([{Func, FuncParams}|Matchers], Params, PLT) ->
                 {pos, {file, F}, {misc, Misc}} -> {pos, {file, F}, {matcher, Func}, {misc, Misc}};
                 pos -> {pos, {file, #file{name="unknown"}}, {matcher, Func}, {misc, ""}}
         end;
-apply_f([], _Params, _PLT) -> neg.
+apply_f([], Params, _PLT) -> {neg, Params}.
 
 apply_m(Func, [FuncParams, {Addr, Files}]) ->
 	Args = case get_matcher_req(Func) of
