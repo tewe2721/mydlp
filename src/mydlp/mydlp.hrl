@@ -30,6 +30,7 @@
 -define(TIMEOUT, 120000).
 
 -define(MAX_MEM_OBJ, 102400).
+-define(CHUNK_THRESHOLD, 1024000).
 
 %% ---------------------------------
 %% Logging mechanism
@@ -39,7 +40,7 @@
 
 -define(PID_FILE, "mydlp.pid").
 
--define(WORK_DIR, "/var/lib/mydlp/work").
+-define(WORK_DIR, "/var/tmp/mydlp").
 
 -define(SSL_FILES, [
 		{certfile, "/etc/mydlp/ssl/public.pem"},

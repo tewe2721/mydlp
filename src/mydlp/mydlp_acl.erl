@@ -80,14 +80,15 @@ acl_exec2(AllRules, Source, Files) ->
 	acl_exec3(AllRules, Source, Files).
 
 acl_exec3(_AllRules, _Source, []) -> pass;
-acl_exec3(AllRules, Source, [File|Files]) ->
-	File1 = mydlp_api:load_files(File),
-	{PFiles, NewFiles} = mydlp_api:analyze(File1),
+acl_exec3(AllRules, Source, Files) ->
+	{InChunk, RestOfFiles} = mydlp_api:get_chunk(Files),
+	Files1 = mydlp_api:load_files(InChunk),
+	{PFiles, NewFiles} = mydlp_api:analyze(Files1),
 	Param = {Source, drop_nodata(PFiles)},
 
 	case apply_rules(AllRules, Param) of
 		pass ->	acl_exec2(AllRules, Source,
-				lists:append(Files, NewFiles) );
+				lists:append(RestOfFiles, NewFiles) );
 		Else -> Else end.
 
 %% it needs refactoring for trusted domains

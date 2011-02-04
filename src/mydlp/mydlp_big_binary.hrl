@@ -36,6 +36,10 @@
 	mydlp_workdir:get_obj_fp(Ref)
 ).
 
+% Big binary get filesize
+-define(BB_S(Ref),
+	mydlp_workdir:get_obj_size(Ref)
+).
 
 % Big binary delete
 -define(BB_D(Ref),

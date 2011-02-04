@@ -37,6 +37,7 @@
 	read_obj/1,
 	delete_obj/1,
 	get_obj_fp/1,
+	get_obj_size/1,
 	stop/0]).
 
 %% gen_server callbacks
@@ -49,18 +50,18 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
--record(state, {workdir}).
+-record(state, {}).
 
 %%%%%%%%%%%%% API
 
-tempfile() -> gen_server:call(?MODULE, tempfile).
+tempfile() ->
+	Ref = now(),
+	FN = ref_to_fn("tmp", Ref),
+	{ok, FN}.
 
-% removes unix file
 raw_to_obj({unixfile, FilePath}) -> 
 	case filelib:file_size(FilePath) > ?MAX_MEM_OBJ of
-		true -> case gen_server:call(?MODULE, {cache_unixfile, FilePath}) of
-			{error, Err} -> throw({error, Err});
-			CacheRef -> CacheRef end;
+		true -> cache_unixfile(FilePath);
 		false -> case file:read_file(FilePath) of
 			{ok, Bin} -> file:delete(FilePath), 
 				{memory, Bin};
@@ -69,9 +70,7 @@ raw_to_obj({memory, Bin}) -> raw_to_obj(Bin);
 raw_to_obj({cacheref, Ref}) -> {cacheref, Ref};
 raw_to_obj(RawData) -> 
 	case mydlp_api:binary_size(RawData) > ?MAX_MEM_OBJ of
-		true -> case gen_server:call(?MODULE, {cache, RawData}) of
-			{error, Err} -> throw({error, Err});
-			CacheRef -> CacheRef end;
+		true -> cache(RawData);
 		false -> {memory, list_to_binary([RawData])} end.
 
 read_obj({memory, Bin}) -> Bin;
@@ -85,48 +84,21 @@ get_obj_fp({unixfile, FilePath}) -> FilePath;
 get_obj_fp({cacheref, Ref}) -> ref_to_fn("obj", Ref);
 get_obj_fp(_Else) -> throw({error, obj_type_no_fn}).
 
-delete_obj({cacheref, Ref}) -> gen_server:cast(?MODULE, {delete_obj, Ref});
+get_obj_size({memory, Bin}) -> size(Bin);
+get_obj_size(Ref) ->
+	FP = get_obj_fp(Ref),
+	filelib:file_size(FP).
+
+delete_obj({cacheref, Ref}) -> delete_cacheref(Ref);
 delete_obj(_Else) -> ok.
 
 %%%%%%%%%%%%%% gen_server handles
-
-ref_to_fn(Prefix, Ref) ->
-	{A,B,C} = Ref,
-	RN = lists:flatten(io_lib:format("~s-~p.~p.~p",[Prefix,A,B,C])),
-	?WORK_DIR ++ "/" ++ RN.
-
-handle_call(tempfile, _From, State) ->
-	Ref = now(),
-	FN = ref_to_fn("tmp", Ref),
-	Reply = {ok, FN},
-	{reply, Reply, State};
-
-handle_call({cache_unixfile, FilePath} , _From, State) ->
-	Ref = now(),
-	FN = ref_to_fn("obj", Ref),
-	Reply = case file:rename(FilePath, FN) of
-		ok -> {cacheref, Ref};
-		{error, Err} -> {error, Err} end,
-	{reply, Reply, State};
-
-handle_call({cache, RawData} , _From, State) ->
-	Ref = now(),
-	FN = ref_to_fn("obj", Ref),
-	Reply = case file:write_file(FN, RawData, [raw]) of
-		ok -> {cacheref, Ref};
-		Err -> Err end,
-	{reply, Reply, State};
 
 handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
 
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
-
-handle_cast({delete_obj, Ref} , State) ->
-	FN = ref_to_fn("obj", Ref),
-	file:delete(FN),
-	{noreply, State};
 
 handle_cast(_Msg, State) ->
         {noreply, State}.
@@ -137,20 +109,16 @@ handle_info(_Info, State) ->
 %%%%%%%%%%%%%%%% Implicit functions
 
 start_link() ->
-
-	Workdir = case application:get_env(mydlp, work_dir) of
-		{ok, WD} -> WD;
-		_Else -> ?WORK_DIR end,
-
-	case gen_server:start_link({local, ?MODULE}, ?MODULE, [Workdir], []) of
+	case gen_server:start_link({local, ?MODULE}, ?MODULE, [], []) of
 		{ok, Pid} -> {ok, Pid};
 		{error, {already_started, Pid}} -> {ok, Pid} end.
 
 stop() ->
 	gen_server:call(?MODULE, stop).
 
-init([Workdir]) ->
-	{ok, #state{workdir=Workdir}}.
+init([]) ->
+	filelib:ensure_dir(?WORK_DIR ++ "/"),
+	{ok, #state{}}.
 
 terminate(_Reason, _State) ->
 	ok.
@@ -159,4 +127,29 @@ code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 
 %%%% implicit
+
+cache(RawData) ->
+	Ref = now(),
+	FN = ref_to_fn("obj", Ref),
+	case file:write_file(FN, RawData, [raw]) of
+		ok -> {cacheref, Ref};
+		{error, Err} -> throw({error, Err}) end.
+
+cache_unixfile(FilePath) ->
+	Ref = now(),
+	FN = ref_to_fn("obj", Ref),
+	case file:rename(FilePath, FN) of
+		ok -> {cacheref, Ref};
+		{error, Err} -> throw({error, Err}) end.
+
+ref_to_fn(Prefix, Ref) ->
+	{A,B,C} = Ref,
+	RN = lists:flatten(io_lib:format("~s-~p.~p.~p",[Prefix,A,B,C])),
+	?WORK_DIR ++ "/" ++ RN.
+
+delete_cacheref(Ref) ->
+	spawn(fun() ->
+		FN = ref_to_fn("obj", Ref),
+		file:delete(FN) 
+	end), ok.
 
