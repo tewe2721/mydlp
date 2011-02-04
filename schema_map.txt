@@ -5,3 +5,5 @@ mydlp-sql-4.patch: 0.5.2.dev-25 -> 0.5.2.dev-26
 mydlp-sql-5.patch: 0.5.2.dev-26 -> 0.5.2.dev-27
 mydlp-sql-6.patch: 0.5.2.dev-32 -> 0.5.3.dev-1
 mydlp-sql-7.patch: 0.5.3.dev-3 -> 0.5.3.dev-4
+mydlp-sql-8.patch: 0.5.3.dev-4 -> 0.5.4.dev-1
+mydlp-sql-9.patch: 0.5.3.dev-4 -> 0.5.4.dev-1
