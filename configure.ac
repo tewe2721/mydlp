@@ -18,7 +18,7 @@
 ###    along with MyDLP.  If not, see <http://www.gnu.org/licenses/>.
 ###--------------------------------------------------------------------------
 
-AC_INIT([mydlp], [0.5.3.dev], [kerem@mydlp.org])
+AC_INIT([mydlp], [0.5.4.dev], [kerem@mydlp.org])
 
 AC_PREREQ([2.64])
 AC_COPYRIGHT([Copyright (C) 2010 Huseyin Kerem Cevahir])
@@ -41,7 +41,7 @@ AC_ERLANG_CHECK_LIB([sasl])
 AC_ERLANG_CHECK_LIB([thrift])
 AC_ERLANG_CHECK_LIB([mysql_driver])
 AC_ERLANG_CHECK_LIB([bayeserl])
-AC_ERLANG_SUBST_INSTALL_LIB_SUBDIR([mydlp], [0.5.3.dev])
+AC_ERLANG_SUBST_INSTALL_LIB_SUBDIR([mydlp], [0.5.4.dev])
 
 AM_PATH_PYTHON
 
