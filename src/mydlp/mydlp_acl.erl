@@ -62,12 +62,35 @@ qa(Dest, Files) ->
 
 %%%%%%%%%%%%%% gen_server handles
 
+%acl_exec(Rules, Source, Files) ->
+%	[{cid, CustomerId}|_] = Source,
+%	Files1 = mydlp_api:df_to_files(Files),
+%	Param = {Source, drop_nodata(Files1)},
+%	DRules = mydlp_mnesia:get_default_rule(CustomerId),
+%	apply_rules(lists:append(DRules, Rules), Param).
+
 acl_exec(Rules, Source, Files) ->
+	Files1 = drop_nodata(Files),
+	acl_exec1(Rules, Source, Files1).
+
+acl_exec1(_Rules, _Source, []) -> pass;
+acl_exec1(Rules, Source, Files) ->
 	[{cid, CustomerId}|_] = Source,
-	Files1 = mydlp_api:df_to_files(Files),
-	Param = {Source, drop_nodata(Files1)},
 	DRules = mydlp_mnesia:get_default_rule(CustomerId),
-	apply_rules(lists:append(DRules, Rules), Param).
+	acl_exec2(lists:append(DRules, Rules), Source, Files).
+
+acl_exec2(AllRules, Source, Files) ->
+	Files1 = drop_nodata(Files),
+	acl_exec3(AllRules, Source, Files1).
+
+acl_exec3(_AllRules, _Source, []) -> pass;
+acl_exec3(AllRules, Source, Files) ->
+	{PFiles, NewFiles} = mydlp_api:analyze(Files),
+
+	Param = {Source, drop_nodata(PFiles)},
+	case apply_rules(AllRules, Param) of
+		pass -> acl_exec2(AllRules, Source, NewFiles);
+		Else -> Else end.
 
 %% it needs refactoring for trusted domains
 handle_call({acl_q, SAddr, {Addr, Files}}, From, #state{is_multisite=true} = State) ->

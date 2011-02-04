@@ -792,42 +792,53 @@ get_nsh(Text) ->
 		end, Res1).
 
 %%--------------------------------------------------------------------
-%% @doc Defines files, detects mimetypes, extracts compressed ones.
+%% @doc Analyzes structure of files. Creates new files if necessary.
 %% @end
 %%----------------------------------------------------------------------
-df_to_files(Files) ->
-	Files1 = df_to_files1(Files, []),
-	Files2 = comp_to_files(Files1),
-	lists:flatten(Files2).
+analyze(Files) -> 
+	Files1 = get_mimes(Files),
+	comp_to_files(Files1).
 
-df_to_files1([#file{mime_type=undefined} = File|Files], Returns) -> 
+%%--------------------------------------------------------------------
+%% @doc Detects mimetypes of all files given, 
+%% @end
+%%----------------------------------------------------------------------
+get_mimes(Files) -> get_mimes(Files, []).
+
+get_mimes([#file{mime_type=undefined} = File|Files], Returns) -> 
 	MT = mydlp_tc:get_mime(File#file.data),
-	df_to_files1(Files, [File#file{mime_type=MT}|Returns]);
-df_to_files1([File|Files], Returns) -> 
-	df_to_files1(Files, [File|Returns]);
-df_to_files1([], Returns) -> lists:reverse(Returns).
+	get_mimes(Files, [File#file{mime_type=MT}|Returns]);
+get_mimes([File|Files], Returns) -> 
+	get_mimes(Files, [File|Returns]);
+get_mimes([], Returns) -> lists:reverse(Returns).
 
-ctf_ok(Files, File, ExtFiles, Returns) -> 
-	comp_to_files(Files, [File#file{compressed_copy=true}, df_to_files(ExtFiles)|Returns]).
+%%--------------------------------------------------------------------
+%% @doc Extract all compressed files given
+%% @end
+%%----------------------------------------------------------------------
+comp_to_files(Files) -> comp_to_files(Files, [], []).
 
-ctf_err_enc(Files, File, Returns) -> 
-	comp_to_files(Files, [File#file{is_encrypted=true}|Returns]).
+ctf_ok(Files, File, ExtFiles, Processed, New) -> 
+	comp_to_files(Files, [File#file{compressed_copy=true}|Processed], [ExtFiles|New]).
+	%comp_to_files(Files, [File#file{compressed_copy=true}, df_to_files(ExtFiles)|Returns]).
 
-comp_to_files(Files) -> comp_to_files(Files, []).
-comp_to_files([#file{mime_type= <<"application/zip">>, compressed_copy=false, is_encrypted=false} = File|Files], Returns) -> 
+ctf_err_enc(Files, File, Processed, New) -> 
+	comp_to_files(Files, [File#file{is_encrypted=true}|Processed], New).
+
+comp_to_files([#file{mime_type= <<"application/zip">>, compressed_copy=false, is_encrypted=false} = File|Files], Processed, New) -> 
 	case zip:extract(File#file.data, [memory]) of
 		{ok, Ext} -> 
 			ExtFiles = ext_to_file(Ext),
-			ctf_ok(Files, File, ExtFiles, Returns);
+			ctf_ok(Files, File, ExtFiles, Processed, New);
 		{error, _ShouldBeLogged} -> 
-			ctf_err_enc(Files, File, Returns) end;
-comp_to_files([#file{mime_type= <<"application/x-rar">>, compressed_copy=false, is_encrypted=false} = File|Files], Returns) -> 
+			ctf_err_enc(Files, File, Processed, New) end;
+comp_to_files([#file{mime_type= <<"application/x-rar">>, compressed_copy=false, is_encrypted=false} = File|Files], Processed, New) -> 
 	case unrar(File#file.data) of
 		{ok, Ext} -> 
 			ExtFiles = ext_to_file(Ext),
-			ctf_ok(Files, File, ExtFiles, Returns);
+			ctf_ok(Files, File, ExtFiles, Processed, New);
 		{error, _ShouldBeLogged} -> 
-			ctf_err_enc(Files, File, Returns) end;
+			ctf_err_enc(Files, File, Processed, New) end;
 %comp_to_files([#file{mime_type= <<"application/x-gzip">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
 	%try 
 	%	GUData = zlib:gunzip(File#file.data),
@@ -836,39 +847,41 @@ comp_to_files([#file{mime_type= <<"application/x-rar">>, compressed_copy=false, 
 	%catch _:_Ex ->
 	%	comp_to_files(Files, [File#file{is_encrypted=true}|Returns])
 	%end;
-comp_to_files([#file{mime_type= <<"application/vnd.oasis.opendocument.text">>}|_] = Files, Returns) -> % Needs refinement for better ODF handling
-	try_unzip(Files, Returns);
-comp_to_files([#file{mime_type= <<"application/octet-stream">>}|_] = Files, Returns) -> % Needs refinement for better ODF handling
+comp_to_files([#file{mime_type= <<"application/vnd.oasis.opendocument.text">>}|_] = Files, Processed, New) -> % Needs refinement for better ODF handling
+	try_unzip(Files, Processed, New);
+comp_to_files([#file{mime_type= <<"application/octet-stream">>}|_] = Files, Processed, New) -> % Needs refinement for better ODF handling
 	%try_unzip(Files, Returns);
-	try_un7z(Files, Returns);
-comp_to_files([#file{mime_type= MimeType, compressed_copy=false, is_encrypted=false} = File | Rest ] = Files, Returns) -> 
+	try_un7z(Files, Processed, New);
+comp_to_files([#file{mime_type= MimeType, compressed_copy=false, is_encrypted=false} = File | Rest ] = Files, Processed, New) -> 
 		case is_compression_mime(MimeType) of
-			true -> use_un7z(Files, Returns);
-			false -> comp_to_files(Rest, [File|Returns]) end;
-comp_to_files([File|Files], Returns) -> comp_to_files(Files, [File|Returns]);
-comp_to_files([], Returns) -> lists:reverse(Returns).
+			true -> use_un7z(Files, Processed, New);
+			false -> comp_to_files(Rest, [File|Processed], New) end;
+comp_to_files([File|Files], Processed, New) -> comp_to_files(Files, [File|Processed], New);
+comp_to_files([], Processed, New) -> 
+	{ lists:reverse(Processed), 
+	  lists:flatten(lists:reverse(New)) }.
 
-use_un7z([File|Files], Returns) ->
+use_un7z([File|Files], Processed, New) ->
 	case un7z(File#file.data, File#file.filename) of
 		{ok, Ext} -> 
 			ExtFiles = ext_to_file(Ext),
-			ctf_ok(Files, File, ExtFiles, Returns);
+			ctf_ok(Files, File, ExtFiles, Processed, New);
 		{error, _ShouldBeLogged} -> 
-			ctf_err_enc(Files, File, Returns) end.
+			ctf_err_enc(Files, File, Processed, New) end.
 
-try_unzip([File|Files], Returns) ->
+try_unzip([File|Files], Processed, New) ->
 	case zip:extract(File#file.data, [memory]) of
 		{ok, Ext} -> 
 			ExtFiles = ext_to_file(Ext),
-			ctf_ok(Files, File, ExtFiles, Returns);
-		{error, _ShouldBeLogged} -> comp_to_files(Files, [File|Returns]) end.
+			ctf_ok(Files, File, ExtFiles, Processed, New);
+		{error, _ShouldBeLogged} -> comp_to_files(Files, [File|Processed], New) end.
 
-try_un7z([File|Files], Returns) ->
+try_un7z([File|Files], Processed, New) ->
 	case un7z(File#file.data, File#file.filename) of
 		{ok, Ext} -> 
 			ExtFiles = ext_to_file(Ext),
-			ctf_ok(Files, File, ExtFiles, Returns);
-		{error, _ShouldBeLogged} -> comp_to_files(Files, [File|Returns]) end.
+			ctf_ok(Files, File, ExtFiles, Processed, New);
+		{error, _ShouldBeLogged} -> comp_to_files(Files, [File|Processed], New) end.
 
 ext_to_file(Ext) ->
 	[#file{name= "extracted file", 
