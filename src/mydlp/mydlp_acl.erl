@@ -86,8 +86,8 @@ acl_exec2(AllRules, Source, Files) ->
 acl_exec3(_AllRules, _Source, []) -> pass;
 acl_exec3(AllRules, Source, Files) ->
 	{PFiles, NewFiles} = mydlp_api:analyze(Files),
+	Param = {Source, PFiles},
 
-	Param = {Source, drop_nodata(PFiles)},
 	case apply_rules(AllRules, Param) of
 		pass -> acl_exec2(AllRules, Source, NewFiles);
 		Else -> Else end.
