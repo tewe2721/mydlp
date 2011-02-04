@@ -34,10 +34,11 @@
 %%%
 %%%---------------------------------------------------------------------------------------
 -module(mime_util).
+-author('kerem@medra.com.tr').
 -author('sjackson@simpleenigma.com').
 -include("mydlp_smtp.hrl").
 
--export([decode/1, decode_content/2]).
+-export([decode/1, decode_multipart/2, decode_content/2]).
 
 -export([split/1,headers/1,split_multipart/2,get_header/2,get_header/3,dec_addr/1]).
 
@@ -57,26 +58,30 @@ decode(Message) when is_binary(Message) ->
 					Boundary = case re:run(Value, ?MP_BOUNDARY_KEY, [{capture,first}]) of
 						nomatch -> get_wo_quote_after(Value);
 						{match,[{S,9}]} -> get_wo_quote_after(Value, S+10) end,
-					Content = case re:run(MIME#mime.body_text, 
-							mydlp_api:escape_regex(Boundary), 
-							[{capture,first}] ) of
-						nomatch -> [];
-						{match,[{0,_}]} -> [];
-						{match,[{1,_}]} -> [];
-						{match,[{2,_}]} -> [];
-						{match,[{I,_}]} -> 
-							CSize = I - 2,
-							<<C:CSize/binary, _/binary>> = MIME#mime.body_text, C end,
-					Parts = split_multipart(Boundary,MIME#mime.body_text),
-					MIMEParts = lists:map(fun(P) ->
-							decode(P)
-						end, Parts),
-					MIME#mime{header = Headers, content = Content, body = MIMEParts};
+					MIME1 = decode_multipart(MIME, Boundary),
+					MIME1#mime{header = Headers};
 				false -> MIME#mime{header = Headers, content = MIME#mime.body_text}
 			end;
 		_ -> MIME#mime{header = Headers, content = MIME#mime.body_text}
 		%_ -> MIME#mime{header = Headers, body = MIME#mime.body_text, message = Message}
 	end.
+
+decode_multipart(MIME, Boundary) ->
+	Content = case re:run(MIME#mime.body_text, 
+			mydlp_api:escape_regex(Boundary), 
+			[{capture,first}] ) of
+		nomatch -> [];
+		{match,[{0,_}]} -> [];
+		{match,[{1,_}]} -> [];
+		{match,[{2,_}]} -> [];
+		{match,[{I,_}]} -> 
+			CSize = I - 2,
+			<<C:CSize/binary, _/binary>> = MIME#mime.body_text, C end,
+	Parts = split_multipart(Boundary,MIME#mime.body_text),
+	MIMEParts = lists:map(fun(P) ->
+			decode(P)
+		end, Parts),
+	MIME#mime{content = Content, body = MIMEParts}.
 
 dec_addrs(AddrList) ->
 	List = string:tokens(AddrList,[44]),

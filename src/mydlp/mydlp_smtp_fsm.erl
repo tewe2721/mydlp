@@ -147,7 +147,7 @@ init([]) ->
 	'READ_FILES'(NewState).
 
 'READ_FILES'(#smtpd_fsm{message_mime=MIME} = State) ->
-	Files = mime_to_files(MIME),
+	Files = mydlp_api:mime_to_files(MIME),
 	'REQ_OK'(State#smtpd_fsm{files=Files}).
 
 
@@ -310,83 +310,6 @@ reset_statedata(#smtpd_fsm{} = State) ->
 		        message_bin = undefined,
 		        files       = [],
 			data  = undefined}.
-
-heads_to_file(Headers) -> heads_to_file(Headers, #file{}).
-
-heads_to_file([{'content-disposition', "inline"}|Rest], #file{filename=undefined, name=undefined} = File) ->
-	case lists:keysearch('content-type',1,Rest) of
-		{value,{'content-type',"text/plain"}} -> heads_to_file(Rest, File#file{name="Inline text message"});
-		{value,{'content-type',"text/html"}} -> heads_to_file(Rest, File#file{name="Inline HTML message"});
-		_Else -> heads_to_file(Rest, File)
-	end;
-heads_to_file([{'content-disposition', CD}|Rest], #file{filename=undefined} = File) ->
-	case string:str(CD, "filename=") of
-		0 -> heads_to_file(Rest, File);
-		I when is_integer(I) -> 
-			FN = case string:strip(string:substr(CD, I + 9)) of
-				"\\\"" ++ Str -> 
-					Len = string:len(Str),
-					"\"\\" = string:substr(Str, Len - 1),
-					string:substr(Str, 1, Len - 2);
-				"\"" ++ Str -> 
-					Len = string:len(Str),
-					"\"" = string:substr(Str, Len),
-					string:substr(Str, 1, Len - 1);
-				Str -> Str
-			end,
-			heads_to_file(Rest, File#file{filename=FN})
-	end;
-heads_to_file([{'content-type', "text/html"}|Rest], #file{filename=undefined, name=undefined} = File) ->
-	case lists:keysearch('content-disposition',1,Rest) of
-		{value,{'content-disposition',"inline"}} -> heads_to_file(Rest, File#file{name="Inline HTML message"});
-		_Else -> heads_to_file(Rest, File)
-	end;
-heads_to_file([{'content-type', "text/plain"}|Rest], #file{filename=undefined, name=undefined} = File) ->
-	case lists:keysearch('content-disposition',1,Rest) of
-		{value,{'content-disposition',"inline"}} -> heads_to_file(Rest, File#file{name="Inline text message"});
-		_Else -> heads_to_file(Rest, File)
-	end;
-heads_to_file([{'content-type', CT}|Rest], #file{filename=undefined} = F) ->
-	GT = case string:chr(CT, $;) of
-		0 -> CT;
-		I when is_integer(I) -> string:substr(CT, 1, I - 1)
-	end,
-	File = F#file{given_type=GT},
-	case string:str(CT, "name=") of
-		0 -> heads_to_file(Rest, File);
-		I2 when is_integer(I2) -> 
-			FN = case string:strip(string:substr(CT, I2 + 5)) of
-				"\\\"" ++ Str -> 
-					Len = string:len(Str),
-					"\"\\" = string:substr(Str, Len - 1),
-					string:substr(Str, 1, Len - 2);
-				"\"" ++ Str -> 
-					Len = string:len(Str),
-					"\"" = string:substr(Str, Len),
-					string:substr(Str, 1, Len - 1);
-				Str -> Str
-			end,
-			heads_to_file(Rest, File#file{filename=FN})
-	end;
-heads_to_file([{'content-id', CI}|Rest], #file{filename=undefined, name=undefined} = File) ->
-	heads_to_file(Rest, File#file{name=CI});
-heads_to_file([{subject, Subject}|Rest], #file{filename=undefined, name=undefined} = File) ->
-	heads_to_file(Rest, File#file{name="Mail: " ++ Subject});
-heads_to_file([_|Rest], File) ->
-	ignore,	heads_to_file(Rest, File);
-heads_to_file([], File) -> File.
-
-mime_to_files(Mime) -> mime_to_files([Mime], []).
-
-mime_to_files([#mime{content=Content, header=Headers, body=Body}|Rest], Acc) ->
-	File = heads_to_file(Headers),
-	CTE = case lists:keysearch('content-transfer-encoding',1,Headers) of
-		{value,{'content-transfer-encoding',Value}} -> Value;
-		_ -> '7bit'
-	end,
-	Data = mime_util:decode_content(CTE, Content),
-	mime_to_files(lists:append(Body, Rest), [File#file{data=Data}|Acc]);
-mime_to_files([], Acc) -> lists:reverse(Acc).
 
 log_req(#smtpd_fsm{message_record=MessageR}, Action,
                 {{rule, RuleId}, {file, File}, {matcher, Matcher}, {misc, Misc}}) ->

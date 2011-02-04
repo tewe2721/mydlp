@@ -69,27 +69,25 @@ qa(Dest, Files) ->
 %	DRules = mydlp_mnesia:get_default_rule(CustomerId),
 %	apply_rules(lists:append(DRules, Rules), Param).
 
+acl_exec(_Rules, _Source, []) -> pass;
 acl_exec(Rules, Source, Files) ->
-	Files1 = drop_nodata(Files),
-	acl_exec1(Rules, Source, Files1).
-
-acl_exec1(_Rules, _Source, []) -> pass;
-acl_exec1(Rules, Source, Files) ->
 	[{cid, CustomerId}|_] = Source,
 	DRules = mydlp_mnesia:get_default_rule(CustomerId),
 	acl_exec2(lists:append(DRules, Rules), Source, Files).
 
 acl_exec2(AllRules, Source, Files) ->
-	Files1 = drop_nodata(Files),
-	acl_exec3(AllRules, Source, Files1).
+	%Files1 = drop_nodata(Files),
+	acl_exec3(AllRules, Source, Files).
 
 acl_exec3(_AllRules, _Source, []) -> pass;
-acl_exec3(AllRules, Source, Files) ->
-	{PFiles, NewFiles} = mydlp_api:analyze(Files),
-	Param = {Source, PFiles},
+acl_exec3(AllRules, Source, [File|Files]) ->
+	File1 = mydlp_api:load_files(File),
+	{PFiles, NewFiles} = mydlp_api:analyze(File1),
+	Param = {Source, drop_nodata(PFiles)},
 
 	case apply_rules(AllRules, Param) of
-		pass -> acl_exec2(AllRules, Source, NewFiles);
+		pass ->	acl_exec2(AllRules, Source,
+				lists:append(Files, NewFiles) );
 		Else -> Else end.
 
 %% it needs refactoring for trusted domains
@@ -250,5 +248,10 @@ drop_whitefile_dr(Files, CustomerId) -> lists:filter(fun(F) -> not is_whitefile_
 
 drop_notext(Files) -> lists:filter(fun(I) -> mydlp_api:has_text(I) end, Files).
 
-drop_nodata(Files) -> lists:filter(fun(F) -> size(F#file.data) > 0 end, Files).
+has_data(#file{dataref={cacheref, _Ref}}) -> true;
+has_data(#file{dataref={memory, Bin}}) -> size(Bin) > 0;
+has_data(#file{data=Data}) -> size(Data) > 0;
+has_data(Else) -> throw({error, unexpected_obj, Else}).
+
+drop_nodata(Files) -> lists:filter(fun(F) -> has_data(F) end, Files).
 

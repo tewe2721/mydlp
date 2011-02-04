@@ -63,6 +63,7 @@ dist_erl_DATA = \
 	mydlp_tc.erl \
 	mydlp_ts.erl \
 	mydlp_trainer.erl \
+	mydlp_workdir.erl \
 	mydlp_worker_sup.erl \
 	smtpc.erl \
 	smtpc_fsm.erl \
@@ -70,6 +71,7 @@ dist_erl_DATA = \
 
 dist_hrl_DATA = \
 	mydlp.hrl \
+	mydlp_big_binary.hrl \
 	mydlp_http.hrl \
 	mydlp_smtp.hrl \
 	mydlp_schema.hrl

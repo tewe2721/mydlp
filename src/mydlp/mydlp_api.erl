@@ -26,6 +26,7 @@
 
 -include("mydlp.hrl").
 -include("mydlp_http.hrl").
+-include("mydlp_smtp.hrl").
 -include_lib("xmerl/include/xmerl.hrl").
 
 %%--------------------------------------------------------------------
@@ -535,79 +536,47 @@ is_valid_nino1([_, _ |Rest]) ->
 %% @end
 %%----------------------------------------------------------------------
 
-mktempfile() -> mktemp([]).
-mktempdir() -> mktemp([directory]).
+tempfile() -> mydlp_workdir:tempfile().
 
-mktemp(Args) ->
-	Args1 = Args ++ [{tmpdir, "/var/tmp"}, {template, "mydlp.XXXXXXXXXX"}],
-	CmdArgs = mt_process_args(Args1, []),
-	Port = open_port({spawn_executable, "/bin/mktemp"}, [{args, CmdArgs},
-					{line, 1000},
-					use_stdio,
-					exit_status,
-					stderr_to_stdout]),
-	mt_get_resp(Port, nil).
+tempdir() -> tempfile().
+	
+mktempfile() -> 
+	{ok, FN} = tempfile(),
+	case file:write_file(FN, <<>>, [raw]) of
+		ok -> {ok, FN};
+		Err -> throw(Err) end.
 
-mt_process_args([], Cmd) -> lists:reverse(Cmd);
-mt_process_args([directory| Rest], Cmd) -> mt_process_args(Rest, ["-d"|Cmd] );
-mt_process_args([{Flag, Value} | Rest], Cmd) ->
-	case Flag of
-		tmpdir -> mt_process_args(Rest, ["--tmpdir=" ++ Value|Cmd]);
-		template -> mt_process_args(Rest, [Value|Cmd])
-	end.
-
-mt_get_resp(Port, Resp) ->
-	case Resp of
-	nil ->
-		receive
-			{ Port, {data, {_, Line}}} -> mt_get_resp(Port, Line);
-			{ Port, {exit_status, _ }} -> { error, "No response from mktemp" }
-		after 1000 -> { error, timeout }
-		end;
-	Resp ->
-		receive
-			{ Port, {data, _}} -> mt_get_resp(Port, Resp);
-			{ Port, {exit_status, 0}} -> { ok, Resp };
-			{ Port, {exit_status, _}} -> { error, Resp }
-		after 1000 -> { error, timeout }
-		end
-	end.
-
-%%--------------------------------------------------------------------
-%% @doc Unrars an Erlang binary 
-%% @end
-%%----------------------------------------------------------------------
-
-unrar(Bin) when is_binary(Bin) -> 
-	{ok, RarFN} = mktempfile(),
-	ok = file:write_file(RarFN, Bin, [raw]),
-	{ok, WorkDir} = mktempdir(),
-	WorkDir1 = WorkDir ++ "/",
-	Port = open_port({spawn_executable, "/usr/bin/unrar"}, 
-			[{args, ["e","-y","-p-","-inul","--",RarFN]},
-			{cd, WorkDir1},
-			use_stdio,
-			exit_status,
-			stderr_to_stdout]),
-
-	Ret = case get_port_resp(Port) of
-		ok -> {ok, rr_files(WorkDir1)};
-		Else -> rmrf_dir(WorkDir1), Else end,
-
-	ok = file:delete(RarFN),
-	Ret.
+mktempdir() ->
+	{ok, DN} = tempdir(),
+	case file:make_dir(DN) of
+		ok -> {ok, DN};
+		Err -> throw(Err) end.
 
 %%--------------------------------------------------------------------
 %% @doc Un7zs an Erlang binary, this can be used for ZIP, CAB, ARJ, GZIP, BZIP2, TAR, CPIO, RPM and DEB formats.
 %% @end
 %%----------------------------------------------------------------------
 
-un7z(Bin) when is_binary(Bin) -> un7z(Bin, "nofilename").
+un7z(Arg) -> un7z(Arg, "nofilename").
 
-un7z(Bin, Filename) when is_binary(Bin) -> 
+un7z0(Filename) ->
 	{ok, ZFNDir} = mktempdir(),
 	ZFN = ZFNDir ++ "/" ++ normalize_fn(Filename),
+	{ZFNDir, ZFN}.
+
+un7z({memory, Bin}, Filename) -> un7z(Bin, Filename);
+un7z({Type, _Value} = Ref, Filename) when
+		Type == cacheref; Type == unixfile -> 
+	{ZFNDir, ZFN} = un7z0(Filename),
+	ok = file:make_symlink(?BB_P(Ref), ZFN),
+	un7z1(ZFNDir, ZFN);
+
+un7z(Bin, Filename) when is_binary(Bin) -> 
+	{ZFNDir, ZFN} = un7z0(Filename),
 	ok = file:write_file(ZFN, Bin, [raw]),
+	un7z1(ZFNDir, ZFN).
+
+un7z1(ZFNDir, ZFN) -> 
 	{ok, WorkDir} = mktempdir(),
 	WorkDir1 = WorkDir ++ "/",
 	Port = open_port({spawn_executable, "/usr/bin/7z"}, 
@@ -662,9 +631,9 @@ rr_files([FN|FNs], WorkDir, Ret) ->
 		{ok, _Filename} ->	ok = file:delete(AbsPath),
 					rr_files(FNs, WorkDir, Ret);
 		{error, _Reason} -> case filelib:is_regular(AbsPath) of
-			true -> {ok, Bin}  = file:read_file(AbsPath),
-				ok = file:delete(AbsPath),
-				rr_files(FNs, WorkDir, [{FN, Bin}|Ret]);
+			true -> CacheRef = ?BB_C({unixfile, AbsPath}),
+				file:delete(AbsPath), %ensure file deletion
+				rr_files(FNs, WorkDir, [{FN, CacheRef}|Ret]);
 			false -> case filelib:is_dir(AbsPath) of
 				true -> Ret1 = rr_files(AbsPath),
 					rr_files(FNs, WorkDir, [Ret1|Ret]);
@@ -795,9 +764,22 @@ get_nsh(Text) ->
 %% @doc Analyzes structure of files. Creates new files if necessary.
 %% @end
 %%----------------------------------------------------------------------
-analyze(Files) -> 
+analyze(#file{} = File) -> analyze([File]);
+analyze(Files) when is_list(Files) -> 
 	Files1 = get_mimes(Files),
 	comp_to_files(Files1).
+
+%%--------------------------------------------------------------------
+%% @doc Loads data properties of files from references.
+%% @end
+%%----------------------------------------------------------------------
+load_files(#file{} = File) -> [Ret] = load_files([File]), Ret;
+load_files(Files) when is_list(Files) ->
+	lists:map(fun(F) ->  
+		Data = ?BB_R(F#file.dataref),
+		?BB_D(F#file.dataref), % no need for reference to exist
+		F#file{data=Data, dataref=undefined}
+		end, Files).
 
 %%--------------------------------------------------------------------
 %% @doc Detects mimetypes of all files given, 
@@ -832,21 +814,6 @@ comp_to_files([#file{mime_type= <<"application/zip">>, compressed_copy=false, is
 			ctf_ok(Files, File, ExtFiles, Processed, New);
 		{error, _ShouldBeLogged} -> 
 			ctf_err_enc(Files, File, Processed, New) end;
-comp_to_files([#file{mime_type= <<"application/x-rar">>, compressed_copy=false, is_encrypted=false} = File|Files], Processed, New) -> 
-	case unrar(File#file.data) of
-		{ok, Ext} -> 
-			ExtFiles = ext_to_file(Ext),
-			ctf_ok(Files, File, ExtFiles, Processed, New);
-		{error, _ShouldBeLogged} -> 
-			ctf_err_enc(Files, File, Processed, New) end;
-%comp_to_files([#file{mime_type= <<"application/x-gzip">>, is_encrypted=false} |_] = Files, Returns) -> use_un7z(Files, Returns);
-	%try 
-	%	GUData = zlib:gunzip(File#file.data),
-	%	ExtFiles = ext_to_file([{File#file.filename, GUData}]),
-	%	comp_to_files(Files, [df_to_files(ExtFiles)|Returns])
-	%catch _:_Ex ->
-	%	comp_to_files(Files, [File#file{is_encrypted=true}|Returns])
-	%end;
 comp_to_files([#file{mime_type= <<"application/vnd.oasis.opendocument.text">>}|_] = Files, Processed, New) -> % Needs refinement for better ODF handling
 	try_unzip(Files, Processed, New);
 comp_to_files([#file{mime_type= <<"application/octet-stream">>}|_] = Files, Processed, New) -> % Needs refinement for better ODF handling
@@ -886,7 +853,7 @@ try_un7z([File|Files], Processed, New) ->
 ext_to_file(Ext) ->
 	[#file{name= "extracted file", 
 		filename=Filename, 
-		data=Data} 
+		dataref=?BB_C(Data)} 
 		|| {Filename,Data} <- Ext].
 
 %%--------------------------------------------------------------------
@@ -955,7 +922,8 @@ parse_multipart(HttpContent, H, Req) ->
 				"multipart/form-data"++Line ->
 					LineArgs = parse_arg_line(Line),
 					{value, {_, Boundary}} = lists:keysearch(boundary, 1, LineArgs),
-					parse_multipart(binary_to_list(un_partial(HttpContent)), Boundary);
+					MIME = #mime{body_text=HttpContent},
+					mime_util:decode_multipart(MIME, Boundary);
 				_Other ->
 					?DEBUG("Can't parse multipart if we "
 						"find no multipart/form-data",[]), []
@@ -963,7 +931,7 @@ parse_multipart(HttpContent, H, Req) ->
 		Other ->
 			?DEBUG("Can't parse multipart if get a ~p", [Other]), []
 	end,
-	result_to_files(Res).
+	mime_to_files(Res).
 
 %%%%% multipart parsing
 un_partial({partial, Bin}) ->
@@ -1138,33 +1106,6 @@ merge_lines_822(["\t"++Line|Lines], [Prev|Acc]) ->
 merge_lines_822([Line|Lines], Acc) ->
     merge_lines_822(Lines, [Line|Acc]).
 
-%%%% convert yaws multipart result to file records
-result_to_files({result, Rest}) ->
-	result_to_files(Rest, [], undefined).
-result_to_files([], Files, File) ->
-	lists:reverse([File|Files]);
-result_to_files([{head,Head}|Rest], Files, File) ->
-	Files1 = case File of
-		undefined -> Files;
-		Else -> [Else|Files]
-	end,
-	{_, Heads} = Head,
-	result_to_files(Rest, Files1, heads_to_file(Heads));
-result_to_files([{body,Data}|Rest], Files, File) ->
-	result_to_files(Rest, Files, File#file{data=list_to_binary(Data)}).
-
-heads_to_file(Heads) ->
-	heads_to_file(Heads, #file{}).
-heads_to_file([{filename,FileName}|Heads], File) ->
-	heads_to_file(Heads, File#file{filename=FileName});
-heads_to_file([{name,PostName}|Heads], File) ->
-	heads_to_file(Heads, File#file{name=PostName});
-heads_to_file([_|Heads], File) ->
-	ignore,
-	heads_to_file(Heads, File);
-heads_to_file([], File) ->
-	File.
-
 %%-------------------------------------------------------------------------
 %% @doc Writes files to quarantine directory.
 %% @end
@@ -1203,7 +1144,7 @@ uenc_to_file(Bin) ->
 		none -> [];
 		{ok, RData} when is_list(RData) -> 
 			[ #file{name="urlencoded-data",
-			data=list_to_binary(RData)} ] end.
+			dataref=?BB_C(RData)} ] end.
 
 parse_uenc_data(Bin) when is_list(Bin) -> parse_uenc_data(list_to_binary(Bin));
 parse_uenc_data(Bin) when is_binary(Bin) ->
@@ -1325,6 +1266,102 @@ is_cobject_mime(<<"application/x-sharedlib">>) -> true;
 is_cobject_mime(<<"application/x-object">>) -> true;
 is_cobject_mime(_Else) -> false.
 
+%%-------------------------------------------------------------------------
+%% @doc Calculates binary size
+%% @end
+%%-------------------------------------------------------------------------
+
+binary_size(Obj) when is_binary(Obj) -> size(Obj);
+binary_size(Obj) when is_list(Obj) ->
+	L1 = lists:map(fun(I) -> binary_size(I) end, Obj),
+	lists:sum(L1);
+binary_size(Obj) when is_integer(Obj), 0 =< Obj, Obj =< 255 -> 1;
+binary_size(Obj) when is_integer(Obj) -> throw({error, bad_integer, Obj});
+binary_size(Obj) when is_atom(Obj) -> throw({error, bad_element});
+binary_size(Obj) when is_tuple(Obj) -> throw({error, bad_element});
+binary_size(_Obj) -> throw({error, bad_element}).
+
+%%-------------------------------------------------------------------------
+%% @doc Converts mime objects to files
+%% @end
+%%-------------------------------------------------------------------------
+
+heads_to_file(Headers) -> heads_to_file(Headers, #file{}).
+
+heads_to_file([{'content-disposition', "inline"}|Rest], #file{filename=undefined, name=undefined} = File) ->
+	case lists:keysearch('content-type',1,Rest) of
+		{value,{'content-type',"text/plain"}} -> heads_to_file(Rest, File#file{name="Inline text message"});
+		{value,{'content-type',"text/html"}} -> heads_to_file(Rest, File#file{name="Inline HTML message"});
+		_Else -> heads_to_file(Rest, File)
+	end;
+heads_to_file([{'content-disposition', CD}|Rest], #file{filename=undefined} = File) ->
+	case string:str(CD, "filename=") of
+		0 -> heads_to_file(Rest, File);
+		I when is_integer(I) -> 
+			FN = case string:strip(string:substr(CD, I + 9)) of
+				"\\\"" ++ Str -> 
+					Len = string:len(Str),
+					"\"\\" = string:substr(Str, Len - 1),
+					string:substr(Str, 1, Len - 2);
+				"\"" ++ Str -> 
+					Len = string:len(Str),
+					"\"" = string:substr(Str, Len),
+					string:substr(Str, 1, Len - 1);
+				Str -> Str
+			end,
+			heads_to_file(Rest, File#file{filename=FN})
+	end;
+heads_to_file([{'content-type', "text/html"}|Rest], #file{filename=undefined, name=undefined} = File) ->
+	case lists:keysearch('content-disposition',1,Rest) of
+		{value,{'content-disposition',"inline"}} -> heads_to_file(Rest, File#file{name="Inline HTML message"});
+		_Else -> heads_to_file(Rest, File)
+	end;
+heads_to_file([{'content-type', "text/plain"}|Rest], #file{filename=undefined, name=undefined} = File) ->
+	case lists:keysearch('content-disposition',1,Rest) of
+		{value,{'content-disposition',"inline"}} -> heads_to_file(Rest, File#file{name="Inline text message"});
+		_Else -> heads_to_file(Rest, File)
+	end;
+heads_to_file([{'content-type', CT}|Rest], #file{filename=undefined} = F) ->
+	GT = case string:chr(CT, $;) of
+		0 -> CT;
+		I when is_integer(I) -> string:substr(CT, 1, I - 1)
+	end,
+	File = F#file{given_type=GT},
+	case string:str(CT, "name=") of
+		0 -> heads_to_file(Rest, File);
+		I2 when is_integer(I2) -> 
+			FN = case string:strip(string:substr(CT, I2 + 5)) of
+				"\\\"" ++ Str -> 
+					Len = string:len(Str),
+					"\"\\" = string:substr(Str, Len - 1),
+					string:substr(Str, 1, Len - 2);
+				"\"" ++ Str -> 
+					Len = string:len(Str),
+					"\"" = string:substr(Str, Len),
+					string:substr(Str, 1, Len - 1);
+				Str -> Str
+			end,
+			heads_to_file(Rest, File#file{filename=FN})
+	end;
+heads_to_file([{'content-id', CI}|Rest], #file{filename=undefined, name=undefined} = File) ->
+	heads_to_file(Rest, File#file{name=CI});
+heads_to_file([{subject, Subject}|Rest], #file{filename=undefined, name=undefined} = File) ->
+	heads_to_file(Rest, File#file{name="Mail: " ++ Subject});
+heads_to_file([_|Rest], File) ->
+	ignore,	heads_to_file(Rest, File);
+heads_to_file([], File) -> File.
+
+mime_to_files(Mime) -> mime_to_files([Mime], []).
+
+mime_to_files([#mime{content=Content, header=Headers, body=Body}|Rest], Acc) ->
+	File = heads_to_file(Headers),
+	CTE = case lists:keysearch('content-transfer-encoding',1,Headers) of
+		{value,{'content-transfer-encoding',Value}} -> Value;
+		_ -> '7bit'
+	end,
+	Data = mime_util:decode_content(CTE, Content),
+	mime_to_files(lists:append(Body, Rest), [File#file{dataref=?BB_C(Data)}|Acc]);
+mime_to_files([], Acc) -> lists:reverse(Acc).
 
 -include_lib("eunit/include/eunit.hrl").
 
@@ -1345,4 +1382,12 @@ normalize_fn_test_() -> [
 	?_assertEqual("hello_world_", normalize_fn("hello|world>"))
 ].
 
+binary_size_test_() -> [
+	?_assertEqual(5, binary_size("hello")),
+	?_assertEqual(6, binary_size("hello" ++ [212])),
+	?_assertEqual(12, binary_size("hello" ++ [212] ++ [<<" world">>])),
+	?_assertEqual(5, binary_size(<<"hello">>)),
+	?_assertEqual("\\\\n \\\\r \\\\n", escape_regex("\\n \\r \\n")),
+	?_assertEqual("\\[a-Z]\\{0-9}", escape_regex("[a-Z]{0-9}"))
+].
 

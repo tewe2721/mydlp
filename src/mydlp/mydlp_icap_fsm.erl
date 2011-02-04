@@ -565,7 +565,7 @@ df_to_files(Uri, Data, Files) ->
 		F -> [F] end,
 
 	OFiles = case length(Files) of
-		0 ->    DFile = #file{name= "post-data", data=Data},
+		0 ->    DFile = #file{name= "post-data", dataref=?BB_C(Data)},
 			[DFile];
 		_ ->    Files end,
 

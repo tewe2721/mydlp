@@ -21,11 +21,15 @@
 -ifndef(_MYDLP_HRL).
 -define(_MYDLP_HRL, true).
 
+-include("mydlp_big_binary.hrl").
+
 -define(MAX_RESTART, 5).
 -define(MAX_TIME, 20).
 -define(KILL_TIMEOUT, 2000).
 
 -define(TIMEOUT, 120000).
+
+-define(MAX_MEM_OBJ, 102400).
 
 %% ---------------------------------
 %% Logging mechanism
@@ -34,6 +38,8 @@
 -define(LOG_PATH, "mydlp.log").
 
 -define(PID_FILE, "mydlp.pid").
+
+-define(WORK_DIR, "/var/lib/mydlp/work").
 
 -define(SSL_FILES, [
 		{certfile, "/etc/mydlp/ssl/public.pem"},
@@ -97,6 +103,8 @@
 -define(INFO_MSG(Format, Args),
 	mydlp_logger:info_msg(?MODULE,?LINE,Format, Args)).
 
+%%%%%%%
+
 %% end of import
 
 -record(file, {
@@ -105,6 +113,7 @@
                 mime_type,
                 given_type,
                 data,
+		dataref,
 		text,
 		compressed_copy = false,
 		is_encrypted = false
