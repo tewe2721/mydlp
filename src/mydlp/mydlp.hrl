@@ -29,8 +29,8 @@
 
 -define(TIMEOUT, 120000).
 
--define(MAX_MEM_OBJ, 102400).
--define(CHUNK_THRESHOLD, 1024000).
+-define(MAX_MEM_OBJ, 262144).
+-define(CHUNK_THRESHOLD, 2097152).
 
 %% ---------------------------------
 %% Logging mechanism

@@ -777,8 +777,18 @@ load_files(#file{} = File) -> [Ret] = load_files([File]), Ret;
 load_files(Files) when is_list(Files) ->
 	lists:map(fun(F) ->  
 		Data = ?BB_R(F#file.dataref),
+		F#file{data=Data}
+		end, Files).
+
+%%--------------------------------------------------------------------
+%% @doc Cleans cache references.
+%% @end
+%%----------------------------------------------------------------------
+clean_files(#file{} = File) -> [Ret] = clean_files([File]), Ret;
+clean_files(Files) when is_list(Files) ->
+	lists:map(fun(F) ->  
 		?BB_D(F#file.dataref), % no need for reference to exist
-		F#file{data=Data, dataref=undefined}
+		F#file{dataref=undefined}
 		end, Files).
 
 %%--------------------------------------------------------------------
@@ -829,7 +839,7 @@ comp_to_files([], Processed, New) ->
 	  lists:flatten(lists:reverse(New)) }.
 
 use_un7z([File|Files], Processed, New) ->
-	case un7z(File#file.data, File#file.filename) of
+	case un7z(File#file.dataref, File#file.filename) of
 		{ok, Ext} -> 
 			ExtFiles = ext_to_file(Ext),
 			ctf_ok(Files, File, ExtFiles, Processed, New);
@@ -844,7 +854,7 @@ try_unzip([File|Files], Processed, New) ->
 		{error, _ShouldBeLogged} -> comp_to_files(Files, [File|Processed], New) end.
 
 try_un7z([File|Files], Processed, New) ->
-	case un7z(File#file.data, File#file.filename) of
+	case un7z(File#file.dataref, File#file.filename) of
 		{ok, Ext} -> 
 			ExtFiles = ext_to_file(Ext),
 			ctf_ok(Files, File, ExtFiles, Processed, New);
@@ -1070,7 +1080,7 @@ uri_to_hr_file(Uri) ->
 	RData = uri_to_hr_str(Uri),
 	case RData of
 		[] -> none;
-		_Else -> #file{name="uri-data", data=list_to_binary([RData])} end.
+		_Else -> #file{name="uri-data", dataref=?BB_C(RData)} end.
 	
 
 %%-------------------------------------------------------------------------

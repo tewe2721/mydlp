@@ -84,7 +84,8 @@ acl_exec3(AllRules, Source, Files) ->
 	{InChunk, RestOfFiles} = mydlp_api:get_chunk(Files),
 	Files1 = mydlp_api:load_files(InChunk),
 	{PFiles, NewFiles} = mydlp_api:analyze(Files1),
-	Param = {Source, drop_nodata(PFiles)},
+	PFiles1 = mydlp_api:clean_files(PFiles),
+	Param = {Source, drop_nodata(PFiles1)},
 
 	case apply_rules(AllRules, Param) of
 		pass ->	acl_exec2(AllRules, Source,
@@ -251,7 +252,7 @@ drop_notext(Files) -> lists:filter(fun(I) -> mydlp_api:has_text(I) end, Files).
 
 has_data(#file{dataref={cacheref, _Ref}}) -> true;
 has_data(#file{dataref={memory, Bin}}) -> size(Bin) > 0;
-has_data(#file{data=Data}) -> size(Data) > 0;
+has_data(#file{data=Data}) when is_binary(Data)-> size(Data) > 0;
 has_data(Else) -> throw({error, unexpected_obj, Else}).
 
 drop_nodata(Files) -> lists:filter(fun(F) -> has_data(F) end, Files).
