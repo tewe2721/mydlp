@@ -223,7 +223,19 @@ init([]) ->
 %% IStock stock = new Stock();
 {rec("[a-zA-Z0-9_<>]+\\s*\\b[a-zA-Z0-9_]+\\b\\s*=\\s*\\bnew\\b\\s*[a-zA-Z0-9_<>]+\\([^).]*\\)"), 10},
 
-{rec("(?:public:|private:|protected:)"), 4}
+{rec("(?:public:|private:|protected:)"), 4},
+
+%% ADA support
+{rec("package\\s+(?:body\\s+)?([\\w\\pP\\pS_]+)\\s+is[\\w\\s\\pP\\pS]*end\\s+\\1\\s*;"), 8, [multiline, caseless, ungreedy]},
+
+{rec("procedure\\s+([\\w\\pS\\pP_]+)\\s+(?:\\(\\s*(?:[\\w_]+\\s*:\\s*(?:in|in\\s+out)\\s*[\\w_]+\\s*;?[\\s]*)*\\))?\\s*is\\s*[\\w\\s\\pP\\pS]*begin[\\w\\s\\pP\\pS]*end\\s+\\1\\s*;"), 29, [multiline, caseless, ungreedy]},
+
+{rec("function\\s+([\\w\\pS\\pP_]+)\\s+(?:\\((?:\\s*[\\w_]+\\s*:\\s*(?:in|in\\s+out)\\s*[\\w_]+\\s*;?[\\s]*)*\\))?\\s*return\\s+[\\w_]+\\s+is\\s*[\\w\\s\\pP\\pS]*begin[\\w\\s\\pP\\pS]*end\\s+\\1\\s*;"), 33, [multiline, caseless, ungreedy]},
+
+{rec("while[\\w\\s\\pP\\pS]*loop[\\w\\s\\pP\\pS]*end\\s+loop\\s*;"), 4, [multiline, caseless, ungreedy]},
+
+{rec("for\\s+[\\w\\s\\pP\\pS]+\\s+in\\s+[\\w\\s\\pP\\pS]+loop[\\w\\s\\pP\\pS]*end\\s+loop\\s*;"), 6, [multiline, caseless, ungreedy]}
+
 		]}
 	],
 	BST = insert_all(BInS, gb_trees:empty()),
@@ -255,10 +267,14 @@ insert_all([], Tree) -> Tree.
 
 rec(Regex) -> {ok, Ret} = re:compile(Regex, [unicode]), Ret.
 
+-define(SS_RE_OPTS, [global, {capture, all, index}]).
+
 score_regex_suite(Regexes, Data) -> score_regex_suite(Regexes, Data, 0).
 
 score_regex_suite([{RE,Weight}|Regexes], Data, Score) ->
-	Count = case re:run(Data, RE, [global, {capture, all, binary}]) of
+		score_regex_suite([{RE,Weight,[]}|Regexes], Data, Score);
+score_regex_suite([{RE,Weight,REOpts}|Regexes], Data, Score) ->
+	Count = case re:run(Data, RE, lists:append(REOpts, ?SS_RE_OPTS)) of
 		nomatch -> 0;
 		{match, Captured} -> length(Captured) end,
 	score_regex_suite(Regexes, Data, Score + (Weight * Count) );
