@@ -36,13 +36,24 @@ mydlp_ui_hrl = \
 	gen-erl/mydlp_ui_constants.hrl \
 	gen-erl/mydlp_ui_types.hrl
 
+moddlp_erl = \
+	gen-erl/moddlp_thrift.erl \
+	gen-erl/moddlp_types.erl
+
+moddlp_hrl = \
+	gen-erl/moddlp_thrift.hrl \
+	gen-erl/moddlp_constants.hrl \
+	gen-erl/moddlp_types.hrl
+
 dist_erl_DATA = \
 	$(mydlp_erl) \
-	$(mydlp_ui_erl)
+	$(mydlp_ui_erl) \
+	$(moddlp_erl)
 	
 dist_hrl_DATA = \
 	$(mydlp_hrl) \
-	$(mydlp_ui_hrl)
+	$(mydlp_ui_hrl) \
+	$(moddlp_hrl)
 
 beam_DATA = \
 	$(dist_erl_DATA:.erl=.beam)
@@ -59,6 +70,17 @@ mydlpphpdir = $(datadir)/php/packages/mydlp_ui
 mydlpphp_DATA = \
 	gen-php/mydlp_ui/Mydlp_ui.php \
 	gen-php/mydlp_ui/mydlp_ui_types.php
+
+moddlp_cpp = moddlp_constants.cpp \
+		Moddlp.cpp \
+		Moddlp_server.skeleton.cpp \
+		moddlp_types.cpp
+
+moddlp_h = moddlp_types.h \
+		moddlp_constants.h \
+		Moddlp.h
+
+noinst_DATA = $(moddlp_cpp) $(moddlp_h)
 
 erldir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/src
 hrldir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/include
@@ -78,9 +100,12 @@ $(mydlp_erl) $(mydlp_hrl) $(pkgpython_PYTHON): mydlp.thrift
 $(mydlp_ui_erl) $(mydlp_ui_hrl) $(mydlpphplib_DATA): mydlp_ui.thrift
 	@$(THRIFT) --gen erl --gen php $<
 
+$(moddlp_erl) $(moddlp_hrl) $(moddlp_cpp) $(moddlp_h): moddlp.thrift
+	@$(THRIFT) --gen erl --gen cpp $<
+
 .erl.beam:
 	@echo "Compiling $<..."
 	@$(ERLC) $(ERLCFLAGS) $<
 
 clean-local:
-	rm -rf gen-erl gen-py gen-php
+	rm -rf gen-erl gen-py gen-php gen-cpp

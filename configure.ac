@@ -46,6 +46,7 @@ AC_ERLANG_SUBST_INSTALL_LIB_SUBDIR([mydlp], [0.5.4.dev])
 AM_PATH_PYTHON
 
 AC_PROG_CC
+AC_PROG_CXX
 AC_PROG_LIBTOOL
 
 AC_PATH_PROG(THRIFT, thrift, thrift, $PATH:/usr/local/bin:/usr/bin)
@@ -60,6 +61,7 @@ AC_CONFIG_FILES([
 		src/mydlp/mydlp.app
 		src/mydlp/mydlp.rel
 		src/mydlp/overview.edoc
+		src/mod_dlp/Makefile
 		src/thrift/Makefile
 		src/backend/Makefile
 		src/backend/py/Makefile

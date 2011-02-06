@@ -39,6 +39,7 @@ src/thrift/gen-erl/
 src/thrift/gen-java/
 src/thrift/gen-php/
 src/thrift/gen-py/
+src/thrift/gen-cpp/
 debian/files
 debian/mydlp.debhelper.log
 debian/mydlp.substvars

@@ -1,0 +1,1 @@
+To install: apxs2 -i -a -n dlp libmoddlp.la
