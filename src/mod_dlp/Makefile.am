@@ -1,7 +1,5 @@
 ## This is the shared library to be built
-apachemoddir = $(libdir)/apache2/modules/
-
-apachemod_LTLIBRARIES = libmoddlp.la
+noinst_LTLIBRARIES = libmoddlp.la
 
 ## Define the source file for the module
 libmoddlp_la_SOURCES = mod_dlp.cpp
@@ -19,6 +17,6 @@ INCLUDES = \
 
 LIBS = -lpthread
 
-#install-data-hook:
-#	/usr/bin/apxs2 -i -A -e -n dlp libmoddlp.la 
+install-data-hook:
+	/usr/bin/apxs2 -i -A -n dlp libmoddlp.la 
 

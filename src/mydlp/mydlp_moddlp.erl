@@ -21,33 +21,29 @@
 %%%-------------------------------------------------------------------
 %%% @author H. Kerem Cevahir <kerem@medratech.com>
 %%% @copyright 2010, H. Kerem Cevahir
-%%% @doc Backend for mydlp ui functions.
+%%% @doc Backend for mydlp moddlp functions.
 %%% @end
 %%%-------------------------------------------------------------------
--module(mydlp_ts).
+-module(mydlp_moddlp).
 -author("kerem@medra.com.tr").
 
--include("mydlp_ui_thrift.hrl").
--include("mydlp_ui_types.hrl").
+-include("moddlp_thrift.hrl").
+-include("moddlp_types.hrl").
 
 -export([start_link/0,
 	stop/1,
 	handle_function/2
 	]).
 
--export([trainConfidential/2,
-	setConfidentialGroup/2,
-	trainPublic/2,
-	removeFile/1,
-	removeGroup/1,
-	removeFileFromGroup/2,
-	compileFilters/0,
-	compileCustomer/1
+-export([init/0,
+	pushData/2,
+	analyze/1,
+	close/1
 	]).
 
 %%%%% EXTERNAL INTERFACE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-start_link() -> thrift_server:start_link(9092, mydlp_ui_thrift, ?MODULE).
+start_link() -> thrift_server:start_link(9099, moddlp_thrift, ?MODULE).
 
 stop(Server) -> thrift_server:stop(Server), ok.
 
@@ -61,18 +57,11 @@ handle_function(Function, Args) when is_atom(Function), is_tuple(Args) ->
 
 %%%%% FUNCTIONS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-trainConfidential(Data, Fileid) -> mydlp_trainer:confidential(Data, Fileid).
+init() -> 5.
 
-setConfidentialGroup(Fileid, Groupid) -> mydlp_mnesia:set_gid_by_fid(Fileid, Groupid).
+pushData(Entityid, Data) -> ok.
 
-trainPublic(Data, Fileid) -> mydlp_trainer:public(Data, Fileid).
+analyze(Entityid) -> ok.
 
-removeFile(Fileid) -> mydlp_mnesia:remove_file_entry(Fileid).
+close(Entityid) -> ok.
 
-removeGroup(Groupid) ->	mydlp_mnesia:remove_group(Groupid).
-
-removeFileFromGroup(Fileid, Groupid) -> mydlp_mnesia:remove_file_from_group(Fileid, Groupid).
-
-compileFilters() -> mydlp_mysql:compile_filters().
-
-compileCustomer(Customerid) -> mydlp_mysql:compile_customer(Customerid).

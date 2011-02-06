@@ -47,3 +47,7 @@ debian/mydlp
 debian/mydlp.*.debhelper
 debian/stamp-autotools-files
 debian/stamp-makefile-build
+confdefs.h
+conftest
+conftest.erl
+

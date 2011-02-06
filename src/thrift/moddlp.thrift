@@ -21,7 +21,7 @@
 service Moddlp {
 
 	i32 init()
-	void push_data(1: i32 Entityid, 2: binary Data)
+	void pushData(1: i32 Entityid, 2: binary Data)
 	void analyze(1: i32 Entityid)
 	oneway void close(1: i32 Entityid)
 

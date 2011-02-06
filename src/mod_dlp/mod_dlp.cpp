@@ -83,12 +83,16 @@ static int dlp_filter (ap_filter_t* f, apr_bucket_brigade* bb)
 		const char* buf = 0 ;
 		apr_size_t bytes = 0 ;
 		apr_bucket_read(b, &buf, &bytes, APR_BLOCK_READ);
+		string s(buf,bytes);
+		cfg->client.pushData(entity_id, s);
 		#ifdef DEBUG
 		fprintf(stderr,"recieved num of bytes: %d.\n", bytes);
 		fwrite (buf, 1, bytes, stderr) ;
 		fflush(stderr);
 		#endif
 	}
+	cfg->client.analyze(entity_id);
+	cfg->client.close(entity_id);
 	return ap_pass_brigade(f->next, bb) ;
 }
 
@@ -108,10 +112,9 @@ static void* mod_dlp_config(apr_pool_t* pool, char* x) {
 	shared_ptr<TTransport> socket(new TSocket("localhost", 9099));
 	shared_ptr<TTransport> transport(new TBufferedTransport(socket));
 	shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
-	mod_dlp_cfg->client = ModdlpClient(protocol);
-
+	ret->client = ModdlpClient(protocol);
 	try {
-		mod_dlp_cfg->transport->open();
+		transport->open();
 //		EntityId = client.init();
 //		transport->close();
 	} catch (TException &tx) {
