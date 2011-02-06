@@ -24,12 +24,14 @@
  * Include the core server components.
  */
 #include "httpd.h"
+#include "http_log.h"
 #include "http_config.h"
 #include "http_protocol.h"
 #include "ap_config.h"
 #include "util_filter.h"
 #include "http_request.h"
 #include "apr_strings.h"
+#include "apr_thread_mutex.h"
 
 #include <stdio.h>
 #include <unistd.h>
@@ -56,6 +58,8 @@ using namespace boost;
  ************************/
 extern "C" module AP_MODULE_DECLARE_DATA dlp_module;
 
+static apr_thread_mutex_t* thrift_connect_mutex;
+
 static ap_filter_rec_t * dlp_filter_handle; 
 
 typedef struct {
@@ -67,11 +71,24 @@ static void try_reconnect(mod_dlp_cfg* cfg)
 {
 	try 
 	{
+		apr_status_t rc = APR_SUCCESS;
+		if ((rc = apr_thread_mutex_lock(thrift_connect_mutex)) != APR_SUCCESS) {
+			ap_log_error(APLOG_MARK, APLOG_ERR, rc, NULL,
+				"mod_dlp: Cannot lock thrift_connect_mutex");
+			return;
+		}
 		cfg->transport->close();
 		cfg->transport->open();
+		if ((rc = apr_thread_mutex_unlock(thrift_connect_mutex)) != APR_SUCCESS) {
+			ap_log_error(APLOG_MARK, APLOG_ERR, rc, NULL,
+				"mod_dlp: Cannot unlock thrift_connect_mutex");
+			return;
+		}
 	}
 	catch (...)
 	{
+		ap_log_error(APLOG_MARK, APLOG_ERR, 0, NULL,
+			"mod_dlp: Failed during trying to reconnect to thrift server.");
 	}
 }
 
@@ -84,7 +101,8 @@ static unsigned int init_entity(mod_dlp_cfg* cfg)
 	}
 	catch (...)
 	{
-		fprintf(stderr,"mod_dlp: Error calling init_entity.\n");
+		ap_log_error(APLOG_MARK, APLOG_ERR, 0, NULL,
+			"mod_dlp: Error calling init_entity.");
 		try_reconnect(cfg);
 	}
 	return 0;
@@ -98,7 +116,8 @@ static void push_data(mod_dlp_cfg* cfg, unsigned int entity_id, const string & d
 	}
 	catch (...)
 	{
-		fprintf(stderr,"mod_dlp: Error calling push_data.\n");
+		ap_log_error(APLOG_MARK, APLOG_ERR, 0, NULL,
+			"mod_dlp: Error calling push_data.");
 		try_reconnect(cfg);
 	}
 }
@@ -112,7 +131,8 @@ static bool analyze(mod_dlp_cfg* cfg, unsigned int entity_id)
 	}
 	catch (...)
 	{
-		fprintf(stderr,"mod_dlp: Error calling analyze.\n");
+		ap_log_error(APLOG_MARK, APLOG_ERR, 0, NULL,
+			"mod_dlp: Error calling analyze.");
 		try_reconnect(cfg);
 	}
 	return true;
@@ -126,7 +146,8 @@ static void close_entity(mod_dlp_cfg* cfg, unsigned int entity_id)
 	}
 	catch (...)
 	{
-		fprintf(stderr,"mod_dlp: Error calling close_entity.\n");
+		ap_log_error(APLOG_MARK, APLOG_ERR, 0, NULL,
+			"mod_dlp: Error calling close_entity.");
 		try_reconnect(cfg);
 	}
 }
@@ -167,22 +188,39 @@ static void insert_filters(request_rec *r) {
 
 static void mod_dlp_register_hooks (apr_pool_t *p)
 {
+	apr_status_t rc = APR_SUCCESS;
+	rc = apr_thread_mutex_create(&thrift_connect_mutex, APR_THREAD_MUTEX_DEFAULT, p);
+	if (rc != APR_SUCCESS) {
+		ap_log_perror(APLOG_MARK, APLOG_ERR, rc, p,
+			"Could not create thrift mutex");
+		exit(1);
+	}
+
 	dlp_filter_handle = ap_register_output_filter("MODDLP", dlp_filter, NULL, AP_FTYPE_RESOURCE) ;
 	ap_hook_insert_filter(insert_filters, NULL, NULL, APR_HOOK_MIDDLE) ;
 }
 
 static void* mod_dlp_config(apr_pool_t* pool, char* x) {
 	mod_dlp_cfg* ret = (mod_dlp_cfg*) apr_palloc(pool, sizeof(mod_dlp_cfg)) ;
+
 	shared_ptr<TTransport> socket(new TSocket("localhost", 9092));
 	shared_ptr<TTransport> transport(new TBufferedTransport(socket));
 	shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
 	shared_ptr<Mydlp_uiIf> client(new Mydlp_uiClient(protocol));
+
 	try {
+		apr_status_t rc = APR_SUCCESS;
+		if ((rc = apr_thread_mutex_lock(thrift_connect_mutex)) != APR_SUCCESS) {
+			ap_log_perror(APLOG_MARK, APLOG_ERR, rc, pool,
+				"mod_dlp: config: Cannot lock thrift_connect_mutex");
+		}
 		transport->open();
-//		EntityId = client.init();
-//		transport->close();
-	} catch (...) {
-	}
+		if ((rc = apr_thread_mutex_unlock(thrift_connect_mutex)) != APR_SUCCESS) {
+			ap_log_perror(APLOG_MARK, APLOG_ERR, rc, pool,
+				"mod_dlp: config: Cannot unlock thrift_connect_mutex");
+		}
+	} catch (...) {}
+
 	ret->client = client;
 	ret->transport = transport;
 	return ret ;
