@@ -239,6 +239,7 @@ get_body(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_impl
 
 'PARSE_REQ_LINE'({data, ReqLine}, State) ->
 	[MethodS, Uri, VersionS] = string:tokens(ReqLine, " "),
+	erlang:display([MethodS, Uri]),
 
 	Method = case http_util:to_lower(MethodS) of
 		"options" -> 'OPTIONS';

@@ -1444,13 +1444,39 @@ get_chunk(_TotalSize, Rest, InChunk) -> {InChunk, Rest}.
 %% @end
 %%-------------------------------------------------------------------------
 
-rb_to_file(Filename) when is_list(Filename) ->
+rb_to_fie(Filename) when is_list(Filename) ->
 	try	rb:start(),
 		rb:start_log(Filename),
 		rb:show(),
 		rb:stop_log(),
 		rb:stop()
 	catch Class:Error -> {"Error occurred.", Class, Error} end.
+
+%%-------------------------------------------------------------------------
+%% @doc Extracts texts from file and inner files and concats them.
+%% @end
+%%-------------------------------------------------------------------------
+
+concat_texts(#file{} = File) -> concat_texts([File]);
+concat_texts(Files) when is_list(Files) -> 
+	Files1 = extract_all(Files),
+	concat_texts(Files1, []).
+
+concat_texts([File|Files], Returns) ->
+	case get_text(File) of
+		{ok, Txt} -> concat_texts(Files, [<<"\n">>, Txt| Returns]);
+		_Else -> concat_texts(Files, Returns)
+	end;
+concat_texts([], Returns) -> list_to_binary(lists:reverse(Returns)).
+
+extract_all(Files) -> extract_all(Files, []).
+
+extract_all([], Return) -> Return;
+extract_all(Files, Return) ->
+	Files1 = load_files(Files),
+	{PFiles, NewFiles} = analyze(Files1),
+	PFiles1 = clean_files(PFiles),
+	extract_all(NewFiles, lists:append(Return, PFiles1)).
 
 
 -include_lib("eunit/include/eunit.hrl").

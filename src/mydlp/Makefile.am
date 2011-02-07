@@ -38,10 +38,11 @@ dist_erl_DATA = \
 	dynamic_compile.erl \
 	gen_server_cluster.erl \
 	mime_util.erl \
+	mydlp_acceptor.erl \
 	mydlp_acl.erl \
 	mydlp_api.erl \
 	mydlp_app.erl \
-	mydlp_acceptor.erl \
+	mydlp_archiver.erl \
 	mydlp_bayeserl_store.erl \
 	mydlp_distributor.erl \
 	mydlp_dynamic.erl \

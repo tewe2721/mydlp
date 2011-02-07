@@ -184,7 +184,7 @@ train_cfile({#file{} = File, FileId, GroupId}) ->
         ok = mydlp_mnesia:add_fhash(MD5Hash, FileId, GroupId),
 
 	% get text
-	case concat_texts(File1) of
+	case mydlp_api:concat_texts(File1) of
 		<<>> -> ok;
 		Txt ->	% add to sentence hash
 			SList = mydlp_api:get_nsh(Txt),
@@ -200,27 +200,6 @@ train_pfile({File, FileId}) ->
         MD5Hash = erlang:md5(File#file.data),
         ok = mydlp_mnesia:add_fhash(MD5Hash, FileId, PGID),
 	% train bayes
-	Txt = concat_texts(File),
+	Txt = mydlp_api:concat_texts(File),
 	bayeserl:train_negative(Txt), ok.
-
-concat_texts(#file{} = File) -> concat_texts([File]);
-concat_texts(Files) when is_list(Files) -> 
-	Files1 = extract_all(Files),
-	concat_texts(Files1, []).
-
-concat_texts([File|Files], Returns) ->
-	case mydlp_api:get_text(File) of
-		{ok, Txt} -> concat_texts(Files, [<<"\n">>, Txt| Returns]);
-		_Else -> concat_texts(Files, Returns)
-	end;
-concat_texts([], Returns) -> list_to_binary(lists:reverse(Returns)).
-
-extract_all(Files) -> extract_all(Files, []).
-
-extract_all([], Return) -> Return;
-extract_all(Files, Return) ->
-	Files1 = mydlp_api:load_files(Files),
-	{PFiles, NewFiles} = mydlp_api:analyze(Files1),
-	PFiles1 = mydlp_api:clean_files(PFiles),
-	extract_all(NewFiles, lists:append(Return, PFiles1)).
 
