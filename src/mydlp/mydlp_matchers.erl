@@ -296,26 +296,24 @@ i_archive_match([]) -> neg.
 
 p_text_match() -> analyzed.
 
-is_hex_or_base_encoded(Data) when is_binary(Data) ->
-	case mydlp_regex:is_match_bin(hexencoded, Data) of
-		true -> true;
-		false -> is_hex_or_base_encoded1(Data) end;
-is_hex_or_base_encoded(_Data) -> false.
+p_text_match(Conf, {_Addr, Files}) ->
+	Score = case lists:keyfind(score, 1, Conf) of
+		{score, S} -> S;
+		false -> 512
+	end,
+	p_text_match1(Score, Files).
 
-is_hex_or_base_encoded1(Data) ->  mydlp_regex:is_match_bin(base64encoded, Data).
+p_text_match1(Limit, [#file{data=Data} = File|Files]) ->
+	S1 = ( mydlp_regex:longest_bin(hexencoded, Data) ) / 2,
+	S2 = mydlp_regex:longest_bin(base64encoded, Data),
+	Score = lists:max([S1,S2]),
 
-
-p_text_match(_Conf, {_Addr, Files}) -> p_text_match(Files).
-p_text_match([#file{mime_type=MimeType, data=Data} = File|Files]) ->
-	case mydlp_api:is_cobject_mime(MimeType) of
-		true -> case is_hex_or_base_encoded(Data) of
-			true -> {pos, {file, File}};
-			false -> p_text_match(Files) end;
-%		false -> case is_hex_or_base_encoded(Text) of
-%			true -> {pos, {file, File}};
-%			false -> p_text_match(Files) end end;
-		false -> p_text_match(Files) end;
-p_text_match([]) -> neg.
+	case Score >= Limit of
+		true -> {pos, {file, File}, 
+			{misc, "score=" ++ integer_to_list(Score)}};
+		false -> p_text_match1(Limit, Files)
+	end;
+p_text_match1(_Score, []) -> neg.
 
 md5_match() -> raw.
 

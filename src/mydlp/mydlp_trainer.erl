@@ -160,11 +160,11 @@ code_change(_OldVsn, State, _Extra) ->
 
 %%%%%%%%%%%%%%%%% internal
 
-term2file(Term) when is_binary(Term) -> #file{data=Term};
+term2file(Term) when is_binary(Term) -> #file{dataref=?BB_C(Term)};
 term2file(#file{} = Term) -> Term;
 term2file(Term) when is_list(Term) ->
         {ok, Bin} = file:read_file(Term),
-        #file{data=Bin}.
+        #file{dataref=?BB_C(Bin)}.
 
 train_cfile({File}) -> train_cfile({File, undefined});
 
@@ -173,25 +173,24 @@ train_cfile({File, FileId}) ->
 	train_cfile({File, FileId, CGID});
 
 train_cfile({#file{mime_type=undefined} = File, FileId, GroupId}) ->
-	MT = mydlp_tc:get_mime(File#file.data),
-	train_cfile({File#file{mime_type = MT}, FileId, GroupId});
+	File1 = mydlp_api:load_files(File), %% Refine these
+	MT = mydlp_tc:get_mime(File1#file.data),
+	train_cfile({File1#file{mime_type = MT}, FileId, GroupId});
 
 train_cfile({#file{} = File, FileId, GroupId}) ->
 	% add to file hash 
-        MD5Hash = erlang:md5(File#file.data),
+	File1 = mydlp_api:load_files(File),
+        MD5Hash = erlang:md5(File1#file.data),
         ok = mydlp_mnesia:add_fhash(MD5Hash, FileId, GroupId),
 
 	% get text
-	case concat_texts(File) of
+	case concat_texts(File1) of
 		<<>> -> ok;
-		Txt ->
-			% add to sentence hash
+		Txt ->	% add to sentence hash
 			SList = mydlp_api:get_nsh(Txt),
 			ok = mydlp_mnesia:add_shash(SList, FileId, GroupId),
 			% train bayes
-			bayeserl:train_positive(Txt)
-	end,
-	ok.
+			bayeserl:train_positive(Txt) end, ok.
 
 train_pfile({File}) -> train_pfile({File, undefined});
 
@@ -202,12 +201,11 @@ train_pfile({File, FileId}) ->
         ok = mydlp_mnesia:add_fhash(MD5Hash, FileId, PGID),
 	% train bayes
 	Txt = concat_texts(File),
-	bayeserl:train_negative(Txt),
-	ok.
+	bayeserl:train_negative(Txt), ok.
 
 concat_texts(#file{} = File) -> concat_texts([File]);
 concat_texts(Files) when is_list(Files) -> 
-	Files1 = mydlp_api:df_to_files(Files),
+	Files1 = extract_all(Files),
 	concat_texts(Files1, []).
 
 concat_texts([File|Files], Returns) ->
@@ -216,4 +214,13 @@ concat_texts([File|Files], Returns) ->
 		_Else -> concat_texts(Files, Returns)
 	end;
 concat_texts([], Returns) -> list_to_binary(lists:reverse(Returns)).
+
+extract_all(Files) -> extract_all(Files, []).
+
+extract_all([], Return) -> Return;
+extract_all(Files, Return) ->
+	Files1 = mydlp_api:load_files(Files),
+	{PFiles, NewFiles} = mydlp_api:analyze(Files1),
+	PFiles1 = mydlp_api:clean_files(PFiles),
+	extract_all(NewFiles, lists:append(Return, PFiles1)).
 

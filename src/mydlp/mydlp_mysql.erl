@@ -457,7 +457,9 @@ populate_match(Id, <<"i_binary">>, Parent) ->
 
 populate_match(Id, <<"p_text">>, Parent) ->
 	Func = p_text_match,
-	new_match(Id, Parent, Func);
+	[ScoreS] = get_func_params(Id),
+	FuncParams = [{score, binary_to_integer(ScoreS)}],
+	new_match(Id, Parent, Func, FuncParams);
 
 populate_match(Id, <<"trid">>, Parent) ->
 	Func = trid_match,
@@ -479,6 +481,24 @@ populate_match(Id, <<"iban">>, Parent) ->
 
 populate_match(Id, <<"cc">>, Parent) ->
 	Func = cc_match,
+	[CountS] = get_func_params(Id),
+	FuncParams = [{count, binary_to_integer(CountS)}],
+	new_match(Id, Parent, Func, FuncParams);
+
+populate_match(Id, <<"canada_sin">>, Parent) ->
+	Func = sin_match,
+	[CountS] = get_func_params(Id),
+	FuncParams = [{count, binary_to_integer(CountS)}],
+	new_match(Id, Parent, Func, FuncParams);
+
+populate_match(Id, <<"france_insee">>, Parent) ->
+	Func = insee_match,
+	[CountS] = get_func_params(Id),
+	FuncParams = [{count, binary_to_integer(CountS)}],
+	new_match(Id, Parent, Func, FuncParams);
+
+populate_match(Id, <<"uk_nino">>, Parent) ->
+	Func = nino_match,
 	[CountS] = get_func_params(Id),
 	FuncParams = [{count, binary_to_integer(CountS)}],
 	new_match(Id, Parent, Func, FuncParams);
@@ -523,7 +543,7 @@ populate_match(Id, <<"file">>, Parent) ->
 			{whitefile, WhiteFile}, {group_ids, GroupsI}],
 	new_match(Id, Parent, Func, FuncParams);
 
-populate_match(_, _, _) -> ok.
+populate_match(Id, Matcher, _) -> throw({error, {unsupported_match, Id, Matcher} }).
 
 get_func_params(MatchId) ->
 	{ok, PQ} = psq(params_by_match_id, [MatchId]),

@@ -254,6 +254,8 @@ get_port_resp(Port) ->
 %% @doc Extracts Text from File records
 %% @end
 %%----------------------------------------------------------------------
+get_text(#file{is_encrypted=true}) -> {error, encrypted};
+get_text(#file{compressed_copy=true}) -> {error, compression};
 get_text(#file{mime_type= <<"application/x-empty">>}) -> {ok, <<>>};
 get_text(#file{mime_type= <<"text/plain">>, data=Data}) -> {ok, Data};
 get_text(#file{mime_type= <<"application/xml">>, data=Data}) ->
@@ -772,10 +774,13 @@ analyze(Files) when is_list(Files) ->
 %%----------------------------------------------------------------------
 load_files(#file{} = File) -> [Ret] = load_files([File]), Ret;
 load_files(Files) when is_list(Files) ->
-	lists:map(fun(F) ->  
-		Data = ?BB_R(F#file.dataref),
-		F#file{data=Data}
-		end, Files).
+	lists:map(fun(F) -> load_file(F) end, Files).
+
+load_file(#file{dataref=undefined} = File) -> File;
+load_file(#file{data=undefined} = File) ->
+	Data = ?BB_R(File#file.dataref),
+	File#file{data=Data};
+load_file(#file{} = File) -> File.
 
 %%--------------------------------------------------------------------
 %% @doc Cleans cache references.
@@ -783,10 +788,12 @@ load_files(Files) when is_list(Files) ->
 %%----------------------------------------------------------------------
 clean_files(#file{} = File) -> [Ret] = clean_files([File]), Ret;
 clean_files(Files) when is_list(Files) ->
-	lists:map(fun(F) ->  
-		?BB_D(F#file.dataref), % no need for reference to exist
-		F#file{dataref=undefined}
-		end, Files).
+	lists:map(fun(F) -> clean_file(F) end, Files).
+
+clean_file(#file{dataref=undefined} = File) -> File;
+clean_file(#file{} = File) -> 
+	?BB_D(File#file.dataref), % no need for reference to exist
+	File#file{dataref=undefined}.
 
 %%--------------------------------------------------------------------
 %% @doc Detects mimetypes of all files given, 

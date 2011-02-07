@@ -35,6 +35,7 @@
 	replace_bin/3,
 	split_bin/2,
 	match_bin/2,
+	longest_bin/2,
 	is_match_bin/2,
 	score_suite/2,
 	match/2,
@@ -59,6 +60,8 @@
 replace_bin(BInKey, Data, Replace) -> async_re_call({rbin, BInKey, Replace}, Data).
 
 match_bin(BInKey, Data) -> async_re_call({mbin, BInKey}, Data).
+
+longest_bin(BInKey, Data) -> async_re_call({longest_bin, BInKey}, Data).
 
 is_match_bin(BInKey, Data) -> async_re_call({i_mbin, BInKey}, Data).
 
@@ -104,6 +107,14 @@ handle_re({mbin, BInKey}, Data, #state{builtin_tree=BT}) ->
 	case re:run(Data, RE, [global, {capture, all, list}]) of
 		nomatch -> [];
 		{match, Captured} -> lists:append(Captured) end;
+
+handle_re({longest_bin, BInKey}, Data, #state{builtin_tree=BT}) ->
+	RE = gb_trees:get(BInKey, BT),
+	case re:run(Data, RE, [global, {capture, all, index}]) of
+		nomatch -> 0;
+		{match, Captured} ->  
+			Lengths = [ L || [{_, L}|_] <- Captured],
+			lists:max(Lengths) end;
 
 handle_re({i_mbin, BInKey}, Data, #state{builtin_tree=BT}) ->
 	RE = gb_trees:get(BInKey, BT),
