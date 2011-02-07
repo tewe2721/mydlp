@@ -230,6 +230,7 @@ pl_text([#file{text=undefined} = File|Files], Rets) ->
 		{ok, Text} -> File#file{text = Text};
 		{error, cobject} -> File;
 		{error, compression} -> File;
+		{error, binary_format} -> File;
 		_Else -> File#file{is_encrypted=true}
 	end,
 	pl_text(Files, [ File1 |Rets]);
