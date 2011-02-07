@@ -64,6 +64,7 @@ get_mime(Data) when is_list(Data) ->
 	end,
 	get_mime(list_to_binary(Data1));
 
+get_mime(<<202,254,186,190, _Rest/binary>>) -> <<"application/java-vm">>; % CAFE BABE -> java class
 get_mime(Data) when is_binary(Data) ->
 	S = size(Data),
 	Data1 = case S > ?MMLEN of

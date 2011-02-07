@@ -285,11 +285,8 @@ get_text(#file{mime_type= <<"application/postscript">>, data=Data}) ->
 get_text(#file{mime_type= <<"text/",_Rest/binary>>, data=Data}) -> {ok, Data};
 get_text(#file{mime_type=undefined}) -> {error, unknown_type};
 get_text(#file{mime_type=MimeType}) -> 
-	case is_cobject_mime(MimeType) of
-		true -> {error, cobject};
-		false -> case is_compression_mime(MimeType) of
-			true -> {error, compression};
-			false -> {error, unsupported_type} end end.
+	MiscMimeCate = mime_category(MimeType),
+	{error, MiscMimeCate}.
 
 %%--------------------------------------------------------------------
 %% @doc Extracts Text from XML string
@@ -1121,40 +1118,53 @@ normalize_fn([C|FN], Acc) ->
 normalize_fn([], Acc) -> lists:reverse(Acc).
 
 %%-------------------------------------------------------------------------
+%% @doc Returns category of misc given mime type.
+%% @end
+%%-------------------------------------------------------------------------
+mime_category(<<"application/zip">>) -> compression;
+mime_category(<<"application/x-rar">>) -> compression;
+mime_category(<<"application/x-tar">>) -> compression;
+mime_category(<<"application/x-gzip">>) -> compression;
+mime_category(<<"application/x-bzip2">>) -> compression;
+mime_category(<<"application/x-gtar">>) -> compression;
+mime_category(<<"application/x-archive">>) -> compression;
+mime_category(<<"application/x-rpm">>) -> compression;
+mime_category(<<"application/x-arj">>) -> compression;
+mime_category(<<"application/arj">>) -> compression;
+mime_category(<<"application/x-7z-compressed">>) -> compression;
+mime_category(<<"application/x-7z">>) -> compression;
+mime_category(<<"application/x-compress">>) -> compression;
+mime_category(<<"application/x-compressed">>) -> compression;
+mime_category(<<"application/x-iso9660-image">>) -> compression;
+mime_category(<<"application/x-lzop">>) -> compression;
+mime_category(<<"application/x-lzip">>) -> compression;
+mime_category(<<"application/x-lzma">>) -> compression;
+mime_category(<<"application/x-xz">>) -> compression;
+mime_category(<<"application/x-winzip">>) -> compression;
+mime_category(<<"application/vnd.ms-cab-compressed">>) -> compression;
+mime_category(<<"application/x-executable">>) -> cobject;
+mime_category(<<"application/x-sharedlib">>) -> cobject;
+mime_category(<<"application/x-object">>) -> cobject;
+mime_category(<<"application/java-vm">>) -> binary_format;
+mime_category(_Else) -> unsupported_type.
+
+%%-------------------------------------------------------------------------
 %% @doc Returns whether given mime type belongs to a compression format or not.
 %% @end
 %%-------------------------------------------------------------------------
-is_compression_mime(<<"application/zip">>) -> true;
-is_compression_mime(<<"application/x-rar">>) -> true;
-is_compression_mime(<<"application/x-tar">>) -> true;
-is_compression_mime(<<"application/x-gzip">>) -> true;
-is_compression_mime(<<"application/x-bzip2">>) -> true;
-is_compression_mime(<<"application/x-gtar">>) -> true;
-is_compression_mime(<<"application/x-archive">>) -> true;
-is_compression_mime(<<"application/x-rpm">>) -> true;
-is_compression_mime(<<"application/x-arj">>) -> true;
-is_compression_mime(<<"application/arj">>) -> true;
-is_compression_mime(<<"application/x-7z-compressed">>) -> true;
-is_compression_mime(<<"application/x-7z">>) -> true;
-is_compression_mime(<<"application/x-compress">>) -> true;
-is_compression_mime(<<"application/x-compressed">>) -> true;
-is_compression_mime(<<"application/x-iso9660-image">>) -> true;
-is_compression_mime(<<"application/x-lzop">>) -> true;
-is_compression_mime(<<"application/x-lzip">>) -> true;
-is_compression_mime(<<"application/x-lzma">>) -> true;
-is_compression_mime(<<"application/x-xz">>) -> true;
-is_compression_mime(<<"application/x-winzip">>) -> true;
-is_compression_mime(<<"application/vnd.ms-cab-compressed">>) -> true;
-is_compression_mime(_Else) -> false.
+is_compression_mime(MimeType) -> 
+	case mime_category(MimeType) of
+		compression -> true;
+		_Else -> false end.
 
 %%-------------------------------------------------------------------------
 %% @doc Returns whether given mime type belongs to a C/C++ object or not.
 %% @end
 %%-------------------------------------------------------------------------
-is_cobject_mime(<<"application/x-executable">>) -> true;
-is_cobject_mime(<<"application/x-sharedlib">>) -> true;
-is_cobject_mime(<<"application/x-object">>) -> true;
-is_cobject_mime(_Else) -> false.
+is_cobject_mime(MimeType) -> 
+	case mime_category(MimeType) of
+		cobject -> true;
+		_Else -> false end.
 
 %%-------------------------------------------------------------------------
 %% @doc Calculates binary size
