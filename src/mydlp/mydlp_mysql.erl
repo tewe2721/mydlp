@@ -489,6 +489,12 @@ populate_match(Id, <<"scode">>, Parent) ->
 	FuncParams = [{score, binary_to_integer(ScoreS)}],
 	new_match(Id, Parent, Func, FuncParams);
 
+populate_match(Id, <<"scode_ada">>, Parent) ->
+	Func = scode_ada_match,
+	[ScoreS] = get_func_params(Id),
+	FuncParams = [{score, binary_to_integer(ScoreS)}],
+	new_match(Id, Parent, Func, FuncParams);
+
 populate_match(Id, <<"mime">>, Parent) ->
 	Func = mime_match,
 	GroupsS = get_func_params(Id),

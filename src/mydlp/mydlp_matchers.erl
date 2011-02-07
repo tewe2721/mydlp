@@ -68,6 +68,8 @@
 	bayes_match/2,
 	scode_match/0,
 	scode_match/2,
+	scode_ada_match/0,
+	scode_ada_match/2,
 	cc_match/0,
 	cc_match/2
 ]).
@@ -451,4 +453,25 @@ scode_match1(Limit, [File|Files]) ->
 		false -> scode_match1(Limit, Files)
 	end;
 scode_match1(_Limit, []) -> neg.
+
+scode_ada_match() -> text.
+
+scode_ada_match(Conf, {_Addr, Files}) when is_list(Conf) -> 
+	Score = case lists:keyfind(score, 1, Conf) of
+		{score, S} -> S;
+		false -> 100
+	end,
+	scode_ada_match1(Score, Files).
+
+scode_ada_match1(Limit, [File|Files]) ->
+	Score = mydlp_regex:score_suite(
+	 	scode_ada, 
+		File#file.text),
+
+	case Score >= Limit of
+		true -> {pos, {file, File}, 
+			{misc, "score=" ++ integer_to_list(Score)}};
+		false -> scode_ada_match1(Limit, Files)
+	end;
+scode_ada_match1(_Limit, []) -> neg.
 

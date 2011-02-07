@@ -223,7 +223,10 @@ init([]) ->
 %% IStock stock = new Stock();
 {rec("[a-zA-Z0-9_<>]+\\s*\\b[a-zA-Z0-9_]+\\b\\s*=\\s*\\bnew\\b\\s*[a-zA-Z0-9_<>]+\\([^).]*\\)"), 10},
 
-{rec("(?:public:|private:|protected:)"), 4},
+{rec("(?:public:|private:|protected:)"), 4}
+
+		]},
+		{scode_ada, [
 
 %% ADA support
 {rec("package\\s+(?:body\\s+)?([\\w\\pP\\pS_]+)\\s+is[\\w\\s\\pP\\pS]*end\\s+\\1\\s*;"), 8, [multiline, caseless, ungreedy]},
