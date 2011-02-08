@@ -157,19 +157,19 @@ stop() ->
 init([]) ->
 	BInREs = [
 		%{credit_card, rec("\\b(?:\\d[ -]{0,4}?){13,16}\\b")}
-		{credit_card, rec("(?:\\d[ -]{0,4}){13,16}")},
-		{iban, rec("(?:[a-zA-Z][ -]{0,4}){2}(?:[0-9][ -]{0,4}){2}(?:[a-zA-Z0-9][ -]{0,4}){4}(?:[0-9][ -]{0,4}){7}(?:[a-zA-Z0-9][ -]{0,4}){0,16}")},
-		{trid, rec("(?:\\d[ -]{0,2}){11}")},
-		{ssn, rec("(?:\\d{3}-\\d{2}-\\d{4})")},
+		{credit_card, rec("(?:\\d[ -]{0,4}){13,16}", [unicode])},
+		{iban, rec("(?:[a-zA-Z][ -]{0,4}){2}(?:[0-9][ -]{0,4}){2}(?:[a-zA-Z0-9][ -]{0,4}){4}(?:[0-9][ -]{0,4}){7}(?:[a-zA-Z0-9][ -]{0,4}){0,16}", [unicode])},
+		{trid, rec("(?:\\d[ -]{0,2}){11}", [unicode])},
+		{ssn, rec("(?:\\d{3}-\\d{2}-\\d{4})", [unicode])},
 		%{ssn, rec("(?:\\d{3} ?-? ?\\d{2} ?-? ?\\d{4})")},
-		{sin, rec("(?:\\d{3} ?-? ?\\d{3} ?-? ?\\d{3})")},
+		{sin, rec("(?:\\d{3} ?-? ?\\d{3} ?-? ?\\d{3})", [unicode])},
 		%{insee, rec("(?:\\d{1} ?-? ?\\d{2} ?-? ?\\d{2} ?-? ?\\d{5} ?-? ?\\d{3} ?-? ?\\d{2})")},
-		{insee, rec("(?:\\d{1} ?\\d{2} ?\\d{2} ?\\d{5} ?\\d{3} ?(?:\\d{2})?)")},
-		{nino, rec("(?:[A-Za-z]{2}\\d{6}[A-Za-z]{0,1})")},
+		{insee, rec("(?:\\d{1} ?\\d{2} ?\\d{2} ?\\d{5} ?\\d{3} ?(?:\\d{2})?)", [unicode])},
+		{nino, rec("(?:[A-Za-z]{2}\\d{6}[A-Za-z]{0,1})", [unicode])},
 		%{nino, rec("(?:[A-Za-z]{2} ?-? ?\\d{2} ?-? ?\\d{2} ?-? ?\\d{2} ?-? ?[A-Za-z]{0,1})")},
-		{nonwc, rec("[^A-Za-z0-9]+")},
-		{sentence, rec("[\\n\\r\\t\\.!?]+\\s{0,1}\\){0,1}\\s+")},
-		{word, rec("\\d*(?:[.,]\\d+)+|[\\w\\p{L}]+-[\\w\\p{L}]+|[\\w\\p{L}]+")},
+		{nonwc, rec("[^A-Za-z0-9]+", [unicode])},
+		{sentence, rec("[\\n\\r\\t\\.!?]+\\s{0,1}\\){0,1}\\s+", [unicode])},
+		{word, rec("\\d*(?:[.,]\\d+)+|[\\w\\p{L}]+-[\\w\\p{L}]+|[\\w\\p{L}]+", [unicode])},
 		{hexencoded, rec("[a-fA-F0-9\\r\\n]{512,}")},
 		{base64encoded, rec("[\\+/a-zA-Z0-9\\r\\n]{256,}(?:={1,}|[\\r\\n])")}
 	],
@@ -181,80 +181,80 @@ init([]) ->
 		{scode, [
 
 %% !=\|&&\|||\|==\|>>\|<<
-{rec("!=|&&|\\|\\||==|>>|<<"), 2},
+{rec("!=|&&|\\|\\||==|>>|<<", [multiline, ungreedy]), 1},
 
 %% int\b\|char\b\|void\b\|const\b\
-{rec("int\\b|char\\b|void\\b|const\\b|enum\\b|typedef\\b"), 2},
+{rec("int\\b|char\\b|void\\b|const\\b|enum\\b|typedef\\b", [multiline, ungreedy]), 2},
 
 %% /\*\|\*/\|[^:]*//
-{rec("/\\*|^\\s*\\*+\\s|\\*/|^//|[^:]//"), 2},
+{rec("/\\*|^\\s*\\*+\\s|\\*/|^//|[^:]//", [multiline, ungreedy]), 1},
 
 %% hrdLocations.get(classID)
-{rec("[a-zA-Z0-9_()]+\\.[a-zA-Z0-9_]+\\([^).]*\\)"), 4},
+{rec("[a-zA-Z0-9_()]+\\.[a-zA-Z0-9_]+\\([^).]*\\)", [multiline, ungreedy]), 4},
 
 %% new FileErrorHandler(dfis->getLocation(), Encodings::ENC_UTF8, false) 
-{rec("\\bnew\\b\\s*[a-zA-Z0-9_]+\\([^).]*\\)"), 4},
+{rec("\\bnew\\b\\s*[a-zA-Z0-9_]+\\([^).]*\\)", [multiline, ungreedy]), 4},
 
 %% TextHRDMapper *mapper = new TextHRDMapper() 
 %% TextHRDMapper ^mapper = new TextHRDMapper() 
 %{rec("([a-zA-Z0-9_]+)\\s*\\^\\s*\\b[a-zA-Z0-9_]+\\b\\s*=\\s*\\bnew\\b\\s*\\1\\([^).]*\\);"), 10},
 %{rec("([a-zA-Z0-9_]+)\\s*\\*\\s*\\b[a-zA-Z0-9_]+\\b\\s*=\\s*\\bnew\\b\\s*\\1\\([^).]*\\);"), 10},
-{rec("([a-zA-Z0-9_]+)\\s*[*^]\\s*\\b[a-zA-Z0-9_]+\\b\\s*=\\s*\\bnew\\b\\s*\\1\\([^).]*\\);"), 10},
+{rec("([a-zA-Z0-9_]+)\\s*[*^]\\s*\\b[a-zA-Z0-9_]+\\b\\s*=\\s*\\bnew\\b\\s*\\1\\([^).]*\\);", [multiline, ungreedy]), 10},
 
 
 %% ParserFactory::ParserFactory()
 %% path->startsWith(DString("file://") 
 %{rec("[a-zA-Z0-9_]+::[a-zA-Z0-9_]+\\([^).]*\\)"), 6},
 %{rec("[a-zA-Z0-9_]+->[a-zA-Z0-9_]+\\([^).]*\\)"), 6},
-{rec("[a-zA-Z0-9_]+(?:->|::)[a-zA-Z0-9_]+\\([^).]*\\)"), 6},
+{rec("[a-zA-Z0-9_]+(?:->|::)[a-zA-Z0-9_]+\\([^).]*\\)", [multiline, ungreedy]), 6},
 
 %% #ifndef\b\|#define\b\|#ifdef\b\|#include\s*[<\"]
-{rec("#ifndef\\b|#define\\b|#ifdef\\b|#include\\s*[<\"]"), 6},
+{rec("#ifndef\\b|#define\\b|#ifdef\\b|#include\\s*[<\"]", [multiline, ungreedy]), 6},
 
 %% package com.deneme.hibernate;
 %% import org.hibernate.Session; 
 %{rec("^[ ]*package \\s*[a-zA-Z0-9_\\.]+;"), 6},
 %{rec("^[ ]*import \\s*[a-zA-Z0-9_\\.]+;"), 6},
-{rec("^[ ]*(?:import|package) \\s*[a-zA-Z0-9_\\.]+;"), 6},
+{rec("^[ ]*(?:import|package) \\s*[a-zA-Z0-9_\\.]+;", [multiline, ungreedy]), 6},
 
 %% public class Uygulama 
 %% public interface Uygulama
 %{rec("(?:(?:(?:public|private|protected|) \\s*){0,1}((static|abstract|) \\s*){0,1}|^\\s*)class \\s*[a-zA-Z0-9_<>]+"), 6},
 %{rec("(?:(?:(?:public|private|protected|) \\s*){0,1}((static|abstract|) \\s*){0,1}|^\\s*)interface \\s*[a-zA-Z0-9_<>]+"), 6},
-{rec("(?:(?:(?:public|private|protected|) \\s*){0,1}(?:(?:static|abstract|) \\s*){0,1}|^\\s*)(?:class|interface) \\s*[a-zA-Z0-9_<>]+"), 6},
+{rec("(?:(?:(?:public|private|protected|) \\s*){0,1}(?:(?:static|abstract|) \\s*){0,1}|^\\s*)(?:class|interface) \\s*[a-zA-Z0-9_<>]+", [multiline, ungreedy]), 6},
 
 %% public static void main( String[] args )
-{rec("(?:public|private|protected|) \\s*(?:static|abstract|) \\s*[a-zA-Z0-9_<>]+\\b\\s*[a-zA-Z0-9_]+\\s*\\([^).]*\\)"), 10},
+{rec("(?:public|private|protected|) \\s*(?:static|abstract|) \\s*[a-zA-Z0-9_<>]+\\b\\s*[a-zA-Z0-9_]+\\s*\\([^).]*\\)", [multiline, ungreedy]), 10},
 
 %% Stock<T> stock = new Stock<T>() - weight = 6
 %% Stock stock = new Stock();
-{rec("([a-zA-Z0-9_<>]+)\\s*\\b[a-zA-Z0-9_]+\\b\\s*=\\s*\\bnew\\b\\s*\\1\\([^).]*\\)"), 10},
+{rec("([a-zA-Z0-9_<>]+)\\s*\\b[a-zA-Z0-9_]+\\b\\s*=\\s*\\bnew\\b\\s*\\1\\([^).]*\\)", [multiline, ungreedy]), 10},
 
 %% IStock<T> stock = new Stock<T>() - weight = 4
 %% IStock stock = new Stock();
-{rec("[a-zA-Z0-9_<>]+\\s*\\b[a-zA-Z0-9_]+\\b\\s*=\\s*\\bnew\\b\\s*[a-zA-Z0-9_<>]+\\([^).]*\\)"), 10},
+{rec("[a-zA-Z0-9_<>]+\\s*\\b[a-zA-Z0-9_]+\\b\\s*=\\s*\\bnew\\b\\s*[a-zA-Z0-9_<>]+\\([^).]*\\)", [multiline, ungreedy]), 10},
 
-{rec("(?:public:|private:|protected:)"), 4}
+{rec("(?:public:|private:|protected:)", [multiline, ungreedy]), 4}
 
 		]},
 		{scode_ada, [
 
 %% ADA support
-{rec("package\\s+(?:body\\s+)?([\\w\\pP\\pS_]+)\\s+is[\\w\\s\\pP\\pS]*end\\s+\\1\\s*;", [multiline, caseless, ungreedy]), 8},
+{rec("package\\s+(?:body\\s+)?([\\w\\pP\\pS_]+)\\s+is[\\w\\s\\pP\\pS]*end\\s+\\1\\s*;", [multiline, caseless, ungreedy]), 22},
 
-{rec("procedure\\s+([\\w\\pS\\pP_]+)\\s+(?:\\(\\s*(?:[\\w_]+\\s*:\\s*(?:in|in\\s+out)\\s*[\\w_]+\\s*;?[\\s]*)*\\))?\\s*is\\s*[\\w\\s\\pP\\pS]*begin[\\w\\s\\pP\\pS]*end\\s+\\1\\s*;", [multiline, caseless, ungreedy]), 29},
+{rec("procedure\\s+([\\w\\pS\\pP_]+)\\s*(?:\\(\\s*(?:[\\w_]+\\s*:\\s*(?:in|in\\s+out)\\s*[\\w_]+\\s*;?[\\s]*)*\\))?(?:\\s+is\\s*[\\w\\s\\pP\\pS]*begin[\\w\\s\\pP\\pS]*end\\s+\\1)\\s*;", [multiline, caseless, ungreedy]), 59},
 
-{rec("function\\s+([\\w\\pS\\pP_]+)\\s+(?:\\((?:\\s*[\\w_]+\\s*:\\s*(?:in|in\\s+out)\\s*[\\w_]+\\s*;?[\\s]*)*\\))?\\s*return\\s+[\\w_]+\\s+is\\s*[\\w\\s\\pP\\pS]*begin[\\w\\s\\pP\\pS]*end\\s+\\1\\s*;", [multiline, caseless, ungreedy]), 33},
+{rec("function\\s+([\\w\\pS\\pP_]+)\\s*(?:\\((?:\\s*[\\w_]+\\s*:\\s*(?:in|in\\s+out)\\s*[\\w_]+\\s*;?[\\s]*)*\\))?\\s*return\\s+[\\w_\\.]+(?:\\s+is\\s*[\\w\\s\\pP\\pS]*begin[\\w\\s\\pP\\pS]*end\\s+\\1)?\\s*;", [multiline, caseless, ungreedy]), 73},
 
-{rec("while[\\w\\s\\pP\\pS]*loop[\\w\\s\\pP\\pS]*end\\s+loop\\s*;", [multiline, caseless, ungreedy]), 4},
+{rec("while[\\w\\s\\pP\\pS]*loop[\\w\\s\\pP\\pS]*end\\s+loop\\s*;", [multiline, caseless, ungreedy]), 7},
 
-{rec("for\\s+[\\w\\s\\pP\\pS]+\\s+in\\s+[\\w\\s\\pP\\pS]+loop[\\w\\s\\pP\\pS]*end\\s+loop\\s*;", [multiline, caseless, ungreedy]), 6}
+{rec("for\\s+[\\w\\s\\pP\\pS]+\\s+in\\s+[\\w\\s\\pP\\pS]+loop[\\w\\s\\pP\\pS]*end\\s+loop\\s*;", [multiline, caseless, ungreedy]), 10}
 
 		]}
 	],
 	BST = insert_all(BInS, gb_trees:empty()),
 
-	U304 = rec("\x{0130}"),
+	U304 = rec("\x{0130}", [unicode]),
 
 	{ok, #state{builtin_tree=BT, builtin_suite_tree=BST, u304=U304}}.
 
@@ -280,7 +280,11 @@ insert_all([{Key, Val}|Rest], Tree) -> insert_all(Rest, gb_trees:enter(Key, Val,
 insert_all([], Tree) -> Tree.
 
 rec(Regex) -> rec(Regex,[]).
-rec(Regex, ReOpts) -> {ok, Ret} = re:compile(Regex, [unicode|ReOpts]), Ret.
+rec(Regex, ReOpts) -> 
+	{ok, Ret} = case ReOpts of
+		[] -> re:compile(Regex);
+		ReOpts -> re:compile(Regex, ReOpts) end,
+	Ret.
 
 -define(SS_RE_OPTS, [global, {capture, all, index}]).
 
