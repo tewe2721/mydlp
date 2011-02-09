@@ -3,9 +3,11 @@ Makefile.in
 aclocal.m4
 autom4te.cache
 config.guess
+config.guess.cdbs-orig
 config.log
 config.status
 config.sub
+config.sub.cdbs-orig
 configure
 configure.lineno
 configure.tmp
