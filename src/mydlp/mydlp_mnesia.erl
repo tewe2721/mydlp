@@ -264,7 +264,7 @@ handle_query({get_rules_by_user, Who}) ->
 	resolve_funcs(Rules);
 
 handle_query({get_regexes, GroupId}) ->
-	Q = qlc:q([R#regex.compiled ||
+	Q = qlc:q([ { R#regex.id, R#regex.compiled } ||
 		R <- mnesia:table(regex),
 		R#regex.group_id == GroupId
 		]),

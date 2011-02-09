@@ -96,8 +96,11 @@ regex_match() -> text.
 regex_match(RGIs, {_Addr, Files}) -> regex_match(RGIs, Files);
 regex_match(RGIs, [File|Files]) ->
 	case mydlp_regex:match(RGIs, File#file.text) of
-		true -> {pos, {file, File}};
-		false -> regex_match(RGIs, Files)
+		{match, {id, RId}, {group_id, GId}} -> 
+			{pos, {file, File},
+				{misc, "regex_id=" ++ integer_to_list(RId) ++
+				" group_id=" ++ integer_to_list(GId)}};
+		nomatch -> regex_match(RGIs, Files)
 	end;
 regex_match(_RGIs, []) -> neg.
 

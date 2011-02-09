@@ -71,10 +71,9 @@ score_suite(BInKey, Data) -> async_re_call({score_suite, BInKey}, Data).
 
 match([GI|GIs], Data) -> 
 	case match1(GI, Data) of
-		true -> true;
-		false -> match(GIs, Data)
-	end;
-match([], _Data) -> false.
+		{match, {id,Id}} -> {match, {id, Id}, {group_id, GI}};
+		nomatch -> match(GIs, Data) end;
+match([], _Data) -> nomatch.
 
 match1(GroupId, Data) -> async_re_call({match, GroupId}, Data).
 
@@ -100,7 +99,7 @@ handle_call(_Msg, _From, State) ->
 
 handle_re({match, GroupId}, Data, _State) ->
 	Regexes = mydlp_mnesia:get_regexes(GroupId),
-	matches_any(Regexes, Data);
+	run_all(Regexes, Data);
 
 handle_re({mbin, BInKey}, Data, #state{builtin_tree=BT}) ->
 	RE = gb_trees:get(BInKey, BT),
@@ -148,8 +147,7 @@ handle_info(_Info, State) ->
 start_link() ->
 	case gen_server:start_link({local, ?MODULE}, ?MODULE, [], []) of
 		{ok, Pid} -> {ok, Pid};
-		{error, {already_started, Pid}} -> {ok, Pid}
-	end.
+		{error, {already_started, Pid}} -> {ok, Pid} end.
 
 stop() ->
 	gen_server:call(?MODULE, stop).
@@ -270,11 +268,11 @@ code_change(_OldVsn, State, _Extra) ->
 preregex(Data, #state{u304=U304}) ->
 	re:replace(Data, U304, <<"i">>, [global, {return, binary}]).
 
-matches_any([R|RS], Data) ->
+run_all([{Id, R}|RS], Data) ->
 	case re:run(Data, R) of
-		{match, _Captured} -> true;
-		nomatch -> matches_any(RS, Data) end;
-matches_any([], _Data) -> false.
+		{match, _Captured} -> {match, {id, Id}};
+		nomatch -> run_all(RS, Data) end;
+run_all([], _Data) -> nomatch.
 
 insert_all([{Key, Val}|Rest], Tree) -> insert_all(Rest, gb_trees:enter(Key, Val, Tree));
 insert_all([], Tree) -> Tree.
