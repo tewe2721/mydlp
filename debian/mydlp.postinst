@@ -80,7 +80,7 @@ case "$1" in
 		generate_keys
 		configure_apache
 		chown_quarantine
-	elif
+	else
 		update_mysql_schema $2
 	fi
 	;;
