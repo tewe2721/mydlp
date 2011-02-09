@@ -27,6 +27,14 @@ INIT_EPOCH=/var/lib/mydlp/init_epoch
 CHOWN=/bin/chown
 QUARANTINE_DIR=/var/lib/mydlp/quarantine/
 
+MYSQLC=/usr/bin/mysql
+SCHEMADIR=/usr/share/mydlp/schema/
+
+AWKBIN=/usr/bin/awk
+DPKGBIN=/usr/bin/dpkg
+ECHOBIN=/bin/echo
+
+
 # Generates SSL keys
 generate_keys() {
 	mkdir -p $SSLDIR || exit 1
@@ -45,19 +53,36 @@ configure_apache() {
 }
 
 generate_init_epoch() {
-	[ -e "$INIT_EPOCH" ] || ( /bin/echo -n "$($DATEBIN +%s)" > $INIT_EPOCH )
+	[ -e "$INIT_EPOCH" ] || ( $ECHOBIN -n "$($DATEBIN +%s)" > $INIT_EPOCH )
 }
 
 chown_quarantine() {
 	$CHOWN -R 33.33 $QUARANTINE_DIR
 }
 
+update_mysql_schema() {
+	OLDVER=$1
+	while read line 
+	do
+		PATCHVER="$($ECHOBIN $line|$AWKBIN '{print $NF}')"
+		PATCHFILE="$($ECHOBIN $line|$AWKBIN -F: '{print $1}')"
+		if $DPKGBIN --compare-versions "$PATCHVER" gt "$OLDVER"; then
+			$MYSQLC mydlp < $SCHEMADIR/patch/$PATCHFILE || \
+				$ECHOBIN "Failed to apply MySQL patch ($PATCHFILE) automatically. Should be applied manually."
+		fi
+	done < $SCHEMADIR/schema_map.txt
+}
+
 case "$1" in
     configure)
-	generate_init_epoch
-	generate_keys
-	configure_apache
-	chown_quarantine
+	if [ -z "$2" ]; then
+		generate_init_epoch
+		generate_keys
+		configure_apache
+		chown_quarantine
+	elif
+		update_mysql_schema $2
+	fi
 	;;
 
     abort-upgrade|abort-deconfigure|abort-remove)
