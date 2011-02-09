@@ -321,7 +321,7 @@ populate_default_rule([[ActionS, CC, CCCount, SSNCount, IBANCount, SINCount, INS
 		Count3 -> [{iban_match, [{count, Count3}]}] end,
 	SINMatch = case SINCount of
 		0 -> [];
-		Count4 -> [{sin_match, [{count, Count4}]}] end,
+		Count4 -> [{canada_sin_match, [{count, Count4}]}] end,
 	INSEEMatch = case INSEECount of
 		0 -> [];
 		Count5 -> [{insee_match, [{count, Count5}]}] end,
@@ -486,7 +486,7 @@ populate_match(Id, <<"cc">>, Parent) ->
 	new_match(Id, Parent, Func, FuncParams);
 
 populate_match(Id, <<"canada_sin">>, Parent) ->
-	Func = sin_match,
+	Func = canada_sin_match,
 	[CountS] = get_func_params(Id),
 	FuncParams = [{count, binary_to_integer(CountS)}],
 	new_match(Id, Parent, Func, FuncParams);
