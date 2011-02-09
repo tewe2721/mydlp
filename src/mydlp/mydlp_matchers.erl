@@ -50,8 +50,8 @@
 	canada_sin_match/2,
 	france_insee_match/0,
 	france_insee_match/2,
-	nino_match/0,
-	nino_match/2,
+	uk_nino_match/0,
+	uk_nino_match/2,
 	e_file_match/0,
 	e_file_match/2,
 	e_archive_match/0,
@@ -224,25 +224,25 @@ france_insee_match1(Count, [File|Files]) ->
 	end;
 france_insee_match1(_Count, []) -> neg.
 
-nino_match() -> text.
+uk_nino_match() -> text.
 
-nino_match(Conf, {_Addr, Files}) when is_list(Conf) ->
+uk_nino_match(Conf, {_Addr, Files}) when is_list(Conf) ->
 	Count = case lists:keyfind(count, 1, Conf) of
 		{count, C} -> C;
 		false -> 5
 	end,
-	nino_match1(Count, Files).
+	uk_nino_match1(Count, Files).
 
-nino_match1(Count, [File|Files]) ->
+uk_nino_match1(Count, [File|Files]) ->
 	Res = mydlp_regex:match_bin(
 	 	nino, 
 		File#file.text),
 	
 	case mydlp_api:more_than_count(fun(I) -> mydlp_api:is_valid_nino(I) end, Count, Res) of
 		true -> {pos, {file, File}};
-		false -> nino_match1(Count, Files)
+		false -> uk_nino_match1(Count, Files)
 	end;
-nino_match1(_Count, []) -> neg.
+uk_nino_match1(_Count, []) -> neg.
 
 -define(CFILE_MINSIZE, 128).
 

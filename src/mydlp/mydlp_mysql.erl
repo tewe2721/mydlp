@@ -327,7 +327,7 @@ populate_default_rule([[ActionS, CC, CCCount, SSNCount, IBANCount, SINCount, INS
 		Count5 -> [{france_insee_match, [{count, Count5}]}] end,
 	NINOMatch = case NINOCount of
 		0 -> [];
-		Count6 -> [{nino_match, [{count, Count6}]}] end,
+		Count6 -> [{uk_nino_match, [{count, Count6}]}] end,
 	TRIDMatch = case TRIDCount of
 		0 -> [];
 		Count7 -> [{trid_match, [{count, Count7}]}] end,
@@ -498,7 +498,7 @@ populate_match(Id, <<"france_insee">>, Parent) ->
 	new_match(Id, Parent, Func, FuncParams);
 
 populate_match(Id, <<"uk_nino">>, Parent) ->
-	Func = nino_match,
+	Func = uk_nino_match,
 	[CountS] = get_func_params(Id),
 	FuncParams = [{count, binary_to_integer(CountS)}],
 	new_match(Id, Parent, Func, FuncParams);
