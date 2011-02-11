@@ -138,10 +138,12 @@ handle_cast({push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Mis
 handle_cast({push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, File, Misc}}, State) ->
 	spawn_link(fun() ->
 		{ok, Path} = mydlp_api:quarantine(File),
+		Size = mydlp_api:binary_size(File#file.data),
+		MimeType = (File#file.mime_type),
 		{CustomerId, RuleId1, Action1, Ip1, User1} = pre_push_log(RuleId, Action, Ip, User),
 		transaction( fun() ->
 			psqt(insert_incident, [CustomerId, RuleId1, Proto, Ip1, User1, To, Action1, Matcher, FileS, Misc]),
-			psqt(insert_incident_file, [Path]) end)
+			psqt(insert_incident_file, [Path, MimeType, Size]) end)
 	end),
 	{noreply, State};
 
@@ -227,7 +229,7 @@ init([]) ->
 		{dr_fhash_by_cid, <<"SELECT hash FROM sh_defaultrule_filehash WHERE customer_id=?">>},
 		{dr_wfhash_by_cid, <<"SELECT hash FROM sh_defaultrule_white_filehash WHERE customer_id=?">>},
 		{insert_incident, <<"INSERT INTO log_incedent (id, customer_id, rule_id, protocol, src_ip, src_user, destination, action, matcher, filename, misc) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)">>},
-		{insert_incident_file, <<"INSERT INTO log_incedent_file (id, log_incedent_id, path) VALUES (NULL, last_insert_id(), ?)">>},
+		{insert_incident_file, <<"INSERT INTO log_incedent_file (id, log_incedent_id, path, mime_type, size) VALUES (NULL, last_insert_id(), ?, ?, ?)">>},
 		{delete_all_smb_discover, <<"DELETE FROM log_shared_folder">>},
 		{insert_smb_discover, <<"INSERT INTO log_shared_folder (id, customer_id, result) VALUES (NULL, ?, ?)">>}
 	]],
