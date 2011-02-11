@@ -67,8 +67,9 @@ update_mysql_schema() {
 		PATCHVER="$($ECHOBIN $line|$AWKBIN '{print $NF}')"
 		PATCHFILE="$($ECHOBIN $line|$AWKBIN -F: '{print $1}')"
 		if $DPKGBIN --compare-versions "$PATCHVER" gt "$OLDVER"; then
-			$MYSQLC mydlp < $SCHEMADIR/patch/$PATCHFILE || \
-				$ECHOBIN "Failed to apply MySQL patch ($PATCHFILE) automatically. Should be applied manually."
+			( $MYSQLC mydlp < $SCHEMADIR/patch/$PATCHFILE && \
+				echo "MySQL schema updated to $PATCHVER ($PATCHFILE)..."
+			) || $ECHOBIN "Failed to apply MySQL patch ($PATCHFILE) automatically. Should be applied manually."
 		fi
 	done < $SCHEMADIR/schema_map.txt
 }
