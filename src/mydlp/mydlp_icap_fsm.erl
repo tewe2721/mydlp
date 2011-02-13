@@ -55,7 +55,7 @@
 	icap_rencap,
 	http_request,
 	http_headers,
-	http_content=[],
+	http_content= <<>>,
 	files=[],
 	max_connections,
 	options_ttl,
@@ -63,8 +63,8 @@
 	buffer,
 	cache_http_h=false,
 	cache_http_b=false,
-	cache_data_http_h=[],
-	cache_data_http_b=[],
+	cache_data_http_h= <<>>,
+	cache_data_http_b= <<>>,
 	tmp
 }).
 
@@ -311,11 +311,11 @@ get_body(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_impl
 	CSize1 = CSize - size(Line),
 	if
 		CSize1 > 0 -> {next_state, 'HTTP_CC_CHUNK', 
-                                State#state{http_content=[Line|Content], tmp=CSize1}, ?TIMEOUT};
+                                State#state{http_content= <<Content/binary,Line/binary>>, tmp=CSize1}, ?TIMEOUT};
 		CSize1 == 0 -> {next_state, 'HTTP_CC_CRLF',
-				State#state{http_content=[Line|Content], tmp=undefined}, ?TIMEOUT};
+				State#state{http_content= <<Content/binary,Line/binary>>, tmp=undefined}, ?TIMEOUT};
 		CSize1 == -2 -> {next_state, 'HTTP_CC_LINE',
-				State#state{http_content=[rm_trailing_crlf(Line)|Content], tmp=undefined}, ?TIMEOUT}
+				State#state{http_content= <<Content/binary, (rm_trailing_crlf(Line)) /binary>>, tmp=undefined}, ?TIMEOUT}
 	end.
 
 'HTTP_CC_CRLF'({data, <<"\r\n">>}, State) ->
@@ -325,8 +325,8 @@ get_body(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_impl
 	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
-'HTTP_CC_TCRLF'({data, <<"\r\n">>}, #state{http_content=Content1} = State) ->
-	get_body(State#state{http_content=lists:reverse(Content1), cache_http_b=false});
+'HTTP_CC_TCRLF'({data, <<"\r\n">>}, State) ->
+	get_body(State#state{cache_http_b=false});
 
 'HTTP_CC_TCRLF'(timeout, State) ->
 	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
@@ -347,7 +347,7 @@ get_body(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_impl
 'REQ_OK'(#state{icap_request=#icap_request{method=options} } = State) -> 'REPLY_OK'(State);
 'REQ_OK'(#state{files=Files, addr=SAddr, http_request=#http_request{path=Uri}, 
 		http_content=HttpContent, icap_headers=#icap_headers{x_client_ip=CAddr} } = State) ->
-	case mydlp_acl:q(SAddr, CAddr, dest, df_to_files(Uri, list_to_binary(HttpContent), Files)) of
+	case mydlp_acl:q(SAddr, CAddr, dest, df_to_files(Uri, HttpContent, Files)) of
 		pass -> 'REPLY_OK'(State);
 		{Block = {block, _ }, AclR} -> log_req(State, Block, AclR),
 					'BLOCK_REQ'(block, State);
@@ -385,13 +385,11 @@ reply(What, #state{socket=Socket, icap_request=IcapReq, http_request=HttpReq,
 				StdIH,
 				"Encapsulated: null-body=0\r\n\r\n"];
 		{ok, false, reqmod} -> 
-				ReqH = list_to_binary(lists:reverse(CacheDataH)),
-				ReqB = lists:reverse(CacheDataB),
 				[IcapVer, " 200 OK\r\n",
 				StdIH,
 				"Encapsulated: req-hdr=0",
-					", req-body=", integer_to_list(size(ReqH)),"\r\n\r\n",
-				ReqH, ReqB, "\r\n"];
+					", req-body=", integer_to_list(size(CacheDataH)),"\r\n\r\n",
+				CacheDataH, CacheDataB, "\r\n"];
 		{block, _, reqmod} -> 
 				{http_request, _,  _, {HTTPMajorv, HTTPMinorv}} = HttpReq,
 				Deny = mydlp_api:get_denied_page(html),
@@ -421,13 +419,13 @@ reply(What, #state{socket=Socket, icap_request=IcapReq, http_request=HttpReq,
 				icap_rencap=undefined,
 				http_request=undefined, 
 				http_headers=undefined,
-				http_content=[], 
+				http_content= <<>>, 
 				files=[],
 				buffer=undefined,
 				cache_http_h=false,
 				cache_http_b=false,
-				cache_data_http_h=[],
-				cache_data_http_b=[],
+				cache_data_http_h= <<>>,
+				cache_data_http_b= <<>>,
 				tmp=undefined}, ?KA_TIMEOUT}.
 
 %%-------------------------------------------------------------------------
@@ -470,13 +468,14 @@ handle_info({tcp, Socket, Bin}, StateName, #state{socket=Socket,
 		cache_http_h=true, cache_data_http_h=CacheH} = StateData) ->
 	% Flow control: enable forwarding of next TCP message
 	inet:setopts(Socket, [{active, once}]),
-	fsm_call(StateName, {data, Bin}, StateData#state{cache_data_http_h=[Bin|CacheH]});
+	fsm_call(StateName, {data, Bin}, StateData#state{cache_data_http_h= 
+			<<CacheH/binary, ( list_to_binary(Bin) )/binary>>});
 
 handle_info({tcp, Socket, Bin}, StateName, #state{socket=Socket,
 		cache_http_b=true, cache_data_http_b=CacheB} = StateData) ->
 	% Flow control: enable forwarding of next TCP message
 	inet:setopts(Socket, [{active, once}]),
-	fsm_call(StateName, {data, Bin}, StateData#state{cache_data_http_b=[Bin|CacheB]});
+	fsm_call(StateName, {data, Bin}, StateData#state{cache_data_http_b= <<CacheB/binary, Bin/binary>>});
 
 handle_info({tcp, Socket, Bin}, StateName, #state{socket=Socket} = StateData) ->
 	% Flow control: enable forwarding of next TCP message
@@ -554,10 +553,10 @@ raw_to_encapsulatedh(EncapStr) ->
 	end, Tokens).
 
 parse_multipart(#state{http_content=HttpContent, http_headers=H, http_request=Req}) ->
-	mydlp_api:parse_multipart(list_to_binary(HttpContent), H, Req).
+	mydlp_api:parse_multipart(HttpContent, H, Req).
 
 parse_urlencoded(#state{http_content=HttpContent}) ->
-	mydlp_api:uenc_to_file(list_to_binary(HttpContent)).
+	mydlp_api:uenc_to_file(HttpContent).
 
 df_to_files(Uri, Data, Files) ->
 	UFile = case mydlp_api:uri_to_hr_file(Uri) of

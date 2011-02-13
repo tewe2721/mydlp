@@ -294,9 +294,16 @@ get_text(#file{mime_type=MimeType}) ->
 %% @doc Extracts Text from XML string
 %% @end
 %%----------------------------------------------------------------------
-xml_to_txt(Data) when is_binary(Data)-> xml_to_txt(binary_to_list(Data));
-xml_to_txt(Data) when is_list(Data) -> 
-	RetList = xml_to_txt1(xmerl_scan:string(Data)),
+xml_to_txt(Data) when is_binary(Data) -> 
+	X = case size(Data) > (?MAX_MEM_OBJ/4) of
+		true ->	{ok, XmlF} = mktempfile(),
+			ok = file:write_file(XmlF, Data, [raw]),
+			X1 = xmerl_scan:file(XmlF),
+			ok = file:delete(XmlF), X1;
+		false -> XmlS = binary_to_list(Data),
+			xmerl_scan:file(XmlS) end,
+
+	RetList = xml_to_txt1(X),
 	unicode:characters_to_binary(RetList).
 
 xml_to_txt1(List) when is_list(List) -> xml_to_txt1(List, []);
@@ -1153,6 +1160,55 @@ mime_category(<<"application/x-executable">>) -> cobject;
 mime_category(<<"application/x-sharedlib">>) -> cobject;
 mime_category(<<"application/x-object">>) -> cobject;
 mime_category(<<"application/java-vm">>) -> binary_format;
+mime_category(<<"image/cgm">>) -> image;
+mime_category(<<"image/g3fax">>) -> image;
+mime_category(<<"image/gif">>) -> image;
+mime_category(<<"image/ief">>) -> image;
+mime_category(<<"image/jpeg">>) -> image;
+mime_category(<<"image/naplps">>) -> image;
+mime_category(<<"image/pcx">>) -> image;
+mime_category(<<"image/png">>) -> image;
+mime_category(<<"image/prs.btif">>) -> image;
+mime_category(<<"image/prs.pti">>) -> image;
+mime_category(<<"image/svg+xml">>) -> image;
+mime_category(<<"image/tiff">>) -> image;
+mime_category(<<"image/vnd.cns.inf2">>) -> image;
+mime_category(<<"image/vnd.djvu">>) -> image;
+mime_category(<<"image/vnd.dwg">>) -> image;
+mime_category(<<"image/vnd.dxf">>) -> image;
+mime_category(<<"image/vnd.fastbidsheet">>) -> image;
+mime_category(<<"image/vnd.fpx">>) -> image;
+mime_category(<<"image/vnd.fst">>) -> image;
+mime_category(<<"image/vnd.fujixerox.edmics-mmr">>) -> image;
+mime_category(<<"image/vnd.fujixerox.edmics-rlc">>) -> image;
+mime_category(<<"image/vnd.mix">>) -> image;
+mime_category(<<"image/vnd.net-fpx">>) -> image;
+mime_category(<<"image/vnd.svf">>) -> image;
+mime_category(<<"image/vnd.wap.wbmp">>) -> image;
+mime_category(<<"image/vnd.xiff">>) -> image;
+mime_category(<<"image/x-canon-cr2">>) -> image;
+mime_category(<<"image/x-canon-crw">>) -> image;
+mime_category(<<"image/x-cmu-raster">>) -> image;
+mime_category(<<"image/x-coreldraw">>) -> image;
+mime_category(<<"image/x-coreldrawpattern">>) -> image;
+mime_category(<<"image/x-coreldrawtemplate">>) -> image;
+mime_category(<<"image/x-corelphotopaint	">>) -> image;
+mime_category(<<"image/x-epson-erf">>) -> image;
+mime_category(<<"image/x-icon">>) -> image;
+mime_category(<<"image/x-jg">>) -> image;
+mime_category(<<"image/x-jng">>) -> image;
+mime_category(<<"image/x-ms-bmp">>) -> image;
+mime_category(<<"image/x-nikon-nef">>) -> image;
+mime_category(<<"image/x-olympus-orf">>) -> image;
+mime_category(<<"image/x-photoshop">>) -> image;
+mime_category(<<"image/x-portable-anymap">>) -> image;
+mime_category(<<"image/x-portable-bitmap">>) -> image;
+mime_category(<<"image/x-portable-graymap">>) -> image;
+mime_category(<<"image/x-portable-pixmap">>) -> image;
+mime_category(<<"image/x-rgb">>) -> image;
+mime_category(<<"image/x-xbitmap">>) -> image;
+mime_category(<<"image/x-xpixmap">>) -> image;
+mime_category(<<"image/x-xwindowdump">>) -> image;
 mime_category(_Else) -> unsupported_type.
 
 %%-------------------------------------------------------------------------
