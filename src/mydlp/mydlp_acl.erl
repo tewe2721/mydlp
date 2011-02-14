@@ -52,13 +52,13 @@
 %%%%%%%%%%%%% MyDLP ACL API
 
 q(Site, Addr, _Dest, Files) ->
-	gen_server:call(?MODULE, {acl_q, Site, {Addr, Files}}, 60000).
+	gen_server:call(?MODULE, {acl_q, Site, {Addr, Files}}, 600000).
 
 qu(User, _Dest, Files) ->
-	gen_server:call(?MODULE, {acl_qu, site, {User, Files}}, 60000).
+	gen_server:call(?MODULE, {acl_qu, site, {User, Files}}, 600000).
 
 qa(Dest, Files) ->
-	gen_server:call(?MODULE, {acl_qa, site, {Dest, Files}}, 60000).
+	gen_server:call(?MODULE, {acl_qa, site, {Dest, Files}}, 600000).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -103,7 +103,7 @@ handle_call({acl_q, SAddr, {Addr, Files}}, From, #state{is_multisite=true} = Sta
 				acl_exec(Rules, [{cid, CustomerId}, {addr, Addr}], Files) end,
 		Worker ! {async_acl_q, Result, From}
 	end),
-	{noreply, State, 60000};
+	{noreply, State};
 
 handle_call({acl_q, _Site, {Addr, Files}}, From, #state{is_multisite=false} = State) ->
 	Worker = self(),
@@ -114,7 +114,7 @@ handle_call({acl_q, _Site, {Addr, Files}}, From, #state{is_multisite=false} = St
 		Result = acl_exec(Rules, [{cid, CustomerId}, {addr, Addr}], Files),
 		Worker ! {async_acl_q, Result, From}
 	end),
-	{noreply, State, 60000};
+	{noreply, State};
 
 %% now this is used for only SMTP, and in SMTP domain part of, mail adresses itself a siteid for customer.
 %% it needs refactoring for both multisite and trusted domains
@@ -125,7 +125,7 @@ handle_call({acl_qu, _Site, {User, Files}}, From, State) ->
 		Result = acl_exec(Rules, [{cid, mydlp_mnesia:get_dcid()}, {user, User}], Files),
 		Worker ! {async_acl_q, Result, From}
 	end),
-	{noreply, State, 60000};
+	{noreply, State};
 
 handle_call({acl_qa, _Site, {Dest, Files}}, From, State) ->
 	Worker = self(),
@@ -134,7 +134,7 @@ handle_call({acl_qa, _Site, {Dest, Files}}, From, State) ->
 		Result = acl_exec(Rules, [{cid, mydlp_mnesia:get_dcid()}], Files),
 		Worker ! {async_acl_q, Result, From}
 	end),
-	{noreply, State, 60000};
+	{noreply, State};
 
 handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
