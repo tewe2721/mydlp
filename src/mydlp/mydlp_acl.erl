@@ -51,14 +51,13 @@
 
 %%%%%%%%%%%%% MyDLP ACL API
 
-q(Site, Addr, _Dest, Files) ->
-	gen_server:call(?MODULE, {acl_q, Site, {Addr, Files}}, 600000).
+q(Site, Addr, _Dest, Files) -> acl_call({q, Site, {Addr, Files}}).
 
-qu(User, _Dest, Files) ->
-	gen_server:call(?MODULE, {acl_qu, site, {User, Files}}, 600000).
+qu(User, _Dest, Files) -> acl_call({qu, site, {User, Files}}).
 
-qa(Dest, Files) ->
-	gen_server:call(?MODULE, {acl_qa, site, {Dest, Files}}, 600000).
+qa(Dest, Files) -> acl_call({qa, site, {Dest, Files}}).
+
+acl_call(Query) -> gen_server:call(?MODULE, {acl, Query}, 600000).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -93,46 +92,43 @@ acl_exec3(AllRules, Source, Files) ->
 		Else -> Else end.
 
 %% it needs refactoring for trusted domains
-handle_call({acl_q, SAddr, {Addr, Files}}, From, #state{is_multisite=true} = State) ->
-	Worker = self(),
-	spawn_link(fun() ->
-		Result = case mydlp_mnesia:get_cid(SAddr) of
-			nocustomer -> block;
-			CustomerId -> 
-				Rules = mydlp_mnesia:get_rules_for_cid(CustomerId, Addr),
-				acl_exec(Rules, [{cid, CustomerId}, {addr, Addr}], Files) end,
-		Worker ! {async_acl_q, Result, From}
-	end),
-	{noreply, State};
+handle_acl({q, SAddr, {Addr, Files}}, #state{is_multisite=true}) ->
+	case mydlp_mnesia:get_cid(SAddr) of
+		nocustomer -> block;
+		CustomerId -> 
+			Rules = mydlp_mnesia:get_rules_for_cid(CustomerId, Addr),
+			acl_exec(Rules, [{cid, CustomerId}, {addr, Addr}], Files) end;
 
-handle_call({acl_q, _Site, {Addr, Files}}, From, #state{is_multisite=false} = State) ->
-	Worker = self(),
-	spawn_link(fun() ->
-		%Rules = mydlp_mnesia:get_rules(Addr),
-		CustomerId = mydlp_mnesia:get_dcid(),
-		Rules = mydlp_mnesia:get_rules_for_cid(CustomerId, Addr),
-		Result = acl_exec(Rules, [{cid, CustomerId}, {addr, Addr}], Files),
-		Worker ! {async_acl_q, Result, From}
-	end),
-	{noreply, State};
+handle_acl({q, _Site, {Addr, Files}}, #state{is_multisite=false}) ->
+	%Rules = mydlp_mnesia:get_rules(Addr),
+	CustomerId = mydlp_mnesia:get_dcid(),
+	Rules = mydlp_mnesia:get_rules_for_cid(CustomerId, Addr),
+	acl_exec(Rules, [{cid, CustomerId}, {addr, Addr}], Files);
 
 %% now this is used for only SMTP, and in SMTP domain part of, mail adresses itself a siteid for customer.
 %% it needs refactoring for both multisite and trusted domains
-handle_call({acl_qu, _Site, {User, Files}}, From, State) ->
-	Worker = self(),
-	spawn_link(fun() ->
-		Rules = mydlp_mnesia:get_rules_by_user(User),
-		Result = acl_exec(Rules, [{cid, mydlp_mnesia:get_dcid()}, {user, User}], Files),
-		Worker ! {async_acl_q, Result, From}
-	end),
-	{noreply, State};
+handle_acl({qu, _Site, {User, Files}}, _State) ->
+	Rules = mydlp_mnesia:get_rules_by_user(User),
+	acl_exec(Rules, [{cid, mydlp_mnesia:get_dcid()}, {user, User}], Files);
 
-handle_call({acl_qa, _Site, {Dest, Files}}, From, State) ->
+handle_acl({qa, _Site, {Dest, Files}}, _State) ->
+	Rules = mydlp_mnesia:get_all_rules(Dest),
+	acl_exec(Rules, [{cid, mydlp_mnesia:get_dcid()}], Files);
+
+handle_acl(Q, _State) -> throw({error, {undefined_query, Q}}).
+
+handle_call({acl, Query}, From, State) ->
 	Worker = self(),
 	spawn_link(fun() ->
-		Rules = mydlp_mnesia:get_all_rules(Dest),
-		Result = acl_exec(Rules, [{cid, mydlp_mnesia:get_dcid()}], Files),
-		Worker ! {async_acl_q, Result, From}
+		Return = try 
+			Result = handle_acl(Query, State),
+			{ok, Result}
+		catch Class:Error ->
+			?ERROR_LOG("Error occured on ACL call. Class: [~w]. Error: [~w].~nStack trace: ~w~n",
+				[Class, Error, erlang:get_stacktrace()]),
+			{error, {Class,Error}} end,
+
+		Worker ! {async_acl_q, Return, From} 
 	end),
 	{noreply, State};
 
@@ -143,7 +139,11 @@ handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
 handle_info({async_acl_q, Res, From}, State) ->
-	gen_server:reply(From, Res),
+	Reply = case Res of
+		{ok, R} -> R;
+		{error, _} -> pass end,
+
+	gen_server:reply(From, Reply),
 	{noreply, State};
 
 handle_info(_Info, State) ->
