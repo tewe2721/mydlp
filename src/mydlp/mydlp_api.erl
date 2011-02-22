@@ -260,8 +260,8 @@ get_text(#file{mime_type= <<"application/x-empty">>}) -> {ok, <<>>};
 get_text(#file{mime_type= <<"text/plain">>, data=Data}) -> {ok, Data};
 get_text(#file{mime_type= <<"application/xml">>, data=Data}) ->
 	try	Text = xml_to_txt(Data),
-		{ok, Text},
-	catch _:E -> {error, E} end,
+		{ok, Text}
+	catch _:E -> {error, E} end;
 get_text(#file{mime_type= <<"application/pdf">>, data=Data}) ->
 	pdf_to_text(Data);
 get_text(#file{mime_type= <<"text/rtf">>, data=Data}) ->
