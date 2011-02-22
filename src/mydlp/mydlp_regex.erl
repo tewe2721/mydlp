@@ -61,7 +61,7 @@ replace_bin(BInKey, Data, Replace) -> async_re_call({rbin, BInKey, Replace}, Dat
 
 match_bin(BInKey, Data) -> async_re_call({mbin, BInKey}, Data).
 
-longest_bin(BInKey, Data) -> async_re_call({longest_bin, BInKey}, Data, 300000).
+longest_bin(BInKey, Data) -> async_re_call({longest_bin, BInKey}, Data, 600000).
 
 is_match_bin(BInKey, Data) -> async_re_call({i_mbin, BInKey}, Data).
 
@@ -296,7 +296,7 @@ score_regex_suite([{RE,Weight}|Regexes], Data, Score) ->
 
 score_regex_suite([], _Data, Score) -> Score.
 	
-async_re_call(Query, Data) -> async_re_call(Query, Data, 60000).
+async_re_call(Query, Data) -> async_re_call(Query, Data, 180000).
 
 async_re_call(Query, Data, Timeout) -> gen_server:call(?MODULE, {async_re, Query, Data}, Timeout).
 

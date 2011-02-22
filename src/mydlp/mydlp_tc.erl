@@ -142,7 +142,7 @@ code_change(_OldVsn, State, _Extra) ->
 
 call_pool(Req) ->
 	Pid = pg2:get_closest_pid(?MODULE),
-	case gen_server:call(Pid, Req, 15000) of
+	case gen_server:call(Pid, Req, 60000) of
 		{ok, Ret} -> Ret;
 		{error, Reason} -> throw({error, Reason}) end.
 

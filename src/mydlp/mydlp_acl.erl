@@ -57,7 +57,7 @@ qu(User, _Dest, Files) -> acl_call({qu, site, {User, Files}}).
 
 qa(Dest, Files) -> acl_call({qa, site, {Dest, Files}}).
 
-acl_call(Query) -> gen_server:call(?MODULE, {acl, Query}, 600000).
+acl_call(Query) -> gen_server:call(?MODULE, {acl, Query}, 1500000).
 
 %%%%%%%%%%%%%% gen_server handles
 
