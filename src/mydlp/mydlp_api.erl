@@ -259,11 +259,9 @@ get_text(#file{compressed_copy=true}) -> {error, compression};
 get_text(#file{mime_type= <<"application/x-empty">>}) -> {ok, <<>>};
 get_text(#file{mime_type= <<"text/plain">>, data=Data}) -> {ok, Data};
 get_text(#file{mime_type= <<"application/xml">>, data=Data}) ->
-	try
-		Text = xml_to_txt(Data),
-		{ok, Text}
-	catch _:E -> {error, E}
-	end;
+	try	Text = xml_to_txt(Data),
+		{ok, Text},
+	catch _:E -> {error, E} end,
 get_text(#file{mime_type= <<"application/pdf">>, data=Data}) ->
 	pdf_to_text(Data);
 get_text(#file{mime_type= <<"text/rtf">>, data=Data}) ->
@@ -277,11 +275,9 @@ get_text(#file{mime_type= <<"application/msword">>} = File) ->
 get_text(#file{mime_type= <<"application/vnd.ms-office">>} = File) ->
 	office_to_text(File);
 get_text(#file{mime_type= <<"text/html">>, data=Data}) ->
-	try
-		Text = mydlp_tc:html_to_text(Data),
+	try	Text = mydlp_tc:html_to_text(Data),
 		{ok, Text}
-	catch _:E -> {error, E}
-	end;
+	catch _:E -> {error, E} end;
 get_text(#file{mime_type= <<"application/postscript">>, data=Data}) ->
 	ps_to_text(Data);
 get_text(#file{mime_type= <<"text/",_Rest/binary>>, data=Data}) -> {ok, Data};
@@ -301,7 +297,7 @@ xml_to_txt(Data) when is_binary(Data) ->
 			X1 = xmerl_scan:file(XmlF),
 			ok = file:delete(XmlF), X1;
 		false -> XmlS = binary_to_list(Data),
-			xmerl_scan:file(XmlS) end,
+			xmerl_scan:string(XmlS) end,
 
 	RetList = xml_to_txt1(X),
 	unicode:characters_to_binary(RetList).

@@ -467,23 +467,33 @@ handle_info({tcp, Socket, _Bin}, _StateName, #state{socket=Socket,
 handle_info({tcp, Socket, Bin}, StateName, #state{socket=Socket,
 		cache_http_h=true, cache_data_http_h=CacheH} = StateData) ->
 	% Flow control: enable forwarding of next TCP message
+	Return = fsm_call(StateName, {data, Bin}, StateData#state{cache_data_http_h= 
+			<<CacheH/binary, ( list_to_binary(Bin) )/binary>>}),
 	inet:setopts(Socket, [{active, once}]),
-	fsm_call(StateName, {data, Bin}, StateData#state{cache_data_http_h= 
-			<<CacheH/binary, ( list_to_binary(Bin) )/binary>>});
+	Return;
 
 handle_info({tcp, Socket, Bin}, StateName, #state{socket=Socket,
 		cache_http_b=true, cache_data_http_b=CacheB} = StateData) ->
 	% Flow control: enable forwarding of next TCP message
+	CacheDataB = try <<CacheB/binary, Bin/binary>>
+		catch Class:Error ->
+			?ERROR_LOG("Error occured on ICAP FSM call (~w) when caching. Class: [~w]. Error: [~w].~nStack trace: ~w~n",
+				[StateName, Class, Error, erlang:get_stacktrace()]),
+			Dummy = list_to_binary([CacheB]),
+			<<Dummy/binary, Bin/binary>> end,
+
+	Return = fsm_call(StateName, {data, Bin}, StateData#state{cache_data_http_b= CacheDataB }),
 	inet:setopts(Socket, [{active, once}]),
-	fsm_call(StateName, {data, Bin}, StateData#state{cache_data_http_b= <<CacheB/binary, Bin/binary>>});
+	Return;
 
 handle_info({tcp, Socket, Bin}, StateName, #state{socket=Socket} = StateData) ->
 	% Flow control: enable forwarding of next TCP message
+	Return = fsm_call(StateName, {data, Bin}, StateData),
 	inet:setopts(Socket, [{active, once}]),
-	fsm_call(StateName, {data, Bin}, StateData);
+	Return;
 
 handle_info({tcp_closed, Socket}, _StateName, #state{socket=Socket, addr=_Addr} = StateData) ->
-	%error_logger:info_msg("~p Client ~p disconnected.\n", [self(), Addr]),
+	% ?ERROR_LOG("~p Client ~p disconnected.\n", [self(), Addr]),
 	{stop, normal, StateData};
 
 handle_info(_Info, StateName, StateData) ->
