@@ -555,30 +555,37 @@ mktempdir() ->
 		Err -> throw(Err) end.
 
 %%--------------------------------------------------------------------
+%% @doc Helper command for uncompression operations
+%% @end
+%%----------------------------------------------------------------------
+uncompress(Method, {memory, Bin}, Filename) -> uncompress(Method, Bin, Filename);
+
+uncompress(Method, {Type, _Value} = Ref, Filename) when
+		Type == cacheref; Type == unixfile -> 
+	{FNDir, FN} = uncompress0(Filename),
+	ok = file:make_symlink(?BB_P(Ref), FN),
+	mydlp_api:Method(FNDir, FN);
+
+uncompress(Method, Bin, Filename) when is_binary(Bin) -> 
+	{FNDir, FN} = uncompress0(Filename),
+	ok = file:write_file(FN, Bin, [raw]),
+	mydlp_api:Method(FNDir, FN).
+
+uncompress0(Filename) ->
+	{ok, FNDir} = mktempdir(),
+	FN = FNDir ++ "/" ++ normalize_fn(Filename),
+	{FNDir, FN}.
+
+%%--------------------------------------------------------------------
 %% @doc Un7zs an Erlang binary, this can be used for ZIP, CAB, ARJ, GZIP, BZIP2, TAR, CPIO, RPM and DEB formats.
 %% @end
 %%----------------------------------------------------------------------
-
 un7z(Arg) -> un7z(Arg, "nofilename").
 
-un7z0(Filename) ->
-	{ok, ZFNDir} = mktempdir(),
-	ZFN = ZFNDir ++ "/" ++ normalize_fn(Filename),
-	{ZFNDir, ZFN}.
+un7z(Arg, FN) -> uncompress(un7zc, Arg, FN).
 
-un7z({memory, Bin}, Filename) -> un7z(Bin, Filename);
-un7z({Type, _Value} = Ref, Filename) when
-		Type == cacheref; Type == unixfile -> 
-	{ZFNDir, ZFN} = un7z0(Filename),
-	ok = file:make_symlink(?BB_P(Ref), ZFN),
-	un7z1(ZFNDir, ZFN);
 
-un7z(Bin, Filename) when is_binary(Bin) -> 
-	{ZFNDir, ZFN} = un7z0(Filename),
-	ok = file:write_file(ZFN, Bin, [raw]),
-	un7z1(ZFNDir, ZFN).
-
-un7z1(ZFNDir, ZFN) -> 
+un7zc(ZFNDir, ZFN) -> 
 	{ok, WorkDir} = mktempdir(),
 	WorkDir1 = WorkDir ++ "/",
 	Port = open_port({spawn_executable, "/usr/bin/7z"}, 
@@ -591,6 +598,30 @@ un7z1(ZFNDir, ZFN) ->
 		ok -> {ok, rr_files(WorkDir1)};
 		Else -> rmrf_dir(WorkDir1), Else end,
 	ok = rmrf_dir(ZFNDir),
+	Ret.
+
+%%--------------------------------------------------------------------
+%% @doc Un7zs an Erlang binary, this can be used for ZIP, CAB, ARJ, GZIP, BZIP2, TAR, CPIO, RPM and DEB formats.
+%% @end
+%%----------------------------------------------------------------------
+unar(Arg) -> unar(Arg, "nofilename").
+
+unar(Arg, FN) -> uncompress(unarc, Arg, FN).
+
+unarc(ArFNDir, ArFN) -> 
+	{ok, WorkDir} = mktempdir(),
+	WorkDir1 = WorkDir ++ "/",
+	Port = open_port({spawn_executable, "/usr/bin/ar"}, 
+			[{args, ["x",ArFN]},
+			{cd, WorkDir1},
+			use_stdio,
+			exit_status,
+			stderr_to_stdout]),
+
+	Ret = case get_port_resp(Port) of
+		ok -> {ok, rr_files(WorkDir1)};
+		Else -> rmrf_dir(WorkDir1), Else end,
+	ok = rmrf_dir(ArFNDir),
 	Ret.
 
 %%--------------------------------------------------------------------
@@ -836,6 +867,13 @@ comp_to_files([#file{mime_type= <<"application/vnd.oasis.opendocument.text">>}|_
 comp_to_files([#file{mime_type= <<"application/octet-stream">>}|_] = Files, Processed, New) -> % Needs refinement for better ODF handling
 	%try_unzip(Files, Returns);
 	try_un7z(Files, Processed, New);
+comp_to_files([#file{mime_type= <<"application/x-archive">>} = File|Files], Processed, New) ->
+	case unar(File#file.dataref, File#file.filename) of
+		{ok, Ext} -> 
+			ExtFiles = ext_to_file(Ext),
+			ctf_ok(Files, File, ExtFiles, Processed, New);
+		{error, _ShouldBeLogged} -> 
+			ctf_err_enc(Files, File, Processed, New) end;
 comp_to_files([#file{mime_type= MimeType, compressed_copy=false, is_encrypted=false} = File | Rest ] = Files, Processed, New) -> 
 		case is_compression_mime(MimeType) of
 			true -> use_un7z(Files, Processed, New);
@@ -1335,6 +1373,18 @@ get_chunk(TotalSize, [#file{dataref=Ref} = File|Files], InChunk)
 	get_chunk(TotalSize + FS, Files, [File|InChunk]);
 get_chunk(_TotalSize, Rest, InChunk) -> {InChunk, Rest}.
 	
+%%-------------------------------------------------------------------------
+%% @doc Prints report browser output to specified file.
+%% @end
+%%-------------------------------------------------------------------------
+
+rb_to_file(Filename) when is_list(Filename) ->
+	try	rb:start(),
+		rb:start_log(Filename),
+		rb:show(),
+		rb:stop_log(),
+		rb:stop()
+	catch Class:Error -> {"Error occurred.", Class, Error} end.
 
 
 -include_lib("eunit/include/eunit.hrl").
