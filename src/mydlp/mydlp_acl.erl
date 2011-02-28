@@ -78,11 +78,20 @@ acl_exec2(AllRules, Source, Files) ->
 	%Files1 = drop_nodata(Files),
 	acl_exec3(AllRules, Source, Files).
 
+acl_exec3([], _Source, _Files) -> pass;
 acl_exec3(_AllRules, _Source, []) -> pass;
 acl_exec3(AllRules, Source, Files) ->
+	[{cid, CustomerId}|_] = Source,
+	
 	{InChunk, RestOfFiles} = mydlp_api:get_chunk(Files),
 	Files1 = mydlp_api:load_files(InChunk),
-	{PFiles, NewFiles} = mydlp_api:analyze(Files1),
+	
+	Files2 = drop_whitefile_dr(Files1, CustomerId),
+	Files3 = case has_wf(AllRules) of
+		true -> drop_whitefile(Files2);
+		false -> Files2 end,
+
+	{PFiles, NewFiles} = mydlp_api:analyze(Files3),
 	PFiles1 = mydlp_api:clean_files(PFiles),
 	Param = {Source, drop_nodata(PFiles1)},
 
@@ -197,12 +206,13 @@ execute_matchers([{Func,_}|_] = Matchers, {Addr, Files} = Params, false) ->
 execute_matchers([], Params, PLT) -> apply_f([], Params, PLT).
 
 apply_f([{whitefile, _FuncParams}|Matchers], {Addr, Files}, PLT) ->
-	% Droping whitefiles to prevent execution of matchers with them
-	execute_matchers(Matchers, {Addr, drop_whitefile(Files)}, PLT);
+%	% Droping whitefiles to prevent execution of matchers with them
+%	execute_matchers(Matchers, {Addr, drop_whitefile(Files)}, PLT);
+	execute_matchers(Matchers, {Addr, Files}, PLT);
 apply_f([{whitefile_dr, _FuncParams}|Matchers], {Source, Files}, PLT) ->
-	[{cid, CustomerId}|_] = Source,
-	% Droping whitefiles to prevent execution of matchers with them
-	execute_matchers(Matchers, {Source, drop_whitefile_dr(Files, CustomerId)}, PLT);
+%	[{cid, CustomerId}|_] = Source,
+%	% Droping whitefiles to prevent execution of matchers with them
+	execute_matchers(Matchers, {Source, Files}, PLT);
 apply_f([{Func, FuncParams}|Matchers], Params, PLT) ->
 	case apply_m(Func, [FuncParams, Params]) of
                 neg -> execute_matchers(Matchers, Params, PLT);
@@ -258,4 +268,10 @@ has_data(#file{data=Data}) when is_binary(Data)-> size(Data) > 0;
 has_data(Else) -> throw({error, unexpected_obj, Else}).
 
 drop_nodata(Files) -> lists:filter(fun(F) -> has_data(F) end, Files).
+
+has_wf(Rules) ->
+	lists:any(fun({_Id, _Action, Matchers}) ->
+		case lists:keyfind(whitefile, 1, Matchers) of
+			false -> false;
+			_Else -> true end end, Rules).
 
