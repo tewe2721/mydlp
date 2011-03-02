@@ -261,7 +261,8 @@ get_text(#file{mime_type= <<"text/plain">>, data=Data}) -> {ok, Data};
 get_text(#file{mime_type= <<"application/xml">>, data=Data}) ->
 	try	Text = xml_to_txt(Data),
 		{ok, Text}
-	catch _:E -> {error, E} end;
+	%catch C:E -> {error, {C,E}} end;
+	catch _C:_E -> {ok, Data} end;
 get_text(#file{mime_type= <<"application/pdf">>, data=Data}) ->
 	pdf_to_text(Data);
 get_text(#file{mime_type= <<"text/rtf">>, data=Data}) ->
@@ -290,14 +291,21 @@ get_text(#file{mime_type=MimeType}) ->
 %% @doc Extracts Text from XML string
 %% @end
 %%----------------------------------------------------------------------
+
+-define(XMERL_OPTS, [
+	{validation,false}, 
+	{quiet,true},
+	{fetch_fun, fun(_URI, State) ->	{ok, {string, ""}, State} end}
+]).
+
 xml_to_txt(Data) when is_binary(Data) -> 
 	X = case size(Data) > (?MAX_MEM_OBJ/4) of
 		true ->	{ok, XmlF} = mktempfile(),
 			ok = file:write_file(XmlF, Data, [raw]),
-			X1 = xmerl_scan:file(XmlF),
+			X1 = xmerl_scan:file(XmlF, ?XMERL_OPTS),
 			ok = file:delete(XmlF), X1;
 		false -> XmlS = binary_to_list(Data),
-			xmerl_scan:string(XmlS) end,
+			xmerl_scan:string(XmlS, ?XMERL_OPTS) end,
 
 	RetList = xml_to_txt1(X),
 	unicode:characters_to_binary(RetList).
