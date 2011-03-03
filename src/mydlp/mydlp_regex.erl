@@ -182,10 +182,10 @@ init([]) ->
 {rec("!=|&&|\\|\\||==|>>|<<", [multiline, ungreedy]), 1},
 
 %% int\b\|char\b\|void\b\|const\b\
-{rec("int\\b|char\\b|void\\b|const\\b|enum\\b|typedef\\b", [multiline, ungreedy]), 2},
+{rec("(?:int|char|void|const|enum|typedef)\\s+[a-zA-Z0-9_]+", [multiline, ungreedy]), 2},
 
 %% /\*\|\*/\|[^:]*//
-{rec("/\\*|^\\s*\\*+\\s|\\*/|^//|[^:]//", [multiline, ungreedy]), 1},
+{rec("/\\*.*\\*/", [multiline, ungreedy]), 2},
 
 %% hrdLocations.get(classID)
 {rec("[a-zA-Z0-9_()]+\\.[a-zA-Z0-9_]+\\([^).]*\\)", [multiline, ungreedy]), 4},
@@ -222,7 +222,7 @@ init([]) ->
 {rec("(?:(?:(?:public|private|protected|) \\s*){0,1}(?:(?:static|abstract|) \\s*){0,1}|^\\s*)(?:class|interface) \\s*[a-zA-Z0-9_<>]+", [multiline, ungreedy]), 6},
 
 %% public static void main( String[] args )
-{rec("(?:public|private|protected|) \\s*(?:static|abstract|) \\s*[a-zA-Z0-9_<>]+\\b\\s*[a-zA-Z0-9_]+\\s*\\([^).]*\\)", [multiline, ungreedy]), 10},
+{rec("(?:(?:public|private|protected)\\s+)?(?:(?:static|abstract)\\s+)?[a-zA-Z0-9_<>]+\\s+[a-zA-Z0-9_]+\\s*\\(\\s*[^'`][^).]*\\)", [multiline, ungreedy]), 10},
 
 %% Stock<T> stock = new Stock<T>() - weight = 6
 %% Stock stock = new Stock();
