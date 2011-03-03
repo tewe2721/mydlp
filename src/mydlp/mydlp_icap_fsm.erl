@@ -245,6 +245,7 @@ get_body(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_impl
 		"poll" -> 'POLL';
 		"search" -> 'SEARCH';
 		"lock" -> 'LOCK';
+		"subscribe" -> 'SUBSCRIBE';
 %		"connect" -> 'CONNECT';
 		_Else -> throw({error, bad_method}) end,
 
