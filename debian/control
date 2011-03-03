@@ -7,5 +7,5 @@ Standards-Version: 3.8.0
 
 Package: mydlp
 Architecture: any
-Depends: ${erlang-nox:Depends}, openssl, python, python-magic, python-lxml, unrar, catdoc, pstotext, poppler-utils, thrift, erlang-mysql-driver, bayeserl, apache2, libapache2-mod-php5, php5-mysql, php5-pgsql, php5-mssql, php5-xsl, php5-ldap, php5-odbc, php5-sybase, mysql-server-5.1, mysql-client-5.1, coreutils, nmap, debianutils, iproute, grep, bash, p7zip-full, p7zip-rar, libelf1, libmagic1, binutils
+Depends: ${erlang-nox:Depends}, openssl, python, python-magic, python-lxml, unrar, catdoc, pstotext, poppler-utils, thrift, erlang-mysql-driver, bayeserl, apache2, libapache2-mod-php5, php5-mysql, php5-pgsql, php5-mssql, php5-xsl, php5-ldap, php5-odbc, php5-sybase, mysql-server-5.1, mysql-client-5.1, coreutils, nmap, debianutils, iproute, grep, bash, p7zip-full, p7zip-rar, libelf1, libmagic1, binutils, procps
 Description: An open source data loss prevention solution.

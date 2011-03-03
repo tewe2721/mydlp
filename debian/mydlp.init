@@ -28,6 +28,9 @@ SERV=/usr/sbin/service
 MYSQLC=/usr/bin/mysql
 MYSQLADM=/usr/bin/mysqladmin
 
+SQUIDBIN=/usr/sbin/squid3
+SQUIDBINNAME=squid3
+
 BEACON=/usr/sbin/mydlp-beacon
 
 . /lib/lsb/init-functions
@@ -150,6 +153,14 @@ status_beacon() {
         status_of_proc $BEACON mydlp "MyDLP Beacon" 2>&1 > /dev/null 
 }
 
+reload_squid() {
+	SQUIDPID=$(pgrep $SQUIDBINNAME)
+	if [ -n "$SQUIDPID" ]; then
+		echo " * Reloading Squid..."
+		[ -x $SQUIDBIN ] && $SQUIDBIN -k reconfigure
+	fi
+}
+
 case "$1" in
   start)
 	check_piddir
@@ -158,6 +169,7 @@ case "$1" in
 	start_mydlp
 	start_beacon
 	cleanpids
+	reload_squid
 	;;
   stop)
 	check_piddir
@@ -182,6 +194,7 @@ case "$1" in
 	start_mydlp
 	start_beacon
 	cleanpids
+	reload_squid
 	;;
 
   status)
