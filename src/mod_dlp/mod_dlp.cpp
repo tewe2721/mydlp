@@ -39,7 +39,7 @@
 #include <transport/TSocket.h>
 #include <transport/TTransportUtils.h>
 
-#include "Moddlp.h"
+#include "Mydlp_ui.h"
 
 #undef strtoul
 
@@ -59,40 +59,100 @@ extern "C" module AP_MODULE_DECLARE_DATA dlp_module;
 static ap_filter_rec_t * dlp_filter_handle; 
 
 typedef struct {
-//  shared_ptr<TTransport> transport;
-  ModdlpClient client;
+	shared_ptr<TTransport> transport;
+	shared_ptr<Mydlp_uiIf> client;
 } mod_dlp_cfg ;
+
+static void try_reconnect(mod_dlp_cfg* cfg)
+{
+	try 
+	{
+		cfg->transport->close();
+		cfg->transport->open();
+	}
+	catch (...)
+	{
+	}
+}
+
+static unsigned int init_entity(mod_dlp_cfg* cfg)
+{
+	try 
+	{
+		int entity_id = cfg->client->initEntity();
+		return entity_id;
+	}
+	catch (...)
+	{
+		fprintf(stderr,"mod_dlp: Error calling init_entity.\n");
+		try_reconnect(cfg);
+	}
+	return 0;
+}
+
+static void push_data(mod_dlp_cfg* cfg, unsigned int entity_id, const string & data)
+{
+	try 
+	{
+		cfg->client->pushData(entity_id, data);
+	}
+	catch (...)
+	{
+		fprintf(stderr,"mod_dlp: Error calling push_data.\n");
+		try_reconnect(cfg);
+	}
+}
+
+static bool analyze(mod_dlp_cfg* cfg, unsigned int entity_id)
+{
+	try 
+	{
+		bool result = cfg->client->analyze(entity_id);
+		return result;
+	}
+	catch (...)
+	{
+		fprintf(stderr,"mod_dlp: Error calling analyze.\n");
+		try_reconnect(cfg);
+	}
+	return true;
+}
+
+static void close_entity(mod_dlp_cfg* cfg, unsigned int entity_id)
+{
+	try 
+	{
+		cfg->client->closeEntity(entity_id);
+	}
+	catch (...)
+	{
+		fprintf(stderr,"mod_dlp: Error calling close_entity.\n");
+		try_reconnect(cfg);
+	}
+}
 
 /* The main filter */
 static int dlp_filter (ap_filter_t* f, apr_bucket_brigade* bb)
 {
 	apr_bucket* b ;
-	unsigned int entity_id;
+	int entity_id;
 	mod_dlp_cfg* cfg = (mod_dlp_cfg*)f->ctx ;
-	entity_id = cfg->client.init();
-	#ifdef DEBUG
-	fprintf(stderr,"mod_dlp: A request was recieved.\n");
-	fflush(stderr);
-	#endif
-
-	for ( b = APR_BRIGADE_FIRST(bb) ;
-			b != APR_BRIGADE_SENTINEL(bb) ;
-			b = APR_BUCKET_NEXT(b) ) {
-		if (APR_BUCKET_IS_EOS(b) || APR_BUCKET_IS_FLUSH(b))
-			continue;
-		const char* buf = 0 ;
-		apr_size_t bytes = 0 ;
-		apr_bucket_read(b, &buf, &bytes, APR_BLOCK_READ);
-		string s(buf,bytes);
-		cfg->client.pushData(entity_id, s);
-		#ifdef DEBUG
-		fprintf(stderr,"recieved num of bytes: %d.\n", bytes);
-		fwrite (buf, 1, bytes, stderr) ;
-		fflush(stderr);
-		#endif
+	entity_id = init_entity(cfg);
+	if ( entity_id != 0 ) {
+		for ( b = APR_BRIGADE_FIRST(bb) ;
+				b != APR_BRIGADE_SENTINEL(bb) ;
+				b = APR_BUCKET_NEXT(b) ) {
+			if (APR_BUCKET_IS_EOS(b) || APR_BUCKET_IS_FLUSH(b))
+				continue;
+			const char* buf = 0 ;
+			apr_size_t bytes = 0 ;
+			apr_bucket_read(b, &buf, &bytes, APR_BLOCK_READ);
+			string s(buf,bytes);
+			push_data(cfg, entity_id, s);
+		}
+		analyze(cfg, entity_id);
+		close_entity(cfg, entity_id);
 	}
-	cfg->client.analyze(entity_id);
-	cfg->client.close(entity_id);
 	return ap_pass_brigade(f->next, bb) ;
 }
 
@@ -109,16 +169,18 @@ static void mod_dlp_register_hooks (apr_pool_t *p)
 
 static void* mod_dlp_config(apr_pool_t* pool, char* x) {
 	mod_dlp_cfg* ret = (mod_dlp_cfg*) apr_palloc(pool, sizeof(mod_dlp_cfg)) ;
-	shared_ptr<TTransport> socket(new TSocket("localhost", 9099));
+	shared_ptr<TTransport> socket(new TSocket("localhost", 9092));
 	shared_ptr<TTransport> transport(new TBufferedTransport(socket));
 	shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
-	ret->client = ModdlpClient(protocol);
+	shared_ptr<Mydlp_uiIf> client(new Mydlp_uiClient(protocol));
 	try {
 		transport->open();
 //		EntityId = client.init();
 //		transport->close();
-	} catch (TException &tx) {
+	} catch (...) {
 	}
+	ret->client = client;
+	ret->transport = transport;
 	return ret ;
 }
 

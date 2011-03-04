@@ -35,6 +35,7 @@
 	q/4,
 	qu/3,
 	qa/2,
+	qm/1,
 	stop/0]).
 
 %% gen_server callbacks
@@ -56,6 +57,8 @@ q(Site, Addr, _Dest, Files) -> acl_call({q, Site, {Addr, Files}}).
 qu(User, _Dest, Files) -> acl_call({qu, site, {User, Files}}).
 
 qa(Dest, Files) -> acl_call({qa, site, {Dest, Files}}).
+
+qm(Files) -> acl_call({qm, site, {Files}}).
 
 acl_call(Query) -> gen_server:call(?MODULE, {acl, Query}, 1500000).
 
@@ -122,6 +125,10 @@ handle_acl({qu, _Site, {User, Files}}, _State) ->
 
 handle_acl({qa, _Site, {Dest, Files}}, _State) ->
 	Rules = mydlp_mnesia:get_all_rules(Dest),
+	acl_exec(Rules, [{cid, mydlp_mnesia:get_dcid()}], Files);
+
+handle_acl({qm, _Site, {Files}}, _State) ->
+	Rules = mydlp_mnesia:get_all_rules(),
 	acl_exec(Rules, [{cid, mydlp_mnesia:get_dcid()}], Files);
 
 handle_acl(Q, _State) -> throw({error, {undefined_query, Q}}).

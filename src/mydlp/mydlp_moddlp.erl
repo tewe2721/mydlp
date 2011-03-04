@@ -20,48 +20,127 @@
 
 %%%-------------------------------------------------------------------
 %%% @author H. Kerem Cevahir <kerem@medratech.com>
-%%% @copyright 2010, H. Kerem Cevahir
-%%% @doc Backend for mydlp moddlp functions.
+%%% @copyright 2011, H. Kerem Cevahir
+%%% @doc Worker for mydlp.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(mydlp_moddlp).
 -author("kerem@medra.com.tr").
+-behaviour(gen_server).
 
--include("moddlp_thrift.hrl").
--include("moddlp_types.hrl").
+-include("mydlp.hrl").
 
+%% API
 -export([start_link/0,
-	stop/1,
-	handle_function/2
-	]).
-
--export([init/0,
-	pushData/2,
+	init_entity/0,
+	push_data/2,
 	analyze/1,
-	close/1
-	]).
+	close_entity/1,
+	stop/0]).
 
-%%%%% EXTERNAL INTERFACE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% gen_server callbacks
+-export([init/1,
+	handle_call/3,
+	handle_cast/2,
+	handle_info/2,
+	terminate/2,
+	code_change/3]).
 
-start_link() -> thrift_server:start_link(9099, moddlp_thrift, ?MODULE).
+-include_lib("eunit/include/eunit.hrl").
 
-stop(Server) -> thrift_server:stop(Server), ok.
+-record(state, {entity_tree}).
 
-%%%%% THRIFT INTERFACE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-handle_function(Function, Args) when is_atom(Function), is_tuple(Args) ->
-	case apply(?MODULE, Function, tuple_to_list(Args)) of
-		ok -> ok;
-		Reply -> {reply, Reply}
+init_entity() -> gen_server:call(?MODULE, i).
+
+push_data(EntityId, Data) -> gen_server:call(?MODULE, {p, EntityId, Data}, 15000).
+
+analyze(EntityId) -> gen_server:call(?MODULE, {a, EntityId}, 300000).
+
+close_entity(EntityId) -> gen_server:call(?MODULE, {c, EntityId}).
+
+%%%%%%%%%%%%%% gen_server handles
+
+handle_def(i) -> 0;
+handle_def({a, _}) -> true;
+handle_def(_) -> ok.
+
+handle(i, Tree) ->
+	EntityId = random:uniform(100000000),
+	Reply = EntityId,
+	Tree1 = gb_trees:enter(EntityId, <<>>, Tree),
+	{ok, Reply, Tree1};
+
+handle({p, EntityId, Data}, Tree) ->
+	ExData = gb_trees:get(EntityId, Tree),
+	Tree1 = gb_trees:enter(EntityId, <<ExData/binary, Data/binary>>, Tree),
+	{ok, ok, Tree1};
+
+handle({a, EntityId}, Tree) ->
+	Data = gb_trees:get(EntityId, Tree),
+	Reply = case mydlp_acl:qm([#file{name="apache-response", dataref=?BB_C(Data)}]) of
+		pass -> true;
+		{Block = {block, _ }, AclR} -> log_req(Block, AclR), false;
+		{Log = {log, _ }, AclR} -> log_req(Log, AclR), true; 
+		{pass, AclR} -> log_req(pass, AclR), true;
+		block -> false end,
+	{ok, Reply, Tree};
+
+handle({c, EntityId}, Tree) ->
+	Tree1 = gb_trees:delete(EntityId, Tree),
+	{ok, ok, Tree1};
+
+handle(_,_) -> throw(undefined_handle).
+
+handle_call({a, _} = Call, From, #state{entity_tree=Tree} = State) ->
+	Worker = self(),
+	spawn_link(fun() ->
+			{ok, Reply, _NoTreeChange} = try handle(Call, Tree) 
+				catch _:_ -> {ok, handle_def(Call), Tree} end,
+			Worker ! {async_reply, Reply, From}
+		end),
+	{noreply, State};
+
+handle_call(Call, _From, #state{entity_tree=Tree} = State) ->
+	{ok, Reply, Tree1} = try handle(Call, Tree) 
+		catch _:_ -> {ok, handle_def(Call), Tree} end,
+	{reply, Reply, State#state{entity_tree=Tree1}};
+
+handle_call(stop, _From, State) ->
+	{stop, normalStop, State};
+
+handle_call(_Msg, _From, State) ->
+	{noreply, State}.
+
+handle_info({async_reply, Reply, From}, State) ->
+	gen_server:reply(From, Reply),
+        {noreply, State};
+
+handle_info(_Info, State) ->
+	{noreply, State}.
+
+%%%%%%%%%%%%%%%% Implicit functions
+
+start_link() ->
+	case gen_server:start_link({local, ?MODULE}, ?MODULE, [], []) of
+		{ok, Pid} -> {ok, Pid};
+		{error, {already_started, Pid}} -> {ok, Pid}
 	end.
 
-%%%%% FUNCTIONS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+stop() ->
+	gen_server:call(?MODULE, stop).
 
-init() -> 5.
+init([]) ->
+	{ok, #state{entity_tree=gb_trees:empty()}}.
 
-pushData(Entityid, Data) -> ok.
+handle_cast(_Msg, State) ->
+	{noreply, State}.
 
-analyze(Entityid) -> ok.
+terminate(_Reason, _State) ->
+	ok.
 
-close(Entityid) -> ok.
+code_change(_OldVsn, State, _Extra) ->
+	{ok, State}.
 
+log_req(Action, {{rule, RuleId}, {file, File}, {matcher, Matcher}, {misc, Misc}}) ->
+        ?ACL_LOG(mod_dlp, RuleId, Action, nil, nil, nil, Matcher, File, Misc).

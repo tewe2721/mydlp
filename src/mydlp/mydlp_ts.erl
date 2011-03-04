@@ -42,7 +42,11 @@
 	removeGroup/1,
 	removeFileFromGroup/2,
 	compileFilters/0,
-	compileCustomer/1
+	compileCustomer/1,
+	initEntity/0,
+	pushData/2,
+	analyze/1,
+	closeEntity/1
 	]).
 
 %%%%% EXTERNAL INTERFACE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -76,3 +80,13 @@ removeFileFromGroup(Fileid, Groupid) -> mydlp_mnesia:remove_file_from_group(File
 compileFilters() -> mydlp_mysql:compile_filters().
 
 compileCustomer(Customerid) -> mydlp_mysql:compile_customer(Customerid).
+
+initEntity() -> mydlp_moddlp:init_entity().
+
+pushData(Entityid, Data) -> mydlp_moddlp:push_data(Entityid, Data).
+
+analyze(Entityid) -> mydlp_moddlp:analyze(Entityid).
+
+closeEntity(Entityid) -> mydlp_moddlp:close_entity(Entityid).
+
+

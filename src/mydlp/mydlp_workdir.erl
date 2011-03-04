@@ -30,6 +30,8 @@
 
 -include("mydlp.hrl").
 
+-include_lib("kernel/include/file.hrl").
+
 %% API
 -export([start_link/0,
 	tempfile/0,
@@ -152,4 +154,17 @@ delete_cacheref(Ref) ->
 		FN = ref_to_fn("obj", Ref),
 		file:delete(FN) 
 	end), ok.
+
+get_age(Filename, LocalTime) ->
+	{ok, FileInfo} = file:read_file_info(Filename),
+	{ADays, ATime} = calendar:time_difference(FileInfo#file_info.atime, LocalTime),
+	{MDays, MTime} = calendar:time_difference(FileInfo#file_info.mtime, LocalTime),
+
+	if 	ADays > MDays -> {ADays, ATime};
+		MDays > ADays -> {MDays, MTime};
+		ATime > MTime -> {ADays, ATime};
+		MTime > ATime -> {MDays, MTime} end.
+
+
+
 

@@ -36,15 +36,6 @@ mydlp_ui_hrl = \
 	gen-erl/mydlp_ui_constants.hrl \
 	gen-erl/mydlp_ui_types.hrl
 
-moddlp_erl = \
-	gen-erl/moddlp_thrift.erl \
-	gen-erl/moddlp_types.erl
-
-moddlp_hrl = \
-	gen-erl/moddlp_thrift.hrl \
-	gen-erl/moddlp_constants.hrl \
-	gen-erl/moddlp_types.hrl
-
 dist_erl_DATA = \
 	$(mydlp_erl) \
 	$(mydlp_ui_erl) \
@@ -71,14 +62,14 @@ mydlpphp_DATA = \
 	gen-php/mydlp_ui/Mydlp_ui.php \
 	gen-php/mydlp_ui/mydlp_ui_types.php
 
-moddlp_cpp = moddlp_constants.cpp \
-		Moddlp.cpp \
-		Moddlp_server.skeleton.cpp \
-		moddlp_types.cpp
+mydlp_ui_cpp = mydlp_ui_constants.cpp \
+		Mydlp_ui.cpp \
+		Mydlp_ui_server.skeleton.cpp \
+		mydlp_ui_types.cpp
 
-moddlp_h = moddlp_types.h \
-		moddlp_constants.h \
-		Moddlp.h
+mydlp_ui_h = mydlp_ui_types.h \
+		mydlp_ui_constants.h \
+		Mydlp_ui.h
 
 noinst_DATA = $(moddlp_cpp) $(moddlp_h)
 
@@ -97,11 +88,8 @@ $(boot_DATA): $(beam_DATA)
 $(mydlp_erl) $(mydlp_hrl) $(pkgpython_PYTHON): mydlp.thrift
 	@$(THRIFT) --gen erl --gen py $<
 
-$(mydlp_ui_erl) $(mydlp_ui_hrl) $(mydlpphplib_DATA): mydlp_ui.thrift
-	@$(THRIFT) --gen erl --gen php $<
-
-$(moddlp_erl) $(moddlp_hrl) $(moddlp_cpp) $(moddlp_h): moddlp.thrift
-	@$(THRIFT) --gen erl --gen cpp $<
+$(mydlp_ui_erl) $(mydlp_ui_hrl) $(mydlpphplib_DATA) $(mydlp_ui_cpp) $(mydlp_ui_h): mydlp_ui.thrift
+	@$(THRIFT) --gen erl --gen php --gen cpp $<
 
 .erl.beam:
 	@echo "Compiling $<..."

@@ -737,6 +737,10 @@ acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, File, Misc) ->
 		_Else -> ok
 	end.
 
+acl_msg1(Proto, RuleId, Action, nil, nil, To, Matcher, FileS, Misc) ->
+	mydlp_logger:notify(acl_msg,
+		"PROTOCOL: ~w , RULE: ~w , ACTION: ~w , TO: \"~s\" , MATCHER: ~w , FILE: \"~s\" , MISC: ~s ~n",
+		[Proto, RuleId, Action, To, Matcher, FileS, Misc]);
 acl_msg1(Proto, RuleId, Action, {Ip1,Ip2,Ip3,Ip4}, nil, To, Matcher, FileS, Misc) ->
 	mydlp_logger:notify(acl_msg,
 		"PROTOCOL: ~w , RULE: ~w , ACTION: ~w , FROM: ~w.~w.~w.~w , TO: \"~s\" , MATCHER: ~w , FILE: \"~s\" , MISC: ~s ~n",

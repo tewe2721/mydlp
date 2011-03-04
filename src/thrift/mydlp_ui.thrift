@@ -20,6 +20,7 @@
 
 service Mydlp_ui {
 
+	// Web UI calls
 	oneway void trainConfidential(1: binary Data, 2: i32 Fileid)
 	oneway void setConfidentialGroup(1: i32 Fileid, 2: i32 Groupid)
 	oneway void trainPublic(1: binary Data, 2: i32 Fileid)
@@ -32,4 +33,10 @@ service Mydlp_ui {
 	void compileFilters()
 
 	void compileCustomer(1: i32 Customerid)
+
+	//moddlp calls.
+	i32 initEntity()
+	void pushData(1: i32 Entityid, 2: binary Data)
+	bool analyze(1: i32 Entityid)
+	oneway void closeEntity(1: i32 Entityid)
 }
