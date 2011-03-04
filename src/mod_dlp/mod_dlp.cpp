@@ -138,6 +138,7 @@ static int dlp_filter (ap_filter_t* f, apr_bucket_brigade* bb)
 	int entity_id;
 	mod_dlp_cfg* cfg = (mod_dlp_cfg*)f->ctx ;
 	entity_id = init_entity(cfg);
+	bool analysis_result = true;
 	if ( entity_id != 0 ) {
 		for ( b = APR_BRIGADE_FIRST(bb) ;
 				b != APR_BRIGADE_SENTINEL(bb) ;
@@ -150,10 +151,13 @@ static int dlp_filter (ap_filter_t* f, apr_bucket_brigade* bb)
 			string s(buf,bytes);
 			push_data(cfg, entity_id, s);
 		}
-		analyze(cfg, entity_id);
+		analysis_result = analyze(cfg, entity_id);
 		close_entity(cfg, entity_id);
 	}
-	return ap_pass_brigade(f->next, bb) ;
+	if ( analysis_result )
+		return ap_pass_brigade(f->next, bb) ;
+	else
+		return APR_SUCCESS;
 }
 
 static void insert_filters(request_rec *r) {
