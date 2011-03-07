@@ -52,7 +52,7 @@ mod_dlp.o: mod_dlp.cpp
 mod_dlp.so: mod_dlp.o $(mydlp_ui_o)
 	g++ -fPIC -shared -o $@ $< $(mydlp_ui_o) $(APXS_LIBS_SHLIB) $(SOLIBS)
 
-install: all
+install-data-hook:
 	install -D -m 644 mod_dlp.so $(apachemoddir)/mod_dlp.so
 #	/usr/bin/apxs2 -i -A -n dlp mod_dlp.so
 
