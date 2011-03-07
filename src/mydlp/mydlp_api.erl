@@ -652,6 +652,10 @@ rmrf_dir([FN|FNs], Dir) ->
 			rmrf_dir(FNs, Dir) end;
 rmrf_dir([], _Dir) -> ok.
 
+rmrf(FN) -> case filelib:is_dir(FN) of
+		true -> rmrf_dir(FN);
+		false -> catch file:delete(FN) end.
+
 %%--------------------------------------------------------------------
 %% @doc Reads and removes files in WorkDir. Files will be returned as binaries.
 %% @end

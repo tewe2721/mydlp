@@ -105,6 +105,11 @@ handle_call(_Msg, _From, State) ->
 handle_cast(_Msg, State) ->
         {noreply, State}.
 
+handle_info(cleanup_now, State) ->
+	cleanup(),
+	call_timer(),
+        {noreply, State};
+
 handle_info(_Info, State) ->
 	{noreply, State}.
 
@@ -120,6 +125,7 @@ stop() ->
 
 init([]) ->
 	filelib:ensure_dir(?WORK_DIR ++ "/"),
+	call_timer(),
 	{ok, #state{}}.
 
 terminate(_Reason, _State) ->
@@ -155,16 +161,32 @@ delete_cacheref(Ref) ->
 		file:delete(FN) 
 	end), ok.
 
-get_age(Filename, LocalTime) ->
+call_timer() ->
+	timer:send_after(900000, cleanup_now).
+
+is_old(Filename, LocalSeconds) ->
 	{ok, FileInfo} = file:read_file_info(Filename),
-	{ADays, ATime} = calendar:time_difference(FileInfo#file_info.atime, LocalTime),
-	{MDays, MTime} = calendar:time_difference(FileInfo#file_info.mtime, LocalTime),
+	ATime = calendar:datetime_to_gregorian_seconds(FileInfo#file_info.atime),
+	MTime = calendar:datetime_to_gregorian_seconds(FileInfo#file_info.mtime),
 
-	if 	ADays > MDays -> {ADays, ATime};
-		MDays > ADays -> {MDays, MTime};
-		ATime > MTime -> {ADays, ATime};
-		MTime > ATime -> {MDays, MTime} end.
+	BTime = if 	ATime > MTime -> ATime;
+			true -> MTime end,
 
+	case (LocalSeconds - BTime) of
+		Age when Age > 1800 -> true;
+		_Else -> false end.
+
+cleanup() ->
+	LocalSeconds = calendar:datetime_to_gregorian_seconds(calendar:local_time()),
+	{ok, FileList} = file:list_dir(?WORK_DIR),
+
+	lists:foreach(fun(FN) -> 
+		NFN = ?WORK_DIR ++ "/" ++ FN,
+		case is_old(NFN, LocalSeconds) of
+			true -> mydlp_api:rmrf(NFN);
+			false -> ok end
+		end, FileList), 
+	ok.
 
 
 
