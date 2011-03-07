@@ -304,7 +304,10 @@ p_text_match(Conf, {_Addr, Files}) ->
 		{score, S} -> S;
 		false -> 512
 	end,
-	p_text_match1(Score, Files).
+	p_text_match0(Score, Files).
+
+p_text_match0(Limit, [#file{mime_type= <<"application/x-tar">>}|Files]) -> p_text_match0(Limit, Files);
+p_text_match0(Limit, Files) -> p_text_match1(Limit, Files).
 
 p_text_match1(Limit, [#file{data=Data} = File|Files]) ->
 	S1 = ( mydlp_regex:longest_bin(hexencoded, Data) ) / 2,
