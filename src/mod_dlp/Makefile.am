@@ -12,6 +12,8 @@ APXS_LDFLAGS_SHLIB=`$(APXS) -q LDFLAGS_SHLIB`
 APXS_SYSCONFDIR=`$(APXS) -q SYSCONFDIR`
 APXS_LIBS_SHLIB=`$(APXS) -q LIBS_SHLIB`
 
+apachemoddir = $(libdir)/apache2/modules
+
 DLPINCLUDES = \
 	-I/usr/include/thrift/ \
 	-I../thrift/gen-cpp/
@@ -51,7 +53,8 @@ mod_dlp.so: mod_dlp.o $(mydlp_ui_o)
 	g++ -fPIC -shared -o $@ $< $(mydlp_ui_o) $(APXS_LIBS_SHLIB) $(SOLIBS)
 
 install: all
-	/usr/bin/apxs2 -i -A -n dlp mod_dlp.so
+	install -D -m 644 mod_dlp.so $(apachemoddir)/mod_dlp.so
+#	/usr/bin/apxs2 -i -A -n dlp mod_dlp.so
 
 clean:
 	rm -f *.so *.o *~
