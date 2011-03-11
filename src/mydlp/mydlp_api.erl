@@ -239,7 +239,7 @@ get_port_resp(Port, Ret) ->
 		{ Port, {data, Data}} -> get_port_resp(Port, [Data|Ret]);
 		{ Port, {exit_status, 0}} -> {ok, list_to_binary(lists:reverse(Ret))};
 		{ Port, {exit_status, RetCode}} -> { error, {retcode, RetCode} }
-	after 15000 -> { error, timeout }
+	after 180000 -> { error, timeout }
 	end.
 
 get_port_resp(Port) ->
@@ -247,7 +247,7 @@ get_port_resp(Port) ->
 		{ Port, {data, _}} -> get_port_resp(Port);
 		{ Port, {exit_status, 0}} -> ok;
 		{ Port, {exit_status, RetCode}} -> { error, {retcode, RetCode} }
-	after 15000 -> { error, timeout }
+	after 180000 -> { error, timeout }
 	end.
 
 %%--------------------------------------------------------------------
