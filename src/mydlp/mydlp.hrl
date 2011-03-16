@@ -79,7 +79,9 @@
 -define(ICAP, [
           {path, "/dlp"},
           {max_connections, 1000},
-          {options_ttl, 3600}
+          {options_ttl, 3600},
+          {log_pass, false},
+          {log_pass_lower_limit, 10240}
          ]).
 
 -define(SMB_DISCOVER, [ 

@@ -730,10 +730,15 @@ pdf_to_text(Bin) when is_binary(Bin) ->
 %% @end
 %%----------------------------------------------------------------------
 acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, File, Misc) ->
-	FileS = file_to_str(File),
+	FileS = case {Action, File} of
+		{_All, #file{} } -> file_to_str(File);
+		{pass, FL} when is_list(FL) ->
+			FLS = lists:map(fun(I) -> file_to_str(I) end, FL),
+			string:join(FLS, " ") end,
 	acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
 
 	case Action of
+		pass -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
 		{log, {cc,false} } -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
 		{block, {cc,false} } -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
 		{log, {cc,true} } -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, File, Misc);

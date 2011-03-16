@@ -65,6 +65,7 @@
 	cache_http_b=false,
 	cache_data_http_h= <<>>,
 	cache_data_http_b= <<>>,
+	log_pass=false,
 	tmp
 }).
 
@@ -115,7 +116,14 @@ init([]) ->
 	{max_connections, MC} = lists:keyfind(max_connections, 1, ConfList),
 	{options_ttl, OT} = lists:keyfind(options_ttl, 1, ConfList),
 
-	{ok, 'WAIT_FOR_SOCKET', #state{max_connections=MC, path=P, options_ttl=OT}}.
+	{log_pass, LogPassEnable} = lists:keyfind(log_pass, 1, ConfList),
+	{log_pass_lower_limit, LogPassLowerLimit} = lists:keyfind(log_pass_lower_limit, 1, ConfList),
+
+	LogPass = case LogPassEnable of
+		false -> false;
+		true -> LogPassLowerLimit end,
+
+	{ok, 'WAIT_FOR_SOCKET', #state{max_connections=MC, path=P, options_ttl=OT, log_pass=LogPass}}.
 
 %%-------------------------------------------------------------------------
 %% Func: StateName/2
@@ -346,10 +354,10 @@ get_body(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_impl
 
 % {Action, {{rule, Id}, {file, File}, {matcher, Func}, {misc, Misc}}}
 'REQ_OK'(#state{icap_request=#icap_request{method=options} } = State) -> 'REPLY_OK'(State);
-'REQ_OK'(#state{files=Files, addr=SAddr, http_request=#http_request{path=Uri}, 
+'REQ_OK'(#state{files=Files, addr=SAddr, http_request=#http_request{path=Uri},
 		http_content=HttpContent, icap_headers=#icap_headers{x_client_ip=CAddr} } = State) ->
 	case mydlp_acl:q(SAddr, CAddr, dest, df_to_files(Uri, HttpContent, Files)) of
-		pass -> 'REPLY_OK'(State);
+		pass -> pass_req(State, Files);
 		{Block = {block, _ }, AclR} -> log_req(State, Block, AclR),
 					'BLOCK_REQ'(block, State);
 		{Log = {log, _ }, AclR} -> log_req(State, Log, AclR),
@@ -358,6 +366,15 @@ get_body(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_impl
 					'REPLY_OK'(State);
 		block -> 'BLOCK_REQ'(block, State)
 	end.
+
+pass_req(#state{log_pass=false} = State, _Files) -> 'REPLY_OK'(State);
+pass_req(#state{log_pass=LogPassLL} = State, Files) -> 
+	UTLFiles = lists:filter(fun(#file{dataref=Ref}) -> ?BB_S(Ref) > LogPassLL end, Files),
+	RId = {dr, mydlp_mnesia:get_dcid()}, % this will create problem for multisite users.
+	case UTLFiles of
+		[] -> ok;
+		_Else -> log_req(State, pass, {{rule, RId}, {file, UTLFiles}, {matcher, none}, {misc,""}}) end,
+	'REPLY_OK'(State).
 
 'REPLY_OK'(State) -> reply(ok, State).
 
