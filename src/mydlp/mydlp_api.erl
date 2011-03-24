@@ -570,16 +570,27 @@ uncompress(Method, {memory, Bin}, Filename) -> uncompress(Method, Bin, Filename)
 
 uncompress(Method, {Type, _Value} = Ref, Filename) when
 		Type == cacheref; Type == unixfile -> 
-	{FNDir, FN} = uncompress0(Filename),
+	{FNDir, FN} = uncompress0(Method, Filename),
 	ok = file:make_symlink(?BB_P(Ref), FN),
 	mydlp_api:Method(FNDir, FN);
 
 uncompress(Method, Bin, Filename) when is_binary(Bin) -> 
-	{FNDir, FN} = uncompress0(Filename),
+	{FNDir, FN} = uncompress0(Method, Filename),
 	ok = file:write_file(FN, Bin, [raw]),
 	mydlp_api:Method(FNDir, FN).
 
-uncompress0(Filename) ->
+uncompress0(ungzipc, Filename) ->
+	{ok, FNDir} = mktempdir(),
+	NFN = normalize_fn(Filename),
+	NFN1 = case string:len(NFN) of
+		L when L > 3 -> case string:to_lower(string:substr(NFN, L - 2)) of
+			".gz" -> NFN;
+			_Else -> NFN ++ ".gz" end;
+		_Else2 -> NFN ++ ".gz" end,
+	
+	FN = FNDir ++ "/" ++ NFN1,
+	{FNDir, FN};
+uncompress0(_Method, Filename) ->
 	{ok, FNDir} = mktempdir(),
 	FN = FNDir ++ "/" ++ normalize_fn(Filename),
 	{FNDir, FN}.
@@ -607,6 +618,25 @@ un7zc(ZFNDir, ZFN) ->
 		Else -> rmrf_dir(WorkDir1), Else end,
 	ok = rmrf_dir(ZFNDir),
 	Ret.
+
+%%--------------------------------------------------------------------
+%% @doc Ungzips an Erlang binary, this can be used for GZIP format.
+%% @end
+%%----------------------------------------------------------------------
+ungzip(Arg) -> ungzip(Arg, "nofilename").
+
+ungzip(Arg, FN) -> uncompress(ungzipc, Arg, FN).
+
+ungzipc(FNDir, FN) -> 
+	Port = open_port({spawn_executable, "/bin/gzip"}, 
+			[{args, ["-d","-f","-q", FN]},
+			use_stdio,
+			exit_status,
+			stderr_to_stdout]),
+
+	case get_port_resp(Port) of
+		ok -> {ok, rr_files(FNDir)};
+		Else -> rmrf_dir(FNDir), Else end.
 
 %%--------------------------------------------------------------------
 %% @doc Un7zs an Erlang binary, this can be used for ZIP, CAB, ARJ, GZIP, BZIP2, TAR, CPIO, RPM and DEB formats.
@@ -883,12 +913,19 @@ comp_to_files([#file{mime_type= <<"application/zip">>, compressed_copy=false, is
 			ctf_ok(Files, File, ExtFiles, Processed, New);
 		{error, _ShouldBeLogged} -> 
 			ctf_err_enc(Files, File, Processed, New) end;
+comp_to_files([#file{mime_type= <<"application/x-gzip">>, compressed_copy=false, is_encrypted=false} = File|Files], Processed, New) ->
+	case ungzip(File#file.dataref, File#file.filename) of
+		{ok, Ext} -> 
+			ExtFiles = ext_to_file(Ext),
+			ctf_ok(Files, File, ExtFiles, Processed, New);
+		{error, _ShouldBeLogged} -> 
+			ctf_err_enc(Files, File, Processed, New) end;
 comp_to_files([#file{mime_type= <<"application/vnd.oasis.opendocument.text">>}|_] = Files, Processed, New) -> % Needs refinement for better ODF handling
 	try_unzip(Files, Processed, New);
 comp_to_files([#file{mime_type= <<"application/octet-stream">>}|_] = Files, Processed, New) -> % Needs refinement for better ODF handling
 	%try_unzip(Files, Returns);
 	try_un7z(Files, Processed, New);
-comp_to_files([#file{mime_type= <<"application/x-archive">>} = File|Files], Processed, New) ->
+comp_to_files([#file{mime_type= <<"application/x-archive">>, compressed_copy=false, is_encrypted=false} = File|Files], Processed, New) ->
 	case unar(File#file.dataref, File#file.filename) of
 		{ok, Ext} -> 
 			ExtFiles = ext_to_file(Ext),
