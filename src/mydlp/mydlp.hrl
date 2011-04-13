@@ -47,8 +47,6 @@
 		{keyfile, "/etc/mydlp/ssl/private.pem"}
          ]).
 
--define(DENIED_PAGE, "denied_page.html").
-
 -define(NLP_TR, [ 
           {activate, false},
           {kokler, "mydlp_nlp_tr_kokler.txt"}

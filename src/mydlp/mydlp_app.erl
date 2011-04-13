@@ -54,11 +54,17 @@ start(_Type, _Args) ->
 	% Read configuration
 	{ok, Protocols} = application:get_env(protocols),
 
+	% Prestart Load of dynamic modules
+	mydlp_dynamic:prestart_load(),
+
+	% Start mydlp
+	SRet = supervisor:start_link({local, ?MODULE}, ?MODULE, [Protocols]),
+
 	% Load dynamic modules
 	mydlp_dynamic:load(),
 
-	% Start mydlp
-	supervisor:start_link({local, ?MODULE}, ?MODULE, [Protocols]).
+	SRet.
+	
 
 init([Protocols]) ->
 	{ok, SWorkers} = application:get_env(shared_workers),

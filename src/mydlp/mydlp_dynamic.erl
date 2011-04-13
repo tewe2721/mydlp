@@ -23,10 +23,14 @@
 -author('kerem@medratech.com').
 
 -export([
-	load/0
+	load/0,
+	prestart_load/0
 ]).
 
 -include("mydlp.hrl").
+
+prestart_load() ->
+	load_mydlp_denied_page0().
 
 load() ->
 	load_mydlp_denied_page().
@@ -40,12 +44,13 @@ load_src(Src) ->
 	end.
 
 denied_page_src() ->
-	DP = case application:get_env(mydlp, denied_page) of
-		{ok, Path} -> Path;
-		undefined -> ?DENIED_PAGE end,
-	{ok, Bin} = file:read_file(DP), binary_to_list(Bin).
+	DPBin = case mydlp_mysql:get_denied_page() of
+		Page when is_binary(Page) -> Page;
+		not_found -> <<"Denied!!!">> end,
+	binary_to_list(DPBin).
 
-mydlp_denied_page_src() ->
+
+mydlp_denied_page_src(DeniedPageSrc) when is_list(DeniedPageSrc) ->
 "-module(mydlp_denied_page).
 -author('kerem@medratech.com').
 
@@ -54,17 +59,20 @@ mydlp_denied_page_src() ->
 	get_base64_str/0
 ]).
 
-get() -> <<\"" ++ denied_page_src() ++ "\">>. 
+get() -> <<\"" ++ DeniedPageSrc ++ "\">>. 
 
 get_base64_str() -> \"" ++ 
 	binary_to_list(
 		mydlp_api:insert_line_feed(
-			base64:encode(denied_page_src())
+			base64:encode(DeniedPageSrc)
 		)
 	)
  				++ "\". 
 
 ".
 
-load_mydlp_denied_page() -> load_src(mydlp_denied_page_src()).
+load_mydlp_denied_page() -> load_src(mydlp_denied_page_src(denied_page_src())).
+
+load_mydlp_denied_page0() -> load_src(mydlp_denied_page_src("Denied!!!")).
+
 

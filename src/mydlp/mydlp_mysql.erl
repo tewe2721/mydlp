@@ -39,6 +39,7 @@
 	push_log/10,
 	push_smb_discover/1,
 	is_multisite/0,
+	get_denied_page/0,
 	stop/0]).
 
 %% gen_server callbacks
@@ -62,6 +63,8 @@ compile_customer(CustomerId) when is_integer(CustomerId) ->
 	gen_server:call(?MODULE, {compile_customer, CustomerId} , 60000).
 
 is_multisite() -> gen_server:call(?MODULE, is_multisite, 60000).
+
+get_denied_page() -> gen_server:call(?MODULE, get_denied_page, 60000).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -98,6 +101,14 @@ handle_call(is_multisite, _From, State) ->
 		[] -> false;
 		[[0]] -> false;
 		[[1]] -> true end,
+        {reply, Reply, State};
+
+handle_call(get_denied_page, _From, State) ->
+	% Probably will create problems in multisite use.
+	{ok, DPQ} = psq(denied_page_by_cid, [mydlp_mnesia:get_dcid()]),
+	Reply = case DPQ of
+		[[DeniedPage]] when is_binary(DeniedPage) -> DeniedPage;
+		_Else -> not_found end,
         {reply, Reply, State};
 
 handle_call(stop, _From,  State) ->
@@ -225,6 +236,7 @@ init([]) ->
 		{regexes_by_cid, <<"SELECT r.id, c.group_id, r.regex FROM sh_regex_cross AS c, sh_regex r WHERE c.regex_id=r.id and r.customer_id=?">>},
 		{customer_by_id, <<"SELECT id,static_ip FROM sh_customer WHERE id=?">>},
 		{app_type, <<"SELECT type FROM app_type">>},
+		{denied_page_by_cid, <<"SELECT html_text FROM sh_warning_page WHERE customer_id=?">>},
 		{defaultrule_by_cid, <<"SELECT action, keep_carbon_copy, cc_count, ssn_count, iban_count, canada_sin_count, france_insee_count, uk_nino_count, tr_tck_count FROM sh_defaultrule_predefined WHERE enabled <> 0 and customer_id=?">>},
 		{dr_fhash_by_cid, <<"SELECT hash FROM sh_defaultrule_filehash WHERE customer_id=?">>},
 		{dr_wfhash_by_cid, <<"SELECT hash FROM sh_defaultrule_white_filehash WHERE customer_id=?">>},
