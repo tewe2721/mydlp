@@ -60,9 +60,12 @@ start(_Type, _Args) ->
 	% Start mydlp
 	SRet = supervisor:start_link({local, ?MODULE}, ?MODULE, [Protocols]),
 
-	% Load dynamic modules
-	mydlp_dynamic:load(),
-
+	case SRet of
+		{ok, _} -> 
+			% If everything is allright,
+			% Load dynamic modules
+			mydlp_dynamic:load();
+		_Else -> ok end,
 	SRet.
 	
 
