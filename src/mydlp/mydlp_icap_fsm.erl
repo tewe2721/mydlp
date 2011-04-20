@@ -254,7 +254,7 @@ get_body(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_impl
 		"search" -> 'SEARCH';
 		"lock" -> 'LOCK';
 		"subscribe" -> 'SUBSCRIBE';
-%		"connect" -> 'CONNECT';
+		"connect" -> 'CONNECT';
 		_Else -> throw({error, bad_method}) end,
 
 	[$h, $t, $t, $p, $/, MajorVersionC, $., MinorVersionC, $\r, $\n ] = 
