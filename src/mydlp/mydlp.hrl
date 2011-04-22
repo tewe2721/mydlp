@@ -76,6 +76,7 @@
 
 -define(ICAP, [
           {path, "/dlp"},
+          {path_respmod, "/dlp-respmod"},
           {max_connections, 1000},
           {options_ttl, 3600},
           {log_pass, false},

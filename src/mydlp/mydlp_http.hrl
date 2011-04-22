@@ -29,6 +29,12 @@
 		version
 	}).
 
+-record(http_response, {
+		code,
+		phrase,
+		version
+	}).
+
 -record(http_headers, {
 		connection,
 		host,

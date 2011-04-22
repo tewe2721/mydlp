@@ -47,6 +47,7 @@ dist_erl_DATA = \
 	mydlp_dynamic.erl \
 	mydlp_fsm.erl \
 	mydlp_icap_fsm.erl \
+	mydlp_icap2_fsm.erl \
 	mydlp_loglevel.erl \
 	mydlp_logger_h.erl \
 	mydlp_matchers.erl \

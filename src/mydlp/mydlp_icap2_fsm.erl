@@ -1,0 +1,778 @@
+%%%
+%%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@medra.com.tr>
+%%%
+%%%--------------------------------------------------------------------------
+%%%    This file is part of MyDLP.
+%%%
+%%%    MyDLP is free software: you can redistribute it and/or modify
+%%%    it under the terms of the GNU General Public License as published by
+%%%    the Free Software Foundation, either version 3 of the License, or
+%%%    (at your option) any later version.
+%%%
+%%%    MyDLP is distributed in the hope that it will be useful,
+%%%    but WITHOUT ANY WARRANTY; without even the implied warranty of
+%%%    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%%%    GNU General Public License for more details.
+%%%
+%%%    You should have received a copy of the GNU General Public License
+%%%    along with MyDLP.  If not, see <http://www.gnu.org/licenses/>.
+%%%--------------------------------------------------------------------------
+
+-module(mydlp_icap2_fsm).
+-author('kerem@medratech.com').
+-behaviour(gen_fsm).
+-include("mydlp.hrl").
+-include("mydlp_http.hrl").
+
+-export([start_link/0]).
+
+%% gen_fsm callbacks
+-export([init/1, handle_event/3,
+         handle_sync_event/4, handle_info/3, terminate/3, code_change/4]).
+
+%% FSM States
+-export([
+    'WAIT_FOR_SOCKET'/2,
+    'ICAP_REQ_LINE'/2,
+    'ICAP_HEADER'/2,
+    'HTTP_REQ_LINE'/2,
+    'PARSE_REQ_LINE'/2,
+    'HTTP_RES_LINE'/2,
+    'PARSE_RES_LINE'/2,
+    'HTTP_HEADER'/2,
+    'PARSE_HEADER'/2,
+    'HTTP_CC_LINE'/2,
+    'HTTP_CC_CHUNK'/2,
+    'PARSE_CC_CHUNK'/2,
+    'HTTP_CC_CRLF'/2,
+    'HTTP_CC_TCRLF'/2
+]).
+
+-record(state, {
+	socket,
+	addr,
+	icap_request,
+	icap_headers,
+	icap_body=[],
+	icap_rencap,
+	http_request,
+	http_response,
+	http_headers,
+	http_req_headers,
+	http_res_headers,
+	http_content= <<>>,
+	http_req_content= <<>>,
+	http_res_content= <<>>,
+	files=[],
+	max_connections,
+	options_ttl,
+	path_reqmod,
+	path_respmod,
+	path_mode=reqmod,
+	buffer,
+	ch_req_h=false,
+	ch_req_b=false,
+	ch_data_req_h= <<>>,
+	ch_data_req_b= <<>>,
+	ch_res_h=false,
+	ch_res_b=false,
+	ch_data_res_h= <<>>,
+	ch_data_res_b= <<>>,
+	log_pass=false,
+	tmp
+}).
+
+-record(icap_request, {
+	method,
+	uri,
+	major_version,
+	minor_version
+}).
+
+-record(icap_headers, {
+	allow,
+	allow204=false,
+	connection,
+	encapsulated,
+	x_client_ip,
+	other=[]
+}).
+
+-define(ICAP_RESP_LINE_OK, <<"ICAP/1.0 200 OK\r\n">>).
+-define(ICAP_RESP_LINE_204, <<"ICAP/1.0 204 No Content\r\n">>).
+-define(ICAP_RESP_STD_HEADERS, 
+	<<	"Service: MyDLP ICAP Server\r\n", 
+		"Connection: keep-alive\r\n", 
+		"ISTag: \"mydlp-icap-rocks\"\r\n"
+	>>).
+
+%%%------------------------------------------------------------------------
+%%% API
+%%%------------------------------------------------------------------------
+
+start_link() ->
+    gen_fsm:start_link(?MODULE, [], []).
+
+%%%------------------------------------------------------------------------
+%%% Callback functions from gen_server
+%%%------------------------------------------------------------------------
+
+%%-------------------------------------------------------------------------
+%% Func: init/1
+%% Returns: {ok, StateName, StateData}          |
+%%          {ok, StateName, StateData, Timeout} |
+%%          ignore                              |
+%%          {stop, StopReason}
+%% @private
+%%-------------------------------------------------------------------------
+init([]) ->
+	process_flag(trap_exit, true),
+
+	ConfList = case application:get_env(icap) of
+		{ok, CL} -> CL;
+		_Else -> ?ICAP
+	end,
+
+	{path, P} = lists:keyfind(path, 1, ConfList),
+	{path_respmod, PR} = lists:keyfind(path_respmod, 1, ConfList),
+	{max_connections, MC} = lists:keyfind(max_connections, 1, ConfList),
+	{options_ttl, OT} = lists:keyfind(options_ttl, 1, ConfList),
+
+	{log_pass, LogPassEnable} = lists:keyfind(log_pass, 1, ConfList),
+	{log_pass_lower_limit, LogPassLowerLimit} = lists:keyfind(log_pass_lower_limit, 1, ConfList),
+
+	LogPass = case LogPassEnable of
+		false -> false;
+		true -> LogPassLowerLimit end,
+
+	{ok, 'WAIT_FOR_SOCKET', #state{max_connections=MC, 
+		path_reqmod=P, path_respmod=PR, options_ttl=OT, log_pass=LogPass}}.
+
+%%-------------------------------------------------------------------------
+%% Func: StateName/2
+%% Returns: {next_state, NextStateName, NextStateData}          |
+%%          {next_state, NextStateName, NextStateData, Timeout} |
+%%          {stop, Reason, NewStateData}
+%% @private
+%%-------------------------------------------------------------------------
+'WAIT_FOR_SOCKET'({socket_ready, Socket, _CommType}, State) when is_port(Socket) ->
+	inet:setopts(Socket, [{active, once}, {packet, line}, list]),
+	{ok, {IP, _Port}} = inet:peername(Socket),
+	{next_state, 'ICAP_REQ_LINE', State#state{socket=Socket, addr=IP}, ?TIMEOUT};
+'WAIT_FOR_SOCKET'(Other, State) ->
+	?DEBUG("ICAP FSM: 'WAIT_FOR_SOCKET'. Unexpected message: ~p\n", [Other]),
+	%% Allow to receive async messages
+	{next_state, 'WAIT_FOR_SOCKET', State}.
+
+%% Notification event coming from client
+'ICAP_REQ_LINE'({data, Line}, #state{path_reqmod=ReqmodPath, path_respmod=RespmodPath} = State) ->
+	Line1 = case Line of
+		L when is_list(L) -> Line;
+		L when is_binary(L) -> binary_to_list(Line) end,
+	[MethodS, Uri, VersionS] = string:tokens(Line1, " "),
+
+	PathMode = case get_path(Uri) of
+		ReqmodPath -> reqmod;
+		RespmodPath -> respmod;
+		Else -> throw({error, {path_does_not_match, Else}}) end,
+
+	Method = case http_util:to_lower(MethodS) of
+		"options" -> options;
+		"reqmod" -> reqmod;
+		"respmod" -> respmod;
+		_Else2 -> throw({error, bad_method}) end,
+
+	[$i, $c, $a, $p, $/, MajorVersionC, $., MinorVersionC, $\r, $\n ] = 
+			http_util:to_lower(VersionS),
+	MajorVersion = MajorVersionC - $0,
+	MinorVersion = MinorVersionC - $0,
+
+	{next_state, 'ICAP_HEADER', 
+		State#state{icap_request=#icap_request{
+			method=Method, uri=Uri, major_version=MajorVersion, minor_version=MinorVersion},
+			icap_headers=#icap_headers{}, path_mode=PathMode}, ?TIMEOUT};
+
+'ICAP_REQ_LINE'(timeout, State) ->
+	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+	{stop, normal, State}.
+
+
+'ICAP_HEADER'({data, "\r\n"}, #state{icap_headers=IcapHeaders} = State) ->
+        Others = IcapHeaders#icap_headers.other,
+        IcapHeaders1 = IcapHeaders#icap_headers{other=lists:reverse(Others)},
+        State1 = State#state{icap_headers=IcapHeaders1},
+
+	HH = State1#state.icap_headers,
+	E = HH#icap_headers.encapsulated,
+	encap_next(State1#state{icap_rencap=E});
+
+'ICAP_HEADER'({data, IcapHeaderLine}, #state{icap_headers=IcapHeaders} = State) ->
+	{Key, Value} = case string:chr(IcapHeaderLine, $:) of
+		0 -> throw({error, {bad_header_line, IcapHeaderLine}});
+		I -> K = string:substr(IcapHeaderLine, 1, I-1),
+			K1 = http_util:to_lower(K),
+			[$\s| V] = string:substr(IcapHeaderLine, I+1), {K1, rm_trailing_crlf(V)} end,
+        IcapHeaders1 = case Key of
+                "connection" -> IcapHeaders#icap_headers{connection=Value};
+                "encapsulated" -> IcapHeaders#icap_headers{encapsulated=raw_to_encapsulatedh(Value)};
+                "x-client-ip" -> IcapHeaders#icap_headers{x_client_ip=raw_to_xciph(Value)};
+                "allow" ->	AllowH = raw_to_allowh(Value),
+				IcapHeaders#icap_headers{allow=AllowH, 
+					allow204=lists:member("204",AllowH)};
+                _ -> Others = IcapHeaders#icap_headers.other, IcapHeaders#icap_headers{
+				other=[#http_header{key=Key, value=Value}|Others]}   %% misc other headers
+        end,
+
+        {next_state, 'ICAP_HEADER', State#state{icap_headers=IcapHeaders1}, ?TIMEOUT};
+
+'ICAP_HEADER'(timeout, State) ->
+	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+	{stop, normal, State}.
+
+encap_next(#state{icap_rencap=[]} = State) -> 'READ_FILES'(State);
+encap_next(#state{icap_rencap=undefined} = State) -> 'READ_FILES'(State);
+encap_next(#state{icap_rencap=[{null_body, _Val}]} = State) -> 'READ_FILES'(State);
+
+encap_next(#state{icap_rencap=[{req_hdr, _BI}|Rest], 
+		icap_headers=#icap_headers{allow204=false}} = State) -> 
+	{next_state, 'HTTP_REQ_LINE', State#state{icap_rencap=Rest, ch_req_h=true}, ?TIMEOUT};
+
+encap_next(#state{icap_rencap=[{req_hdr, _BI}|Rest], 
+		icap_headers=#icap_headers{allow204=true}} = State) -> 
+	{next_state, 'HTTP_REQ_LINE', State#state{icap_rencap=Rest, ch_req_h=false}, ?TIMEOUT};
+
+encap_next(#state{icap_rencap=[{res_hdr, _BI}|Rest], 
+		icap_headers=#icap_headers{allow204=false}} = State) -> 
+	{next_state, 'HTTP_RES_LINE', State#state{icap_rencap=Rest, ch_res_h=true}, ?TIMEOUT};
+
+encap_next(#state{icap_rencap=[{res_hdr, _BI}|Rest], 
+		icap_headers=#icap_headers{allow204=true}} = State) -> 
+	{next_state, 'HTTP_RES_LINE', State#state{icap_rencap=Rest, ch_res_h=false}, ?TIMEOUT};
+
+encap_next(#state{socket=Socket, icap_rencap=[{req_body, _BI}|Rest],
+		icap_headers=#icap_headers{allow204=false}} = State) -> 
+	inet:setopts(Socket, [{packet, line}, binary]),
+	{next_state, 'HTTP_CC_LINE', State#state{icap_rencap=Rest, ch_req_b=true}, ?TIMEOUT};
+
+encap_next(#state{socket=Socket, icap_rencap=[{req_body, _BI}|Rest],
+		icap_headers=#icap_headers{allow204=true}} = State) -> 
+	inet:setopts(Socket, [{packet, line}, binary]),
+	{next_state, 'HTTP_CC_LINE', State#state{icap_rencap=Rest, ch_req_b=false}, ?TIMEOUT};
+
+encap_next(#state{socket=Socket, icap_rencap=[{res_body, _BI}|Rest],
+		icap_headers=#icap_headers{allow204=false}} = State) -> 
+	inet:setopts(Socket, [{packet, line}, binary]),
+	{next_state, 'HTTP_CC_LINE', State#state{icap_rencap=Rest, ch_res_b=true}, ?TIMEOUT};
+
+encap_next(#state{socket=Socket, icap_rencap=[{res_body, _BI}|Rest],
+		icap_headers=#icap_headers{allow204=true}} = State) -> 
+	inet:setopts(Socket, [{packet, line}, binary]),
+	{next_state, 'HTTP_CC_LINE', State#state{icap_rencap=Rest, ch_res_b=false}, ?TIMEOUT};
+
+%encap_next(#state{icap_rencap=[{res_hdr, _BI}|_Rest]}) -> throw({error, {not_implemented, res_hdr}});
+%encap_next(#state{icap_rencap=[{res_body, _BI}|_Rest]}) -> throw({error, {not_implemented, res_body}});
+encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_implemented, opt_body}}).
+
+'HTTP_REQ_LINE'({data, Line}, State) -> read_line(Line, State, 'HTTP_REQ_LINE', 'PARSE_REQ_LINE');
+
+'HTTP_REQ_LINE'(timeout, State) ->
+        ?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+        {stop, normal, State}.
+
+'PARSE_REQ_LINE'({data, ReqLine}, State) ->
+	[MethodS, Uri, VersionS] = string:tokens(ReqLine, " "),
+
+	Method = case http_util:to_lower(MethodS) of
+		"options" -> 'OPTIONS';
+		"get" -> 'GET';
+		"head" -> 'HEAD';
+		"post" -> 'POST';
+		"put" -> 'PUT';
+		"delete" -> 'DELETE';
+		"trace" -> 'TRACE';
+		"propfind" -> 'PROPFIND';
+		"pull" -> 'PULL';
+		"poll" -> 'POLL';
+		"search" -> 'SEARCH';
+		"lock" -> 'LOCK';
+		"subscribe" -> 'SUBSCRIBE';
+		"connect" -> 'CONNECT';
+		_Else -> throw({error, bad_method}) end,
+
+	[$h, $t, $t, $p, $/, MajorVersionC, $., MinorVersionC, $\r, $\n ] = 
+			http_util:to_lower(VersionS),
+	MajorVersion = MajorVersionC - $0,
+	MinorVersion = MinorVersionC - $0,
+        {next_state, 'HTTP_HEADER', State#state{http_request=#http_request{
+			method=Method, path=Uri, version={MajorVersion, MinorVersion}}
+			, http_headers=#http_headers{}}, ?TIMEOUT}.
+
+'HTTP_RES_LINE'({data, Line}, State) -> read_line(Line, State, 'HTTP_RES_LINE', 'PARSE_RES_LINE');
+
+'HTTP_RES_LINE'(timeout, State) ->
+        ?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+        {stop, normal, State}.
+
+'PARSE_RES_LINE'({data, ResLine}, State) ->
+	[VersionS, CodeS|PhraseArr] = string:tokens(ResLine, " "),
+	PhraseS = string:join(PhraseArr, " "),
+
+	Code = try list_to_integer(CodeS)
+		catch _:Err -> throw({error, {notint, CodeS, Err}}) end,
+		
+	[$h, $t, $t, $p, $/, MajorVersionC, $., MinorVersionC ] = 
+			http_util:to_lower(VersionS),
+	MajorVersion = MajorVersionC - $0,
+	MinorVersion = MinorVersionC - $0,
+
+        {next_state, 'HTTP_HEADER', State#state{http_response=#http_response{
+			code=Code, phrase=PhraseS, version={MajorVersion, MinorVersion}}
+			, http_headers=#http_headers{}}, ?TIMEOUT}.
+
+'HTTP_HEADER'({data, Line}, State) -> read_line(Line, State, 'HTTP_HEADER', 'PARSE_HEADER');
+
+'HTTP_HEADER'(timeout, State) ->
+	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+	{stop, normal, State}.
+
+'PARSE_HEADER'({data, "\r\n"}, #state{http_headers=HttpHeaders} = State) ->
+	Cookies = HttpHeaders#http_headers.cookie,
+	Others = HttpHeaders#http_headers.other,
+	HttpHeaders1 = HttpHeaders#http_headers{cookie=lists:reverse(Cookies), other=lists:reverse(Others)},
+	State1 = case State#state.http_response of % Request headers or response headers
+		undefined -> State#state{http_req_headers=HttpHeaders1, ch_req_h=false};
+		_Else -> State#state{http_res_headers=HttpHeaders1, ch_res_h=false} end,
+	encap_next(State1#state{http_headers=undefined});
+
+'PARSE_HEADER'({data, HttpHeaderLine}, #state{http_headers=HttpHeaders} = State) ->
+	{Key, Value} = case string:chr(HttpHeaderLine, $:) of
+		0 -> throw({error, {bad_header_line, HttpHeaderLine}});
+		I -> K = string:substr(HttpHeaderLine, 1, I-1),
+			K1 = http_util:to_lower(K),
+			[$\s| V] = string:substr(HttpHeaderLine, I+1), {K1, rm_trailing_crlf(V)} end,
+	HttpHeaders1 = case Key of
+		"connection" -> HttpHeaders#http_headers{connection=Value};
+		"host" -> HttpHeaders#http_headers{host=Value};
+		"cookie" -> Cookies = HttpHeaders#http_headers.cookie, HttpHeaders#http_headers{cookie=[Value|Cookies]};
+		"keep-alive" -> HttpHeaders#http_headers{keep_alive=Value};
+		"content-length" -> HttpHeaders#http_headers{content_length=Value};
+		"content-type" -> HttpHeaders#http_headers{content_type=Value};
+		"content-encoding" -> HttpHeaders#http_headers{content_encoding=Value};
+		"transfer-encoding" -> HttpHeaders#http_headers{transfer_encoding=Value};
+		_ -> Others = HttpHeaders#http_headers.other, HttpHeaders#http_headers{other=[
+				#http_header{key=Key, value=Value}|Others]}   %% misc other headers
+	end,
+		
+	{next_state, 'HTTP_HEADER', State#state{http_headers=HttpHeaders1}, ?TIMEOUT}.
+
+'HTTP_CC_LINE'({data, Line}, State) ->
+	CSize = mydlp_api:hex2int(Line),
+	case CSize of
+		0 -> {next_state, 'HTTP_CC_TCRLF', State, ?TIMEOUT};
+		_ -> {next_state, 'HTTP_CC_CHUNK', State#state{tmp=CSize}, ?TIMEOUT}
+	end;
+
+'HTTP_CC_LINE'(timeout, State) ->
+	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+	{stop, normal, State}.
+
+'HTTP_CC_CHUNK'({data, Line}, State) -> read_line(Line, State, 'HTTP_CC_CHUNK', 'PARSE_CC_CHUNK');
+
+'HTTP_CC_CHUNK'(timeout, State) ->
+	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+	{stop, normal, State}.
+
+'PARSE_CC_CHUNK'({data, Line}, #state{http_content=Content, tmp=CSize} = State) ->
+	CSize1 = CSize - size(Line),
+	if
+		CSize1 > 0 -> {next_state, 'HTTP_CC_CHUNK', 
+                                State#state{http_content= <<Content/binary,Line/binary>>, tmp=CSize1}, ?TIMEOUT};
+		CSize1 == 0 -> {next_state, 'HTTP_CC_CRLF',
+				State#state{http_content= <<Content/binary,Line/binary>>, tmp=undefined}, ?TIMEOUT};
+		CSize1 == -2 -> {next_state, 'HTTP_CC_LINE',
+				State#state{http_content= <<Content/binary, (rm_trailing_crlf(Line)) /binary>>, tmp=undefined}, ?TIMEOUT}
+	end.
+
+'HTTP_CC_CRLF'({data, <<"\r\n">>}, State) ->
+	{next_state, 'HTTP_CC_LINE', State, ?TIMEOUT};
+
+'HTTP_CC_CRLF'(timeout, State) ->
+	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+	{stop, normal, State}.
+
+'HTTP_CC_TCRLF'({data, <<"\r\n">>}, #state{http_content=Content} = State) ->
+	State1 = case State#state.http_response of % Request payload or response payload
+		undefined -> State#state{http_req_content=Content, ch_req_b=false};
+		_Else -> State#state{http_res_content=Content, ch_res_b=false} end,
+	
+	encap_next(State1#state{http_content= <<>>});
+
+'HTTP_CC_TCRLF'(timeout, State) ->
+	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+	{stop, normal, State}.
+
+'READ_FILES'(#state{icap_request=#icap_request{method=options}} = State) -> 'REQ_OK'(State);
+'READ_FILES'(#state{http_req_headers=undefined} = State) -> 'REQ_OK'(State);
+'READ_FILES'(#state{http_req_headers=HttpHeaders} = State) ->
+%	when HttpHeaders#http_headers.content_type == ''->
+	Files = case HttpHeaders#http_headers.content_type of 
+			"multipart/form-data" ++ _Tail -> parse_multipart(State);
+			"application/x-www-form-urlencoded" ++ _Tail -> parse_urlencoded(State);
+			_Else -> [] end,
+
+	'REQ_OK'(State#state{files=Files}).
+
+% {Action, {{rule, Id}, {file, File}, {matcher, Func}, {misc, Misc}}}
+'REQ_OK'(#state{icap_request=#icap_request{method=options} } = State) -> 'REPLY_OK'(State);
+'REQ_OK'(#state{files=Files, addr=SAddr, http_request=#http_request{path=Uri},
+		http_req_content=ReqContent, http_res_content=ResContent,
+		icap_headers=#icap_headers{x_client_ip=CAddr} } = State) ->
+	case mydlp_acl:q(SAddr, CAddr, dest, df_to_files(Uri, ReqContent, ResContent, Files)) of
+		pass -> pass_req(State, Files);
+		{Block = {block, _ }, AclR} -> log_req(State, Block, AclR),
+					'BLOCK_REQ'(block, State);
+		{Log = {log, _ }, AclR} -> log_req(State, Log, AclR),
+					'REPLY_OK'(State); % refine this
+		{pass, AclR} -> log_req(State, pass, AclR),
+					'REPLY_OK'(State);
+		block -> 'BLOCK_REQ'(block, State)
+	end.
+
+pass_req(#state{log_pass=false} = State, _Files) -> 'REPLY_OK'(State);
+pass_req(#state{log_pass=LogPassLL} = State, Files) -> 
+	UTLFiles = lists:filter(fun(#file{dataref=Ref}) -> ?BB_S(Ref) > LogPassLL end, Files),
+	RId = {dr, mydlp_mnesia:get_dcid()}, % this will create problem for multisite users.
+	case UTLFiles of
+		[] -> ok;
+		_Else -> log_req(State, pass, {{rule, RId}, {file, UTLFiles}, {matcher, none}, {misc,""}}) end,
+	'REPLY_OK'(State).
+
+'REPLY_OK'(State) -> reply(ok, State).
+
+'BLOCK_REQ'(block, State) -> reply(block, State).
+
+reply(What, #state{socket=Socket, icap_request=IcapReq, http_request=HttpReq,
+		icap_headers=#icap_headers{allow204=Allow204},
+		ch_data_req_h=CacheDataReqH, ch_data_req_b=CacheDataReqB,
+		ch_data_res_h=CacheDataResH, ch_data_res_b=CacheDataResB,
+		max_connections=MC, options_ttl=OT, path_mode=PathMode} = State) ->
+
+	Reply = case {What, Allow204, IcapReq#icap_request.method} of
+		{ok, _, options} -> 
+				PMS = case PathMode of 
+					reqmod -> <<"REQMOD">>;
+					respmod -> <<"RESPMOD">> end,
+				[ ?ICAP_RESP_LINE_OK,
+				icap_date_hdr_line(),
+				?ICAP_RESP_STD_HEADERS,
+				"Methods: ", PMS, "\r\n",
+				"Max-Connections: ", integer_to_list(MC), "\r\n",
+				"Options-TTL: ", integer_to_list(OT), "\r\n",
+				"Encapsulated: null-body=0\r\n",
+				"Allow: 204\r\n\r\n"];
+		{ok, true, _Reqmod_Or_Respmod} -> [
+				?ICAP_RESP_LINE_204,
+				icap_date_hdr_line(),
+				?ICAP_RESP_STD_HEADERS,
+				<<"Encapsulated: null-body=0\r\n\r\n">>];
+		{ok, false, reqmod} -> 
+				{EncapLine, Payload} = encap_pl_req(CacheDataReqH, CacheDataReqB),
+				[ ?ICAP_RESP_LINE_OK,
+				icap_date_hdr_line(),
+				?ICAP_RESP_STD_HEADERS,
+				EncapLine,
+				<<"\r\n\r\n">>,
+                                Payload,
+				<<"\r\n">>];
+		{ok, false, respmod} -> 
+				{EncapLine, Payload} = encap_pl_res(CacheDataResH, CacheDataResB),
+				[ ?ICAP_RESP_LINE_OK,
+				icap_date_hdr_line(),
+				?ICAP_RESP_STD_HEADERS,
+				EncapLine,
+				<<"\r\n\r\n">>,
+                                Payload,
+				<<"\r\n">>];
+		{block, _, _Reqmod_Or_Respmod} -> 
+				{http_request, _,  _, {HTTPMajorv, HTTPMinorv}} = HttpReq,
+				Deny = mydlp_api:get_denied_page(html),
+				ReqModB = [httpd_util:integer_to_hexlist(size(Deny)), 
+						"\r\n", Deny, "\r\n0\r\n"],
+				ReqModH = list_to_binary(
+					["HTTP/", integer_to_list(HTTPMajorv), ".", 
+						integer_to_list(HTTPMinorv), " 403 Forbidden\r\n",
+				"Content-Type: text/html; charset=UTF-8\r\n",
+				"Content-Length: ", integer_to_list(size(Deny)), "\r\n",
+				"\r\n"]),
+				[ ?ICAP_RESP_LINE_OK,
+				icap_date_hdr_line(),
+				?ICAP_RESP_STD_HEADERS,
+				"Encapsulated: res-hdr=0",
+					", res-body=", integer_to_list(size(ReqModH)),"\r\n\r\n",
+				ReqModH, ReqModB, "\r\n"] end,
+
+	% io:format("~s~n",[binary_to_list(list_to_binary(Reply))]),
+
+	gen_tcp:send(Socket, Reply),
+	inet:setopts(Socket, [{packet, line}, list]),
+
+	{next_state, 'ICAP_REQ_LINE', 
+		State#state{icap_request=undefined,
+				icap_headers=undefined,
+				icap_body=[],
+				icap_rencap=undefined,
+				http_request=undefined, 
+				http_headers=undefined,
+				http_req_headers=undefined,
+				http_res_headers=undefined,
+				http_content= <<>>, 
+				files=[],
+				buffer=undefined,
+				ch_req_h=false,
+				ch_req_b=false,
+				ch_data_req_h= <<>>,
+				ch_data_req_b= <<>>,
+				ch_res_h=false,
+				ch_res_b=false,
+				ch_data_res_h= <<>>,
+				ch_data_res_b= <<>>,
+				tmp=undefined}, ?KA_TIMEOUT}.
+
+%%-------------------------------------------------------------------------
+%% Func: handle_event/3
+%% Returns: {next_state, NextStateName, NextStateData}          |
+%%          {next_state, NextStateName, NextStateData, Timeout} |
+%%          {stop, Reason, NewStateData}
+%% @private
+%%-------------------------------------------------------------------------
+handle_event(stop, _StateName, State) ->
+	{stop, normal, State};
+handle_event(Event, StateName, StateData) ->
+	{stop, {StateName, undefined_event, Event}, StateData}.
+
+%%-------------------------------------------------------------------------
+%% Func: handle_sync_event/4
+%% Returns: {next_state, NextStateName, NextStateData}            |
+%%          {next_state, NextStateName, NextStateData, Timeout}   |
+%%          {reply, Reply, NextStateName, NextStateData}          |
+%%          {reply, Reply, NextStateName, NextStateData, Timeout} |
+%%          {stop, Reason, NewStateData}                          |
+%%          {stop, Reason, Reply, NewStateData}
+%% @private
+%%-------------------------------------------------------------------------
+handle_sync_event(Event, _From, StateName, StateData) ->
+	{stop, {StateName, undefined_event, Event}, StateData}.
+
+%%-------------------------------------------------------------------------
+%% Func: handle_info/3
+%% Returns: {next_state, NextStateName, NextStateData}          |
+%%          {next_state, NextStateName, NextStateData, Timeout} |
+%%          {stop, Reason, NewStateData}
+%% @private
+%%-------------------------------------------------------------------------
+handle_info({tcp, Socket, _Bin}, _StateName, #state{socket=Socket,
+		ch_req_h=true, ch_req_b=true}) ->
+	throw({error, should_not_cache_both_http_req_h_and_b});
+
+handle_info({tcp, Socket, Bin}, StateName, #state{socket=Socket,
+		ch_req_h=true, ch_data_req_h=CacheH} = StateData) ->
+	CacheDataH = <<CacheH/binary, ( list_to_binary(Bin) )/binary>>,
+	Return = fsm_call(StateName, {data, Bin}, StateData#state{ch_data_req_h=CacheDataH}),
+	% Flow control: enable forwarding of next TCP message
+	inet:setopts(Socket, [{active, once}]),
+	Return;
+
+handle_info({tcp, Socket, Bin}, StateName, #state{socket=Socket,
+		ch_req_b=true, ch_data_req_b=CacheB} = StateData) ->
+	CacheDataB = concat_cache_data(StateName, CacheB, Bin),
+	Return = fsm_call(StateName, {data, Bin}, StateData#state{ch_data_req_b= CacheDataB }),
+	% Flow control: enable forwarding of next TCP message
+	inet:setopts(Socket, [{active, once}]),
+	Return;
+
+handle_info({tcp, Socket, _Bin}, _StateName, #state{socket=Socket,
+		ch_res_h=true, ch_res_b=true}) ->
+	throw({error, should_not_cache_both_http_res_h_and_b});
+
+handle_info({tcp, Socket, Bin}, StateName, #state{socket=Socket,
+		ch_res_h=true, ch_data_res_h=CacheH} = StateData) ->
+	% Flow control: enable forwarding of next TCP message
+	CacheDataH = <<CacheH/binary, ( list_to_binary(Bin) )/binary>>,
+	Return = fsm_call(StateName, {data, Bin}, StateData#state{ch_data_res_h=CacheDataH}),
+	inet:setopts(Socket, [{active, once}]),
+	Return;
+
+
+handle_info({tcp, Socket, Bin}, StateName, #state{socket=Socket,
+		ch_res_b=true, ch_data_res_b=CacheB} = StateData) ->
+	% Flow control: enable forwarding of next TCP message
+	CacheDataB = concat_cache_data(StateName, CacheB, Bin),
+	Return = fsm_call(StateName, {data, Bin}, StateData#state{ch_data_res_b=CacheDataB }),
+	inet:setopts(Socket, [{active, once}]),
+	Return;
+
+handle_info({tcp, Socket, Bin}, StateName, #state{socket=Socket} = StateData) ->
+	% Flow control: enable forwarding of next TCP message
+	Return = fsm_call(StateName, {data, Bin}, StateData),
+	inet:setopts(Socket, [{active, once}]),
+	Return;
+
+handle_info({tcp_closed, Socket}, _StateName, #state{socket=Socket, addr=_Addr} = StateData) ->
+	% ?ERROR_LOG("~p Client ~p disconnected.\n", [self(), Addr]),
+	{stop, normal, StateData};
+
+handle_info(_Info, StateName, StateData) ->
+	{noreply, StateName, StateData}.
+
+fsm_call(StateName, Args, StateData) -> 
+	try ?MODULE:StateName(Args, StateData)
+	catch Class:Error ->
+		?ERROR_LOG("Error occured on FSM (~w) call (~w). Class: [~w]. Error: [~w].~nStack trace: ~w~n",
+				[?MODULE, StateName, Class, Error, erlang:get_stacktrace()]),
+		%(catch 'REPLY_OK'(StateData)),
+		{stop, normalStop, StateData} end.
+
+%%-------------------------------------------------------------------------
+%% Func: terminate/3
+%% Purpose: Shutdown the fsm
+%% Returns: any
+%% @private
+%%-------------------------------------------------------------------------
+terminate(_Reason, _StateName, #state{socket=Socket} = _State) ->
+	% @todo: close conenctions to message store
+    (catch gen_tcp:close(Socket)),
+    ok.
+
+%%-------------------------------------------------------------------------
+%% Func: code_change/4
+%% Purpose: Convert process state when code is changed
+%% Returns: {ok, NewState, NewStateData}
+%% @private
+%%-------------------------------------------------------------------------
+code_change(_OldVsn, StateName, StateData, _Extra) ->
+    {ok, StateName, StateData}.
+
+rm_trailing_crlf(Str) when is_list(Str) ->
+	StrL = string:len(Str),
+	"\r\n" = string:substr(Str, StrL - 1, 2),
+	string:substr(Str, 1, StrL - 2);
+rm_trailing_crlf(Bin) when is_binary(Bin) -> 
+	BuffSize = size(Bin) - 2,
+	<<Buff:BuffSize/binary, "\r\n">> = Bin,
+	Buff.
+
+raw_to_xciph(IpStr) -> 
+	Tokens = string:tokens(IpStr,"."),
+	[_,_,_,_] = Tokens,
+	Ints = lists:map(fun(S) -> list_to_integer(S) end, Tokens),
+	case lists:any(fun(I) -> ( I > 255 ) or ( I < 0 ) end, Ints) of
+		true -> throw({error, {bad_ip, Ints}});
+		false -> ok end,
+	[I1,I2,I3,I4] = Ints,
+	{I1,I2,I3,I4}.
+
+raw_to_allowh(AllowStr) ->
+	string:tokens(AllowStr, ", ").
+
+raw_to_encapsulatedh(EncapStr) ->
+	Tokens = string:tokens(EncapStr, ", "),
+	lists:map(fun(S) -> 
+		case string:tokens(S, "=") of
+			["req-hdr", Val] -> {req_hdr, list_to_integer(Val)};
+			["res-hdr", Val] -> {res_hdr, list_to_integer(Val)};
+			["req-body", Val] -> {req_body, list_to_integer(Val)};
+			["res-body", Val] -> {res_body, list_to_integer(Val)};
+			["opt-body", Val] -> {opt_body, list_to_integer(Val)};
+			["null-body", Val] -> {null_body, list_to_integer(Val)};
+			Else -> throw({error, {bad_encap_part, Else}}) end
+	end, Tokens).
+
+parse_multipart(#state{http_req_content=HttpContent, http_req_headers=H, http_request=Req}) ->
+	mydlp_api:parse_multipart(HttpContent, H, Req).
+
+parse_urlencoded(#state{http_req_content=HttpContent}) ->
+	mydlp_api:uenc_to_file(HttpContent).
+
+df_to_files(Uri, ReqData, ResData, Files) ->
+	UFile = case mydlp_api:uri_to_hr_file(Uri) of
+		none -> [];
+		F -> [F] end,
+
+	OFiles = case Files of
+		[] -> DFile = #file{name= "post-data", dataref=?BB_C(ReqData)}, [DFile];
+		_ -> Files end,
+
+	ResFile = case ResData of
+		<<>> -> [];
+		_ -> RFile = #file{name= "resp-data", dataref=?BB_C(ResData)}, [RFile] end,
+
+	lists:append([UFile, OFiles, ResFile]).
+
+log_req(#state{icap_headers=#icap_headers{x_client_ip=Addr}, 
+		http_req_headers=(#http_headers{host=DestHost})}, Action, 
+		{{rule, RuleId}, {file, File}, {matcher, Matcher}, {misc, Misc}}) ->
+	?ACL_LOG(icap, RuleId, Action, Addr, nil, DestHost, Matcher, File, Misc).
+
+get_path(("/" ++ _Str) = Uri) -> Uri;
+get_path("icap://" ++ Str) ->
+	case string:chr(Str, $/) of
+		0 -> "/";
+		I2 -> string:substr(Str, I2) end;
+get_path(Uri) -> throw({error, {bad_uri, Uri}}).
+
+binary_last(Bin) when is_binary(Bin) ->
+	JunkSize = size(Bin) - 1,
+	<<_Junk:JunkSize/binary, Last/integer>> = Bin,
+	Last.
+
+read_line(Line, #state{buffer=undefined} = State, FSMState, ParseFunc) when is_list(Line) ->
+	case lists:last(Line) of
+		$\n -> ?MODULE:ParseFunc({data, Line}, State);
+		_Else -> {next_state, FSMState, State#state{buffer=[Line]}, ?TIMEOUT} end;
+
+read_line(Line, #state{buffer=BuffList} = State, FSMState, ParseFunc) when is_list(Line) ->
+	case lists:last(Line) of
+		$\n -> ?MODULE:ParseFunc(
+				{data, lists:append(lists:reverse([Line|BuffList]))}, 
+				State#state{buffer=undefined});
+		_Else -> {next_state, FSMState, State#state{buffer=[Line|BuffList]}, ?TIMEOUT} end;
+
+read_line(Line, #state{buffer=undefined} = State, FSMState, ParseFunc) when is_binary(Line) ->
+	% case binary:last(Line) of % Erlang R14 bif
+	case binary_last(Line) of
+		$\n -> ?MODULE:ParseFunc({data, Line}, State);
+		_Else -> {next_state, FSMState, State#state{buffer=[Line]}, ?TIMEOUT} end;
+
+read_line(Line, #state{buffer=BuffList} = State, FSMState, ParseFunc) when is_binary(Line) ->
+	% case binary:last(Line) of % Erlang R14 bif
+	case binary_last(Line) of
+		$\n -> ?MODULE:ParseFunc(
+				{data, list_to_binary(lists:reverse([Line|BuffList]))}, 
+				State#state{buffer=undefined});
+		_Else -> {next_state, FSMState, State#state{buffer=[Line|BuffList]}, ?TIMEOUT} end.
+
+icap_date_hdr_line() -> [<<"Date: ">>, httpd_util:rfc1123_date(), <<"\r\n">>].
+
+concat_cache_data(StateName, CacheB, Bin) ->
+	try <<CacheB/binary, Bin/binary>>
+	catch Class:Error ->
+		?ERROR_LOG("Error occured on ICAP FSM call (~w) when caching. Class: [~w]. Error: [~w].~nStack trace: ~w~n",
+			[StateName, Class, Error, erlang:get_stacktrace()]),
+		Dummy = list_to_binary([CacheB]),
+		<<Dummy/binary, Bin/binary>> end.
+
+encap_pl_req(CacheDataReqH, CacheDataReqB) ->
+	case CacheDataReqB of
+		<<>> -> { [<<"Encapsulated: req-hdr=0">>], [CacheDataReqH] };
+		_Else -> { [<<"Encapsulated: req-hdr=0, req-body=">>, 
+			integer_to_list(size(CacheDataReqH))],
+			[CacheDataReqH, CacheDataReqB] } end.
+
+encap_pl_res(CacheDataResH, CacheDataResB) ->
+	case CacheDataResB of
+		<<>> -> { [<<"Encapsulated: res-hdr=0">>], [CacheDataResH] };
+		_Else -> { [<<"Encapsulated: res-hdr=0, res-body=">>, 
+			integer_to_list(size(CacheDataResH))],
+			[CacheDataResH, CacheDataResB] } end.
+
+
