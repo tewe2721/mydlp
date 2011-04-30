@@ -32,8 +32,8 @@
 
 %% API
 -export([start_link/0,
-	a/1,
 	a/2,
+	a/3,
 	stop/0]).
 
 %% gen_server callbacks
@@ -53,13 +53,13 @@
 
 %%%%%%%%%%%%%  API
 
-a(Term) ->
-	File = term2file(Term),
-	gen_server:cast(?MODULE, {a, File}).
+a(FileId, Term) ->
+	File = mydlp_api:term2file(Term),
+	gen_server:cast(?MODULE, {a, {FileId, File} }).
 
-a(Term, FileName) ->
-	File = term2file(Term),
-	gen_server:cast(?MODULE, {a, File#file{filename=FileName} }).
+a(FileId, Term, FileName) ->
+	File = mydlp_api:term2file(Term),
+	gen_server:cast(?MODULE, {a, {FileId, File#file{filename=FileName} } }).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -69,13 +69,13 @@ handle_call(stop, _From, State) ->
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-handle_cast({a, File}, #state{file_queue=Q, file_inprog=false} = State) ->
-	Q1 = queue:in(File, Q),
+handle_cast({a, Item}, #state{file_queue=Q, file_inprog=false} = State) ->
+	Q1 = queue:in(Item, Q),
 	consume_file(),
 	{noreply, State#state{file_queue=Q1, file_inprog=true}};
 
-handle_cast({a, File}, #state{file_queue=Q, file_inprog=true} = State) ->
-	Q1 = queue:in(File, Q),
+handle_cast({a, Item}, #state{file_queue=Q, file_inprog=true} = State) ->
+	Q1 = queue:in(Item, Q),
 	{noreply,State#state{file_queue=Q1}};
 
 handle_cast(consume_file, #state{file_queue=Q} = State) ->
@@ -122,13 +122,7 @@ code_change(_OldVsn, State, _Extra) ->
 
 %%%%%%%%%%%%%%%%% internal
 
-term2file(Term) when is_binary(Term) -> #file{dataref=?BB_C(Term)};
-term2file(#file{} = Term) -> Term;
-term2file(Term) when is_list(Term) ->
-        {ok, Bin} = file:read_file(Term),
-        #file{dataref=?BB_C(Bin)}.
-
-archive_file(#file{} = File) ->
+archive_file({ FileId, #file{} = File }) ->
 	% add to file hash 
 	File1 = mydlp_api:load_files(File),
 	% get text

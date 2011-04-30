@@ -1478,6 +1478,16 @@ extract_all(Files, Return) ->
 	PFiles1 = clean_files(PFiles),
 	extract_all(NewFiles, lists:append(Return, PFiles1)).
 
+%%-------------------------------------------------------------------------
+%% @doc Converts a binary, list or file record term to file record.
+%% @end
+%%-------------------------------------------------------------------------
+
+term2file(Term) when is_binary(Term) -> #file{dataref=?BB_C(Term)};
+term2file(#file{} = Term) -> Term;
+term2file(Term) when is_list(Term) ->
+	{ok, Bin} = file:read_file(Term),
+	#file{dataref=?BB_C(Bin)}.
 
 -include_lib("eunit/include/eunit.hrl").
 

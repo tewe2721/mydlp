@@ -59,23 +59,23 @@
 %%%%%%%%%%%%%  API
 
 confidential(Term) ->
-	File = term2file(Term),
+	File = mydlp_api:term2file(Term),
 	gen_server:cast(?MODULE, {confidential, {File}}).
 
 confidential(Term, FileId) ->
-	File = term2file(Term),
+	File = mydlp_api:term2file(Term),
 	gen_server:cast(?MODULE, {confidential, {File, FileId}}).
 
 confidential(Term, FileId, GroupId) ->
-	File = term2file(Term),
+	File = mydlp_api:term2file(Term),
 	gen_server:cast(?MODULE, {confidential, {File, FileId, GroupId}}).
 
 public(Term) ->
-	File = term2file(Term),
+	File = mydlp_api:term2file(Term),
 	gen_server:cast(?MODULE, {public, {File}}).
 
 public(Term, FileId) ->
-	File = term2file(Term),
+	File = mydlp_api:term2file(Term),
 	gen_server:cast(?MODULE, {public, {File, FileId}}).
 
 %%%%%%%%%%%%%% gen_server handles
@@ -159,12 +159,6 @@ code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 
 %%%%%%%%%%%%%%%%% internal
-
-term2file(Term) when is_binary(Term) -> #file{dataref=?BB_C(Term)};
-term2file(#file{} = Term) -> Term;
-term2file(Term) when is_list(Term) ->
-        {ok, Bin} = file:read_file(Term),
-        #file{dataref=?BB_C(Bin)}.
 
 train_cfile({File}) -> train_cfile({File, undefined});
 
