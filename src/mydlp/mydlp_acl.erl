@@ -1,4 +1,4 @@
-
+%%%
 %%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@medra.com.tr>
 %%%
 %%%--------------------------------------------------------------------------
@@ -71,36 +71,54 @@ acl_call(Query) -> gen_server:call(?MODULE, {acl, Query}, 1500000).
 %	DRules = mydlp_mnesia:get_default_rule(CustomerId),
 %	apply_rules(lists:append(DRules, Rules), Param).
 
-acl_exec(_Rules, _Source, []) -> pass;
-acl_exec(Rules, Source, Files) ->
+acl_exec(_RuleTables, _Source, []) -> pass;
+acl_exec(RuleTables, Source, Files) ->
 	[{cid, CustomerId}|_] = Source,
 	DRules = mydlp_mnesia:get_default_rule(CustomerId),
-	acl_exec2(lists:append(DRules, Rules), Source, Files).
+	acl_exec2(head_dr(RuleTables, DRules), Source, Files).
 
-acl_exec2(AllRules, Source, Files) ->
-	%Files1 = drop_nodata(Files),
-	acl_exec3(AllRules, Source, Files).
+acl_exec2([], _Source, _Files) -> pass;
+% acl_exec2([{{_Id, DefaultAction}, Rules}| Rest], Source, Files)  % Cannot be more than one filter
+acl_exec2([{{_Id, DefaultAction}, Rules}], Source, Files) ->
+	case { DefaultAction, acl_exec3(Rules, Source, Files) } of
+		% {return, return}-> acl_exec2(Rest, Source, Files);  % Cannot be more than one filter
+		{DefaultAction, return} -> DefaultAction;
+		{_DefaultAction, Action} -> Action end.
 
-acl_exec3([], _Source, _Files) -> pass;
-acl_exec3(_AllRules, _Source, []) -> pass;
+acl_exec3([], _Source, _Files) -> return;
+acl_exec3(_AllRules, _Source, []) -> return;
 acl_exec3(AllRules, Source, Files) ->
+	acl_exec3(AllRules, Source, Files, [], false).
+
+acl_exec3(_AllRules, _Source, [], [], _CleanFiles) -> return;
+
+acl_exec3(AllRules, Source, [], ExNewFiles, false) ->
+	acl_exec3(AllRules, Source, [], ExNewFiles, true);
+
+acl_exec3(AllRules, Source, [], ExNewFiles, CleanFiles) ->
+	acl_exec3(AllRules, Source, ExNewFiles, [], CleanFiles);
+	
+acl_exec3(AllRules, Source, Files, ExNewFiles, CleanFiles) ->
 	[{cid, CustomerId}|_] = Source,
 	
 	{InChunk, RestOfFiles} = mydlp_api:get_chunk(Files),
 	Files1 = mydlp_api:load_files(InChunk),
 	
-	Files2 = drop_whitefile_dr(Files1, CustomerId),
+	Files2 = drop_whitefile_dr(Files1, CustomerId), % these are should be cleaned too
 	Files3 = case has_wf(AllRules) of
 		true -> drop_whitefile(Files2);
 		false -> Files2 end,
 
 	{PFiles, NewFiles} = mydlp_api:analyze(Files3),
-	PFiles1 = mydlp_api:clean_files(PFiles),
+	PFiles1 = case CleanFiles of
+		true -> mydlp_api:clean_files(PFiles); % Cleaning newly created files.
+		false -> PFiles end,
+
 	Param = {Source, drop_nodata(PFiles1)},
 
 	case apply_rules(AllRules, Param) of
-		pass ->	acl_exec2(AllRules, Source,
-				lists:append(RestOfFiles, NewFiles) );
+		return -> acl_exec3(AllRules, Source, RestOfFiles,
+				lists:append(ExNewFiles, NewFiles), CleanFiles);
 		Else -> Else end.
 
 %% it needs refactoring for trusted domains
@@ -198,7 +216,7 @@ apply_rules([{Id, Action, Matchers}|Rules], Params) ->
 			% If neg is return, params may be modified because of whitefile matchers.
 			% So, we should updated params.
 	end;
-apply_rules([], _Params) -> pass.
+apply_rules([], _Params) -> return.
 
 execute_matchers(Matchers, Params) -> execute_matchers(Matchers, Params, false).
 
@@ -280,5 +298,10 @@ has_wf(Rules) ->
 	lists:any(fun({_Id, _Action, Matchers}) ->
 		case lists:keyfind(whitefile, 1, Matchers) of
 			false -> false;
-			_Else -> true end end, Rules).
+			_Else -> true end end, 
+	Rules).
+
+head_dr([], []) -> [];
+head_dr([{FilterKey, Rules}|Rest], DRules) -> [{FilterKey, lists:append(DRules,Rules)}|Rest];
+head_dr([], DRules) -> [{{0, pass}, DRules}].
 

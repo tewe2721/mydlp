@@ -239,7 +239,6 @@ get_body(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_impl
 
 'PARSE_REQ_LINE'({data, ReqLine}, State) ->
 	[MethodS, Uri, VersionS] = string:tokens(ReqLine, " "),
-	erlang:display([MethodS, Uri]),
 
 	Method = case http_util:to_lower(MethodS) of
 		"options" -> 'OPTIONS';
@@ -357,16 +356,41 @@ get_body(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_impl
 'REQ_OK'(#state{icap_request=#icap_request{method=options} } = State) -> 'REPLY_OK'(State);
 'REQ_OK'(#state{files=Files, addr=SAddr, http_request=#http_request{path=Uri},
 		http_content=HttpContent, icap_headers=#icap_headers{x_client_ip=CAddr} } = State) ->
-	case mydlp_acl:q(SAddr, CAddr, dest, df_to_files(Uri, HttpContent, Files)) of
-		pass -> pass_req(State, Files);
-		{Block = {block, _ }, AclR} -> log_req(State, Block, AclR),
-					'BLOCK_REQ'(block, State);
-		{Log = {log, _ }, AclR} -> log_req(State, Log, AclR),
-					'REPLY_OK'(State); % refine this
-		{pass, AclR} -> log_req(State, pass, AclR),
+	DFFiles = df_to_files(Uri, HttpContent, Files),
+
+	case case mydlp_acl:q(SAddr, CAddr, dest, DFFiles) of
+		pass -> {pass, mydlp_api:empty_aclr(DFFiles)};
+		log -> {log, mydlp_api:empty_aclr(DFFiles)};
+		archive -> {archive, mydlp_api:empty_aclr(DFFiles)};
+		block -> {block, mydlp_api:empty_aclr(DFFiles)};
+		quarantine -> {quanratine, mydlp_api:empty_aclr(DFFiles)};
+		{pass, _AR} = T -> T;
+		{log, _AR} = T -> T;
+		{archive, _AR} = T -> T;
+		{block, _AR} = T -> T;
+		{quarantine, _AR} = T -> T
+	end of
+		{pass, _AclR} -> pass_req(State, DFFiles),
+					mydlp_api:clean_files(DFFiles),
+					'REPLY_OK'(State); 
+		{log, AclR} -> log_req(State, log, AclR),
+					mydlp_api:clean_files(DFFiles),
+					'REPLY_OK'(State); 
+		{archive, AclR} -> archive_req(State, AclR, DFFiles),
+					% mydlp_archive will clean files.
 					'REPLY_OK'(State);
-		block -> 'BLOCK_REQ'(block, State)
+		{block, AclR} -> log_req(State, block, AclR),
+					mydlp_api:clean_files(DFFiles),
+					'BLOCK_REQ'(block, State);
+		{quarantine, AclR} -> log_req(State, quarantine, AclR),
+					mydlp_api:clean_files(DFFiles),
+					'BLOCK_REQ'(block, State)
 	end.
+
+archive_req(State, {{rule, RId}, {file, _}, {matcher, _}, {misc, _}}, DFFiles) ->
+	case DFFiles of
+		[] -> ok;
+		_Else -> log_req(State, archive, {{rule, RId}, {file, DFFiles}, {matcher, none}, {misc,""}}) end.
 
 pass_req(#state{log_pass=false} = State, _Files) -> 'REPLY_OK'(State);
 pass_req(#state{log_pass=LogPassLL} = State, Files) -> 
@@ -374,8 +398,7 @@ pass_req(#state{log_pass=LogPassLL} = State, Files) ->
 	RId = {dr, mydlp_mnesia:get_dcid()}, % this will create problem for multisite users.
 	case UTLFiles of
 		[] -> ok;
-		_Else -> log_req(State, pass, {{rule, RId}, {file, UTLFiles}, {matcher, none}, {misc,""}}) end,
-	'REPLY_OK'(State).
+		_Else -> log_req(State, pass, {{rule, RId}, {file, UTLFiles}, {matcher, none}, {misc,""}}) end.
 
 'REPLY_OK'(State) -> reply(ok, State).
 

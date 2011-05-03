@@ -236,8 +236,7 @@ handle_query({get_rules_for_cid, CustomerId, Who}) ->
 			]),
 	Parents = qlc:e(Q),
 	Parents1 = lists:usort(Parents),
-	Rules = resolve_rules(Parents1),
-	resolve_funcs(Rules);
+	resolve_all(Parents1);
 
 handle_query({get_rules, Who}) ->
 	Q = qlc:q([I#ipr.parent || I <- mnesia:table(ipr),
@@ -245,15 +244,13 @@ handle_query({get_rules, Who}) ->
 			]),
 	Parents = qlc:e(Q),
 	Parents1 = lists:usort(Parents),
-	Rules = resolve_rules(Parents1),
-	resolve_funcs(Rules);
+	resolve_all(Parents1);
 
 handle_query(get_all_rules) ->
 	Q = qlc:q([{rule, R#rule.id} || R <- mnesia:table(rule)]),
 	Parents = qlc:e(Q),
 	Parents1 = lists:usort(Parents),
-	Rules = resolve_rules(Parents1),
-	resolve_funcs(Rules);
+	resolve_all(Parents1);
 
 handle_query({get_all_rules, Dest}) ->
 	Q = qlc:q([{rule, R#rule.id} || R <- mnesia:table(rule),
@@ -261,8 +258,7 @@ handle_query({get_all_rules, Dest}) ->
 			]),
 	Parents = qlc:e(Q),
 	Parents1 = lists:usort(Parents),
-	Rules = resolve_rules(Parents1),
-	resolve_funcs(Rules);
+	resolve_all(Parents1);
 
 handle_query({get_rules_by_user, Who}) ->
 	Q = qlc:q([U#m_user.parent || U <- mnesia:table(m_user),
@@ -270,8 +266,7 @@ handle_query({get_rules_by_user, Who}) ->
 			]),
 	Parents = qlc:e(Q),
 	Parents1 = lists:usort(Parents),
-	Rules = resolve_rules(Parents1),
-	resolve_funcs(Rules);
+	resolve_all(Parents1);
 
 handle_query({get_regexes, GroupId}) ->
 	Q = qlc:q([ { R#regex.id, R#regex.compiled } ||
@@ -288,7 +283,7 @@ handle_query({get_cid, SIpAddr}) ->
 	qlc:e(Q);
 
 handle_query({get_default_rule, CustomerId}) ->
-	Q = qlc:q([D#default_rule.resolved_rule ||
+	Q = qlc:q([ D#default_rule.resolved_rule ||
 		D <- mnesia:table(default_rule),
 		D#default_rule.customer_id == CustomerId
 		]),
@@ -300,6 +295,12 @@ handle_query({remove_site, CI}) ->
 		F#filter.customer_id == CI
 		]),
 	FIs = qlc:e(Q),
+
+	Q1 = qlc:q([I#ipr.id ||
+		I <- mnesia:table(ipr),
+		I#ipr.customer_id == CI
+		]),
+	IIs = qlc:e(Q1),
 
 	Q2 = qlc:q([R#regex.id ||
 		R <- mnesia:table(regex),
@@ -338,6 +339,7 @@ handle_query({remove_site, CI}) ->
 
 	mnesia:delete({default_rule, CI}),
 	remove_filters(FIs),
+	lists:foreach(fun(Id) -> mnesia:delete({ipr, Id}) end, IIs),
 	lists:foreach(fun(Id) -> mnesia:delete({file_hash, Id}) end, WFIs),
 	lists:foreach(fun(Id) -> mnesia:delete({file_hash, Id}) end, BFIs),
 	lists:foreach(fun(Id) -> mnesia:delete({regex, Id}) end, RIs),
@@ -618,6 +620,27 @@ transaction(F) ->
 
 ip_band({A1,B1,C1,D1}, {A2,B2,C2,D2}) -> {A1 band A2, B1 band B2, C1 band C2, D1 band D2}.
 
+resolve_all(ParentList) ->
+	FilterRuleTS = resolve_rules(ParentList),
+	resolve_all(FilterRuleTS, []).
+
+resolve_all([],[]) -> [];
+
+resolve_all([{FilterKey, RuleDef}|Rest], []) ->
+	resolve_all(Rest, [{FilterKey, [RuleDef]}]);
+
+resolve_all([{FilterKey, RuleDef}|Rest], [{FilterKey, RuleList}|ReturnRest]) ->
+	resolve_all(Rest, [{FilterKey, [RuleDef|RuleList]}|ReturnRest]);
+
+resolve_all([{FilterKey, RuleDef}|Rest], [{LastFilterKey, LastRuleList}|ReturnRest]) ->
+	resolve_all(Rest, [{FilterKey, [RuleDef]}, 
+				{LastFilterKey, lists:reverse(LastRuleList)} 
+				|ReturnRest]);
+
+resolve_all([], [{FilterKey, RuleList}|ReturnRest]) ->
+	ReturnList = [{FilterKey, lists:reverse(RuleList)}|ReturnRest],
+	lists:reverse(ReturnList).
+
 resolve_rules(PS) -> resolve_rules(PS,[]).
 resolve_rules([P|PS], Rules) -> 
 	case resolve_rule(P) of
@@ -634,21 +657,16 @@ resolve_rule({mgroup, Id}) ->
 		[Parent] -> resolve_rule(Parent);
 		_Else -> none end;
 resolve_rule({rule, Id}) ->
-	Q = qlc:q([{R#rule.id, R#rule.action} || 
-			R <- mnesia:table(rule), 
+	Q = qlc:q([{{F#filter.id, F#filter.default_action}, {R#rule.id, R#rule.action}} || 
 			F <- mnesia:table(filter), 
-			R#rule.id == Id,
-			F#filter.id == R#rule.filter_id
+			R <- mnesia:table(rule), 
+			F#filter.id == R#rule.filter_id,
+			R#rule.id == Id
 			]),
 	case qlc:e(Q) of
-		[Rule] -> Rule;
+		[{FilterKey, {Id, Action}}] -> {FilterKey, {Id, Action, find_funcs({rule, Id})}};
 		_Else -> none end.
 	
-resolve_funcs(Rules) -> resolve_funcs(Rules,[]).
-resolve_funcs([{Id,Action}|Rules], Results) -> 
-	resolve_funcs(Rules, [{Id, Action, find_funcs({rule, Id})}|Results]);
-resolve_funcs([], Results) -> lists:reverse(Results).
-
 find_funcss(Parents) -> find_funcss(Parents, []).
 find_funcss([Parent|Parents], Funcs) ->
 	find_funcss(Parents, [find_funcs(Parent)|Funcs]);

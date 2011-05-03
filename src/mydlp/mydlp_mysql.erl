@@ -37,9 +37,12 @@
 	compile_customer/1,
 	push_log/9,
 	push_log/10,
+	archive_log/6,
 	push_smb_discover/1,
 	is_multisite/0,
 	get_denied_page/0,
+	new_afile/0,
+	update_afile/6,
 	stop/0]).
 
 %% gen_server callbacks
@@ -56,6 +59,18 @@
 
 %%%%%%%%%%%%% MyDLP Thrift RPC API
 
+push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc) ->
+	gen_server:cast(?MODULE, {push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc}}).
+
+push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, #file{} = File, Misc) ->
+	gen_server:cast(?MODULE, {push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, File, Misc}}).
+
+archive_log(Proto, RuleId, Ip, User, To, AFileId ) ->
+	gen_server:cast(?MODULE, {archive_log, {Proto, RuleId, Ip, User, To, AFileId}}).
+
+push_smb_discover(XMLResult) ->
+	gen_server:cast(?MODULE, {push_smb_discover, XMLResult}).
+
 compile_filters() -> 
 	gen_server:call(?MODULE, compile_filters, 60000).
 
@@ -66,16 +81,12 @@ is_multisite() -> gen_server:call(?MODULE, is_multisite, 60000).
 
 get_denied_page() -> gen_server:call(?MODULE, get_denied_page, 60000).
 
+new_afile() -> gen_server:call(?MODULE, new_afile, 60000).
+
+update_afile(AFileId, Filename, MimeType, Size, ArchivePath, ContentText) -> 
+	gen_server:cast(?MODULE, {update_afile, AFileId, Filename, MimeType, Size, ArchivePath, ContentText}).
+
 %%%%%%%%%%%%%% gen_server handles
-
-push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc) ->
-	gen_server:cast(?MODULE, {push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc}}).
-
-push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, #file{} = File, Misc) ->
-	gen_server:cast(?MODULE, {push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, File, Misc}}).
-
-push_smb_discover(XMLResult) ->
-	gen_server:cast(?MODULE, {push_smb_discover, XMLResult}).
 
 handle_call({compile_customer, CustomerId}, From, State) ->
 	Worker = self(),
@@ -111,38 +122,34 @@ handle_call(get_denied_page, _From, State) ->
 		_Else -> not_found end,
         {reply, Reply, State};
 
+handle_call(new_afile, _From, State) ->
+	% Probably will create problems in multisite use.
+	{atomic, AFEId} = transaction(fun() ->
+		psqt(new_archive_file_entry),
+		last_insert_id_t() end),
+	Reply = AFEId,	
+        {reply, Reply, State};
+
 handle_call(stop, _From,  State) ->
 	{stop, normalStop, State};
 
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-pre_push_log(RuleId, Action, Ip, User) -> 
-	{CustomerId, RuleId1} = case RuleId of
-		{dr, CId} -> {CId, 0};
-		RId when is_integer(RId) -> {get_rule_cid(RId), RId} end,
-	User1 = case User of
-		nil -> null;
-		Else -> Else
-	end,
-	Ip1 = case ip_to_int(Ip) of
-		nil -> null;
-		Else2 -> Else2
-	end,
-	Action1 = case Action of
-                {block, _} -> block;
-                {log, _} -> log;
-                block -> block;
-                pass -> pass;
-                log -> log end,
-	{CustomerId, RuleId1, Action1, Ip1, User1}.
+% INSERT INTO log_archive (id, customer_id, rule_id, protocol, src_ip, src_user, destination, log_archive_file_id)
+handle_cast({archive_log, {Proto, RuleId, Ip, User, To, AFileId}}, State) ->
+	spawn_link(fun() ->
+		{CustomerId, RuleId1, Ip1, User1} = pre_push_log(RuleId, Ip, User),
+		psq(insert_archive, [CustomerId, RuleId1, Proto, Ip1, User1, To, AFileId])
+	end),
+	{noreply, State};
 
 % INSERT INTO log_incedent (id, rule_id, protocol, src_ip, destination, action, matcher, filename, misc)
 handle_cast({push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc}}, State) ->
 	spawn_link(fun() ->
-		{CustomerId, RuleId1, Action1, Ip1, User1} = pre_push_log(RuleId, Action, Ip, User),
+		{CustomerId, RuleId1, Ip1, User1} = pre_push_log(RuleId, Ip, User),
 		psq(insert_incident, 
-			[CustomerId, RuleId1, Proto, Ip1, User1, To, Action1, Matcher, FileS, Misc])
+			[CustomerId, RuleId1, Proto, Ip1, User1, To, Action, Matcher, FileS, Misc])
 	end),
 	{noreply, State};
 
@@ -151,9 +158,9 @@ handle_cast({push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Fil
 		{ok, Path} = mydlp_api:quarantine(File),
 		Size = mydlp_api:binary_size(File#file.data),
 		MimeType = (File#file.mime_type),
-		{CustomerId, RuleId1, Action1, Ip1, User1} = pre_push_log(RuleId, Action, Ip, User),
+		{CustomerId, RuleId1, Ip1, User1} = pre_push_log(RuleId, Ip, User),
 		transaction( fun() ->
-			psqt(insert_incident, [CustomerId, RuleId1, Proto, Ip1, User1, To, Action1, Matcher, FileS, Misc]),
+			psqt(insert_incident, [CustomerId, RuleId1, Proto, Ip1, User1, To, Action, Matcher, FileS, Misc]),
 			psqt(insert_incident_file, [Path, MimeType, Size]) end)
 	end),
 	{noreply, State};
@@ -163,6 +170,13 @@ handle_cast({push_smb_discover, XMLResult}, State) ->
 		transaction( fun() ->
 			psqt(delete_all_smb_discover),
 			psqt(insert_smb_discover, [mydlp_mnesia:get_dcid(), XMLResult]) end )
+	end),
+	{noreply, State};
+
+handle_cast({update_afile, AFileId, Filename, MimeType, Size, ArchivePath, ContentText}, State) ->
+	% Probably will create problems in multisite use.
+	spawn_link(fun() ->
+		psq(update_archive_file, [Filename, MimeType, Size, ArchivePath, ContentText, AFileId])
 	end),
 	{noreply, State};
 
@@ -219,12 +233,13 @@ init([]) ->
 	[ erlang:monitor(process, P) || P <- PPids ],
 
 	[ mysql:prepare(Key, Query) || {Key, Query} <- [
-		{filters, <<"SELECT id,name FROM sh_filter WHERE is_active=TRUE">>},
-		{filters_by_cid, <<"SELECT id,name FROM sh_filter WHERE is_active=TRUE and customer_id=?">>},
-		{rules_by_fid, <<"SELECT id,action,keep_carbon_copy FROM sh_rule WHERE is_nw_active=TRUE and filter_id=?">>},
+		{last_insert_id, <<"SELECT last_insert_id()">>},
+		{filters, <<"SELECT id,name,default_action FROM sh_filter WHERE is_active=TRUE">>},
+		{filters_by_cid, <<"SELECT id,name,default_action FROM sh_filter WHERE is_active=TRUE and customer_id=?">>},
+		{rules_by_fid, <<"SELECT id,action FROM sh_rule WHERE is_nw_active=TRUE and filter_id=?">>},
 		{tdomains_by_rid, <<"SELECT domain_name FROM nw_rule_white_domain WHERE rule_id=?">>},
 		{cid_of_rule_by_id, <<"SELECT f.customer_id FROM sh_rule AS r, sh_filter AS f WHERE r.filter_id=f.id AND r.id=?">>},
-		{ipr_by_rule_id, <<"SELECT a.id,a.customer_id,a.base_ip,a.subnet FROM sh_ipr AS i, sh_ipaddress AS a WHERE i.parent_rule_id=? AND i.sh_ipaddress_id=a.id">>},
+		{ipr_by_rule_id, <<"SELECT a.customer_id,a.base_ip,a.subnet FROM sh_ipr AS i, sh_ipaddress AS a WHERE i.parent_rule_id=? AND i.sh_ipaddress_id=a.id">>},
 		{user_by_rule_id, <<"SELECT eu.id, eu.username FROM sh_ad_entry_user AS eu, sh_ad_cross AS c, sh_ad_entry AS e, sh_ad_group AS g, sh_ad_rule_cross AS rc WHERE rc.parent_rule_id=? AND rc.group_id=g.id AND rc.group_id=c.group_id AND c.entry_id=e.id AND c.entry_id=eu.entry_id">>},
 		%{user_by_rule_id, <<"SELECT eu.id, eu.username FROM sh_ad_entry_user AS eu, sh_ad_cross AS c, sh_ad_rule_cross AS rc WHERE rc.parent_rule_id=? AND rc.group_id=c.group_id AND c.entry_id=eu.entry_id">>},
 		{match_by_rule_id, <<"SELECT DISTINCT m.id,m.func FROM sh_match AS m, sh_func_params AS p WHERE m.parent_rule_id=? AND p.match_id=m.id AND p.param <> \"0\" ">>},
@@ -237,11 +252,14 @@ init([]) ->
 		{customer_by_id, <<"SELECT id,static_ip FROM sh_customer WHERE id=?">>},
 		{app_type, <<"SELECT type FROM app_type">>},
 		{denied_page_by_cid, <<"SELECT html_text FROM sh_warning_page WHERE customer_id=?">>},
-		{defaultrule_by_cid, <<"SELECT action, keep_carbon_copy, cc_count, ssn_count, iban_count, canada_sin_count, france_insee_count, uk_nino_count, tr_tck_count FROM sh_defaultrule_predefined WHERE enabled <> 0 and customer_id=?">>},
+		{defaultrule_by_cid, <<"SELECT action, cc_count, ssn_count, iban_count, canada_sin_count, france_insee_count, uk_nino_count, tr_tck_count FROM sh_defaultrule_predefined WHERE enabled <> 0 and customer_id=?">>},
 		{dr_fhash_by_cid, <<"SELECT hash FROM sh_defaultrule_filehash WHERE customer_id=?">>},
 		{dr_wfhash_by_cid, <<"SELECT hash FROM sh_defaultrule_white_filehash WHERE customer_id=?">>},
 		{insert_incident, <<"INSERT INTO log_incedent (id, customer_id, rule_id, protocol, src_ip, src_user, destination, action, matcher, filename, misc) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)">>},
 		{insert_incident_file, <<"INSERT INTO log_incedent_file (id, log_incedent_id, path, mime_type, size) VALUES (NULL, last_insert_id(), ?, ?, ?)">>},
+		{insert_archive, <<"INSERT INTO log_archive (id, customer_id, rule_id, protocol, src_ip, src_user, destination, log_archive_file_id) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)">>},
+		{new_archive_file_entry, <<"INSERT INTO log_archive_file (id) VALUES (NULL)">>},
+		{update_archive_file, <<"UPDATE log_archive_file SET filename=?, mime_type=?, size=?, path=?, content_text=? WHERE id = ?">>},
 		{delete_all_smb_discover, <<"DELETE FROM log_shared_folder">>},
 		{insert_smb_discover, <<"INSERT INTO log_shared_folder (id, customer_id, result) VALUES (NULL, ?, ?)">>}
 	]],
@@ -265,8 +283,12 @@ psq(PreparedKey) when is_atom(PreparedKey) ->
 psq(PreparedKey, Params) when is_atom(PreparedKey), is_list(Params) ->
 	case mysql:execute(p, PreparedKey, Params) of
 		{data,{mysql_result,_,Result,_,_}} -> {ok, Result};
-		Else -> {error, Else}
+		{updated,{mysql_result, _,_,RowCount,_}} -> {updated, RowCount};
+		Else -> throw({error, Else})
 	end.
+
+last_insert_id_t() ->
+	{ok, [[LIId]]} = psqt(last_insert_id), LIId.
 
 transaction(Fun) -> mysql:transaction(p, Fun).
 
@@ -275,7 +297,8 @@ psqt(PreparedKey) when is_atom(PreparedKey) -> psqt(PreparedKey, []).
 psqt(PreparedKey, Params) when is_atom(PreparedKey), is_list(Params) ->
 	case mysql:execute(PreparedKey, Params) of
 		{data,{mysql_result,_,Result,_,_}} -> {ok, Result};
-		Else -> {error, Else}
+		{updated,{mysql_result, _,_,RowCount,_}} -> {updated, RowCount};
+		Else -> throw({error, Else})
 	end.
 
 %%%%%%%%%%%% internal
@@ -308,10 +331,11 @@ populate_site(CustomerId) ->
 
 populate_filters(Rows) -> populate_filters(Rows, mydlp_mnesia:get_dcid()).
 
-populate_filters([[Id, Name]|Rows], CustomerId) ->
+populate_filters([[Id, Name, DActionS]|Rows], CustomerId) ->
+	DAction = rule_action_to_tuple(DActionS),
 	{ok, RQ} = psq(rules_by_fid, [Id]),
 	populate_rules(RQ, Id),
-	F = #filter{id=Id, customer_id=CustomerId, name=Name},
+	F = #filter{id=Id, customer_id=CustomerId, name=Name, default_action=DAction},
 	mydlp_mnesia:write(F),
 	populate_filters(Rows, CustomerId);
 populate_filters([], _CustomerId) -> ok.
@@ -319,9 +343,9 @@ populate_filters([], _CustomerId) -> ok.
 % Id, Action, [Matchers]	
 % {Func, FuncParams}
 populate_default_rule([], _CustomerId) -> ok;
-populate_default_rule([[ActionS, CC, CCCount, SSNCount, IBANCount, SINCount, INSEECount, NINOCount, TRIDCount]], CustomerId) ->
+populate_default_rule([[ActionS, CCCount, SSNCount, IBANCount, SINCount, INSEECount, NINOCount, TRIDCount]], CustomerId) ->
 	DefaultRuleId = {dr, CustomerId},
-	Action = rule_action_to_tuple(ActionS, CC),
+	Action = rule_action_to_tuple(ActionS),
 
 	WFMatch = [{whitefile_dr, []}],
 	CCMatch = case CCCount of
@@ -361,11 +385,8 @@ populate_default_rule([[ActionS, CC, CCCount, SSNCount, IBANCount, SINCount, INS
 	DR = #default_rule{customer_id=CustomerId, resolved_rule=ResolvedRule},
 	mydlp_mnesia:write(DR).
 
-populate_rules([[Id, <<"pass">>, _CC] |Rows], FilterId) ->
-	populate_rule(Id, pass, FilterId),
-	populate_rules(Rows, FilterId);
-populate_rules([[Id, ActionS, CC ] |Rows], FilterId) ->
-	Action = rule_action_to_tuple(ActionS, CC),
+populate_rules([[Id, ActionS ] |Rows], FilterId) ->
+	Action = rule_action_to_tuple(ActionS),
 	populate_rule(Id, Action, FilterId),
 	populate_rules(Rows, FilterId);
 populate_rules([], _FilterId) -> ok.
@@ -385,9 +406,10 @@ populate_rule(Id, Action, FilterId) ->
 	R = #rule{id=Id, action=Action, filter_id=FilterId, trusted_domains=TDs},
 	mydlp_mnesia:write(R).
 
-populate_iprs([[Id, CustomerId, Base, Subnet]| Rows], Parent) ->
+populate_iprs([[CustomerId, Base, Subnet]| Rows], Parent) ->
 	B1 = int_to_ip(Base),
 	S1 = int_to_ip(Subnet),
+	Id = mydlp_mnesia:get_unique_id(ipr),
 	I = #ipr{id=Id, customer_id=CustomerId, parent=Parent, ipbase=B1, ipmask=S1},
 	mydlp_mnesia:write(I),
 	populate_iprs(Rows, Parent);
@@ -604,10 +626,28 @@ get_rule_cid(RuleId) ->
 		{ok, [[CustomerId]]} -> CustomerId;
 		_Else -> 0 end.
 
-rule_action_to_tuple(ActionS, CC) ->
-	case {ActionS, CC} of 
-		{<<"log">>, 1} -> {log, {cc,true}}; 
-		{<<"log">>, 0} -> {log, {cc,false}}; 
-		{<<"block">>, 1} -> {block, {cc,true}}; 
-		{<<"block">>, 0} -> {block, {cc,false}} end.
+rule_action_to_tuple(<<"pass">>) -> pass;
+rule_action_to_tuple(<<"log">>) -> log;
+rule_action_to_tuple(<<"block">>) -> block;
+rule_action_to_tuple(<<"quarantine">>) -> quarantine;
+rule_action_to_tuple(<<"archive">>) -> archive;
+rule_action_to_tuple(<<"">>) -> pass;
+rule_action_to_tuple(Else) -> throw({error, unsupported_action_type, Else}).
+
+pre_push_log(RuleId, Ip, User) -> 
+	{CustomerId, RuleId1} = case RuleId of
+		{dr, CId} -> {CId, 0};
+		-1 = RuleId -> {mydlp_mnesia:get_dcid(), RuleId};	% this shows default action had been enforeced 
+							% this should be refined for multisite use
+		RId when is_integer(RId) -> {get_rule_cid(RId), RId} end,
+	User1 = case User of
+		nil -> null;
+		Else -> Else
+	end,
+	Ip1 = case ip_to_int(Ip) of
+		nil -> null;
+		Else2 -> Else2
+	end,
+	{CustomerId, RuleId1, Ip1, User1}.
+
 

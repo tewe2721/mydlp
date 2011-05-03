@@ -26,7 +26,8 @@
 -record(filter, {
 	id,
 	customer_id,
-	name
+	name,
+	default_action
 }).
 
 -record(rule, {

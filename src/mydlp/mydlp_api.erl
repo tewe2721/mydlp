@@ -759,22 +759,34 @@ pdf_to_text(Bin) when is_binary(Bin) ->
 %% @doc Logs acl messages
 %% @end
 %%----------------------------------------------------------------------
-acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, File, Misc) ->
-	FileS = case {Action, File} of
-		{_All, #file{} } -> file_to_str(File);
-		{pass, FL} when is_list(FL) ->
-			FLS = lists:map(fun(I) -> file_to_str(I) end, FL),
-			string:join(FLS, " ") end,
-	acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
+
+acl_msg(_Proto, _RuleId, _Action, _Ip, _User, _To, _Matcher, [], _Misc) -> ok;
+
+acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, [_|_] = FileList, Misc) ->
+	lists:foreach(fun(File) -> acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, File, Misc) end, FileList);
+
+acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, #file{} = File, Misc) ->
+	FileS = file_to_str(File),
+
+	%acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
 
 	case Action of
-		pass -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
-		{log, {cc,false} } -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
-		{block, {cc,false} } -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
-		{log, {cc,true} } -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, File, Misc);
-		{block, {cc,true} } -> mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, File, Misc);
-		_Else -> ok
-	end.
+		pass -> 	acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
+				mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
+		log -> 		acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
+				mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
+		block -> 	acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
+				mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
+		quarantine ->	acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
+				mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, File, Misc);
+		archive -> 
+			case ?BB_S(File#file.dataref) > ?MINIMUM_ARCHIVE_OBJ_SIZE of % will use new configuration refs
+				true -> acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
+					AFileId = mydlp_mysql:new_afile(),
+					mydlp_archive:a(AFileId, File),
+					mydlp_mysql:archive_log(Proto, RuleId, Ip, User, To, AFileId);
+				false -> ok end;
+		_Else -> ok end.
 
 acl_msg1(Proto, RuleId, Action, nil, nil, To, Matcher, FileS, Misc) ->
 	mydlp_logger:notify(acl_msg,
@@ -1488,6 +1500,13 @@ term2file(#file{} = Term) -> Term;
 term2file(Term) when is_list(Term) ->
 	{ok, Bin} = file:read_file(Term),
 	#file{dataref=?BB_C(Bin)}.
+
+%%-------------------------------------------------------------------------
+%% @doc Creates an empty acl result tuple with given files
+%% @end
+%%-------------------------------------------------------------------------
+
+empty_aclr(Files) -> {{rule, -1}, {file, Files}, {matcher, none}, {misc,""}}.
 
 -include_lib("eunit/include/eunit.hrl").
 

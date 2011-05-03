@@ -42,7 +42,7 @@ dist_erl_DATA = \
 	mydlp_acl.erl \
 	mydlp_api.erl \
 	mydlp_app.erl \
-	mydlp_archiver.erl \
+	mydlp_archive.erl \
 	mydlp_bayeserl_store.erl \
 	mydlp_distributor.erl \
 	mydlp_dynamic.erl \

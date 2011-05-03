@@ -89,6 +89,12 @@
           {interval, 3600}
          ]).
 
+-define(ARCHIVE, [ 
+          {minimum_size, 256}
+         ]}).
+
+-define(MINIMUM_ARCHIVE_OBJ_SIZE, 512).
+
 -define(AUTO_DIST, [
           {activate, false}
          ]).

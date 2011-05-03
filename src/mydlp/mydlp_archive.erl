@@ -24,7 +24,7 @@
 %%% @doc Worker for mydlp.
 %%% @end
 %%%-------------------------------------------------------------------
--module(mydlp_archiver).
+-module(mydlp_archive).
 -author("kerem@mydlp.org").
 -behaviour(gen_server).
 
@@ -59,7 +59,7 @@ a(FileId, Term) ->
 
 a(FileId, Term, FileName) ->
 	File = mydlp_api:term2file(Term),
-	gen_server:cast(?MODULE, {a, {FileId, File#file{filename=FileName} } }).
+	a(FileId, File#file{filename=FileName}).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -122,11 +122,26 @@ code_change(_OldVsn, State, _Extra) ->
 
 %%%%%%%%%%%%%%%%% internal
 
-archive_file({ FileId, #file{} = File }) ->
+archive_file({ AFileId, #file{} = File }) ->
 	% add to file hash 
 	File1 = mydlp_api:load_files(File),
 	% get text
-	FileText = mydlp_api:concat_texts(File1),
+	ContentText = mydlp_api:concat_texts(File1),
+
+	% get meta
+	Size = mydlp_api:binary_size(File1#file.data),
+	MimeType = case File1#file.mime_type of
+		undefined -> mydlp_tc:get_mime(File1#file.data);
+		Else -> Else end,
+	Filename = mydlp_api:file_to_str(File1),
+
+	% persist to filesystem
+	{ok, ArchivePath} = mydlp_api:quarantine(File1),
+
+	mydlp_api:clean_files(File1),
+
+	% update afile
+	mydlp_mysql:update_afile(AFileId, Filename, MimeType, Size, ArchivePath, ContentText),
 
 	ok.
 
