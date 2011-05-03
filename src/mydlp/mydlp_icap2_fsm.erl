@@ -30,6 +30,8 @@
 -export([init/1, handle_event/3,
          handle_sync_event/4, handle_info/3, terminate/3, code_change/4]).
 
+-compile(export_all).
+
 %% FSM States
 -export([
     'WAIT_FOR_SOCKET'/2,
@@ -426,26 +428,51 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 'REQ_OK'(#state{icap_request=#icap_request{method=options} } = State) -> 'REPLY_OK'(State);
 'REQ_OK'(#state{files=Files, addr=SAddr, http_request=#http_request{path=Uri},
 		http_req_content=ReqContent, http_res_content=ResContent,
-		icap_headers=#icap_headers{x_client_ip=CAddr} } = State) ->
-	case mydlp_acl:q(SAddr, CAddr, dest, df_to_files(Uri, ReqContent, ResContent, Files)) of
-		pass -> pass_req(State, Files);
-		{Block = {block, _ }, AclR} -> log_req(State, Block, AclR),
-					'BLOCK_REQ'(block, State);
-		{Log = {log, _ }, AclR} -> log_req(State, Log, AclR),
-					'REPLY_OK'(State); % refine this
-		{pass, AclR} -> log_req(State, pass, AclR),
+		icap_headers=#icap_headers{x_client_ip=CAddr}, path_mode=PathMode } = State) ->
+	DFFiles = df_to_files(PathMode, Uri, ReqContent, ResContent, Files),
+
+	case case mydlp_acl:q(SAddr, CAddr, dest, DFFiles) of
+		pass -> {pass, mydlp_api:empty_aclr(DFFiles)};
+		log -> {log, mydlp_api:empty_aclr(DFFiles)};
+		archive -> {archive, mydlp_api:empty_aclr(DFFiles)};
+		block -> {block, mydlp_api:empty_aclr(DFFiles)};
+		quarantine -> {quanratine, mydlp_api:empty_aclr(DFFiles)};
+		{pass, _AR} = T -> T;
+		{log, _AR} = T -> T;
+		{archive, _AR} = T -> T;
+		{block, _AR} = T -> T;
+		{quarantine, _AR} = T -> T
+	end of
+		{pass, _AclR} -> pass_req(State, DFFiles),
+					mydlp_api:clean_files(DFFiles),
+					'REPLY_OK'(State); 
+		{log, AclR} -> log_req(State, log, AclR),
+					mydlp_api:clean_files(DFFiles),
+					'REPLY_OK'(State); 
+		{archive, AclR} -> archive_req(State, AclR, DFFiles),
+					% mydlp_archive will clean files.
 					'REPLY_OK'(State);
-		block -> 'BLOCK_REQ'(block, State)
+		{block, AclR} -> log_req(State, block, AclR),
+					mydlp_api:clean_files(DFFiles),
+					'BLOCK_REQ'(block, State);
+		{quarantine, AclR} -> log_req(State, quarantine, AclR),
+					mydlp_api:clean_files(DFFiles),
+					'BLOCK_REQ'(block, State)
 	end.
 
+archive_req(State, {{rule, RId}, {file, _}, {matcher, _}, {misc, _}}, DFFiles) ->
+	case DFFiles of
+		[] -> ok;
+		_Else -> log_req(State, archive, {{rule, RId}, {file, DFFiles}, {matcher, none}, {misc,""}}) end.
+
 pass_req(#state{log_pass=false} = State, _Files) -> 'REPLY_OK'(State);
-pass_req(#state{log_pass=LogPassLL} = State, Files) -> 
+pass_req(#state{log_pass=LogPassLL, path_mode=reqmod} = State, Files) -> 
 	UTLFiles = lists:filter(fun(#file{dataref=Ref}) -> ?BB_S(Ref) > LogPassLL end, Files),
 	RId = {dr, mydlp_mnesia:get_dcid()}, % this will create problem for multisite users.
 	case UTLFiles of
 		[] -> ok;
-		_Else -> log_req(State, pass, {{rule, RId}, {file, UTLFiles}, {matcher, none}, {misc,""}}) end,
-	'REPLY_OK'(State).
+		_Else -> log_req(State, pass, {{rule, RId}, {file, UTLFiles}, {matcher, none}, {misc,""}}) end;
+pass_req(State, _Files) -> 'REPLY_OK'(State).
 
 'REPLY_OK'(State) -> reply(ok, State).
 
@@ -693,20 +720,23 @@ parse_multipart(#state{http_req_content=HttpContent, http_req_headers=H, http_re
 parse_urlencoded(#state{http_req_content=HttpContent}) ->
 	mydlp_api:uenc_to_file(HttpContent).
 
-df_to_files(Uri, ReqData, ResData, Files) ->
+df_to_files(reqmod, Uri, ReqData, _ResData, Files) ->
 	UFile = case mydlp_api:uri_to_hr_file(Uri) of
 		none -> [];
 		F -> [F] end,
-
 	OFiles = case Files of
 		[] -> DFile = #file{name= "post-data", dataref=?BB_C(ReqData)}, [DFile];
 		_ -> Files end,
+	lists:append([UFile, OFiles]);
+df_to_files(respmod, _Uri, _ReqData, <<>>, _Files) -> [];
+df_to_files(respmod, _Uri, _ReqData, ResData, _Files) ->
+	RFile = #file{name= "resp-data", dataref=?BB_C(ResData)}, [RFile];
+df_to_files(Else, _Uri, _ReqData, _ResData, _Files) -> throw({error, not_implemented, Else}).
 
-	ResFile = case ResData of
-		<<>> -> [];
-		_ -> RFile = #file{name= "resp-data", dataref=?BB_C(ResData)}, [RFile] end,
-
-	lists:append([UFile, OFiles, ResFile]).
+log_req(#state{icap_headers=#icap_headers{x_client_ip=Addr}, 
+		http_res_headers=(#http_headers{host=DestHost})}, Action, 
+		{{rule, RuleId}, {file, File}, {matcher, Matcher}, {misc, Misc}}) ->
+	?ACL_LOG(icap, RuleId, Action, Addr, nil, DestHost, Matcher, File, Misc);
 
 log_req(#state{icap_headers=#icap_headers{x_client_ip=Addr}, 
 		http_req_headers=(#http_headers{host=DestHost})}, Action, 
