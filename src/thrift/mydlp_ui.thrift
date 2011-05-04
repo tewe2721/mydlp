@@ -34,6 +34,10 @@ service Mydlp_ui {
 
 	void compileCustomer(1: i32 Customerid)
 
+	i64 newAFileEntry()
+	oneway void updateAFile(1: i64 Afileid, 2: binary Adata)
+	oneway void updateAFileFN(1: i64 Afileid, 2: binary Adata, 3: string Filename)
+
 	//moddlp calls.
 	i32 initEntity()
 	void pushData(1: i32 Entityid, 2: binary Data)

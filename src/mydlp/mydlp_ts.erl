@@ -1,4 +1,4 @@
-%%%
+%%
 %%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@medra.com.tr>
 %%%
 %%%--------------------------------------------------------------------------
@@ -43,6 +43,9 @@
 	removeFileFromGroup/2,
 	compileFilters/0,
 	compileCustomer/1,
+        newAFileEntry/0,
+        updateAFile/2,
+        updateAFileFN/3,
 	initEntity/0,
 	pushData/2,
 	analyze/1,
@@ -80,6 +83,12 @@ removeFileFromGroup(Fileid, Groupid) -> mydlp_mnesia:remove_file_from_group(File
 compileFilters() -> mydlp_mysql:compile_filters().
 
 compileCustomer(Customerid) -> mydlp_mysql:compile_customer(Customerid).
+
+newAFileEntry() -> mydlp_mysql:new_afile().
+
+updateAFile(Afileid, Adata) -> mydlp_archive:a(AFileId, Adata).
+
+updateAFileFN(Afileid, Adata, Filename) -> mydlp_archive:a(AFileId, Adata, Filename).
 
 initEntity() -> mydlp_moddlp:init_entity().
 

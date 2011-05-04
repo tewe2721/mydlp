@@ -57,7 +57,9 @@ a(FileId, Term) ->
 	File = mydlp_api:term2file(Term),
 	gen_server:cast(?MODULE, {a, {FileId, File} }).
 
-a(FileId, Term, FileName) ->
+a(FileId, Term, <<FileName/binary>>) -> a(FileId, Term, binary_to_list(FileName));
+a(FileId, Term, [] ) -> a(FileId, Term);
+a(FileId, Term, [_|_] = FileName) ->
 	File = mydlp_api:term2file(Term),
 	a(FileId, File#file{filename=FileName}).
 
