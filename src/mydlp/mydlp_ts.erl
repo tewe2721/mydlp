@@ -86,9 +86,9 @@ compileCustomer(Customerid) -> mydlp_mysql:compile_customer(Customerid).
 
 newAFileEntry() -> mydlp_mysql:new_afile().
 
-updateAFile(Afileid, Adata) -> mydlp_archive:a(AFileId, Adata).
+updateAFile(Afileid, Adata) -> mydlp_archive:a(Afileid, Adata).
 
-updateAFileFN(Afileid, Adata, Filename) -> mydlp_archive:a(AFileId, Adata, Filename).
+updateAFileFN(Afileid, Adata, Filename) -> mydlp_archive:a(Afileid, Adata, Filename).
 
 initEntity() -> mydlp_moddlp:init_entity().
 
