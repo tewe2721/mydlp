@@ -621,25 +621,13 @@ transaction(F) ->
 ip_band({A1,B1,C1,D1}, {A2,B2,C2,D2}) -> {A1 band A2, B1 band B2, C1 band C2, D1 band D2}.
 
 resolve_all(ParentList) ->
-	FilterRuleTS = resolve_rules(ParentList),
-	resolve_all(FilterRuleTS, []).
-
-resolve_all([],[]) -> [];
-
-resolve_all([{FilterKey, RuleDef}|Rest], []) ->
-	resolve_all(Rest, [{FilterKey, [RuleDef]}]);
-
-resolve_all([{FilterKey, RuleDef}|Rest], [{FilterKey, RuleList}|ReturnRest]) ->
-	resolve_all(Rest, [{FilterKey, [RuleDef|RuleList]}|ReturnRest]);
-
-resolve_all([{FilterKey, RuleDef}|Rest], [{LastFilterKey, LastRuleList}|ReturnRest]) ->
-	resolve_all(Rest, [{FilterKey, [RuleDef]}, 
-				{LastFilterKey, lists:reverse(LastRuleList)} 
-				|ReturnRest]);
-
-resolve_all([], [{FilterKey, RuleList}|ReturnRest]) ->
-	ReturnList = [{FilterKey, lists:reverse(RuleList)}|ReturnRest],
-	lists:reverse(ReturnList).
+	Rules = resolve_rules(ParentList),
+	Q = qlc:q([{F#filter.id, F#filter.default_action} || 
+			F <- mnesia:table(filter)
+			]),
+	case qlc:e(Q) of
+		[FilterKey] -> [{FilterKey, Rules}];
+		_Else -> [{{0, pass}, []}] end.
 
 resolve_rules(PS) -> resolve_rules(PS,[]).
 resolve_rules([P|PS], Rules) -> 
@@ -657,14 +645,14 @@ resolve_rule({mgroup, Id}) ->
 		[Parent] -> resolve_rule(Parent);
 		_Else -> none end;
 resolve_rule({rule, Id}) ->
-	Q = qlc:q([{{F#filter.id, F#filter.default_action}, {R#rule.id, R#rule.action}} || 
+	Q = qlc:q([{R#rule.id, R#rule.action, find_funcs({rule, R#rule.id})} || 
 			F <- mnesia:table(filter), 
 			R <- mnesia:table(rule), 
 			F#filter.id == R#rule.filter_id,
 			R#rule.id == Id
 			]),
 	case qlc:e(Q) of
-		[{FilterKey, {Id, Action}}] -> {FilterKey, {Id, Action, find_funcs({rule, Id})}};
+		[Rule] -> Rule;
 		_Else -> none end.
 	
 find_funcss(Parents) -> find_funcss(Parents, []).

@@ -302,6 +302,6 @@ has_wf(Rules) ->
 	Rules).
 
 head_dr([], []) -> [];
-head_dr([{FilterKey, Rules}|Rest], DRules) -> [{FilterKey, lists:append(DRules,Rules)}|Rest];
+head_dr([{FilterKey, Rules}], DRules) -> [{FilterKey, lists:append(DRules,Rules)}];
 head_dr([], DRules) -> [{{0, pass}, DRules}].
 
