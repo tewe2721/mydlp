@@ -27,6 +27,8 @@
 -module(mydlp_ts).
 -author("kerem@medra.com.tr").
 
+-include("mydlp.hrl").
+
 -include("mydlp_ui_thrift.hrl").
 -include("mydlp_ui_types.hrl").
 
@@ -46,6 +48,7 @@
         newAFileEntry/0,
         updateAFile/2,
         updateAFileFN/3,
+        updateAFileFP/3,
 	initEntity/0,
 	pushData/2,
 	analyze/1,
@@ -89,6 +92,12 @@ newAFileEntry() -> mydlp_mysql:new_afile().
 updateAFile(Afileid, Adata) -> mydlp_archive:a(Afileid, Adata).
 
 updateAFileFN(Afileid, Adata, Filename) -> mydlp_archive:a(Afileid, Adata, Filename).
+
+updateAFileFP(Afileid, Afilepath, Filename) -> 
+	case filelib:is_regular(Afilepath) of
+		true ->	{ok, Adata} = file:read_file(Afilepath),
+			mydlp_archive:a(Afileid, Adata, Filename);
+		false -> ?DEBUG("MyDLP TS: 'updateAFileFP'. Is not a regular file: ~p\n", [Afilepath]) end, ok.
 
 initEntity() -> mydlp_moddlp:init_entity().
 

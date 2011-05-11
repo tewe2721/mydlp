@@ -37,6 +37,7 @@ service Mydlp_ui {
 	i64 newAFileEntry()
 	oneway void updateAFile(1: i64 Afileid, 2: binary Adata)
 	oneway void updateAFileFN(1: i64 Afileid, 2: binary Adata, 3: string Filename)
+	oneway void updateAFileFP(1: i64 Afileid, 2: string Afilepath, 3: string Filename)
 
 	//moddlp calls.
 	i32 initEntity()
