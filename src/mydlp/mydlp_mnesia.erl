@@ -621,12 +621,13 @@ transaction(F) ->
 ip_band({A1,B1,C1,D1}, {A2,B2,C2,D2}) -> {A1 band A2, B1 band B2, C1 band C2, D1 band D2}.
 
 resolve_all(ParentList) ->
-	Rules = resolve_rules(ParentList),
 	Q = qlc:q([{F#filter.id, F#filter.default_action} || 
 			F <- mnesia:table(filter)
 			]),
 	case qlc:e(Q) of
-		[FilterKey] -> [{FilterKey, Rules}];
+		[FilterKey] -> 	
+			Rules = resolve_rules(ParentList),
+			[{FilterKey, Rules}];
 		_Else -> [{{0, pass}, []}] end.
 
 resolve_rules(PS) -> resolve_rules(PS,[]).
