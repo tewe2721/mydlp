@@ -1183,13 +1183,24 @@ parse_uenc_data1(D) ->
 		{ok, R} -> R end.
 
 uri_to_hr_str(Uri) when is_binary(Uri) -> uri_to_hr_str(binary_to_list(Uri));
-uri_to_hr_str(Uri) when is_list(Uri) ->
-	{_Path, QueryStr} = httpd_util:split_path(Uri),
-	case QueryStr of
-		[] -> [];
-		_Else -> Tokens = string:tokens(QueryStr, "?=;&"),
-			Cleans = lists:map(fun(I) -> parse_uenc_data1(I) end, Tokens),
-			string:join(Cleans, " ") end.
+uri_to_hr_str(("/" ++ _Rest) = Uri) -> prettify_uri(Uri);
+uri_to_hr_str(Uri) ->
+	Str = case string:chr(Uri, $:) of
+		0 -> Uri;
+		I when I < 10 -> case string:substr(Uri, I + 1) of
+				"//" ++ Rest -> case string:chr(Rest, $/) of
+						0 -> "";
+						I2 -> string:substr(Rest, I2) end;
+				_Else2 -> Uri end;
+		_Else -> Uri end,
+
+	prettify_uri(Str).
+
+prettify_uri("") -> "";
+prettify_uri(UriStr) -> 
+	Tokens = string:tokens(UriStr, "?=;&/"),
+	Cleans = lists:map(fun(I) -> parse_uenc_data1(I) end, Tokens),
+	string:join(Cleans, " ").
 
 uri_to_hr_file(Uri) ->
 	RData = uri_to_hr_str(Uri),
