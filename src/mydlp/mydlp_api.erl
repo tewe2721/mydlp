@@ -1381,21 +1381,9 @@ heads_to_file([{'content-disposition', "inline"}|Rest], #file{filename=undefined
 		_Else -> heads_to_file(Rest, File)
 	end;
 heads_to_file([{'content-disposition', CD}|Rest], #file{filename=undefined} = File) ->
-	case string:str(CD, "filename=") of
-		0 -> heads_to_file(Rest, File);
-		I when is_integer(I) -> 
-			FN = case string:strip(string:substr(CD, I + 9)) of
-				"\\\"" ++ Str -> 
-					Len = string:len(Str),
-					"\"\\" = string:substr(Str, Len - 1),
-					string:substr(Str, 1, Len - 2);
-				"\"" ++ Str -> 
-					Len = string:len(Str),
-					"\"" = string:substr(Str, Len),
-					string:substr(Str, 1, Len - 1);
-				Str -> Str
-			end,
-			heads_to_file(Rest, File#file{filename=FN})
+	case cd_to_fn(CD) of
+		none -> heads_to_file(Rest, File);
+		FN -> heads_to_file(Rest, File#file{filename=FN})
 	end;
 heads_to_file([{'content-type', "text/html"}|Rest], #file{filename=undefined, name=undefined} = File) ->
 	case lists:keysearch('content-disposition',1,Rest) of
@@ -1448,6 +1436,25 @@ mime_to_files([#mime{content=Content, header=Headers, body=Body}|Rest], Acc) ->
 	Data = mime_util:decode_content(CTE, Content),
 	mime_to_files(lists:append(Body, Rest), [File#file{dataref=?BB_C(Data)}|Acc]);
 mime_to_files([], Acc) -> lists:reverse(Acc).
+
+%%-------------------------------------------------------------------------
+%% @doc Extracts filename from value of content disposition header
+%% @end
+%%-------------------------------------------------------------------------
+
+cd_to_fn(ContentDisposition) ->
+	case string:str(ContentDisposition, "filename=") of
+		0 -> none; 
+		I -> case string:strip(string:substr(ContentDisposition, I + 9)) of
+				"\\\"" ++ Str -> 
+					Len = string:len(Str),
+					"\"\\" = string:substr(Str, Len - 1),
+					string:substr(Str, 1, Len - 2);
+				"\"" ++ Str -> 
+					Len = string:len(Str),
+					"\"" = string:substr(Str, Len),
+					string:substr(Str, 1, Len - 1);
+				Str -> Str end end.
 
 %%-------------------------------------------------------------------------
 %% @doc Select chuck from files

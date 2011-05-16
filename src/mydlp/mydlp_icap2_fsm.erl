@@ -1,4 +1,4 @@
-%%%
+%%
 %%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@medra.com.tr>
 %%%
 %%%--------------------------------------------------------------------------
@@ -359,6 +359,7 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 		"keep-alive" -> HttpHeaders#http_headers{keep_alive=Value};
 		"content-length" -> HttpHeaders#http_headers{content_length=Value};
 		"content-type" -> HttpHeaders#http_headers{content_type=Value};
+		"content-disposition" -> HttpHeaders#http_headers{content_disposition=Value};
 		"content-encoding" -> HttpHeaders#http_headers{content_encoding=Value};
 		"transfer-encoding" -> HttpHeaders#http_headers{transfer_encoding=Value};
 		_ -> Others = HttpHeaders#http_headers.other, HttpHeaders#http_headers{other=[
@@ -426,10 +427,8 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 
 % {Action, {{rule, Id}, {file, File}, {matcher, Func}, {misc, Misc}}}
 'REQ_OK'(#state{icap_request=#icap_request{method=options} } = State) -> 'REPLY_OK'(State);
-'REQ_OK'(#state{files=Files, addr=SAddr, http_request=#http_request{path=Uri},
-		http_req_content=ReqContent, http_res_content=ResContent,
-		icap_headers=#icap_headers{x_client_ip=CAddr}, path_mode=PathMode } = State) ->
-	DFFiles = df_to_files(PathMode, Uri, ReqContent, ResContent, Files),
+'REQ_OK'(#state{addr=SAddr, icap_headers=#icap_headers{x_client_ip=CAddr} } = State) ->
+	DFFiles = df_to_files(State),
 
 	case case mydlp_acl:q(SAddr, CAddr, dest, DFFiles) of
 		pass -> {pass, mydlp_api:empty_aclr(DFFiles)};
@@ -720,7 +719,10 @@ parse_multipart(#state{http_req_content=HttpContent, http_req_headers=H, http_re
 parse_urlencoded(#state{http_req_content=HttpContent}) ->
 	mydlp_api:uenc_to_file(HttpContent).
 
-df_to_files(reqmod, Uri, ReqData, _ResData, Files) ->
+
+df_to_files(#state{path_mode=reqmod, files=Files, 
+		http_request=#http_request{path=Uri},
+		http_req_content=ReqData}) ->
 	UFile = case mydlp_api:uri_to_hr_file(Uri) of
 		none -> [];
 		F -> [F] end,
@@ -728,10 +730,35 @@ df_to_files(reqmod, Uri, ReqData, _ResData, Files) ->
 		[] -> DFile = #file{name= "post-data", dataref=?BB_C(ReqData)}, [DFile];
 		_ -> Files end,
 	lists:append([UFile, OFiles]);
-df_to_files(respmod, _Uri, _ReqData, <<>>, _Files) -> [];
-df_to_files(respmod, _Uri, _ReqData, ResData, _Files) ->
-	RFile = #file{name= "resp-data", dataref=?BB_C(ResData)}, [RFile];
-df_to_files(Else, _Uri, _ReqData, _ResData, _Files) -> throw({error, not_implemented, Else}).
+df_to_files(#state{path_mode=respmod, http_res_content= <<>>}) -> [];
+df_to_files(#state{path_mode=respmod,
+		http_request=#http_request{path=Uri},
+		http_res_headers=#http_headers{content_disposition=CDisposition},
+		http_res_content=ResData}) ->
+
+	FN = case cd_to_fn1(CDisposition) of
+		none -> uri_to_fn(Uri);
+		CDFN -> CDFN end,
+
+	RFile = case FN of
+		none -> #file{name= "resp-data", dataref=?BB_C(ResData)};
+		FN -> #file{filename=FN, dataref=?BB_C(ResData)} end,
+	[RFile];
+df_to_files(#state{path_mode=Else}) -> throw({error, not_implemented, Else}).
+
+cd_to_fn1(undefined) -> none;
+cd_to_fn1(CDisposition) -> mydlp_api:cd_to_fn(CDisposition).
+
+uri_to_fn(Uri) ->
+	Length = string:len(Uri),
+	case string:rchr(Uri, $/) of 
+		0 -> none;
+		Length -> none;
+		I -> LC = string:substr(Uri, I + 1),
+			case string:chr(LC, $?) of
+				0 -> LC;
+				1 -> none;
+				I2 -> string:substr(LC, 1, I2 - 1) end end.
 
 log_req(#state{icap_headers=#icap_headers{x_client_ip=Addr}, 
 		http_res_headers=(#http_headers{host=DestHost})}, Action, 

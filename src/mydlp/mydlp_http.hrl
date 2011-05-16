@@ -42,6 +42,7 @@
 		keep_alive,
 		content_length,
 		content_type,
+		content_disposition,
 		content_encoding,
 		transfer_encoding,
 		other = []   %% misc other headers
