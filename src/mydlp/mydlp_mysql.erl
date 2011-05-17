@@ -180,7 +180,7 @@ handle_cast({push_smb_discover, XMLResult}, State) ->
 handle_cast({update_afile, AFileId, Filename, MimeType, Size, ArchivePath, ContentText}, State) ->
 	% Probably will create problems in multisite use.
 	spawn_link(fun() ->
-		psq(update_archive_file, [Filename, MimeType, Size, ArchivePath, ContentText, AFileId])
+		psq(update_archive_file, [Filename, MimeType, Size, ArchivePath, ContentText, AFileId], 60000)
 	end),
 	{noreply, State};
 
@@ -292,11 +292,12 @@ code_change(_OldVsn, State, _Extra) ->
 
 %%%%%%%%%%%% internal api
 
-psq(PreparedKey) when is_atom(PreparedKey) ->
-	psq(PreparedKey, []).
+psq(PreparedKey) -> psq(PreparedKey, []).
 
-psq(PreparedKey, Params) when is_atom(PreparedKey), is_list(Params) ->
-	case mysql:execute(p, PreparedKey, Params) of
+psq(PreparedKey, Params) -> psq(PreparedKey, Params, 5000).
+
+psq(PreparedKey, Params, Timeout) ->
+	case mysql:execute(p, PreparedKey, Params, Timeout) of
 		{data,{mysql_result,_,Result,_,_}} -> {ok, Result};
 		{updated,{mysql_result, _,_,RowCount,_}} -> {updated, RowCount};
 		Else -> throw({error, Else})
@@ -305,11 +306,13 @@ psq(PreparedKey, Params) when is_atom(PreparedKey), is_list(Params) ->
 last_insert_id_t() ->
 	{ok, [[LIId]]} = psqt(last_insert_id), LIId.
 
-transaction(Fun) -> mysql:transaction(p, Fun).
+transaction(Fun) -> transaction(Fun, 5000).
 
-psqt(PreparedKey) when is_atom(PreparedKey) -> psqt(PreparedKey, []).
+transaction(Fun, Timeout) -> mysql:transaction(p, Fun, Timeout).
 
-psqt(PreparedKey, Params) when is_atom(PreparedKey), is_list(Params) ->
+psqt(PreparedKey) -> psqt(PreparedKey, []).
+
+psqt(PreparedKey, Params) ->
 	case mysql:execute(PreparedKey, Params) of
 		{data,{mysql_result,_,Result,_,_}} -> {ok, Result};
 		{updated,{mysql_result, _,_,RowCount,_}} -> {updated, RowCount};
