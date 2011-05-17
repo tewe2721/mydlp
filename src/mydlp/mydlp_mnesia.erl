@@ -41,6 +41,7 @@
 	get_pgid/0,
 	get_dcid/0,
 	get_drid/0,
+	wait_for_tables/0,
 	get_rules/1,
 	get_all_rules/0,
 	get_all_rules/1,
@@ -149,6 +150,14 @@ get_pgid() -> -2.
 get_dcid() -> 1.
 
 get_drid() -> 0.
+
+wait_for_tables() ->
+	TableList = lists:map( fun
+			({RecordAtom,_,_}) -> RecordAtom;
+			({RecordAtom,_}) -> RecordAtom;
+			(RecordAtom) when is_atom(RecordAtom) -> RecordAtom
+		end, ?TABLES),
+	mnesia:wait_for_tables(TableList, 15000).
 
 get_rules(Who) -> async_query_call({get_rules, Who}).
 
@@ -570,9 +579,13 @@ is_mnesia_distributed() ->
 
 start_tables(IsDistributionInit) ->
 	start_table(IsDistributionInit, {unique_ids, set}),
-	start_tables(IsDistributionInit, ?TABLES),
+	StartResult =  start_tables(IsDistributionInit, ?TABLES),
 
 	consistency_chk(),
+
+	case StartResult of
+		{ok, no_change} -> ok;
+		{ok, schema_changed} -> mydlp_mysql:repopulate_mnesia() end,
 	ok.
 
 start_table(IsDistributionInit, RecordAtom) when is_atom(RecordAtom) ->
@@ -590,23 +603,52 @@ start_table(true = _IsDistributionInit, {RecordAtom, _, _}) ->
 		true -> ok end, ok.
 
 init_table({RecordAtom, TableType, InitFun}) ->
-	try
-		mnesia:table_info(RecordAtom, type)
-	catch
-		exit: _ ->
-			mnesia:create_table(RecordAtom,
-					[{attributes, 
-						get_record_fields(RecordAtom) },
-						{type, TableType},
-						{disc_copies, [node()]}]),
+	RecordAttributes = get_record_fields(RecordAtom),
 
-			transaction(InitFun)
+	TabState = try
+		case mnesia:table_info(RecordAtom, attributes) of
+			RecordAttributes -> ok;
+			_Else -> recreate  % it means that schema had been updated, should recreate tab.
+		end 
+	catch
+		exit: _ -> create % it means that there is no tab in database as specified.
+	end,
+
+	case TabState of
+		ok -> 		ok;
+		create -> 	create_table(RecordAtom, RecordAttributes, TableType, InitFun), 
+				changed;
+		recreate -> 	mnesia:wait_for_tables([RecordAtom], 5000),
+				delete_table(RecordAtom),
+				create_table(RecordAtom, RecordAttributes, TableType, InitFun), 
+				changed 
 	end.
 
-start_tables(IsDistributionInit, [RecordAtom|RAList]) ->
+delete_table(RecordAtom) -> mnesia:delete_table(RecordAtom).
+
+create_table(RecordAtom, RecordAttributes, TableType, InitFun) ->
+	mnesia:create_table(RecordAtom,
+			[{attributes, 
+				RecordAttributes },
+				{type, TableType},
+				{disc_copies, [node()]}]),
+
+	transaction(InitFun).
+
+start_tables(IsDistributionInit, RecordAtomList) ->
+	start_tables(IsDistributionInit, RecordAtomList, false).
+
+start_tables(IsDistributionInit, [RecordAtom|RAList], false = _IsSchemaChanged) ->
+	StartResult = start_table(IsDistributionInit, RecordAtom),
+	IsSchemaChanged = case StartResult of
+		ok -> false;
+		changed -> true end,
+	start_tables(IsDistributionInit, RAList, IsSchemaChanged);
+start_tables(IsDistributionInit, [RecordAtom|RAList], true = _IsSchemaChanged) ->
 	start_table(IsDistributionInit, RecordAtom),
-	start_tables(IsDistributionInit, RAList);
-start_tables(_IsDistributionInit, []) -> ok.
+	start_tables(IsDistributionInit, RAList, true);
+start_tables(_IsDistributionInit, [], false = _IsSchemaChanged) -> {ok, no_change};
+start_tables(_IsDistributionInit, [], true = _IsSchemaChanged) -> {ok, schema_changed}.
 
 %get_unique_id(TableName) ->
 %	mnesia:dirty_update_counter(unique_ids, TableName, 1).

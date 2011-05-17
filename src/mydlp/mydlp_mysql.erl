@@ -43,6 +43,7 @@
 	get_denied_page/0,
 	new_afile/0,
 	update_afile/6,
+	repopulate_mnesia/0,
 	stop/0]).
 
 %% gen_server callbacks
@@ -70,6 +71,9 @@ archive_log(Proto, RuleId, Ip, User, To, AFileId ) ->
 
 push_smb_discover(XMLResult) ->
 	gen_server:cast(?MODULE, {push_smb_discover, XMLResult}).
+
+repopulate_mnesia() ->
+	gen_server:cast(?MODULE, repopulate_mnesia).
 
 compile_filters() -> 
 	gen_server:call(?MODULE, compile_filters, 60000).
@@ -177,6 +181,17 @@ handle_cast({update_afile, AFileId, Filename, MimeType, Size, ArchivePath, Conte
 	% Probably will create problems in multisite use.
 	spawn_link(fun() ->
 		psq(update_archive_file, [Filename, MimeType, Size, ArchivePath, ContentText, AFileId])
+	end),
+	{noreply, State};
+
+handle_cast(repopulate_mnesia, State) ->
+	% Probably will create problems in multisite use.
+	spawn_link(fun() ->
+		mydlp_mnesia:wait_for_tables(),
+		case mydlp_mysql:is_multisite() of
+			false -> mydlp_mysql:compile_customer(mydlp_mnesia:get_dcid());
+			true -> ok % should be implemented for multi site usage
+		end
 	end),
 	{noreply, State};
 

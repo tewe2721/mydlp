@@ -69,8 +69,8 @@
    [
     {shared_workers, [
           {mydlp_distributor, start_link,[]},
-          {mydlp_mnesia, start_link,[]},
           {mydlp_mysql, start_link,[]},
+          {mydlp_mnesia, start_link,[]},
           {mydlp_quarantine, start_link,[]},
           {mydlp_regex, start_link,[]}, 
           {pg, {mydlp_tc, start_link,[]}, 4}, 
