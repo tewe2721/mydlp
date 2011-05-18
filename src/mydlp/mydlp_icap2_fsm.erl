@@ -70,7 +70,8 @@
 	options_ttl,
 	path_reqmod,
 	path_respmod,
-	path_mode=reqmod,
+	icap_mod_mode=reqmod, % icap modification mode
+	http_message_type,
 	buffer,
 	ch_req_h=false,
 	ch_req_b=false,
@@ -173,15 +174,15 @@ init([]) ->
 		L when is_binary(L) -> binary_to_list(Line) end,
 	[MethodS, Uri, VersionS] = string:tokens(Line1, " "),
 
-	PathMode = case get_path(Uri) of
+	ModMode = case get_path(Uri) of
 		ReqmodPath -> reqmod;
 		RespmodPath -> respmod;
 		Else -> throw({error, {path_does_not_match, Else}}) end,
 
-	Method = case http_util:to_lower(MethodS) of
-		"options" -> options;
-		"reqmod" -> reqmod;
-		"respmod" -> respmod;
+	Method = case {ModMode, http_util:to_lower(MethodS)} of
+		{_, "options"} -> options;
+		{reqmod, "reqmod"} -> reqmod;
+		{respmod, "respmod"} -> respmod;
 		_Else2 -> throw({error, bad_method}) end,
 
 	[$i, $c, $a, $p, $/, MajorVersionC, $., MinorVersionC, $\r, $\n ] = 
@@ -192,7 +193,7 @@ init([]) ->
 	{next_state, 'ICAP_HEADER', 
 		State#state{icap_request=#icap_request{
 			method=Method, uri=Uri, major_version=MajorVersion, minor_version=MinorVersion},
-			icap_headers=#icap_headers{}, path_mode=PathMode}, ?TIMEOUT};
+			icap_headers=#icap_headers{}, icap_mod_mode=ModMode}, ?TIMEOUT};
 
 'ICAP_REQ_LINE'(timeout, State) ->
 	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
@@ -231,45 +232,45 @@ init([]) ->
 	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
-encap_next(#state{icap_rencap=[]} = State) -> 'READ_FILES'(State);
-encap_next(#state{icap_rencap=undefined} = State) -> 'READ_FILES'(State);
-encap_next(#state{icap_rencap=[{null_body, _Val}]} = State) -> 'READ_FILES'(State);
+encap_next(#state{icap_rencap=[]} = State) -> 'READ_FILES'(State#state{http_message_type=undefined});
+encap_next(#state{icap_rencap=undefined} = State) -> 'READ_FILES'(State#state{http_message_type=undefined});
+encap_next(#state{icap_rencap=[{null_body, _Val}]} = State) -> 'READ_FILES'(State#state{http_message_type=undefined});
 
 encap_next(#state{icap_rencap=[{req_hdr, _BI}|Rest], 
 		icap_headers=#icap_headers{allow204=false}} = State) -> 
-	{next_state, 'HTTP_REQ_LINE', State#state{icap_rencap=Rest, ch_req_h=true}, ?TIMEOUT};
+	{next_state, 'HTTP_REQ_LINE', State#state{icap_rencap=Rest, http_message_type=request, ch_req_h=true}, ?TIMEOUT};
 
 encap_next(#state{icap_rencap=[{req_hdr, _BI}|Rest], 
 		icap_headers=#icap_headers{allow204=true}} = State) -> 
-	{next_state, 'HTTP_REQ_LINE', State#state{icap_rencap=Rest, ch_req_h=false}, ?TIMEOUT};
+	{next_state, 'HTTP_REQ_LINE', State#state{icap_rencap=Rest, http_message_type=request, ch_req_h=false}, ?TIMEOUT};
 
 encap_next(#state{icap_rencap=[{res_hdr, _BI}|Rest], 
 		icap_headers=#icap_headers{allow204=false}} = State) -> 
-	{next_state, 'HTTP_RES_LINE', State#state{icap_rencap=Rest, ch_res_h=true}, ?TIMEOUT};
+	{next_state, 'HTTP_RES_LINE', State#state{icap_rencap=Rest, http_message_type=response, ch_res_h=true}, ?TIMEOUT};
 
 encap_next(#state{icap_rencap=[{res_hdr, _BI}|Rest], 
 		icap_headers=#icap_headers{allow204=true}} = State) -> 
-	{next_state, 'HTTP_RES_LINE', State#state{icap_rencap=Rest, ch_res_h=false}, ?TIMEOUT};
+	{next_state, 'HTTP_RES_LINE', State#state{icap_rencap=Rest, http_message_type=response, ch_res_h=false}, ?TIMEOUT};
 
 encap_next(#state{socket=Socket, icap_rencap=[{req_body, _BI}|Rest],
 		icap_headers=#icap_headers{allow204=false}} = State) -> 
 	inet:setopts(Socket, [{packet, line}, binary]),
-	{next_state, 'HTTP_CC_LINE', State#state{icap_rencap=Rest, ch_req_b=true}, ?TIMEOUT};
+	{next_state, 'HTTP_CC_LINE', State#state{icap_rencap=Rest, http_message_type=request, ch_req_b=true}, ?TIMEOUT};
 
 encap_next(#state{socket=Socket, icap_rencap=[{req_body, _BI}|Rest],
 		icap_headers=#icap_headers{allow204=true}} = State) -> 
 	inet:setopts(Socket, [{packet, line}, binary]),
-	{next_state, 'HTTP_CC_LINE', State#state{icap_rencap=Rest, ch_req_b=false}, ?TIMEOUT};
+	{next_state, 'HTTP_CC_LINE', State#state{icap_rencap=Rest, http_message_type=request, ch_req_b=false}, ?TIMEOUT};
 
 encap_next(#state{socket=Socket, icap_rencap=[{res_body, _BI}|Rest],
 		icap_headers=#icap_headers{allow204=false}} = State) -> 
 	inet:setopts(Socket, [{packet, line}, binary]),
-	{next_state, 'HTTP_CC_LINE', State#state{icap_rencap=Rest, ch_res_b=true}, ?TIMEOUT};
+	{next_state, 'HTTP_CC_LINE', State#state{icap_rencap=Rest, http_message_type=response, ch_res_b=true}, ?TIMEOUT};
 
 encap_next(#state{socket=Socket, icap_rencap=[{res_body, _BI}|Rest],
 		icap_headers=#icap_headers{allow204=true}} = State) -> 
 	inet:setopts(Socket, [{packet, line}, binary]),
-	{next_state, 'HTTP_CC_LINE', State#state{icap_rencap=Rest, ch_res_b=false}, ?TIMEOUT};
+	{next_state, 'HTTP_CC_LINE', State#state{icap_rencap=Rest, http_message_type=response, ch_res_b=false}, ?TIMEOUT};
 
 %encap_next(#state{icap_rencap=[{res_hdr, _BI}|_Rest]}) -> throw({error, {not_implemented, res_hdr}});
 %encap_next(#state{icap_rencap=[{res_body, _BI}|_Rest]}) -> throw({error, {not_implemented, res_body}});
@@ -341,9 +342,9 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 	Cookies = HttpHeaders#http_headers.cookie,
 	Others = HttpHeaders#http_headers.other,
 	HttpHeaders1 = HttpHeaders#http_headers{cookie=lists:reverse(Cookies), other=lists:reverse(Others)},
-	State1 = case State#state.http_response of % Request headers or response headers
-		undefined -> State#state{http_req_headers=HttpHeaders1, ch_req_h=false};
-		_Else -> State#state{http_res_headers=HttpHeaders1, ch_res_h=false} end,
+	State1 = case State#state.http_message_type of % Request headers or response headers
+		request -> State#state{http_req_headers=HttpHeaders1, ch_req_h=false};
+		response -> State#state{http_res_headers=HttpHeaders1, ch_res_h=false} end,
 	encap_next(State1#state{http_headers=undefined});
 
 'PARSE_HEADER'({data, HttpHeaderLine}, #state{http_headers=HttpHeaders} = State) ->
@@ -365,7 +366,6 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 		_ -> Others = HttpHeaders#http_headers.other, HttpHeaders#http_headers{other=[
 				#http_header{key=Key, value=Value}|Others]}   %% misc other headers
 	end,
-		
 	{next_state, 'HTTP_HEADER', State#state{http_headers=HttpHeaders1}, ?TIMEOUT}.
 
 'HTTP_CC_LINE'({data, Line}, State) ->
@@ -404,9 +404,9 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 	{stop, normal, State}.
 
 'HTTP_CC_TCRLF'({data, <<"\r\n">>}, #state{http_content=Content} = State) ->
-	State1 = case State#state.http_response of % Request payload or response payload
-		undefined -> State#state{http_req_content=Content, ch_req_b=false};
-		_Else -> State#state{http_res_content=Content, ch_res_b=false} end,
+	State1 = case State#state.http_message_type of % Request payload or response payload
+		request -> State#state{http_req_content=Content, ch_req_b=false};
+		response -> State#state{http_res_content=Content, ch_res_b=false} end,
 	
 	encap_next(State1#state{http_content= <<>>});
 
@@ -465,7 +465,7 @@ archive_req(State, {{rule, RId}, {file, _}, {matcher, _}, {misc, _}}, DFFiles) -
 		_Else -> log_req(State, archive, {{rule, RId}, {file, DFFiles}, {matcher, none}, {misc,""}}) end.
 
 pass_req(#state{log_pass=false} = State, _Files) -> 'REPLY_OK'(State);
-pass_req(#state{log_pass=LogPassLL, path_mode=reqmod} = State, Files) -> 
+pass_req(#state{log_pass=LogPassLL, icap_mod_mode=reqmod} = State, Files) -> 
 	UTLFiles = lists:filter(fun(#file{dataref=Ref}) -> ?BB_S(Ref) > LogPassLL end, Files),
 	RId = {dr, mydlp_mnesia:get_dcid()}, % this will create problem for multisite users.
 	case UTLFiles of
@@ -481,11 +481,11 @@ reply(What, #state{socket=Socket, icap_request=IcapReq, http_request=HttpReq,
 		icap_headers=#icap_headers{allow204=Allow204},
 		ch_data_req_h=CacheDataReqH, ch_data_req_b=CacheDataReqB,
 		ch_data_res_h=CacheDataResH, ch_data_res_b=CacheDataResB,
-		max_connections=MC, options_ttl=OT, path_mode=PathMode} = State) ->
+		max_connections=MC, options_ttl=OT, icap_mod_mode=ModMode} = State) ->
 
 	Reply = case {What, Allow204, IcapReq#icap_request.method} of
 		{ok, _, options} -> 
-				PMS = case PathMode of 
+				PMS = case ModMode of 
 					reqmod -> <<"REQMOD">>;
 					respmod -> <<"RESPMOD">> end,
 				[ ?ICAP_RESP_LINE_OK,
@@ -553,6 +553,7 @@ reply(What, #state{socket=Socket, icap_request=IcapReq, http_request=HttpReq,
 				http_res_headers=undefined,
 				http_content= <<>>, 
 				files=[],
+				http_message_type=undefined,
 				buffer=undefined,
 				ch_req_h=false,
 				ch_req_b=false,
@@ -720,7 +721,7 @@ parse_urlencoded(#state{http_req_content=HttpContent}) ->
 	mydlp_api:uenc_to_file(HttpContent).
 
 
-df_to_files(#state{path_mode=reqmod, files=Files, 
+df_to_files(#state{icap_mod_mode=reqmod, files=Files, 
 		http_request=#http_request{path=Uri},
 		http_req_content=ReqData}) ->
 	UFile = case mydlp_api:uri_to_hr_file(Uri) of
@@ -730,8 +731,8 @@ df_to_files(#state{path_mode=reqmod, files=Files,
 		[] -> DFile = #file{name= "post-data", dataref=?BB_C(ReqData)}, [DFile];
 		_ -> Files end,
 	lists:append([UFile, OFiles]);
-df_to_files(#state{path_mode=respmod, http_res_content= <<>>}) -> [];
-df_to_files(#state{path_mode=respmod,
+df_to_files(#state{icap_mod_mode=respmod, http_res_content= <<>>}) -> [];
+df_to_files(#state{icap_mod_mode=respmod,
 		http_request=#http_request{path=Uri},
 		http_res_headers=#http_headers{content_disposition=CDisposition},
 		http_res_content=ResData}) ->
@@ -744,7 +745,7 @@ df_to_files(#state{path_mode=respmod,
 		none -> #file{name= "resp-data", dataref=?BB_C(ResData)};
 		FN -> #file{filename=FN, dataref=?BB_C(ResData)} end,
 	[RFile];
-df_to_files(#state{path_mode=Else}) -> throw({error, not_implemented, Else}).
+df_to_files(#state{icap_mod_mode=Else}) -> throw({error, not_implemented, Else}).
 
 cd_to_fn1(undefined) -> none;
 cd_to_fn1(CDisposition) -> mydlp_api:cd_to_fn(CDisposition).
@@ -760,13 +761,13 @@ uri_to_fn(Uri) ->
 				1 -> none;
 				I2 -> string:substr(LC, 1, I2 - 1) end end.
 
-log_req(#state{icap_headers=#icap_headers{x_client_ip=Addr}, 
-		http_res_headers=(#http_headers{host=DestHost})}, Action, 
+log_req(#state{icap_headers=#icap_headers{x_client_ip=Addr},
+		http_req_headers=(#http_headers{host=DestHost})}, Action,
 		{{rule, RuleId}, {file, File}, {matcher, Matcher}, {misc, Misc}}) ->
 	?ACL_LOG(icap, RuleId, Action, Addr, nil, DestHost, Matcher, File, Misc);
 
-log_req(#state{icap_headers=#icap_headers{x_client_ip=Addr}, 
-		http_req_headers=(#http_headers{host=DestHost})}, Action, 
+log_req(#state{icap_headers=#icap_headers{x_client_ip=Addr},
+		http_res_headers=(#http_headers{host=DestHost})}, Action, 
 		{{rule, RuleId}, {file, File}, {matcher, Matcher}, {misc, Misc}}) ->
 	?ACL_LOG(icap, RuleId, Action, Addr, nil, DestHost, Matcher, File, Misc).
 
