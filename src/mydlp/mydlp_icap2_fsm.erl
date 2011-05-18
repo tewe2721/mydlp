@@ -720,6 +720,7 @@ parse_multipart(#state{http_req_content=HttpContent, http_req_headers=H, http_re
 parse_urlencoded(#state{http_req_content=HttpContent}) ->
 	mydlp_api:uenc_to_file(HttpContent).
 
+-define(MAX_FILENAME_LENGTH, 128).
 
 df_to_files(#state{icap_mod_mode=reqmod, files=Files, 
 		http_request=#http_request{path=Uri},
@@ -743,7 +744,10 @@ df_to_files(#state{icap_mod_mode=respmod,
 
 	RFile = case FN of
 		none -> #file{name= "resp-data", dataref=?BB_C(ResData)};
-		FN -> #file{filename=FN, dataref=?BB_C(ResData)} end,
+		FN -> FN1 = case string:len(FN) > ?MAX_FILENAME_LENGTH of
+				true -> string:substr(FN, 1, ?MAX_FILENAME_LENGTH);
+				false -> FN end,
+			#file{filename=FN1, dataref=?BB_C(ResData)} end,
 	[RFile];
 df_to_files(#state{icap_mod_mode=Else}) -> throw({error, not_implemented, Else}).
 
