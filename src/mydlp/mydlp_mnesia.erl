@@ -688,14 +688,15 @@ resolve_rule({mgroup, Id}) ->
 		[Parent] -> resolve_rule(Parent);
 		_Else -> none end;
 resolve_rule({rule, Id}) ->
-	Q = qlc:q([{R#rule.id, R#rule.action, find_funcs({rule, R#rule.id})} || 
+	Q = qlc:q([{R#rule.id, R#rule.action} || 
 			F <- mnesia:table(filter), 
 			R <- mnesia:table(rule), 
 			F#filter.id == R#rule.filter_id,
 			R#rule.id == Id
 			]),
+	
 	case qlc:e(Q) of
-		[Rule] -> Rule;
+		[{RId, RAction}] -> {RId, RAction, find_funcs({rule, RId})};
 		_Else -> none end.
 	
 find_funcss(Parents) -> find_funcss(Parents, []).
