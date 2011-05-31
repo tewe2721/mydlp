@@ -93,7 +93,9 @@ updateAFile(Afileid, Adata) -> mydlp_archive:a(Afileid, Adata).
 
 updateAFileFN(Afileid, Adata, Filename) -> mydlp_archive:a(Afileid, Adata, Filename).
 
-updateAFileFP(Afileid, Afilepath, Filename) -> 
+updateAFileFP(Afileid, <<Afilepath/binary>>, Filename) ->
+	updateAFileFP(Afileid, binary_to_list(Afilepath), Filename);
+updateAFileFP(Afileid, [_|_] = Afilepath, Filename) -> 
 	case filelib:is_regular(Afilepath) of
 		true ->	{ok, Adata} = file:read_file(Afilepath),
 			mydlp_archive:a(Afileid, Adata, Filename);
