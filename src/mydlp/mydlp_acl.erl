@@ -52,11 +52,11 @@
 
 %%%%%%%%%%%%% MyDLP ACL API
 
-q(Site, Addr, _Dest, Files) -> acl_call({q, Site, {Addr, Files}}).
+q(Site, Addr, DestList, Files) -> acl_call({q, Site, DestList, {Addr, Files}}).
 
 qu(User, _Dest, Files) -> acl_call({qu, site, {User, Files}}).
 
-qa(Dest, Files) -> acl_call({qa, site, {Dest, Files}}).
+qa(DestList, Files) -> acl_call({qa, site, {DestList, Files}}).
 
 qm(Files) -> acl_call({qm, site, {Files}}).
 
@@ -122,17 +122,17 @@ acl_exec3(AllRules, Source, Files, ExNewFiles, CleanFiles) ->
 		Else -> Else end.
 
 %% it needs refactoring for trusted domains
-handle_acl({q, SAddr, {Addr, Files}}, #state{is_multisite=true}) ->
+handle_acl({q, SAddr, DestList, {Addr, Files}}, #state{is_multisite=true}) ->
 	case mydlp_mnesia:get_cid(SAddr) of
 		nocustomer -> block;
 		CustomerId -> 
-			Rules = mydlp_mnesia:get_rules_for_cid(CustomerId, Addr),
+			Rules = mydlp_mnesia:get_rules_for_cid(CustomerId, DestList, Addr),
 			acl_exec(Rules, [{cid, CustomerId}, {addr, Addr}], Files) end;
 
-handle_acl({q, _Site, {Addr, Files}}, #state{is_multisite=false}) ->
+handle_acl({q, _Site, DestList, {Addr, Files}}, #state{is_multisite=false}) ->
 	%Rules = mydlp_mnesia:get_rules(Addr),
 	CustomerId = mydlp_mnesia:get_dcid(),
-	Rules = mydlp_mnesia:get_rules_for_cid(CustomerId, Addr),
+	Rules = mydlp_mnesia:get_rules_for_cid(CustomerId, DestList, Addr),
 	acl_exec(Rules, [{cid, CustomerId}, {addr, Addr}], Files);
 
 %% now this is used for only SMTP, and in SMTP domain part of, mail adresses itself a siteid for customer.
@@ -141,8 +141,8 @@ handle_acl({qu, _Site, {User, Files}}, _State) ->
 	Rules = mydlp_mnesia:get_rules_by_user(User),
 	acl_exec(Rules, [{cid, mydlp_mnesia:get_dcid()}, {user, User}], Files);
 
-handle_acl({qa, _Site, {Dest, Files}}, _State) ->
-	Rules = mydlp_mnesia:get_all_rules(Dest),
+handle_acl({qa, _Site, {DestList, Files}}, _State) ->
+	Rules = mydlp_mnesia:get_all_rules(DestList),
 	acl_exec(Rules, [{cid, mydlp_mnesia:get_dcid()}], Files);
 
 handle_acl({qm, _Site, {Files}}, _State) ->

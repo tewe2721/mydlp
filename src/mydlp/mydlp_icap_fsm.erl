@@ -355,10 +355,12 @@ get_body(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_impl
 % {Action, {{rule, Id}, {file, File}, {matcher, Func}, {misc, Misc}}}
 'REQ_OK'(#state{icap_request=#icap_request{method=options} } = State) -> 'REPLY_OK'(State);
 'REQ_OK'(#state{files=Files, addr=SAddr, http_request=#http_request{path=Uri},
+		http_headers=(#http_headers{host=DestHost}),
 		http_content=HttpContent, icap_headers=#icap_headers{x_client_ip=CAddr} } = State) ->
 	DFFiles = df_to_files(Uri, HttpContent, Files),
+	DestList = [list_to_binary(DestHost)],
 
-	case case mydlp_acl:q(SAddr, CAddr, dest, DFFiles) of
+	case case mydlp_acl:q(SAddr, CAddr, DestList, DFFiles) of
 		pass -> {pass, mydlp_api:empty_aclr(DFFiles)};
 		log -> {log, mydlp_api:empty_aclr(DFFiles)};
 		archive -> {archive, mydlp_api:empty_aclr(DFFiles)};

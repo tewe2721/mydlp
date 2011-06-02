@@ -46,6 +46,7 @@
 	get_all_rules/0,
 	get_all_rules/1,
 	get_rules_for_cid/2,
+	get_rules_for_cid/3,
 	get_rules_by_user/1,
 	get_regexes/1,
 	get_cid/1,
@@ -163,9 +164,11 @@ get_rules(Who) -> async_query_call({get_rules, Who}).
 
 get_all_rules() -> async_query_call(get_all_rules).
 
-get_all_rules(Dest) -> async_query_call({get_all_rules, Dest}).
+get_all_rules(DestList) -> async_query_call({get_all_rules, DestList}).
 
-get_rules_for_cid(CustomerId, Who) -> async_query_call({get_rules_for_cid, CustomerId, Who}).
+get_rules_for_cid(CustomerId, Who) -> get_rules_for_cid(CustomerId, [], Who).
+
+get_rules_for_cid(CustomerId, DestList, Who) -> async_query_call({get_rules_for_cid, CustomerId, DestList, Who}).
 
 get_rules_by_user(Who) -> async_query_call({get_rules_by_user, Who}).
 
@@ -238,14 +241,14 @@ handle_result({is_dr_fh_of_fid, _, _}, {atomic, Result}) ->
 
 handle_result(_Query, {atomic, Objects}) -> Objects.
 
-handle_query({get_rules_for_cid, CustomerId, Who}) ->
+handle_query({get_rules_for_cid, CustomerId, DestList, Who}) ->
 	Q = qlc:q([I#ipr.parent || I <- mnesia:table(ipr),
 			I#ipr.customer_id == CustomerId,
 			ip_band(I#ipr.ipbase, I#ipr.ipmask) == ip_band(Who, I#ipr.ipmask)
 			]),
 	Parents = qlc:e(Q),
 	Parents1 = lists:usort(Parents),
-	resolve_all(Parents1);
+	resolve_all(Parents1, DestList);
 
 handle_query({get_rules, Who}) ->
 	Q = qlc:q([I#ipr.parent || I <- mnesia:table(ipr),
@@ -261,13 +264,11 @@ handle_query(get_all_rules) ->
 	Parents1 = lists:usort(Parents),
 	resolve_all(Parents1);
 
-handle_query({get_all_rules, Dest}) ->
-	Q = qlc:q([{rule, R#rule.id} || R <- mnesia:table(rule),
-			lists:any(fun(E) -> not lists:member(E, R#rule.trusted_domains) end, Dest)
-			]),
+handle_query({get_all_rules, DestList}) ->
+	Q = qlc:q([{rule, R#rule.id} || R <- mnesia:table(rule)]),
 	Parents = qlc:e(Q),
 	Parents1 = lists:usort(Parents),
-	resolve_all(Parents1);
+	resolve_all(Parents1, DestList);
 
 handle_query({get_rules_by_user, Who}) ->
 	Q = qlc:q([U#m_user.parent || U <- mnesia:table(m_user),
@@ -662,33 +663,37 @@ transaction(F) ->
 
 ip_band({A1,B1,C1,D1}, {A2,B2,C2,D2}) -> {A1 band A2, B1 band B2, C1 band C2, D1 band D2}.
 
-resolve_all(ParentList) ->
+resolve_all(ParentList) -> resolve_all(ParentList, []).
+
+resolve_all(ParentList, DestList) ->
 	Q = qlc:q([{F#filter.id, F#filter.default_action} || 
 			F <- mnesia:table(filter)
 			]),
-	case qlc:e(Q) of
+	A = case qlc:e(Q) of
 		[FilterKey] -> 	
-			Rules = resolve_rules(ParentList),
+			Rules = resolve_rules(ParentList, DestList),
 			[{FilterKey, Rules}];
 		_Else -> [{{0, pass}, []}] end.
 
-resolve_rules(PS) -> resolve_rules(PS,[]).
-resolve_rules([P|PS], Rules) -> 
-	case resolve_rule(P) of
-		none -> resolve_rules(PS, Rules);
-		Rule -> resolve_rules(PS, [Rule| Rules]) end;
-resolve_rules([], Rules) -> lists:reverse(Rules).
+resolve_rules(PS, DestList) -> resolve_rules(PS, DestList, []).
+resolve_rules([P|PS], DestList, Rules) -> 
+	case resolve_rule(P, DestList) of
+		none -> resolve_rules(PS, DestList, Rules);
+		Rule -> resolve_rules(PS, DestList, [Rule| Rules]) end;
+resolve_rules([], _DestList, Rules) -> lists:reverse(Rules).
 
-resolve_rule({mgroup, Id}) ->
+resolve_rule({mgroup, Id}, DestList) ->
 	Q = qlc:q([MG#match_group.parent || 
 			MG <- mnesia:table(match_group),
 			MG#match_group.id == Id
 			]),
 	case qlc:e(Q) of
-		[Parent] -> resolve_rule(Parent);
+		[Parent] -> resolve_rule(Parent, DestList);
 		_Else -> none end;
-resolve_rule({rule, Id}) ->
-	Q = qlc:q([{R#rule.id, R#rule.action} || 
+resolve_rule({rule, Id}, DestList) ->
+	Q = qlc:q([{R#rule.id, R#rule.action, 
+			lists:any(fun(E) -> not lists:member(E, R#rule.trusted_domains) end, DestList)
+			} || 
 			F <- mnesia:table(filter), 
 			R <- mnesia:table(rule), 
 			F#filter.id == R#rule.filter_id,
@@ -696,7 +701,8 @@ resolve_rule({rule, Id}) ->
 			]),
 	
 	case qlc:e(Q) of
-		[{RId, RAction}] -> {RId, RAction, find_funcs({rule, RId})};
+		[{RId, RAction, true = _IsNotWhiteDomain}] -> {RId, RAction, find_funcs({rule, RId})};
+		[{RId, RAction, false = _IsNotWhiteDomain}] -> {RId, RAction, []};
 		_Else -> none end.
 	
 find_funcss(Parents) -> find_funcss(Parents, []).
