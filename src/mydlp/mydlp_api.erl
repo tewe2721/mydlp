@@ -1445,16 +1445,22 @@ mime_to_files([], Acc) -> lists:reverse(Acc).
 cd_to_fn(ContentDisposition) ->
 	case string:str(ContentDisposition, "filename=") of
 		0 -> none; 
-		I -> case string:strip(string:substr(ContentDisposition, I + 9)) of
+		I ->	FNVal = string:strip(string:substr(ContentDisposition, I + 9)),
+			FNVal1 = string:strip(FNVal, right, $;),
+			case FNVal1 of
 				"\\\"" ++ Str -> 
 					Len = string:len(Str),
-					"\"\\" = string:substr(Str, Len - 1),
+					case string:substr(Str, Len - 1) of
+						"\"\\" -> ok;
+						"\\\"" -> ok end,
 					string:substr(Str, 1, Len - 2);
 				"\"" ++ Str -> 
 					Len = string:len(Str),
 					"\"" = string:substr(Str, Len),
 					string:substr(Str, 1, Len - 1);
 				Str -> Str end end.
+
+
 
 %%-------------------------------------------------------------------------
 %% @doc Select chuck from files
