@@ -432,7 +432,7 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 	DFFiles = df_to_files(State),
 	DestList = [list_to_binary(DestHost)],
 
-	A = case case mydlp_acl:q(SAddr, CAddr, DestList, DFFiles) of
+	case case mydlp_acl:q(SAddr, CAddr, DestList, DFFiles) of
 		pass -> {pass, mydlp_api:empty_aclr(DFFiles)};
 		log -> {log, mydlp_api:empty_aclr(DFFiles)};
 		archive -> {archive, mydlp_api:empty_aclr(DFFiles)};
@@ -466,14 +466,14 @@ archive_req(State, {{rule, RId}, {file, _}, {matcher, _}, {misc, _}}, DFFiles) -
 		[] -> ok;
 		_Else -> log_req(State, archive, {{rule, RId}, {file, DFFiles}, {matcher, none}, {misc,""}}) end.
 
-pass_req(#state{log_pass=false} = State, _Files) -> ok;
+pass_req(#state{log_pass=false}, _Files) -> ok;
 pass_req(#state{log_pass=LogPassLL, icap_mod_mode=reqmod} = State, Files) -> 
 	UTLFiles = lists:filter(fun(#file{dataref=Ref}) -> ?BB_S(Ref) > LogPassLL end, Files),
 	RId = {dr, mydlp_mnesia:get_dcid()}, % this will create problem for multisite users.
 	case UTLFiles of
 		[] -> ok;
 		_Else -> log_req(State, pass, {{rule, RId}, {file, UTLFiles}, {matcher, none}, {misc,""}}) end;
-pass_req(State, _Files) -> ok.
+pass_req(_State, _Files) -> ok.
 
 'REPLY_OK'(State) -> reply(ok, State).
 
