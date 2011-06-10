@@ -421,8 +421,10 @@ reply(What, #state{socket=Socket, icap_request=IcapReq, http_request=HttpReq,
 		{ok, _, options} -> [IcapVer, " 200 OK\r\n",
 				StdIH,
 				"Methods: REQMOD\r\n",
-				"Max-Connections: ", integer_to_list(MC), "\r\n",
-				"Options-TTL: ", integer_to_list(OT), "\r\n",
+				case MC of 0 -> "";
+					_ -> ["Max-Connections: ", integer_to_list(MC), "\r\n"] end,
+				case OT of 0 -> "";
+					_ -> ["Options-TTL: ", integer_to_list(OT), "\r\n"] end,
 				"Encapsulated: null-body=0\r\n",
 				"Allow: 204\r\n\r\n"];
 		{ok, true, reqmod} -> [IcapVer, " 204 No Content\r\n",
