@@ -669,7 +669,7 @@ resolve_all(ParentList, DestList) ->
 	Q = qlc:q([{F#filter.id, F#filter.default_action} || 
 			F <- mnesia:table(filter)
 			]),
-	A = case qlc:e(Q) of
+	case qlc:e(Q) of
 		[FilterKey] -> 	
 			Rules = resolve_rules(ParentList, DestList),
 			[{FilterKey, Rules}];
