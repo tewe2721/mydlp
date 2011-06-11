@@ -94,19 +94,19 @@ init([]) ->
 %% @private
 %%-------------------------------------------------------------------------
 'WAIT_FOR_SOCKET'({socket_ready, Socket, _CommType}, State) when is_port(Socket) ->
-    % Now we own the socket
-    inet:setopts(Socket, [{active, once}, binary]),
-    {ok, {IP, _Port}} = inet:peername(Socket),
+	% Now we own the socket
+	inet:setopts(Socket, [{active, once}, binary]),
+	{ok, {IP, _Port}} = inet:peername(Socket),
 %	{ok,DNSBL} = erlmail_antispam:dnsbl(IP),
 %	?D({relay,IP,smtpd_queue:checkip(IP)}),
 %	NewState = State#smtpd_fsm{socket=Socket, addr=IP, options = DNSBL, relay = smtpd_queue:checkip(IP)},
 	NewState = State#smtpd_fsm{socket=Socket, addr=IP, relay = true},
 	NextState = smtpd_cmd:command({greeting,IP},NewState),
-    {next_state, 'WAIT_FOR_CMD', NextState, ?TIMEOUT};
+	{next_state, 'WAIT_FOR_CMD', NextState, ?TIMEOUT};
 'WAIT_FOR_SOCKET'(Other, State) ->
-    ?DEBUG("SMTP State: 'WAIT_FOR_SOCKET'. Unexpected message: ~p\n", [Other]),
-    %% Allow to receive async messages
-    {next_state, 'WAIT_FOR_SOCKET', State}.
+	?DEBUG("SMTP State: 'WAIT_FOR_SOCKET'. Unexpected message: ~p\n", [Other]),
+	%% Allow to receive async messages
+	{next_state, 'WAIT_FOR_SOCKET', State}.
 
 %% Notification event coming from client
 'WAIT_FOR_CMD'({data, Data}, #smtpd_fsm{buff = Buff} = State) ->
@@ -124,8 +124,8 @@ init([]) ->
 	end;
 
 'WAIT_FOR_CMD'(timeout, State) ->
-    ?DEBUG("~p Client connection timeout - closing.\n", [self()]),
-    {stop, normal, State}.
+	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+	{stop, normal, State}.
 
 %% Notification event coming from client
 'WAIT_FOR_DATA'({data, Data}, #smtpd_fsm{buff = Buff} = State) ->
@@ -138,8 +138,8 @@ init([]) ->
 			{next_state, 'PROCESS_DATA', State#smtpd_fsm{message_bin=Message, buff=NextBuff}, ?TIMEOUT} end;
 
 'WAIT_FOR_DATA'(timeout, State) ->
-    ?DEBUG("~p Client connection timeout - closing.\n", [self()]),
-    {stop, normal, State}.
+	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+	{stop, normal, State}.
 
 'PROCESS_DATA'(ok, #smtpd_fsm{message_bin=Message} = State) ->
 	NewState = smtpd_cmd:read_message(Message,State),
@@ -149,7 +149,6 @@ init([]) ->
 'READ_FILES'(#smtpd_fsm{message_mime=MIME} = State) ->
 	Files = mydlp_api:mime_to_files(MIME),
 	'REQ_OK'(State#smtpd_fsm{files=Files}).
-
 
 % {Action, {{rule, Id}, {file, File}, {matcher, Func}, {misc, Misc}}}
 'REQ_OK'(#smtpd_fsm{enable_for_all=true, files=Files, message_record=MessageR} = State) ->
@@ -244,7 +243,7 @@ handle_event(Event, StateName, StateData) ->
 %% @private
 %%-------------------------------------------------------------------------
 handle_sync_event(Event, _From, StateName, StateData) ->
-    {stop, {StateName, undefined_event, Event}, StateData}.
+	{stop, {StateName, undefined_event, Event}, StateData}.
 
 %%-------------------------------------------------------------------------
 %% Func: handle_info/3
@@ -254,16 +253,16 @@ handle_sync_event(Event, _From, StateName, StateData) ->
 %% @private
 %%-------------------------------------------------------------------------
 handle_info({tcp, Socket, Bin}, StateName, #smtpd_fsm{socket=Socket} = StateData) ->
-    % Flow control: enable forwarding of next TCP message
-    inet:setopts(Socket, [{active, once}]),
-    fsm_call(StateName, {data, Bin}, StateData);
+	% Flow control: enable forwarding of next TCP message
+	inet:setopts(Socket, [{active, once}]),
+	fsm_call(StateName, {data, Bin}, StateData);
 
 handle_info({tcp_closed, Socket}, _StateName, #smtpd_fsm{socket=Socket, addr=_Addr} = StateData) ->
-%    error_logger:info_msg("~p Client ~p disconnected.\n", [self(), Addr]),
-    {stop, normal, StateData};
+	% error_logger:info_msg("~p Client ~p disconnected.\n", [self(), Addr]),
+	{stop, normal, StateData};
 
 handle_info(_Info, StateName, StateData) ->
-    {noreply, StateName, StateData}.
+	{noreply, StateName, StateData}.
 
 fsm_call(StateName, Args, StateData) -> 
 	try ?MODULE:StateName(Args, StateData)
@@ -294,8 +293,8 @@ deliver_raw(#smtpd_fsm{mail=From, rcpt=Rcpt, message_bin=MessageS}) ->
 %%-------------------------------------------------------------------------
 terminate(_Reason, _StateName, #smtpd_fsm{socket=Socket} = _State) ->
 	% @todo: close conenctions to message store
-    (catch gen_tcp:close(Socket)),
-    ok.
+	(catch gen_tcp:close(Socket)),
+	ok.
 
 %%-------------------------------------------------------------------------
 %% Func: code_change/4
@@ -304,7 +303,7 @@ terminate(_Reason, _StateName, #smtpd_fsm{socket=Socket} = _State) ->
 %% @private
 %%-------------------------------------------------------------------------
 code_change(_OldVsn, StateName, StateData, _Extra) ->
-    {ok, StateName, StateData}.
+	{ok, StateName, StateData}.
 
 end_of_cmd(Bin) ->
 	% Refine this with compiled version for %20 performance improvement
