@@ -54,6 +54,7 @@
 
 -compile(export_all).
 
+-define(SMTP_LOG(Type, Param), smtp_msg(Type,Param)).
 
 
 %%%------------------------------------------------------------------------
@@ -101,6 +102,7 @@ init([]) ->
 %	?D({relay,IP,smtpd_queue:checkip(IP)}),
 %	NewState = State#smtpd_fsm{socket=Socket, addr=IP, options = DNSBL, relay = smtpd_queue:checkip(IP)},
 	NewState = State#smtpd_fsm{socket=Socket, addr=IP, relay = true},
+	?SMTP_LOG(connect, IP),
 	NextState = smtpd_cmd:command({greeting,IP},NewState),
 	{next_state, 'WAIT_FOR_CMD', NextState, ?TIMEOUT};
 'WAIT_FOR_SOCKET'(Other, State) ->
@@ -144,6 +146,7 @@ init([]) ->
 'PROCESS_DATA'(ok, #smtpd_fsm{message_bin=Message} = State) ->
 	NewState = smtpd_cmd:read_message(Message,State),
 	smtpd_cmd:send(NewState,250),
+	?SMTP_LOG(received, NewState#smtpd_fsm.message_record),
 	'READ_FILES'(NewState).
 
 'READ_FILES'(#smtpd_fsm{message_mime=MIME} = State) ->
@@ -208,11 +211,13 @@ archive_req(State, {{rule, RId}, {file, _}, {matcher, _}, {misc, _}}, Files) ->
 				"\r\n" ++
 				mydlp_api:get_denied_page(html_base64_str)},
 	mydlp_smtpc:mail(RepMessage),
+	?SMTP_LOG(sent_deny, MessageR),
 	NextState = reset_statedata(State),
 	{next_state, 'WAIT_FOR_CMD', NextState, ?TIMEOUT}.
 
 'CONNECT_REMOTE'(connect, #smtpd_fsm{message_record=MessageR} = State) ->
 	mydlp_smtpc:mail(MessageR),
+	?SMTP_LOG(sent_ok, MessageR),
 	NextState = reset_statedata(State),
 	{next_state, 'WAIT_FOR_CMD', NextState, ?TIMEOUT}.
 
@@ -257,8 +262,7 @@ handle_info({tcp, Socket, Bin}, StateName, #smtpd_fsm{socket=Socket} = StateData
 	inet:setopts(Socket, [{active, once}]),
 	fsm_call(StateName, {data, Bin}, StateData);
 
-handle_info({tcp_closed, Socket}, _StateName, #smtpd_fsm{socket=Socket, addr=_Addr} = StateData) ->
-	% error_logger:info_msg("~p Client ~p disconnected.\n", [self(), Addr]),
+handle_info({tcp_closed, Socket}, _StateName, #smtpd_fsm{socket=Socket} = StateData) ->
 	{stop, normal, StateData};
 
 handle_info(_Info, StateName, StateData) ->
@@ -291,8 +295,8 @@ deliver_raw(#smtpd_fsm{mail=From, rcpt=Rcpt, message_bin=MessageS}) ->
 %% Returns: any
 %% @private
 %%-------------------------------------------------------------------------
-terminate(_Reason, _StateName, #smtpd_fsm{socket=Socket} = _State) ->
-	% @todo: close conenctions to message store
+terminate(_Reason, _StateName, #smtpd_fsm{socket=Socket, addr=Addr} = _State) ->
+	?SMTP_LOG(disconnect, Addr),
 	(catch gen_tcp:close(Socket)),
 	ok.
 
@@ -330,14 +334,19 @@ reset_statedata(#smtpd_fsm{} = State) ->
 		        files       = [],
 			data  = undefined}.
 
+get_from(MessageR) -> MessageR#message.mail_from.
+
+get_dest_addresses(MessageR) ->
+	DestList = ["rcpt to: <" ++ MessageR#message.rcpt_to ++ ">"] ++ 
+		["to: <" ++ A#addr.username ++ "@" ++ A#addr.domainname ++ ">"|| A <- MessageR#message.to] ++
+		["cc: <" ++ A#addr.username ++ "@" ++ A#addr.domainname ++ ">"|| A <- MessageR#message.cc] ++
+		["bcc: <" ++ A#addr.username ++ "@" ++ A#addr.domainname ++ ">"|| A <- MessageR#message.bcc],
+	string:join(DestList, ", ").
+
 log_req(#smtpd_fsm{message_record=MessageR}, Action,
                 {{rule, RuleId}, {file, File}, {matcher, Matcher}, {misc, Misc}}) ->
-	Src = MessageR#message.mail_from,
-	DestList = ["rcpt to: <" ++ MessageR#message.rcpt_to ++ ">"] ++ 
-			["to: <" ++ A#addr.username ++ "@" ++ A#addr.domainname ++ ">"|| A <- MessageR#message.to] ++
-			["cc: <" ++ A#addr.username ++ "@" ++ A#addr.domainname ++ ">"|| A <- MessageR#message.cc] ++
-			["bcc: <" ++ A#addr.username ++ "@" ++ A#addr.domainname ++ ">"|| A <- MessageR#message.bcc],
-	Dest = string:join(DestList, ", "),
+	Src = get_from(MessageR),
+	Dest = get_dest_addresses(MessageR),
         ?ACL_LOG(smtp, RuleId, Action, nil, Src, Dest, Matcher, File, Misc).
 
 get_dest_domains(#message{rcpt_to=RcptTo, to=ToH, cc=CCH, bcc=BCCH})->
@@ -345,6 +354,48 @@ get_dest_domains(#message{rcpt_to=RcptTo, to=ToH, cc=CCH, bcc=BCCH})->
 	DestList = RcptToA ++ ToH ++ CCH ++ BCCH,
 	Domains = [list_to_binary(A#addr.domainname) || A <- DestList],
 	lists:usort(Domains).
+
+create_smtp_msg(connect, {Ip1,Ip2,Ip3,Ip4}) ->
+	{
+		"Connected to ~w.~w.~w.~w .",
+		[Ip1,Ip2,Ip3,Ip4]
+	};
+create_smtp_msg(received, MessageR) ->
+	From = get_from(MessageR),
+	ToList = get_dest_addresses(MessageR),
+	{
+		"Recieved mail. FROM=~s TO='~s'",
+		[From, ToList]
+	};
+create_smtp_msg(sent_ok, MessageR) ->
+	From = get_from(MessageR),
+	ToList = get_dest_addresses(MessageR),
+	{
+		"Transferred clean message to queue. FROM=~s TO='~s' ",
+		[From, ToList]
+	};
+create_smtp_msg(sent_deny, MessageR) ->
+	From = get_from(MessageR),
+	{
+		"Transfer deny message to queue. TO=~s ",
+		[From]
+	};
+create_smtp_msg(disconnect, {Ip1,Ip2,Ip3,Ip4}) ->
+	{
+		"Disconnected from ~w.~w.~w.~w .",
+		[Ip1,Ip2,Ip3,Ip4]
+	};
+create_smtp_msg(Type, Param) ->
+	{
+		"Type=~w Param=~w",
+		[Type, Param]
+	}.
+
+smtp_msg(Type, Param) ->
+	{Format, Args} = create_smtp_msg(Type, Param),
+	Format1 = "PID=~w " ++ Format ++ "~n",
+	Args1 = [self() | Args],
+	mydlp_logger:notify(smtp_msg, Format1, Args1).
 
 -include_lib("eunit/include/eunit.hrl").
 
