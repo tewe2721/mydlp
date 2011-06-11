@@ -133,18 +133,15 @@ reopen_log() ->
 %%% Internal functions
 %%%----------------------------------------------------------------------
 
+get_prefix(acl_msg) -> "ACL";
+get_prefix(info_msg) -> "INFO";
+get_prefix(smtp_msg) -> "SMTP";
+get_prefix(icap_msg) -> "ICAP";
+get_prefix(_Else) -> "OTHER".
+
 % Copied from erlang_logger_file_h.erl
-write_event(Fd, {Time, {acl_msg, _GL, {Pid, Format, Args}}}) ->
-    T = write_time(Time, "ACL"),
-    case catch io_lib:format(add_node(Format,Pid), Args) of
-	S when is_list(S) ->
-	    file:write(Fd, io_lib:format(T ++ S, []));
-	_ ->
-	    F = add_node("ERROR: ~p - ~p~n", Pid),
-	    file:write(Fd, io_lib:format(T ++ F, [Format,Args]))
-    end;
-write_event(Fd, {Time, {info_msg, _GL, {Pid, Format, Args}}}) ->
-    T = write_time(Time, "INFO"),
+write_event(Fd, {Time, {MsgTag, _GL, {Pid, Format, Args}}}) ->
+    T = write_time(Time, get_prefix(MsgTag)),
     case catch io_lib:format(add_node(Format,Pid), Args) of
 	S when is_list(S) ->
 	    file:write(Fd, io_lib:format(T ++ S, []));
