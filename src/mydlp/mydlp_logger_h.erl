@@ -65,12 +65,9 @@
 %%          Other
 %%----------------------------------------------------------------------
 init(File) ->
-    case file:open(File, [append, raw]) of
-	{ok, Fd} ->
-	    {ok, #state{fd = Fd, file = File}};
-	Error ->
-	    Error
-    end.
+	case file:open(File, [append, raw]) of
+		{ok, Fd} -> {ok, #state{fd = Fd, file = File}};
+		Error -> Error end.
 
 %%----------------------------------------------------------------------
 %% Func: handle_event/2
@@ -79,8 +76,8 @@ init(File) ->
 %%          remove_handler                              
 %%----------------------------------------------------------------------
 handle_event(Event, State) ->
-    write_event(State#state.fd, {erlang:localtime(), Event}),
-    {ok, State}.
+	write_event(State#state.fd, {erlang:localtime(), Event}),
+	{ok, State}.
 
 %%----------------------------------------------------------------------
 %% Func: handle_call/2
@@ -89,8 +86,8 @@ handle_event(Event, State) ->
 %%          {remove_handler, Reply}                            
 %%----------------------------------------------------------------------
 handle_call(_Request, State) ->
-    Reply = ok,
-    {ok, Reply, State}.
+	Reply = ok,
+	{ok, Reply, State}.
 
 %%----------------------------------------------------------------------
 %% Func: handle_info/2
@@ -99,35 +96,29 @@ handle_call(_Request, State) ->
 %%          remove_handler                              
 %%----------------------------------------------------------------------
 handle_info({'EXIT', _Fd, _Reason}, _State) ->
-    remove_handler;
+	remove_handler;
 handle_info({emulator, _GL, reopen}, State) ->
-    file:close(State#state.fd),
-    rotate_log(State#state.file),
-    case file:open(State#state.file, [append, raw]) of
-	{ok, Fd} ->
-	    {ok, State#state{fd = Fd}};
-	Error ->
-	    Error
-    end;
+	file:close(State#state.fd),
+	rotate_log(State#state.file),
+	case file:open(State#state.file, [append, raw]) of
+		{ok, Fd} -> {ok, State#state{fd = Fd}};
+		Error -> Error end;
 handle_info({emulator, GL, Chars}, State) ->
-    write_event(State#state.fd, {erlang:localtime(), {emulator, GL, Chars}}),
-    {ok, State};
+	write_event(State#state.fd, {erlang:localtime(), {emulator, GL, Chars}}),
+	{ok, State};
 handle_info(_Info, State) ->
-    {ok, State}.
+	{ok, State}.
 
 %%----------------------------------------------------------------------
 %% Func: terminate/2
 %% Purpose: Shutdown the server
 %% Returns: any
 %%----------------------------------------------------------------------
-terminate(_Reason, _State) ->
-    ok.
+terminate(_Reason, _State) -> ok.
 
-code_change(_OldVsn, State, _Extra) ->
-    {ok, State}.
+code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
-reopen_log() ->
-    error_logger ! {emulator, noproc, reopen}.
+reopen_log() -> error_logger ! {emulator, noproc, reopen}.
 
 %%%----------------------------------------------------------------------
 %%% Internal functions
@@ -141,29 +132,26 @@ get_prefix(_Else) -> "OTHER".
 
 % Copied from erlang_logger_file_h.erl
 write_event(Fd, {Time, {MsgTag, _GL, {Pid, Format, Args}}}) ->
-    T = write_time(Time, get_prefix(MsgTag)),
-    case catch io_lib:format(add_node(Format,Pid), Args) of
-	S when is_list(S) ->
-	    file:write(Fd, io_lib:format(T ++ S, []));
-	_ ->
-	    F = add_node("ERROR: ~p - ~p~n", Pid),
-	    file:write(Fd, io_lib:format(T ++ F, [Format,Args]))
-    end;
-write_event(_, _) ->
-    ok.
+	T = write_time(Time, get_prefix(MsgTag)),
+	case catch io_lib:format(add_node(Format,Pid), Args) of
+		S when is_list(S) ->
+			file:write(Fd, io_lib:format(T ++ S, []));
+		_ ->
+			F = add_node("ERROR: ~p - ~p~n", Pid),
+			file:write(Fd, io_lib:format(T ++ F, [Format,Args])) end;
+write_event(_, _) -> ok.
 
 add_node(X, Pid) when is_atom(X) ->
-    add_node(atom_to_list(X), Pid);
+	add_node(atom_to_list(X), Pid);
 add_node(X, Pid) when node(Pid) /= node() ->
-    lists:concat([X,"** at node ",node(Pid)," **~n"]);
-add_node(X, _) ->
-    X.
+	lists:concat([X,"** at node ",node(Pid)," **~n"]);
+add_node(X, _) -> X.
 
 %write_time(Time) -> write_time(Time, "ERROR").
 
 write_time({{Y,Mo,D},{H,Mi,S}}, Type) ->
-    io_lib:format("~s: ~w-~.2.0w-~.2.0w ~.2.0w:~.2.0w:~.2.0w -> ",
-		  [Type, Y, Mo, D, H, Mi, S]).
+	io_lib:format("~s: ~w-~.2.0w-~.2.0w ~.2.0w:~.2.0w:~.2.0w -> ",
+		[Type, Y, Mo, D, H, Mi, S]).
 
 %% @doc Rename the log file if exists, to "*-old.log".
 %% This is needed in systems when the file must be closed before rotation (Windows).
@@ -171,12 +159,10 @@ write_time({{Y,Mo,D},{H,Mi,S}}, Type) ->
 %% the log can directly be reopened.
 %% @spec (Filename::string()) -> ok
 rotate_log(Filename) ->
-    case file:read_file_info(Filename) of
-	{ok, _FileInfo} ->
-	    RotationName = filename:rootname(Filename),
-	    file:rename(Filename, [RotationName, "-old.log"]),
-	    ok;
-	{error, _Reason} ->
-	    ok
-    end.
+	case file:read_file_info(Filename) of
+		{ok, _FileInfo} ->
+			RotationName = filename:rootname(Filename),
+			file:rename(Filename, [RotationName, "-old.log"]),
+			ok;
+		{error, _Reason} -> ok end.
 	    
