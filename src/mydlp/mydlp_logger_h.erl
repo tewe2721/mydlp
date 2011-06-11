@@ -53,21 +53,49 @@
 -export([init/1, handle_event/2, handle_call/2, handle_info/2, terminate/2,
 	 code_change/3, reopen_log/0, rotate_log/1]).
 
--record(state, {fd, file}).
+-record(state, {
+	log_dir,
+	info_fd,
+	error_fd,
+	acl_fd,
+	smtp_fd
+}).
 
 %%%----------------------------------------------------------------------
 %%% Callback functions from gen_event
 %%%----------------------------------------------------------------------
+
+%%---------------------------------------------------------------------
+%% Log file definitions
+%%---------------------------------------------------------------------
+	    
+open_files(#state{log_dir=LogDir} = State) ->
+	{ok, InfoFd} = fopen(LogDir ++ "/info.log"),
+	{ok, ErrorFd} = fopen(LogDir ++ "/error.log"),
+	{ok, AclFd} = fopen(LogDir ++ "/acl.log"),
+	{ok, SmtpFd} = fopen(LogDir ++ "/smtp.log"),
+	State#state{acl_fd=AclFd, info_fd=InfoFd, error_fd=ErrorFd, smtp_fd=SmtpFd}.
+
+close_files(#state{acl_fd=AclFd, info_fd=InfoFd, error_fd=ErrorFd, smtp_fd=SmtpFd} = State) ->
+	file:close(InfoFd),
+	file:close(ErrorFd),
+	file:close(AclFd),
+	file:close(SmtpFd),
+	State#state{acl_fd=undefined, error_fd=undefined, smtp_fd=undefined}.
+
+rotate_logs(LogDir) ->
+	rotate_log(LogDir ++ "/error.log"),
+	rotate_log(LogDir ++ "/info.log"),
+	rotate_log(LogDir ++ "/acl.log"),
+	rotate_log(LogDir ++ "/smtp.log").
 
 %%----------------------------------------------------------------------
 %% Func: init/1
 %% Returns: {ok, State}          |
 %%          Other
 %%----------------------------------------------------------------------
-init(File) ->
-	case file:open(File, [append, raw]) of
-		{ok, Fd} -> {ok, #state{fd = Fd, file = File}};
-		Error -> Error end.
+init(LogDir) ->
+	{ok, open_files(#state{log_dir=LogDir})}.
 
 %%----------------------------------------------------------------------
 %% Func: handle_event/2
@@ -76,7 +104,7 @@ init(File) ->
 %%          remove_handler                              
 %%----------------------------------------------------------------------
 handle_event(Event, State) ->
-	write_event(State#state.fd, {erlang:localtime(), Event}),
+	write_event(State, {erlang:localtime(), Event}),
 	{ok, State}.
 
 %%----------------------------------------------------------------------
@@ -97,14 +125,12 @@ handle_call(_Request, State) ->
 %%----------------------------------------------------------------------
 handle_info({'EXIT', _Fd, _Reason}, _State) ->
 	remove_handler;
-handle_info({emulator, _GL, reopen}, State) ->
-	file:close(State#state.fd),
-	rotate_log(State#state.file),
-	case file:open(State#state.file, [append, raw]) of
-		{ok, Fd} -> {ok, State#state{fd = Fd}};
-		Error -> Error end;
+handle_info({emulator, _GL, reopen}, #state{log_dir=LogDir} = State) ->
+	State1 = close_files(State),
+	rotate_logs(LogDir),
+	{ok, open_files(State1)};
 handle_info({emulator, GL, Chars}, State) ->
-	write_event(State#state.fd, {erlang:localtime(), {emulator, GL, Chars}}),
+	write_event(State, {erlang:localtime(), {emulator, GL, Chars}}),
 	{ok, State};
 handle_info(_Info, State) ->
 	{ok, State}.
@@ -124,24 +150,30 @@ reopen_log() -> error_logger ! {emulator, noproc, reopen}.
 %%% Internal functions
 %%%----------------------------------------------------------------------
 % Copied from erlang_logger_file_h.erl
-write_event(Fd, {Time, {acl_msg, _GL, {Pid, Format, Args}}}) ->
+write_event(#state{acl_fd=Fd}, {Time, {acl_msg, _GL, {Pid, Format, Args}}}) ->
 	write_event1(Fd, "ACL", Time, Pid, Format, Args);
-write_event(Fd, {Time, {info_msg, _GL, {Pid, Format, Args}}}) ->
+write_event(#state{info_fd=Fd}, {Time, {info_msg, _GL, {Pid, Format, Args}}}) ->
 	write_event1(Fd, "INFO", Time, Pid, Format, Args);
-write_event(Fd, {Time, {smtp_msg, _GL, {Pid, Format, Args}}}) ->
+write_event(#state{smtp_fd=Fd}, {Time, {smtp_msg, _GL, {Pid, Format, Args}}}) ->
 	write_event1(Fd, "SMTP", Time, Pid, Format, Args);
-write_event(Fd, {Time, {icap_msg, _GL, {Pid, Format, Args}}}) ->
-	write_event1(Fd, "ICAP", Time, Pid, Format, Args);
+write_event(#state{error_fd=Fd}, {Time, {error, _GL, {Pid, Format, Args}}}) ->
+	write_event1(Fd, "ERROR", Time, Pid, Format, Args);
+write_event(#state{error_fd=Fd}, {Time, {error_report, _GL, {Pid, Format, Args}}}) ->
+	write_event1(Fd, "ERROR", Time, Pid, Format, Args);
 write_event(_, _) -> ok.
 
-write_event1(Fd, Prefix, Time, Pid, Format, Args) ->
+write_event1(Fd, Prefix, Time, Pid, Format, Args) when is_list(Format)->
 	T = write_time(Time, Prefix),
 	case catch io_lib:format(add_node(Format,Pid), Args) of
 		S when is_list(S) ->
 			file:write(Fd, io_lib:format(T ++ S, []));
 		_ ->
 			F = add_node("ERROR: ~p - ~p~n", Pid),
-			file:write(Fd, io_lib:format(T ++ F, [Format,Args])) end.
+			file:write(Fd, io_lib:format(T ++ F, [Format,Args])) end;
+write_event1(Fd, Prefix, Time, Pid, Format, Args) ->
+	T = write_time(Time, Prefix),
+	F = add_node("~p - ~p~n", Pid),
+	file:write(Fd, io_lib:format(T ++ F, [Format,Args])).
 
 add_node(X, Pid) when is_atom(X) ->
 	add_node(atom_to_list(X), Pid);
@@ -167,4 +199,5 @@ rotate_log(Filename) ->
 			file:rename(Filename, [RotationName, "-old.log"]),
 			ok;
 		{error, _Reason} -> ok end.
-	    
+
+fopen(Filename) -> file:open(Filename, [append, raw]).

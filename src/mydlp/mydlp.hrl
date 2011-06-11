@@ -36,7 +36,7 @@
 %% Logging mechanism
 %% imported from http://github.com/processone/ejabberd/blob/master/src/ejabberd.hrl
 
--define(LOG_PATH, "mydlp.log").
+-define(LOG_DIR, ".").
 
 -define(PID_FILE, "mydlp.pid").
 

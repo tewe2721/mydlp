@@ -48,7 +48,7 @@ start(_Type, _Args) ->
         application:load(thrift),
         application:load(sasl),
         application:load(mydlp),
-        error_logger:add_report_handler(mydlp_logger_h, get_log_path()),
+        error_logger:add_report_handler(mydlp_logger_h, get_log_dir()),
 	create_pid_file(),
 
 	% Read configuration
@@ -135,14 +135,13 @@ stop(_S) ->
 %% If not defined it checks the environment variable EJABBERD_LOG_PATH.
 %% And if that one is neither defined, returns the default value:
 %% "ejabberd.log" in current directory.
-get_log_path() ->
-        case application:get_env(mydlp, log_path) of
-        {ok, Path} ->
-                Path;
+get_log_dir() ->
+        case application:get_env(mydlp, log_dir) of
+        {ok, Dir} -> Dir;
         undefined ->
-                case os:getenv("MYDLP_LOG_PATH") of
-                        false -> ?LOG_PATH;
-                        Path -> Path
+                case os:getenv("MYDLP_LOG_DIR") of
+                        false -> ?LOG_DIR;
+                        Dir -> Dir
                 end
         end.
 
