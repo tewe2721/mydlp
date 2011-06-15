@@ -780,12 +780,12 @@ acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, #file{} = File, Misc) ->
 		quarantine ->	acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
 				mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, File, Misc);
 		archive -> 
-			case ?BB_S(File#file.dataref) > ?MINIMUM_ARCHIVE_OBJ_SIZE of % will use new configuration refs
-				true -> acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
+			case { Proto, ?BB_S(File#file.dataref) > ?MINIMUM_ARCHIVE_OBJ_SIZE } of % will use new configuration refs
+				{ icap, true } -> acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
 					AFileId = mydlp_mysql:new_afile(),
 					mydlp_archive:a(AFileId, File),
 					mydlp_mysql:archive_log(Proto, RuleId, Ip, User, To, AFileId);
-				false -> ok end;
+				_Else -> ok end;
 		_Else -> ok end.
 
 acl_msg1(Proto, RuleId, Action, nil, nil, To, Matcher, FileS, Misc) ->
