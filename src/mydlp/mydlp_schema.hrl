@@ -18,6 +18,8 @@
 %%%    along with MyDLP.  If not, see <http://www.gnu.org/licenses/>.
 %%%--------------------------------------------------------------------------
 
+-ifdef(__MYDLP_NETWORK).
+
 -ifndef(_MYDLP_SCHEMA_HRL).
 -define(_MYDLP_SCHEMA_HRL, true).
 
@@ -126,3 +128,6 @@
 }).
 
 -endif.
+
+-endif.
+

@@ -86,7 +86,6 @@ init([protocol_supervisor, ProtoConf]) ->
 			]
 		}
 	};
-
 init([socket, http]) ->
 	{ok,
 		{_SupFlags = {simple_one_for_one, ?MAX_RESTART, ?MAX_TIME},

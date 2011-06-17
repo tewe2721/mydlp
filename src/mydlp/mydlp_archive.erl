@@ -24,6 +24,9 @@
 %%% @doc Worker for mydlp.
 %%% @end
 %%%-------------------------------------------------------------------
+
+-ifdef(__MYDLP_NETWORK).
+
 -module(mydlp_archive).
 -author("kerem@mydlp.org").
 -behaviour(gen_server).
@@ -146,4 +149,6 @@ archive_file({ AFileId, #file{} = File }) ->
 	mydlp_mysql:update_afile(AFileId, Filename, MimeType, Size, ArchivePath, ContentText),
 
 	ok.
+
+-endif.
 

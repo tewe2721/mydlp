@@ -29,11 +29,23 @@
 
 -include("mydlp.hrl").
 
+-ifdef(__MYDLP_NETWORK).
+
 prestart_load() ->
 	load_mydlp_denied_page0().
 
 load() ->
 	load_mydlp_denied_page().
+
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
+prestart_load() -> ok.
+
+load() -> ok.
+
+-endif.
 
 load_src(Src) ->
 	try

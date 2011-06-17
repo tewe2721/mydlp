@@ -18,6 +18,8 @@
 %%%    along with MyDLP.  If not, see <http://www.gnu.org/licenses/>.
 %%%--------------------------------------------------------------------------
 
+-ifdef(__MYDLP_NETWORK).
+
 -ifndef(_MYDLP_HTTP_HRL).
 -define(_MYDLP_HTTP_HRL, true).
 
@@ -63,3 +65,6 @@
 -define(NEWLINE, <<"\r\n">>).
 
 -endif.
+
+-endif.
+

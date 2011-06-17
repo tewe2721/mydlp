@@ -185,9 +185,14 @@ to_lowerchar(C) ->
 %% @doc Extracts Texts from MS Office 97 - 2003 Files 
 %% @end
 %%----------------------------------------------------------------------
+
+-ifdef(__PLATFORM_LINUX).
+
 -define(DOC, {"/usr/bin/catdoc", ["-wx", "-dutf-8"]}).
 -define(PPT, {"/usr/bin/catppt", []}).
 -define(XLS, {"/usr/bin/xls2csv", ["-x"]}).
+
+-endif.
 
 office_to_text(#file{filename = Filename, data = Data}) ->
 	StrLen = case is_list(Filename) of
@@ -566,12 +571,29 @@ mktempdir() ->
 %% @doc Helper command for uncompression operations
 %% @end
 %%----------------------------------------------------------------------
+
+-ifdef(__PLATFORM_LINUX).
+
+uncompress_sl(Src,Dest) ->
+	ok = file:make_symlink(Src, Dest).
+
+-endif.
+
+-ifdef(__PLATFORM_WINDOWS).
+
+uncompress_sl(Src,Dest) ->
+	{ok, _ByteCount} = file:copy(Src, Dest).
+
+-endif.
+
 uncompress(Method, {memory, Bin}, Filename) -> uncompress(Method, Bin, Filename);
 
 uncompress(Method, {Type, _Value} = Ref, Filename) when
 		Type == cacheref; Type == unixfile -> 
 	{FNDir, FN} = uncompress0(Method, Filename),
-	ok = file:make_symlink(?BB_P(Ref), FN),
+
+	uncompress_sl(?BB_P(Ref), FN),
+
 	mydlp_api:Method(FNDir, FN);
 
 uncompress(Method, Bin, Filename) when is_binary(Bin) -> 
@@ -599,16 +621,22 @@ uncompress0(_Method, Filename) ->
 %% @doc Un7zs an Erlang binary, this can be used for ZIP, CAB, ARJ, GZIP, BZIP2, TAR, CPIO, RPM and DEB formats.
 %% @end
 %%----------------------------------------------------------------------
+-ifdef(__PLATFORM_LINUX).
+
+-define(SEVENZBIN, "/usr/bin/7z").
+-define(SEVENZARGS(WorkDir, ZFN), ["-p","-y","-bd","-o" ++ WorkDir,"x",ZFN] ).
+
+-endif.
+
 un7z(Arg) -> un7z(Arg, "nofilename").
 
 un7z(Arg, FN) -> uncompress(un7zc, Arg, FN).
 
-
 un7zc(ZFNDir, ZFN) -> 
 	{ok, WorkDir} = mktempdir(),
 	WorkDir1 = WorkDir ++ "/",
-	Port = open_port({spawn_executable, "/usr/bin/7z"}, 
-			[{args, ["-p","-y","-bd","-o" ++ WorkDir1,"x",ZFN]},
+	Port = open_port({spawn_executable, ?SEVENZBIN}, 
+			[{args, ?SEVENZARGS(WorkDir1, ZFN)},
 			use_stdio,
 			exit_status,
 			stderr_to_stdout]),
@@ -623,13 +651,20 @@ un7zc(ZFNDir, ZFN) ->
 %% @doc Ungzips an Erlang binary, this can be used for GZIP format.
 %% @end
 %%----------------------------------------------------------------------
+-ifdef(__PLATFORM_LINUX).
+
+-define(GZIPBIN, "/bin/gzip").
+-define(GZIPARGS(FN), ["-d","-f","-q", FN] ).
+
+-endif.
+
 ungzip(Arg) -> ungzip(Arg, "nofilename").
 
 ungzip(Arg, FN) -> uncompress(ungzipc, Arg, FN).
 
 ungzipc(FNDir, FN) -> 
-	Port = open_port({spawn_executable, "/bin/gzip"}, 
-			[{args, ["-d","-f","-q", FN]},
+	Port = open_port({spawn_executable, ?GZIPBIN}, 
+			[{args, ?GZIPARGS(FN)},
 			use_stdio,
 			exit_status,
 			stderr_to_stdout]),
@@ -639,9 +674,16 @@ ungzipc(FNDir, FN) ->
 		Else -> rmrf_dir(FNDir), Else end.
 
 %%--------------------------------------------------------------------
-%% @doc Un7zs an Erlang binary, this can be used for ZIP, CAB, ARJ, GZIP, BZIP2, TAR, CPIO, RPM and DEB formats.
+%% @doc Unars an Erlang binary, this can be used for AR format.
 %% @end
 %%----------------------------------------------------------------------
+-ifdef(__PLATFORM_LINUX).
+
+-define(ARBIN, "/usr/bin/ar").
+-define(ARARGS(ArFN), ["x",ArFN] ).
+
+-endif.
+
 unar(Arg) -> unar(Arg, "nofilename").
 
 unar(Arg, FN) -> uncompress(unarc, Arg, FN).
@@ -649,8 +691,8 @@ unar(Arg, FN) -> uncompress(unarc, Arg, FN).
 unarc(ArFNDir, ArFN) -> 
 	{ok, WorkDir} = mktempdir(),
 	WorkDir1 = WorkDir ++ "/",
-	Port = open_port({spawn_executable, "/usr/bin/ar"}, 
-			[{args, ["x",ArFN]},
+	Port = open_port({spawn_executable, ?ARBIN}, 
+			[{args, ?ARARGS(ArFN)},
 			{cd, WorkDir1},
 			use_stdio,
 			exit_status,
@@ -720,11 +762,18 @@ rr_files([], _WorkDir, Ret) -> lists:flatten(lists:reverse(Ret)).
 %% @doc Extracts Text from PostScript files
 %% @end
 %%----------------------------------------------------------------------
+-ifdef(__PLATFORM_LINUX).
+
+-define(PSTOTEXTBIN, "/usr/bin/pstotext").
+-define(PSTOTEXTARGS(Ps), [Ps]).
+
+-endif.
+
 ps_to_text(Bin) when is_binary(Bin) -> 
 	{ok, Ps} = mktempfile(),
 	ok = file:write_file(Ps, Bin, [raw]),
-	Port = open_port({spawn_executable, "/usr/bin/pstotext"}, 
-			[{args, [Ps]},
+	Port = open_port({spawn_executable, ?PSTOTEXTBIN}, 
+			[{args, ?PSTOTEXTARGS(Ps)},
 			use_stdio,
 			exit_status,
 			stderr_to_stdout]),
@@ -739,12 +788,19 @@ ps_to_text(Bin) when is_binary(Bin) ->
 %% @doc Extracts Text from PDF files
 %% @end
 %%----------------------------------------------------------------------
+-ifdef(__PLATFORM_LINUX).
+
+-define(PDFTOTEXTBIN, "/usr/bin/pdftotext").
+-define(PDFTOTEXTARGS(Pdf, TextFN), ["-q","-eol","unix",Pdf,TextFN]).
+
+-endif.
+
 pdf_to_text(Bin) when is_binary(Bin) -> 
 	{ok, Pdf} = mktempfile(),
 	ok = file:write_file(Pdf, Bin, [raw]),
 	{ok, TextFN} = mktempfile(),
-	Port = open_port({spawn_executable, "/usr/bin/pdftotext"}, 
-			[{args, ["-q","-eol","unix",Pdf,TextFN]},
+	Port = open_port({spawn_executable, ?PDFTOTEXTBIN}, 
+			[{args, ?PDFTOTEXTARGS(Pdf, TextFN)},
 			use_stdio,
 			exit_status,
 			stderr_to_stdout]),

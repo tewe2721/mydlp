@@ -24,6 +24,9 @@
 %%% @doc Worker for mydlp.
 %%% @end
 %%%-------------------------------------------------------------------
+
+-ifdef(__MYDLP_NETWORK).
+
 -module(mydlp_moddlp).
 -author("kerem@medra.com.tr").
 -behaviour(gen_server).
@@ -144,3 +147,6 @@ code_change(_OldVsn, State, _Extra) ->
 
 log_req(Action, {{rule, RuleId}, {file, File}, {matcher, Matcher}, {misc, Misc}}) ->
         ?ACL_LOG(mod_dlp, RuleId, Action, nil, nil, nil, Matcher, File, Misc).
+
+-endif.
+

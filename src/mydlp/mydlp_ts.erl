@@ -24,6 +24,9 @@
 %%% @doc Backend for mydlp ui functions.
 %%% @end
 %%%-------------------------------------------------------------------
+
+-ifdef(__MYDLP_NETWORK).
+
 -module(mydlp_ts).
 -author("kerem@medra.com.tr").
 
@@ -109,4 +112,5 @@ analyze(Entityid) -> mydlp_moddlp:analyze(Entityid).
 
 closeEntity(Entityid) -> mydlp_moddlp:close_entity(Entityid).
 
+-endif.
 

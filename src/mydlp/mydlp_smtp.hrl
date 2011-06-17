@@ -18,6 +18,8 @@
 %%%    along with MyDLP.  If not, see <http://www.gnu.org/licenses/>.
 %%%--------------------------------------------------------------------------
 
+-ifdef(__MYDLP_NETWORK).
+
 -ifndef(_MYDLP_SMTP_HRL).
 -define(_MYDLP_SMTP_HRL, true).
 
@@ -100,3 +102,6 @@
         }).
 
 -endif.
+
+-endif.
+

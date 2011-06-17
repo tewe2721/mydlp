@@ -30,6 +30,26 @@
 
 -include("mydlp.hrl").
 
+-ifdef(__MYDLP_ENDPOINT).
+
+-define(SEAP, 
+			{seap, % Simple endpoint agent protocol
+				{acceptor, {1011, plain, seap} },
+		                 {workers, []} 
+			}
+	).
+
+-define(ENDPOINT_SWORKERS,
+		[
+			{mydlp_acl, start_link,[]},
+			{mydlp_regex, start_link,[]},
+			{pg, {mydlp_tc, start_link,[]}, 4},
+			{mydlp_workdir, start_link,[]}
+		]
+	).
+
+-endif.
+
 %%--------------------------------------------------------------------
 %% Function: start(Type, StartArgs) -> {ok, Pid} |
 %%                                     {ok, Pid, State} |
@@ -43,16 +63,14 @@
 start(_Type, _Args) ->
 	% Start dependencies
 	mydlp_loglevel:set(4),
-        application:start(ssl),
-        application:start(crypto),
+	start_crypto(),
         application:load(thrift),
         application:load(sasl),
         application:load(mydlp),
         error_logger:add_report_handler(mydlp_logger_h, get_log_dir()),
 	create_pid_file(),
 
-	% Read configuration
-	{ok, Protocols} = application:get_env(protocols),
+	Protocols = get_protocols(),
 
 	% Prestart Load of dynamic modules
 	mydlp_dynamic:prestart_load(),
@@ -67,10 +85,9 @@ start(_Type, _Args) ->
 			mydlp_dynamic:load();
 		_Else -> ok end,
 	SRet.
-	
 
 init([Protocols]) ->
-	{ok, SWorkers} = application:get_env(shared_workers),
+	SWorkers = get_sworkers(),
 	SWSpec = { shared_worker_sup,                                                    % Id       = internal id
 		{supervisor, start_link,
 			[{local, shared_worker_sup}, mydlp_worker_sup, [SWorkers]]
@@ -158,3 +175,31 @@ get_pid_path() ->
 
 create_pid_file() ->
 	file:write_file(get_pid_path(), os:getpid()).
+
+
+-ifdef(__MYDLP_NETWORK).
+
+start_crypto() ->
+        application:start(ssl),
+        application:start(crypto),
+	ok.
+
+get_protocols() -> 
+	{ok, Protocols} = application:get_env(protocols),
+	Protocols.
+
+get_sworkers() -> 
+	{ok, SWorkers} = application:get_env(shared_workers),
+	SWorkers.
+
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
+start_crypto() -> ok.
+
+get_protocols() -> [ ?SEAP ].
+
+get_sworkers() ->  ?ENDPOINT_SWORKERS.
+
+-endif.

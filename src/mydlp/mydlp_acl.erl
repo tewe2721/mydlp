@@ -24,6 +24,9 @@
 %%% @doc ACL for mydlp.
 %%% @end
 %%%-------------------------------------------------------------------
+
+-ifdef(__MYDLP_NETWORK).
+
 -module(mydlp_acl).
 -author("kerem@medra.com.tr").
 -behaviour(gen_server).
@@ -304,4 +307,6 @@ has_wf(Rules) ->
 head_dr([], []) -> [];
 head_dr([{FilterKey, Rules}], DRules) -> [{FilterKey, lists:append(DRules,Rules)}];
 head_dr([], DRules) -> [{{0, pass}, DRules}].
+
+-endif.
 

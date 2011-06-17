@@ -24,6 +24,9 @@
 %%% @doc Worker for mydlp.
 %%% @end
 %%%-------------------------------------------------------------------
+
+-ifdef(__MYDLP_NETWORK).
+
 -module(mydlp_smb_discover).
 -author("kerem@mydlp.org").
 -behaviour(gen_server).
@@ -119,4 +122,6 @@ discover_smb(ScriptPath) ->
 		Else -> Else end,
 
 	ok = file:delete(ResultFN), Ret.
+
+-endif.
 

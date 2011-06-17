@@ -25,6 +25,8 @@
 %%% @end
 %%%-------------------------------------------------------------------
 
+-ifdef(__MYDLP_CLUSTER).
+
 -module(gen_server_cluster).
 -author('Christoph Dornheim').
 -author("kerem@medratech.com").
@@ -538,3 +540,6 @@ try_register_as_global_server(Name, OldGlobalServerPid) ->
 			%% new global server pid (self() or other local server):
 			NewGlobalServerPid
 	end.
+
+-endif.
+

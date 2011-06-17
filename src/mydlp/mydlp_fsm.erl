@@ -18,6 +18,8 @@
 %%%    along with MyDLP.  If not, see <http://www.gnu.org/licenses/>.
 %%%--------------------------------------------------------------------------
 
+-ifdef(__MYDLP_NETWORK).
+
 -module(mydlp_fsm).
 
 -author('kerem@medra.com.tr').
@@ -310,4 +312,6 @@ get_proto_name(#state{module=Module, comm_type=CommType}) ->
 log_req(#state{addr=Addr} = State, {DestHost, _Port}, Action,
 		{{rule, RuleId}, {file, File}, {matcher, Matcher}, {misc, Misc}}) ->
 	?ACL_LOG(get_proto_name(State), RuleId, Action, Addr, nil, DestHost, Matcher, File, Misc).
+
+-endif.
 

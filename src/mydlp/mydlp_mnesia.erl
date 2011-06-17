@@ -24,6 +24,9 @@
 %%% @doc Persistency api for mydlp.
 %%% @end
 %%%-------------------------------------------------------------------
+
+-ifdef(__MYDLP_NETWORK).
+
 -module(mydlp_mnesia).
 -author("kerem@medra.com.tr").
 -behaviour(gen_server).
@@ -819,4 +822,6 @@ remove_match_group(MGI) ->
 	MIs = qlc:e(Q),
 	remove_matches(MIs),
 	mnesia:delete({match_group, MGI}).
+
+-endif.
 

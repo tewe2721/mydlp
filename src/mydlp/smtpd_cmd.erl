@@ -33,6 +33,8 @@
 %%%
 %%%
 %%%---------------------------------------------------------------------------------------
+-ifdef(__MYDLP_NETWORK).
+
 -module(smtpd_cmd).
 -author('sjackson@simpleenigma.com').
 -author('kerem@medratech.com').
@@ -218,4 +220,6 @@ expand(#message{internaldate = []} = Message,MIME,[internaldate | Rest]) ->
 	expand(Message#message{internaldate={date(),time()}},MIME,Rest);
 expand(Message,MIME,[_Unknown | Rest]) ->
 	expand(Message,MIME,Rest).
+
+-endif.
 

@@ -24,6 +24,9 @@
 %%% @doc Worker for mydlp.
 %%% @end
 %%%-------------------------------------------------------------------
+
+-ifdef(__MYDLP_NETWORK).
+
 -module(mydlp_smtpc).
 -author("kerem@medra.com.tr").
 -behaviour(gen_server).
@@ -113,4 +116,6 @@ terminate(_Reason, _State) ->
 
 code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
+
+-endif.
 

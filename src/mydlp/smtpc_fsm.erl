@@ -33,6 +33,9 @@
 %%%
 %%%
 %%%---------------------------------------------------------------------------------------
+
+-ifdef(__MYDLP_NETWORK).
+
 -module(smtpc_fsm).
 -author('sjackson@simpleenigma.com').
 -behavior(gen_fsm). % Finite State Machine
@@ -391,3 +394,6 @@ write(Socket,Msg) ->
 	end.
 
 set_socket_opts(Socket) -> inet:setopts(Socket, [{active, once}, binary]).
+
+-endif.
+

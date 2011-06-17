@@ -33,6 +33,9 @@
 %%%
 %%%
 %%%---------------------------------------------------------------------------------------
+
+-ifdef(__MYDLP_NETWORK).
+
 -module(mydlp_smtp_fsm).
 -author('sjackson@simpleenigma.com').
 -author('kerem@medratech.com').
@@ -413,4 +416,6 @@ end_of_data_test_() -> [
 	?_assertEqual(0, end_of_data(<<"humbara\r\nrumbara\r\nrumbamba!!!">>)),
 	?_assertEqual(0, end_of_data(<<"humbara rumbara rumbamba!!!">>))
 	].
+
+-endif.
 

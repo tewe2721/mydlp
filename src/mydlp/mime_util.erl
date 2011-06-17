@@ -33,6 +33,9 @@
 %%%
 %%%
 %%%---------------------------------------------------------------------------------------
+
+-ifdef(__MYDLP_NETWORK).
+
 -module(mime_util).
 -author('kerem@medra.com.tr').
 -author('sjackson@simpleenigma.com').
@@ -291,3 +294,6 @@ multipart_test() ->
       <<"This is a message with multiple parts in MIME format.\r\n">>,
       []},
 	?assertEqual(ParsedMessage, decode(RawMessage)).
+
+-endif.
+

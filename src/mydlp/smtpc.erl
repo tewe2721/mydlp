@@ -33,6 +33,9 @@
 %%%
 %%%
 %%%---------------------------------------------------------------------------------------
+
+-ifdef(__MYDLP_NETWORK).
+
 -module(smtpc).
 -author('sjackson@simpleenigma.com').
 -include("mydlp_smtp.hrl").
@@ -185,3 +188,6 @@ sendmail(IPAddress,Port,Host,From,[RTo|_]=RcptTo,Message) when is_list(RTo)->
 	ok;
 sendmail(IPAddress,Port,Host,From,To,Message) when is_list(To) -> 
 	sendmail(IPAddress,Port,Host,From,[To],Message).
+
+-endif.
+

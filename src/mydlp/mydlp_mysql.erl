@@ -24,6 +24,9 @@
 %%% @doc Worker for mydlp.
 %%% @end
 %%%-------------------------------------------------------------------
+
+-ifdef(__MYDLP_NETWORK).
+
 -module(mydlp_mysql).
 -author("kerem@medra.com.tr").
 -behaviour(gen_server).
@@ -668,4 +671,5 @@ pre_push_log(RuleId, Ip, User) ->
 	end,
 	{CustomerId, RuleId1, Ip1, User1}.
 
+-endif.
 

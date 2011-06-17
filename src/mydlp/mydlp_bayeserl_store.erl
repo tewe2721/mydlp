@@ -24,6 +24,9 @@
 %%% @doc Worker for mydlp.
 %%% @end
 %%%-------------------------------------------------------------------
+
+-ifdef(__MYDLP_NETWORK).
+
 -module(mydlp_bayeserl_store).
 
 -author("kerem@medra.com.tr").
@@ -74,4 +77,6 @@ g_p_wc(Word) -> case mnesia:dirty_read(bayes_positive, Word) of
 g_n_wc(Word) -> case mnesia:dirty_read(bayes_negative, Word) of
 		[#bayes_negative{word_hash=Word, count=C}] -> C;
 		[] -> 0 end.
+
+-endif.
 

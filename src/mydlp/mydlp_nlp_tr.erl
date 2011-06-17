@@ -72,6 +72,8 @@ kok_ozeti_bul2(Word) ->
 		{error, _} -> erlang:phash2(Word1); % workaround because of I char
 		Pid -> gen_server:call(Pid, {kob, Word}) end.
 
+-ifdef(__MYDLP_NETWORK).
+
 %%%%%%%%%%%%%% gen_server handles
 
 handle_call({kob, LowerWord}, _From, #state{wordtree = WT} = State) ->
@@ -133,6 +135,8 @@ terminate(_Reason, _State) ->
 
 code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
+
+-endif.
 
 find_leaf(WT, Word) -> 
 	case find_leaf(WT, Word, none) of

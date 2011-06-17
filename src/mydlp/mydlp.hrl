@@ -40,18 +40,25 @@
 
 -define(PID_FILE, "mydlp.pid").
 
+-ifdef(__PLATFORM_LINUX).
 -define(WORK_DIR, "/var/tmp/mydlp").
+-endif.
 
+-ifdef(__MYDLP_NETWORK).
 -define(SSL_FILES, [
 		{certfile, "/etc/mydlp/ssl/public.pem"},
 		{keyfile, "/etc/mydlp/ssl/private.pem"}
          ]).
+-endif.
 
+-ifdef(__MYDLP_NETWORK).
 -define(NLP_TR, [ 
           {activate, false},
           {kokler, "mydlp_nlp_tr_kokler.txt"}
          ]).
+-endif.
 
+-ifdef(__MYDLP_NETWORK).
 -define(MYSQL, [
 		{host, "localhost"},
 		{port, 3306},
@@ -60,20 +67,26 @@
 		{database, "mydlp"},
 		{pool_size, 2}
          ]).
+-endif.
 
+-ifdef(__MYDLP_NETWORK).
 -define(QUARANTINE, [
           {dir, "/var/lib/mydlp/quarantine/"},
           {uid, 33},
           {gid, 33}
          ]).
+-endif.
 
+-ifdef(__MYDLP_NETWORK).
 -define(SMTP, [ 
           {helo_name, "mydlp.org"},
           {next_hop, {"localhost", 10027}},
           {bypass_on_fail, true},
           {enable_for_all, true}
          ]).
+-endif.
 
+-ifdef(__MYDLP_NETWORK).
 -define(ICAP, [
           {path, "/dlp"},
           {path_respmod, "/dlp-respmod"},
@@ -82,22 +95,31 @@
           {log_pass, false},
           {log_pass_lower_limit, 10240}
          ]).
+-endif.
 
+-ifdef(__MYDLP_NETWORK).
 -define(SMB_DISCOVER, [ 
           {activate, false},
           {script_path, "/usr/sbin/mydlp-smb-discover"},
           {interval, 3600}
          ]).
+-endif.
 
+-ifdef(__MYDLP_NETWORK).
 -define(ARCHIVE, [ 
           {minimum_size, 256}
          ]}).
+-endif.
 
+-ifdef(__MYDLP_NETWORK).
 -define(MINIMUM_ARCHIVE_OBJ_SIZE, 512).
+-endif.
 
+-ifdef(__MYDLP_NETWORK).
 -define(AUTO_DIST, [
           {activate, false}
          ]).
+-endif.
 
 -define(ACL_LOG(Proto, RuleId, Action, Ip, User, To, Matcher, File, Misc), 
 	mydlp_api:acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, File, Misc)).

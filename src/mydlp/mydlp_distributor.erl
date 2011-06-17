@@ -24,6 +24,9 @@
 %%% @doc Distribution Manager for MyDLP.
 %%% @end
 %%%-------------------------------------------------------------------
+
+-ifdef(__MYDLP_NETWORK).
+
 -module(mydlp_distributor).
 -author("kerem@medra.com.tr").
 -behaviour(gen_server).
@@ -177,3 +180,6 @@ find_an_authority(Nodes, Priority, InitEpoch) ->
 			case replies_to_nodes(Replies) of 
 				[] -> none ;
 				NodeList -> select_random(NodeList) end end.
+
+-endif.
+

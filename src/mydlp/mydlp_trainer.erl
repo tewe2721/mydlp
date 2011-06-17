@@ -24,6 +24,9 @@
 %%% @doc Worker for mydlp.
 %%% @end
 %%%-------------------------------------------------------------------
+
+-ifdef(__MYDLP_NETWORK).
+
 -module(mydlp_trainer).
 -author("kerem@medra.com.tr").
 -behaviour(gen_server).
@@ -196,4 +199,6 @@ train_pfile({File, FileId}) ->
 	% train bayes
 	Txt = mydlp_api:concat_texts(File),
 	bayeserl:train_negative(Txt), ok.
+
+-endif.
 

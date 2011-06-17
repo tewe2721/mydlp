@@ -18,6 +18,8 @@
 %%%    along with MyDLP.  If not, see <http://www.gnu.org/licenses/>.
 %%%--------------------------------------------------------------------------
 
+-ifdef(__MYDLP_NETWORK).
+
 -module(mydlp_icap_fsm).
 -author('kerem@medratech.com').
 -behaviour(gen_fsm).
@@ -668,3 +670,6 @@ read_line(Line, #state{buffer=BuffList} = State, FSMState, ParseFunc) when is_bi
 				{data, list_to_binary(lists:reverse([Line|BuffList]))}, 
 				State#state{buffer=undefined});
 		_Else -> {next_state, FSMState, State#state{buffer=[Line|BuffList]}, ?TIMEOUT} end.
+
+-endif.
+

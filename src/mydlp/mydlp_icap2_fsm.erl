@@ -18,6 +18,8 @@
 %%%    along with MyDLP.  If not, see <http://www.gnu.org/licenses/>.
 %%%--------------------------------------------------------------------------
 
+-ifdef(__MYDLP_NETWORK).
+
 -module(mydlp_icap2_fsm).
 -author('kerem@medratech.com').
 -behaviour(gen_fsm).
@@ -841,4 +843,5 @@ encap_pl_res(CacheDataResH, CacheDataResB) ->
 			integer_to_list(size(CacheDataResH))],
 			[CacheDataResH, CacheDataResB] } end.
 
+-endif.
 
