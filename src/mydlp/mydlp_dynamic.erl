@@ -37,16 +37,6 @@ prestart_load() ->
 load() ->
 	load_mydlp_denied_page().
 
--endif.
-
--ifdef(__MYDLP_ENDPOINT).
-
-prestart_load() -> ok.
-
-load() -> ok.
-
--endif.
-
 load_src(Src) ->
 	try
 		{Mod,Code} = dynamic_compile:from_string(Src),
@@ -87,4 +77,14 @@ load_mydlp_denied_page() -> load_src(mydlp_denied_page_src(denied_page_src())).
 
 load_mydlp_denied_page0() -> load_src(mydlp_denied_page_src("Denied!!!")).
 
+
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
+prestart_load() -> ok.
+
+load() -> ok.
+
+-endif.
 

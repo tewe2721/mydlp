@@ -44,6 +44,10 @@
 -define(WORK_DIR, "/var/tmp/mydlp").
 -endif.
 
+-ifdef(__PLATFORM_WINDOWS).
+-define(WORK_DIR, "C:/WINDOWS/Temp/mydlp").
+-endif.
+
 -ifdef(__MYDLP_NETWORK).
 -define(SSL_FILES, [
 		{certfile, "/etc/mydlp/ssl/public.pem"},

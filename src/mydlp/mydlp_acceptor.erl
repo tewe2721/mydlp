@@ -72,15 +72,8 @@ init([Port, CommType, SocketSup]) ->
 	Opts = [binary, {packet, 0}, {reuseaddr, true}, {nodelay, true},
 			{keepalive, true}, {backlog, 30}, {active, false}],
 	
-	{Backend, Opts1} = case CommType of
-			plain -> {gen_tcp, Opts};
-			ssl -> 
-				SslFiles = case application:get_env(ssl_files) of
-					{ok, SF} -> SF;
-					_Else -> ?SSL_FILES
-				end,
-				{ssl, Opts ++ [{ssl_imp, new}, {verify, verify_none}] ++ SslFiles}
-		end,
+	{Backend, NOpts} = get_bops(CommType),
+	Opts1 = Opts ++ NOpts,
 
 	case Backend:listen(Port, Opts1) of
 		{ok, ListSock} ->
@@ -92,6 +85,24 @@ init([Port, CommType, SocketSup]) ->
 		{error, Reason} ->
 			{stop, Reason}
 	end.
+
+-ifdef(__MYDLP_NETWORK).
+
+get_bops(plain) -> {gen_tcp, []};
+get_bops(ssl) -> 
+	SslFiles = case application:get_env(ssl_files) of
+		{ok, SF} -> SF;
+		_Else -> ?SSL_FILES
+	end,
+	{ssl, [{ssl_imp, new}, {verify, verify_none}] ++ SslFiles}.
+
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
+get_bops(plain) -> {gen_tcp, []}.
+
+-endif.
 
 %%-------------------------------------------------------------------------
 %% @spec (Request, From, State) -> {reply, Reply, State}		  |

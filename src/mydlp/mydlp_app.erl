@@ -97,7 +97,7 @@ init([Protocols]) ->
 		supervisor,                                                           % Type   = worker | supervisor
 		[mydlp_worker_sup]                                            % Modules  = [Module] | dynamic
 	},
-	{ok, Agents} = application:get_env(agents),
+	Agents = get_agents(),
 	ASpec = { agent_sup,                                                    % Id       = internal id
 		{supervisor, start_link,
 			[{local, agent_sup}, mydlp_worker_sup, [Agents]]
@@ -192,6 +192,10 @@ get_sworkers() ->
 	{ok, SWorkers} = application:get_env(shared_workers),
 	SWorkers.
 
+get_agents() ->
+	{ok, Agents} = application:get_env(agents),
+	Agents.
+
 -endif.
 
 -ifdef(__MYDLP_ENDPOINT).
@@ -201,5 +205,7 @@ start_crypto() -> ok.
 get_protocols() -> [ ?SEAP ].
 
 get_sworkers() ->  ?ENDPOINT_SWORKERS.
+
+get_agents() -> ok.
 
 -endif.

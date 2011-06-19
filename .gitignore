@@ -19,8 +19,8 @@ py-compile
 install-sh
 missing
 *.beam
-*.app
-*.rel
+mydlp.app
+mydlp.rel
 *.boot
 *.script
 src/mydlp/overview.edoc
@@ -50,4 +50,5 @@ debian/stamp-makefile-build
 confdefs.h
 conftest
 conftest.erl
+*~
 

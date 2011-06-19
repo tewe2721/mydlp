@@ -25,7 +25,6 @@
 %%% @end
 %%%-------------------------------------------------------------------
 
--ifdef(__MYDLP_NETWORK).
 
 -module(mydlp_acl).
 -author("kerem@medra.com.tr").
@@ -35,11 +34,26 @@
 
 %% API
 -export([start_link/0,
+	stop/0]).
+
+-ifdef(__MYDLP_NETWORK).
+
+-export([
 	q/4,
 	qu/3,
 	qa/2,
-	qm/1,
-	stop/0]).
+	qm/1
+	]).
+
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
+-export([
+	qe/1
+	]).
+
+-endif.
 
 %% gen_server callbacks
 -export([init/1,
@@ -55,6 +69,8 @@
 
 %%%%%%%%%%%%% MyDLP ACL API
 
+-ifdef(__MYDLP_NETWORK).
+
 q(Site, Addr, DestList, Files) -> acl_call({q, Site, DestList, {Addr, Files}}).
 
 qu(User, _Dest, Files) -> acl_call({qu, site, {User, Files}}).
@@ -63,22 +79,27 @@ qa(DestList, Files) -> acl_call({qa, site, {DestList, Files}}).
 
 qm(Files) -> acl_call({qm, site, {Files}}).
 
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
+qe(Files) -> acl_call({qe, site, {Files}}).
+
+-endif.
+
 acl_call(Query) -> gen_server:call(?MODULE, {acl, Query}, 1500000).
 
 %%%%%%%%%%%%%% gen_server handles
 
-%acl_exec(Rules, Source, Files) ->
-%	[{cid, CustomerId}|_] = Source,
-%	Files1 = mydlp_api:df_to_files(Files),
-%	Param = {Source, drop_nodata(Files1)},
-%	DRules = mydlp_mnesia:get_default_rule(CustomerId),
-%	apply_rules(lists:append(DRules, Rules), Param).
+-ifdef(__MYDLP_NETWORK).
 
 acl_exec(_RuleTables, _Source, []) -> pass;
 acl_exec(RuleTables, Source, Files) ->
 	[{cid, CustomerId}|_] = Source,
 	DRules = mydlp_mnesia:get_default_rule(CustomerId),
 	acl_exec2(head_dr(RuleTables, DRules), Source, Files).
+
+-endif.
 
 acl_exec2([], _Source, _Files) -> pass;
 % acl_exec2([{{_Id, DefaultAction}, Rules}| Rest], Source, Files)  % Cannot be more than one filter
@@ -124,6 +145,8 @@ acl_exec3(AllRules, Source, Files, ExNewFiles, CleanFiles) ->
 				lists:append(ExNewFiles, NewFiles), CleanFiles);
 		Else -> Else end.
 
+-ifdef(__MYDLP_NETWORK).
+
 %% it needs refactoring for trusted domains
 handle_acl({q, SAddr, DestList, {Addr, Files}}, #state{is_multisite=true}) ->
 	case mydlp_mnesia:get_cid(SAddr) of
@@ -153,6 +176,19 @@ handle_acl({qm, _Site, {Files}}, _State) ->
 	acl_exec(Rules, [{cid, mydlp_mnesia:get_dcid()}], Files);
 
 handle_acl(Q, _State) -> throw({error, {undefined_query, Q}}).
+
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
+handle_acl({qe, _Site, {Files}}, _State) ->
+	FinalRuleTable = [],
+	acl_exec2(FinalRuleTable, [{cid, 0}], Files);
+
+handle_acl(Q, _State) -> throw({error, {undefined_query, Q}}).
+
+-endif.
+
 
 handle_call({acl, Query}, From, State) ->
 	Worker = self(),
@@ -197,9 +233,20 @@ start_link() ->
 stop() ->
 	gen_server:call(?MODULE, stop).
 
+-ifdef(__MYDLP_NETWORK).
+
 init([]) ->
 	IsMS = mydlp_mysql:is_multisite(),
 	{ok, #state{is_multisite=IsMS}}.
+
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
+init([]) ->
+	{ok, #state{is_multisite=false}}.
+
+-endif.
 
 handle_cast(_Msg, State) ->
 	{noreply, State}.
@@ -303,6 +350,8 @@ has_wf(Rules) ->
 			false -> false;
 			_Else -> true end end, 
 	Rules).
+
+-ifdef(__MYDLP_NETWORK).
 
 head_dr([], []) -> [];
 head_dr([{FilterKey, Rules}], DRules) -> [{FilterKey, lists:append(DRules,Rules)}];

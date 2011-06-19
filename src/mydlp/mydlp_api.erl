@@ -25,8 +25,14 @@
 -compile(export_all).
 
 -include("mydlp.hrl").
+
+-ifdef(__MYDLP_NETWORK).
+
 -include("mydlp_http.hrl").
 -include("mydlp_smtp.hrl").
+
+-endif.
+
 -include_lib("xmerl/include/xmerl.hrl").
 
 %%--------------------------------------------------------------------
@@ -191,6 +197,14 @@ to_lowerchar(C) ->
 -define(DOC, {"/usr/bin/catdoc", ["-wx", "-dutf-8"]}).
 -define(PPT, {"/usr/bin/catppt", []}).
 -define(XLS, {"/usr/bin/xls2csv", ["-x"]}).
+
+-endif.
+
+-ifdef(__PLATFORM_WINDOWS).
+
+-define(DOC, {"c:/Program Files/MyDLP/cygwin/bin/catdoc.exe", ["-wx", "-dutf-8"]}).
+-define(PPT, {"c:/Program Files/MyDLP/cygwin/bin/catppt.exe", []}).
+-define(XLS, {"c:/Program Files/MyDLP/cygwin/bin/xls2csv.exe", ["-x"]}).
 
 -endif.
 
@@ -624,9 +638,16 @@ uncompress0(_Method, Filename) ->
 -ifdef(__PLATFORM_LINUX).
 
 -define(SEVENZBIN, "/usr/bin/7z").
--define(SEVENZARGS(WorkDir, ZFN), ["-p","-y","-bd","-o" ++ WorkDir,"x",ZFN] ).
 
 -endif.
+
+-ifdef(__PLATFORM_WINDOWS).
+
+-define(SEVENZBIN, "c:/Program Files/MyDLP/libexec/7z.exe").
+
+-endif.
+
+-define(SEVENZARGS(WorkDir, ZFN), ["-p","-y","-bd","-o" ++ WorkDir,"x",ZFN] ).
 
 un7z(Arg) -> un7z(Arg, "nofilename").
 
@@ -654,9 +675,16 @@ un7zc(ZFNDir, ZFN) ->
 -ifdef(__PLATFORM_LINUX).
 
 -define(GZIPBIN, "/bin/gzip").
--define(GZIPARGS(FN), ["-d","-f","-q", FN] ).
 
 -endif.
+
+-ifdef(__PLATFORM_WINDOWS).
+
+-define(GZIPBIN, "c:/Program Files/MyDLP/cygwin/bin/gzip.exe").
+
+-endif.
+
+-define(GZIPARGS(FN), ["-d","-f","-q", FN] ).
 
 ungzip(Arg) -> ungzip(Arg, "nofilename").
 
@@ -680,9 +708,16 @@ ungzipc(FNDir, FN) ->
 -ifdef(__PLATFORM_LINUX).
 
 -define(ARBIN, "/usr/bin/ar").
--define(ARARGS(ArFN), ["x",ArFN] ).
 
 -endif.
+
+-ifdef(__PLATFORM_WINDOWS).
+
+-define(ARBIN, "c:/Program Files/MyDLP/cygwin/bin/ar.exe").
+
+-endif.
+
+-define(ARARGS(ArFN), ["x",ArFN] ).
 
 unar(Arg) -> unar(Arg, "nofilename").
 
@@ -767,8 +802,6 @@ rr_files([], _WorkDir, Ret) -> lists:flatten(lists:reverse(Ret)).
 -define(PSTOTEXTBIN, "/usr/bin/pstotext").
 -define(PSTOTEXTARGS(Ps), [Ps]).
 
--endif.
-
 ps_to_text(Bin) when is_binary(Bin) -> 
 	{ok, Ps} = mktempfile(),
 	ok = file:write_file(Ps, Bin, [raw]),
@@ -784,6 +817,14 @@ ps_to_text(Bin) when is_binary(Bin) ->
 	end,
 	ok = file:delete(Ps), Ret.
 
+-endif.
+
+-ifdef(__PLATFORM_WINDOWS).
+
+ps_to_text(Bin) -> pdf_to_text(Bin).
+
+-endif.
+
 %%--------------------------------------------------------------------
 %% @doc Extracts Text from PDF files
 %% @end
@@ -791,9 +832,16 @@ ps_to_text(Bin) when is_binary(Bin) ->
 -ifdef(__PLATFORM_LINUX).
 
 -define(PDFTOTEXTBIN, "/usr/bin/pdftotext").
--define(PDFTOTEXTARGS(Pdf, TextFN), ["-q","-eol","unix",Pdf,TextFN]).
 
 -endif.
+
+-ifdef(__PLATFORM_WINDOWS).
+
+-define(PDFTOTEXTBIN, "c:/Program Files/MyDLP/cygwin/bin/pdftotext.exe").
+
+-endif.
+
+-define(PDFTOTEXTARGS(Pdf, TextFN), ["-q","-eol","unix",Pdf,TextFN]).
 
 pdf_to_text(Bin) when is_binary(Bin) -> 
 	{ok, Pdf} = mktempfile(),
@@ -815,6 +863,8 @@ pdf_to_text(Bin) when is_binary(Bin) ->
 %% @doc Logs acl messages
 %% @end
 %%----------------------------------------------------------------------
+
+-ifdef(__MYDLP_NETWORK).
 
 acl_msg(_Proto, _RuleId, _Action, _Ip, _User, _To, _Matcher, [], _Misc) -> ok;
 
@@ -843,6 +893,37 @@ acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, #file{} = File, Misc) ->
 					mydlp_mysql:archive_log(Proto, RuleId, Ip, User, To, AFileId);
 				_Else -> ok end;
 		_Else -> ok end.
+
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
+acl_msg(_Proto, _RuleId, _Action, _Ip, _User, _To, _Matcher, [], _Misc) -> ok;
+
+acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, [_|_] = FileList, Misc) ->
+	lists:foreach(fun(File) -> acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, File, Misc) end, FileList);
+
+acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, #file{} = File, Misc) ->
+	FileS = file_to_str(File),
+
+	%acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
+
+	case Action of
+		pass -> 	acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
+				%mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
+		log -> 		acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
+				%mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
+		block -> 	acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
+				%mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
+		quarantine ->	acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
+				%mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, File, Misc);
+		archive -> 	acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
+				%	AFileId = mydlp_mysql:new_afile(),
+				%	mydlp_archive:a(AFileId, File),
+				%	mydlp_mysql:archive_log(Proto, RuleId, Ip, User, To, AFileId);
+		_Else -> ok end.
+
+-endif.
 
 acl_msg1(Proto, RuleId, Action, nil, nil, To, Matcher, FileS, Misc) ->
 	mydlp_logger:notify(acl_msg,
@@ -1081,6 +1162,7 @@ unquote(String) ->
         S2 = string:strip(String,both,32),
         string:strip(S2,both,34).
 
+-ifdef(__MYDLP_NETWORK).
 
 split_email(Atom) when is_atom(Atom) -> split_email(atom_to_list(Atom));
 split_email([]) -> {[],[]};
@@ -1090,6 +1172,10 @@ split_email(EmailAddress) ->
                 _AnythingsElse -> {[],[]}
         end.
 
+-endif.
+
+
+-ifdef(__MYDLP_NETWORK).
 
 %%% imported from yaws (may be refactored for binary operation)
 parse_multipart(HttpContent, H, Req) ->
@@ -1166,6 +1252,8 @@ make_parse_line_reply(Key, Value, Rest) ->
     X = {{list_to_atom(mydlp_api:funreverse(Key, {mydlp_api, to_lowerchar})),
           lists:reverse(Value)}, Rest},
     X.
+
+-endif.
 
 %%-------------------------------------------------------------------------
 %% @doc Writes files to quarantine directory.
@@ -1428,6 +1516,8 @@ binary_size(_Obj) -> throw({error, bad_element}).
 %% @end
 %%-------------------------------------------------------------------------
 
+-ifdef(__MYDLP_NETWORK).
+
 heads_to_file(Headers) -> heads_to_file(Headers, #file{}).
 
 heads_to_file([{'content-disposition', "inline"}|Rest], #file{filename=undefined, name=undefined} = File) ->
@@ -1493,10 +1583,14 @@ mime_to_files([#mime{content=Content, header=Headers, body=Body}|Rest], Acc) ->
 	mime_to_files(lists:append(Body, Rest), [File#file{dataref=?BB_C(Data)}|Acc]);
 mime_to_files([], Acc) -> lists:reverse(Acc).
 
+-endif.
+
 %%-------------------------------------------------------------------------
 %% @doc Extracts filename from value of content disposition header
 %% @end
 %%-------------------------------------------------------------------------
+
+-ifdef(__MYDLP_NETWORK).
 
 cd_to_fn(ContentDisposition) ->
 	case string:str(ContentDisposition, "filename=") of
@@ -1516,7 +1610,7 @@ cd_to_fn(ContentDisposition) ->
 					string:substr(Str, 1, Len - 1);
 				Str -> Str end end.
 
-
+-endif.
 
 %%-------------------------------------------------------------------------
 %% @doc Select chuck from files
