@@ -37,6 +37,8 @@ import BCFileIntegrity
 
 import lxml.html
 
+import os
+
 class MydlpHandler:
 	def __init__(self):
 		self.mime = magic.Magic(mime=True)
@@ -114,7 +116,7 @@ if len(sys.argv) > 1:
 
 s = MyDLPBackendServer(pidfile)
 
-s.start()
-#s.run()
+#s.start()
+s.run()
 
 

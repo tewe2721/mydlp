@@ -104,8 +104,11 @@ def from_buffer(buffer, mime=False):
 
 
 
-
-libmagic = ctypes.CDLL(ctypes.util.find_library('magic'))
+libmagic = False
+try:
+	libmagic = ctypes.CDLL(ctypes.util.find_library('magic'))
+except:
+	libmagic = False
 if not libmagic or not libmagic._name:
     import sys
     if sys.platform == "darwin":

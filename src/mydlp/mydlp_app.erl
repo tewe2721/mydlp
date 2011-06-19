@@ -206,6 +206,6 @@ get_protocols() -> [ ?SEAP ].
 
 get_sworkers() ->  ?ENDPOINT_SWORKERS.
 
-get_agents() -> ok.
+get_agents() -> [].
 
 -endif.
