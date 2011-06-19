@@ -39,13 +39,12 @@ import lxml.html
 
 class MydlpHandler:
 	def __init__(self):
-		self.mime = magic.open(magic.MAGIC_MIME)
-		self.mime.load()
+		self.mime = magic.Magic(mime=True)
 		self.bcfi = BCFileIntegrity.BCFileIntegrity()
 
 	def getMagicMime(self, data):
 		try:
-			mtype = self.mime.buffer(data)
+			mtype = self.mime.from_buffer(data)
 			sc = mtype.find(';')
 			if sc == -1:
 				return mtype
