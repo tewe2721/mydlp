@@ -40,7 +40,8 @@ import lxml.html
 class MydlpHandler:
 	def __init__(self):
 		self.mime = magic.Magic(mime=True)
-		self.bcfi = BCFileIntegrity.BCFileIntegrity()
+		if os.name == "posix":
+			self.bcfi = BCFileIntegrity.BCFileIntegrity()
 
 	def getMagicMime(self, data):
 		try:
@@ -73,13 +74,19 @@ class MydlpHandler:
 
 	def checkBinaryIntegrity(self, file_path):
 		try:
-			return self.bcfi.checkBinarySize(file_path)
+			if os.name == "posix":
+				return self.bcfi.checkBinarySize(file_path)
+			else:
+				return False
 		except:
 			return False	
 
 	def checkArchiveIntegrity(self, file_path):
 		try:
-			return self.bcfi.checkArchiveSize(file_path)
+			if os.name == "posix":
+				return self.bcfi.checkArchiveSize(file_path)
+			else:
+				return False
 		except:
 			return False	
 
