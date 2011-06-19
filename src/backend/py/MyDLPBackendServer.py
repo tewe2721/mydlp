@@ -116,7 +116,7 @@ if len(sys.argv) > 1:
 
 s = MyDLPBackendServer(pidfile)
 
-#s.start()
-s.run()
+s.start()
+#s.run()
 
 
