@@ -109,14 +109,16 @@ class MyDLPBackendServer(daemon.Daemon):
 		server.serve()
 		print 'done.'
 
-pidfile = "/var/run/mydlp/backend-py.pid"
+if os.name == "posix":
+	pidfile = "/var/run/mydlp/backend-py.pid"
 
-if len(sys.argv) > 1:
-	pidfile = sys.argv[1]
+	if len(sys.argv) > 1:
+		pidfile = sys.argv[1]
 
-s = MyDLPBackendServer(pidfile)
+	s = MyDLPBackendServer(pidfile)
 
-s.start()
+	s.start()
+
 #s.run()
 
 
