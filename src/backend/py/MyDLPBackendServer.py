@@ -115,7 +115,7 @@ class MyDLPBackendServer(daemon.Daemon):
 
 	def stop(self):
 		print 'Stopping MyDLP Backend server...'
-		self.server.stop()
+		#self.server.stop()
 		self.transport.close()
 		print 'done.'
 
