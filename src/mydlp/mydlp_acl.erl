@@ -128,7 +128,7 @@ acl_exec3(AllRules, Source, Files, ExNewFiles, CleanFiles) ->
 	{InChunk, RestOfFiles} = mydlp_api:get_chunk(Files),
 	Files1 = mydlp_api:load_files(InChunk),
 	
-	Files2 = drop_whitefile_dr(Files1, CustomerId), % these are should be cleaned too
+	Files2 = drop_whitefile_dr(Files1, CustomerId), % these should be cleaned too
 	Files3 = case has_wf(AllRules) of
 		true -> drop_whitefile(Files2);
 		false -> Files2 end,
