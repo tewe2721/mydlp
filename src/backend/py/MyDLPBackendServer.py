@@ -93,23 +93,33 @@ class MydlpHandler:
 			return False	
 
 class MyDLPBackendServer(daemon.Daemon):
-	def run(self):
-		handler = MydlpHandler()
 
-		processor = Mydlp.Processor(handler)
-		transport = TSocket.TServerSocket(9090)
-		tfactory = TTransport.TBufferedTransportFactory()
-		pfactory = TBinaryProtocol.TBinaryProtocolFactory()
+	def __init__(self, pidfile):
+		daemon.Daemon.__init__(self, pidfile)
+
+		self.handler = MydlpHandler()
+
+		self.processor = Mydlp.Processor(self.handler)
+		self.transport = TSocket.TServerSocket(9090)
+		self.tfactory = TTransport.TBufferedTransportFactory()
+		self.pfactory = TBinaryProtocol.TBinaryProtocolFactory()
 
 		#server = TServer.TSimpleServer(processor, transport, tfactory, pfactory)
 		#server = TServer.TThreadedServer(processor, transport, tfactory, pfactory)
-		server = TServer.TThreadPoolServer(processor, transport, tfactory, pfactory)
+		self.server = TServer.TThreadPoolServer(self.processor, self.transport, self.tfactory, self.pfactory)
 
+	def run(self):
 		print 'Starting MyDLP Backend server...'
-		server.serve()
+		self.server.serve()
 		print 'done.'
 
-if os.name == "posix":
+	def stop(self):
+		print 'Stopping MyDLP Backend server...'
+		#self.server.stop()
+		self.transport.close()
+		print 'done.'
+
+if __name__ == '__main__':
 	pidfile = "/var/run/mydlp/backend-py.pid"
 
 	if len(sys.argv) > 1:
