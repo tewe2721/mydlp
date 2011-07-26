@@ -1,0 +1,39 @@
+
+
+Id -> Integer
+
+
+BEGIN
+ERR/OK Id
+
+
+key -> [a-Z0-9]
+value -> anything other than cr or lf
+
+SETPROP Id key=value
+ERR/OK
+
+GETPROP Id key
+ERR/OK value
+
+
+PUSH Id Size
+Data
+
+OK/ERR
+
+
+END Id
+OK/ERR
+
+
+
+ACLQ Id
+ERR/OK Action [block, pass]
+
+
+DESTROY Id
+ERR/OK
+
+
+

@@ -132,6 +132,21 @@ init([socket, icap]) ->
 			]
 		}
 	};
+init([socket, seap]) ->
+	{ok,
+		{_SupFlags = {simple_one_for_one, ?MAX_RESTART, ?MAX_TIME},
+			[
+				% TCP Client
+			  {   undefined,								% Id	   = internal id
+				  {mydlp_seap_fsm,start_link,[]},		% StartFun = {M, F, A}
+				  temporary,								% Restart  = permanent | transient | temporary
+				  ?KILL_TIMEOUT,							% Shutdown = brutal_kill | int() >= 0 | infinity
+				  worker,									% Type	 = worker | supervisor
+				  []										% Modules  = [Module] | dynamic
+			  }
+			]
+		}
+	};
 init([socket, FsmModule]) ->
 	{ok,
 		{_SupFlags = {simple_one_for_one, ?MAX_RESTART, ?MAX_TIME},

@@ -59,6 +59,7 @@ dist_erl_DATA = \
 	mydlp_pg_sup.erl \
 	mydlp_quarantine.erl \
 	mydlp_regex.erl \
+	mydlp_seap_fsm.erl \
 	mydlp_smb_discover.erl \
 	mydlp_smtp_fsm.erl \
 	mydlp_smtpc.erl \
