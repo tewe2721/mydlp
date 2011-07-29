@@ -29,8 +29,12 @@
 
 -define(TIMEOUT, 120000).
 
--define(MAX_MEM_OBJ, 204800). % 200KB
--define(CHUNK_THRESHOLD, 1048576). % 1MB
+-define(MAX_MEM_OBJ, 204800). % 200 KB
+-define(CHUNK_THRESHOLD, 1048576). % 1 MB
+
+-define(MIN_SIZE_FOR_P, 131072). % 128 KB
+
+-define(MIN_COUNT_FOR_P, 4). % 128 KB
 
 %% ---------------------------------
 %% Logging mechanism
