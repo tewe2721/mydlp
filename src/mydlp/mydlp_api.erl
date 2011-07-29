@@ -1682,6 +1682,95 @@ term2file(Term) when is_list(Term) ->
 
 empty_aclr(Files) -> {{rule, -1}, {file, Files}, {matcher, none}, {misc,""}}.
 
+
+%%-------------------------------------------------------------------------
+%% @doc Spawns a process, monitors it and kills after timeout
+%% @end
+%%-------------------------------------------------------------------------
+
+-define(SPAWN_TIMEOUT, 5000).
+
+mspawn(Fun) -> mspawn(Fun, ?SPAWN_TIMEOUT).
+
+mspawn(Fun, Timeout) ->
+	Pid = spawn_link(Fun),
+	{ok, _} = timer:exit_after(Timeout, Pid, timeout),
+	Pid.
+
+%%-------------------------------------------------------------------------
+%% @doc Paralel mapping function with managed spawns
+%% @end
+%%-------------------------------------------------------------------------
+
+pmap(Fun, ListOfArgs) -> pmap(Fun, ListOfArgs, ?SPAWN_TIMEOUT).
+
+pmap(Fun, ListOfArgs, Timeout) ->
+	Self = self(),
+	Pids = lists:map(fun(I) -> mspawn(fun() -> pmap_f(Self, Fun, I) end) end, ListOfArgs),
+	pmap_gather(Pids, Timeout).
+
+pmap_gather(Pids, Timeout) -> pmap_gather(Pids, Timeout, []).
+
+pmap_gather([Pid|Rest], Timeout, Returns) ->
+	Return = receive
+		{Pid, Ret} -> Ret
+	after Timeout ->
+		exit({timeout, {pmap, Pid}})
+	end,
+	pmap_gather(Rest, Timeout, [Return|Returns]);
+pmap_gather([], _Timeout, Returns) -> lists:reverse(Returns).
+
+pmap_f(Parent, Fun, I) ->
+	Parent ! {self(), Fun(I)}.
+
+%%-------------------------------------------------------------------------
+%% @doc Paralel lists:any function with managed spawns, returns for anything other than false or neg
+%% @end
+%%-------------------------------------------------------------------------
+
+pany(Fun, ListOfArgs) -> pany(Fun, ListOfArgs, ?SPAWN_TIMEOUT).
+
+pany(Fun, ListOfArgs, Timeout) ->
+	Self = self(),
+	Pid = spawn(fun() -> pany_sup_f(Self, Fun, ListOfArgs, Timeout) end),
+	pany_gather(Pid, Timeout).
+
+pany_gather(Pid, Timeout) ->
+	receive
+		{Pid, {error, I, Reason}} -> throw({error, I, Reason});
+		{Pid, Ret} -> Ret
+	after Timeout ->
+		exit({timeout, {pany, Pid}})
+	end.
+
+pany_sup_f(Parent, Fun, ListOfArgs, Timeout) -> 
+	Self = self(),
+	Pids = lists:map(fun(I) -> mspawn(fun() -> pany_child_f(Self, Fun, I) end) end, ListOfArgs),
+	NumberOfPids = length(Pids),
+	pany_sup_gather(NumberOfPids, Parent, Timeout).
+
+pany_sup_gather(0, Parent, _Timeout) -> pany_sup_return(Parent, false);
+pany_sup_gather(NumberOfPids, Parent, Timeout) ->
+	receive
+		{_Pid, _I, false} -> 		pany_sup_gather(NumberOfPids - 1, Parent, Timeout);
+		{_Pid, _I, neg} -> 		pany_sup_gather(NumberOfPids - 1, Parent, Timeout);
+		{_Pid, _I, negative} -> 	pany_sup_gather(NumberOfPids - 1, Parent, Timeout);
+		{_Pid, {error, I, Reason}} -> 	pany_sup_return(Parent, {error, I, Reason} ),
+						exit({pany_error});
+		{_Pid, I, Else} -> 		pany_sup_return(Parent, {ok, I, Else} ),
+						exit({pany_returned})
+	after Timeout ->
+		exit({timeout, pany_sup_gather}) % not needed to emit to parent
+	end.
+
+pany_sup_return(Parent, Return) -> Parent ! {self(), Return}.
+
+pany_child_f(Parent, Fun, I) -> 
+	case catch Fun(I) of
+		{error, Reason} -> Parent ! {self(), {error, I, Reason}};
+		ElseRet -> Parent ! {self(), I, ElseRet} end.
+
+
 -include_lib("eunit/include/eunit.hrl").
 
 escape_regex_test_() -> [
@@ -1710,3 +1799,22 @@ binary_size_test_() -> [
 	?_assertEqual("\\[a-Z]\\{0-9}", escape_regex("[a-Z]{0-9}"))
 ].
 
+pmap_test_() -> [
+	?_assertEqual([2,4,6,8,10,12,14,16], 
+			pmap(fun(I) -> I*2 end, 
+				[1,2,3,4,5,6,7,8]))
+].
+
+pany_test_() -> [
+	?_assertEqual(false,
+			pany(fun(_I) -> false end,
+				[1,2,3,4,5,6,7,8])),
+	?_assertEqual({ok, 5, true},
+			pany(fun(I) -> 
+				case I of
+					2 -> neg;
+					3 -> negative;
+					5 -> true;
+					_ -> false end end,
+				[1,2,3,4,5,6,7,8]))
+].
