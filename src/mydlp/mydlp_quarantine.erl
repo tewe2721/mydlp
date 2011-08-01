@@ -48,13 +48,13 @@
 
 -record(state, {quarantine_dir, quarantine_uid, quarantine_gid}).
 
-s(Data) -> gen_server:call(?MODULE, {s, Data}, 15000).
+s(Data) -> gen_server:call(?MODULE, {s, Data}, 20000).
 
 %%%%%%%%%%%%%% gen_server handles
 
 handle_call({s, Data}, From, #state{quarantine_dir=Dir, quarantine_uid=Uid, quarantine_gid=Gid} = State) ->
 	Worker = self(),
-	spawn_link(fun() ->
+	mydlp_api:mspawn(fun() ->
 		Hash = mydlp_api:md5_hex(Data),
 
 		L1Dir = Dir ++ string:substr(Hash, 1, 1),

@@ -97,11 +97,11 @@ handle(_,_) -> throw(undefined_handle).
 
 handle_call({a, _} = Call, From, #state{entity_tree=Tree} = State) ->
 	Worker = self(),
-	spawn_link(fun() ->
+	mydlp_api:mspawn(fun() ->
 			{ok, Reply, _NoTreeChange} = try handle(Call, Tree) 
 				catch _:_ -> {ok, handle_def(Call), Tree} end,
 			Worker ! {async_reply, Reply, From}
-		end),
+		end, 300000),
 	{noreply, State};
 
 handle_call(Call, _From, #state{entity_tree=Tree} = State) ->

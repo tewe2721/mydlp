@@ -97,21 +97,21 @@ update_afile(AFileId, Filename, MimeType, Size, ArchivePath, ContentText) ->
 
 handle_call({compile_customer, CustomerId}, From, State) ->
 	Worker = self(),
-        spawn_link(fun() ->
+	mydlp_api:mspawn(fun() ->
 			mydlp_mnesia:remove_site(CustomerId),
 			Reply = populate_site(CustomerId),
                         Worker ! {async_reply, Reply, From}
-                end),
-        {noreply, State, 60000};
+		end, 60000),
+        {noreply, State};
 
 handle_call(compile_filters, From, State) ->
 	Worker = self(),
-        spawn_link(fun() ->
+	mydlp_api:mspawn(fun() ->
 			mydlp_mnesia:truncate_nondata(),
 			Reply = populate(),
                         Worker ! {async_reply, Reply, From}
-                end),
-        {noreply, State, 60000};
+		end, 60000),
+        {noreply, State};
 
 handle_call(is_multisite, _From, State) ->
 	{ok, ATQ} = psq(app_type),
@@ -145,7 +145,7 @@ handle_call(_Msg, _From, State) ->
 
 % INSERT INTO log_archive (id, customer_id, rule_id, protocol, src_ip, src_user, destination, log_archive_file_id)
 handle_cast({archive_log, {Proto, RuleId, Ip, User, To, AFileId}}, State) ->
-	spawn_link(fun() ->
+	mydlp_api:mspawn(fun() ->
 		{CustomerId, RuleId1, Ip1, User1} = pre_push_log(RuleId, Ip, User),
 		psq(insert_archive, [CustomerId, RuleId1, Proto, Ip1, User1, To, AFileId])
 	end),
@@ -153,7 +153,7 @@ handle_cast({archive_log, {Proto, RuleId, Ip, User, To, AFileId}}, State) ->
 
 % INSERT INTO log_incedent (id, rule_id, protocol, src_ip, destination, action, matcher, filename, misc)
 handle_cast({push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc}}, State) ->
-	spawn_link(fun() ->
+	mydlp_api:mspawn(fun() ->
 		{CustomerId, RuleId1, Ip1, User1} = pre_push_log(RuleId, Ip, User),
 		psq(insert_incident, 
 			[CustomerId, RuleId1, Proto, Ip1, User1, To, Action, Matcher, FileS, Misc])
@@ -161,7 +161,7 @@ handle_cast({push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Mis
 	{noreply, State};
 
 handle_cast({push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, File, Misc}}, State) ->
-	spawn_link(fun() ->
+	mydlp_api:mspawn(fun() ->
 		{ok, Path} = mydlp_api:quarantine(File),
 		Size = mydlp_api:binary_size(File#file.data),
 		MimeType = (File#file.mime_type),
@@ -173,7 +173,7 @@ handle_cast({push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Fil
 	{noreply, State};
 
 handle_cast({push_smb_discover, XMLResult}, State) ->
-	spawn_link(fun() ->
+	mydlp_api:mspawn(fun() ->
 		transaction( fun() ->
 			psqt(delete_all_smb_discover),
 			psqt(insert_smb_discover, [mydlp_mnesia:get_dcid(), XMLResult]) end )
@@ -182,14 +182,14 @@ handle_cast({push_smb_discover, XMLResult}, State) ->
 
 handle_cast({update_afile, AFileId, Filename, MimeType, Size, ArchivePath, ContentText}, State) ->
 	% Probably will create problems in multisite use.
-	spawn_link(fun() ->
+	mydlp_api:mspawn(fun() ->
 		psq(update_archive_file, [Filename, MimeType, Size, ArchivePath, ContentText, AFileId], 60000)
-	end),
+	end, 60000),
 	{noreply, State};
 
 handle_cast(repopulate_mnesia, State) ->
 	% Probably will create problems in multisite use.
-	spawn_link(fun() ->
+	mydlp_api:mspawn(fun() ->
 		mydlp_mnesia:wait_for_tables(),
 		case mydlp_mysql:is_multisite() of
 			false -> mydlp_mysql:compile_customer(mydlp_mnesia:get_dcid());

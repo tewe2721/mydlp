@@ -82,13 +82,13 @@ match1(GroupId, Data) -> async_re_call({match, GroupId}, Data).
 
 %%%%%%%%%%%%%% gen_server handles
 
-handle_call({async_re, Call, Data}, From, State) ->
+handle_call({async_re, Call, Data, Timeout}, From, State) ->
 	Worker = self(),
-	spawn_link(fun() -> 
+	mydlp_api:mspawn(fun() -> 
 			Data1 = preregex(Data, State),
 			Ret = handle_re(Call, Data1, State),
 			Worker ! {async_reply, Ret, From}
-		end),
+		end, Timeout),
 	{noreply, State};
 
 handle_call(stop, _From, State) ->
@@ -309,5 +309,5 @@ score_regex_suite1({RE,Weight}, Data) ->
 
 async_re_call(Query, Data) -> async_re_call(Query, Data, 180000).
 
-async_re_call(Query, Data, Timeout) -> gen_server:call(?MODULE, {async_re, Query, Data}, Timeout).
+async_re_call(Query, Data, Timeout) -> gen_server:call(?MODULE, {async_re, Query, Data, Timeout}, Timeout).
 

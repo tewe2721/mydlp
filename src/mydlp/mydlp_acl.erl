@@ -87,7 +87,8 @@ qe(Files) -> acl_call({qe, site, {Files}}).
 
 -endif.
 
-acl_call(Query) -> gen_server:call(?MODULE, {acl, Query}, 1500000).
+acl_call(Query) -> acl_call(Query, 1500000).
+acl_call(Query, Timeout) -> gen_server:call(?MODULE, {acl, Query, Timeout}, Timeout).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -190,9 +191,9 @@ handle_acl(Q, _State) -> throw({error, {undefined_query, Q}}).
 -endif.
 
 
-handle_call({acl, Query}, From, State) ->
+handle_call({acl, Query, Timeout}, From, State) ->
 	Worker = self(),
-	spawn_link(fun() ->
+	mydlp_api:mspawn(fun() ->
 		Return = try 
 			Result = handle_acl(Query, State),
 			{ok, Result}
@@ -202,7 +203,7 @@ handle_call({acl, Query}, From, State) ->
 			{error, {Class,Error}} end,
 
 		Worker ! {async_acl_q, Return, From} 
-	end),
+	end, Timeout),
 	{noreply, State};
 
 handle_call(stop, _From, State) ->

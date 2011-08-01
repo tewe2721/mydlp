@@ -457,30 +457,30 @@ handle_query(Query) -> throw({error,{unhandled_query,Query}}).
 
 handle_call({async_query, Query}, From, State) ->
 	Worker = self(),
-	spawn_link(fun() ->
+	mydlp_api:mspawn(fun() ->
 		F = fun() -> handle_query(Query) end,
 		Result = transaction(F),
 		Return = handle_result(Query, Result),
 		Worker ! {async_reply, Return, From}
-	end),
-	{noreply, State, 5000};
+	end, 15000),
+	{noreply, State};
 
 handle_call(truncate_nondata, From, State) ->
 	Worker = self(),
-	spawn_link(fun() ->
+	mydlp_api:mspawn(fun() ->
 		lists:foreach(fun(T) -> mnesia:clear_table(T) end, nondata_tab_names()),
 		lists:foreach(fun(T) -> mydlp_mnesia:delete({unique_ids, T}) end, nondata_tab_names()),
 		Worker ! {async_reply, ok, From}
-	end),
-	{noreply, State, 15000};
+	end, 15000),
+	{noreply, State};
 
 handle_call(truncate_bayes, From, State) ->
 	Worker = self(),
-	spawn_link(fun() ->
+	mydlp_api:mspawn(fun() ->
 		lists:foreach(fun(T) -> mnesia:clear_table(T) end, bayes_tab_names()),
 		Worker ! {async_reply, ok, From}
-	end),
-	{noreply, State, 15000};
+	end, 15000),
+	{noreply, State};
 
 handle_call({new_authority, AuthorNode}, _From, State) ->
 	MnesiaNodes = get_mnesia_nodes(),
