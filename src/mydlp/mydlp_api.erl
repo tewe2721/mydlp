@@ -1688,7 +1688,7 @@ empty_aclr(Files) -> {{rule, -1}, {file, Files}, {matcher, none}, {misc,""}}.
 %% @end
 %%-------------------------------------------------------------------------
 
--define(SPAWN_TIMEOUT, 5000).
+-define(SPAWN_TIMEOUT, 60000).
 
 mspawn(Fun) -> mspawn(Fun, ?SPAWN_TIMEOUT).
 

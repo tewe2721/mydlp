@@ -244,9 +244,9 @@ init([]) ->
 
 {rec("function\\s+([\\w\\pS\\pP_]+)\\s*(?:\\((?:\\s*[\\w_]+\\s*:\\s*(?:in|in\\s+out)\\s*[\\w_]+\\s*;?[\\s]*)*\\))?\\s*return\\s+[\\w_\\.]+(?:\\s+is\\s*[\\w\\s\\pP\\pS]*begin[\\w\\s\\pP\\pS]*end\\s+\\1)?\\s*;", [multiline, caseless, ungreedy]), 73},
 
-{rec("while[\\w\\s\\pP\\pS]*loop[\\w\\s\\pP\\pS]*end\\s+loop\\s*;", [multiline, caseless, ungreedy]), 7},
+{rec("while[\\w\\s\\pP\\pS]*loop[\\w\\s\\pP\\pS]*end\\s+loop\\s*;", [multiline, caseless, ungreedy]), 7}
 
-{rec("for\\s+[\\w\\s\\pP\\pS]+\\s+in\\s+[\\w\\s\\pP\\pS]+loop[\\w\\s\\pP\\pS]*end\\s+loop\\s*;", [multiline, caseless, ungreedy]), 10}
+%{rec("for\\s+[\\w\\s\\pP\\pS]+\\s+in\\s+[\\w\\s\\pP\\pS]+loop[\\w\\s\\pP\\pS]*end\\s+loop\\s*;", [multiline, caseless, ungreedy]), 10}
 
 		]}
 	],
@@ -286,16 +286,27 @@ rec(Regex, ReOpts) ->
 
 -define(SS_RE_OPTS, [global, {capture, all, index}]).
 
-score_regex_suite(Regexes, Data) -> score_regex_suite(Regexes, Data, 0).
+%score_regex_suite(Regexes, Data) -> score_regex_suite(Regexes, Data, 0).
 
-score_regex_suite([{RE,Weight}|Regexes], Data, Score) ->
+%score_regex_suite([{RE,Weight}|Regexes], Data, Score) ->
+%	Count = case re:run(Data, RE, ?SS_RE_OPTS) of
+%		nomatch -> 0;
+%		{match, Captured} -> length(Captured) end,
+%	score_regex_suite(Regexes, Data, Score + (Weight * Count) );
+
+%score_regex_suite([], _Data, Score) -> Score.
+
+% Now we go parallel
+score_regex_suite(Regexes, Data) ->
+	Scores = mydlp_api:pmap(fun(I) -> score_regex_suite1(I, Data) end, Regexes),
+	lists:sum(Scores).
+
+score_regex_suite1({RE,Weight}, Data) ->
 	Count = case re:run(Data, RE, ?SS_RE_OPTS) of
 		nomatch -> 0;
 		{match, Captured} -> length(Captured) end,
-	score_regex_suite(Regexes, Data, Score + (Weight * Count) );
+	(Weight * Count).
 
-score_regex_suite([], _Data, Score) -> Score.
-	
 async_re_call(Query, Data) -> async_re_call(Query, Data, 180000).
 
 async_re_call(Query, Data, Timeout) -> gen_server:call(?MODULE, {async_re, Query, Data}, Timeout).

@@ -214,7 +214,7 @@ handle_call(_Msg, _From, State) ->
 handle_info({async_acl_q, Res, From}, State) ->
 	Reply = case Res of
 		{ok, R} -> R;
-		{error, _} -> pass end,
+		{error, _} -> pass end, % TODO conf
 
 	gen_server:reply(From, Reply),
 	{noreply, State};
@@ -280,6 +280,7 @@ execute_matchers([{Func,_}|_] = Matchers, {Addr, Files} = Params, false) ->
 	apply_f(Matchers, Params1, PLT);
 execute_matchers([], Params, PLT) -> apply_f([], Params, PLT).
 
+apply_f([], Params, _PLT) -> {neg, Params};
 apply_f([{whitefile, _FuncParams}|Matchers], {Addr, Files}, PLT) ->
 %	% Droping whitefiles to prevent execution of matchers with them
 %	execute_matchers(Matchers, {Addr, drop_whitefile(Files)}, PLT);
@@ -288,26 +289,43 @@ apply_f([{whitefile_dr, _FuncParams}|Matchers], {Source, Files}, PLT) ->
 %	[{cid, CustomerId}|_] = Source,
 %	% Droping whitefiles to prevent execution of matchers with them
 	execute_matchers(Matchers, {Source, Files}, PLT);
-apply_f([{Func, FuncParams}|Matchers], Params, PLT) ->
-	case apply_m(Func, [FuncParams, Params]) of
-                neg -> execute_matchers(Matchers, Params, PLT);
-                {pos, {file, F}} -> {pos, {file, F}, {matcher, Func}, {misc, ""}};
-                {pos, {file, F}, {misc, Misc}} -> {pos, {file, F}, {matcher, Func}, {misc, Misc}};
-                pos -> {pos, {file, #file{name="unknown"}}, {matcher, Func}, {misc, ""}}
-        end;
-apply_f([], Params, _PLT) -> {neg, Params}.
+apply_f(Matchers, Params, true) ->    % if pl_text is already called, we can go parallel
+					% total file size check could be added 
+	PAnyRet = mydlp_api:pany(fun({Func, FuncParams}) ->
+					apply_m(Func, [FuncParams, Params]) end, Matchers),
+	{FuncRet, Ret} = case PAnyRet of
+		false -> {arbitrary_func, neg};
+		{ok, {Func, _FuncParams}, R} -> {Func, R} end,
+
+	apply_f_ret([], FuncRet, Params, true, Ret);
+apply_f([{Func, FuncParams}|Matchers], Params, PLT) ->   % pl_text is not called already, matchers will be called sequential.
+	Ret = apply_m(Func, [FuncParams, Params]),
+	apply_f_ret(Matchers, Func, Params, PLT, Ret).
+
+apply_f_ret(Matchers, _Func, Params, PLT, neg) -> 				execute_matchers(Matchers, Params, PLT);
+apply_f_ret(_Matchers, Func, _Params, _PLT, {pos, {file, F}}) -> 		{pos, {file, F}, {matcher, Func}, {misc, ""}};
+apply_f_ret(_Matchers, Func, _Params, _PLT, {pos, {file, F}, {misc, Misc}}) -> 	{pos, {file, F}, {matcher, Func}, {misc, Misc}};
+apply_f_ret(_Matchers, Func, _Params, _PLT, pos) -> 				{pos, {file, #file{name="unknown"}}, {matcher, Func}, {misc, ""}}.
 
 apply_m(Func, [FuncParams, {Addr, Files}]) ->
-	Args = case get_matcher_req(Func) of
-		raw -> [FuncParams, {Addr, Files}];
-		analyzed -> [FuncParams, {Addr, Files}];
-		text -> [FuncParams, {Addr, drop_notext(Files)}]
-	end,
-	apply(mydlp_matchers, Func, Args).
+	Files1 = case get_matcher_req(Func) of
+		raw -> Files;
+		analyzed -> Files;
+		text -> drop_notext(Files) end,
+	FuncOpts = get_func_opts(Func, FuncParams),
+	apply_mp(Func, FuncOpts, Addr, Files1).
+
+apply_mp(Func, FuncOpts, Addr, Files) ->
+	PanyRet = mydlp_api:pany(fun(I) -> apply(mydlp_matchers, Func, [FuncOpts, Addr, I]) end, Files),
+	case PanyRet of
+		false -> neg;
+		{ok, _File, Result} -> Result end.
 
 get_matcher_req(whitefile) -> raw;
 get_matcher_req(whitefile_dr) -> raw;
 get_matcher_req(Func) -> apply(mydlp_matchers, Func, []).
+
+get_func_opts(Func, FuncParams) -> apply(mydlp_matchers, Func, [FuncParams]).
 
 pl_text(Files) -> pl_text(Files, []).
 pl_text([#file{text=undefined} = File|Files], Rets) -> 
