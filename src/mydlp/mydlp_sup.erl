@@ -122,8 +122,8 @@ init([socket, icap]) ->
 			[
 				% TCP Client
 			  {   undefined,								% Id	   = internal id
-				  {mydlp_icap_fsm,start_link,[]},		% StartFun = {M, F, A}
-				  %{mydlp_icap2_fsm,start_link,[]},		% StartFun = {M, F, A}
+				  %{mydlp_icap_fsm,start_link,[]},		% StartFun = {M, F, A}
+				  {mydlp_icap2_fsm,start_link,[]},		% StartFun = {M, F, A}
 				  temporary,								% Restart  = permanent | transient | temporary
 				  ?KILL_TIMEOUT,							% Shutdown = brutal_kill | int() >= 0 | infinity
 				  worker,									% Type	 = worker | supervisor
