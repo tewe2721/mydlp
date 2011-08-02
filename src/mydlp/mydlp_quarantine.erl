@@ -54,7 +54,7 @@ s(Data) -> gen_server:call(?MODULE, {s, Data}, 20000).
 
 handle_call({s, Data}, From, #state{quarantine_dir=Dir, quarantine_uid=Uid, quarantine_gid=Gid} = State) ->
 	Worker = self(),
-	mydlp_api:mspawn(fun() ->
+	mydlp_api:mspawn(?FLE(fun() ->
 		Hash = mydlp_api:md5_hex(Data),
 
 		L1Dir = Dir ++ string:substr(Hash, 1, 1),
@@ -76,7 +76,7 @@ handle_call({s, Data}, From, #state{quarantine_dir=Dir, quarantine_uid=Uid, quar
 				file:change_owner(FilePath, Uid, Gid) end,
 
 		Worker ! {async_reply, {ok, FilePath}, From}
-	end),
+	end)),
 	
 	{noreply, State};
 

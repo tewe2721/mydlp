@@ -1798,6 +1798,19 @@ exception(error, Reason) -> erlang:error(Reason);
 exception(throw, Reason) -> erlang:throw(Reason);
 exception(exit, Reason) -> erlang:exit(Reason).
 
+%%-------------------------------------------------------------------------
+%% @doc Catches and logs exception; this function will catch exception, logs it and rethrows it
+%% @end
+%%-------------------------------------------------------------------------
+
+log_exception(Fun) ->
+	try Fun()
+	catch Class:Error ->
+		?ERROR_LOG("Logged exception: Class: [~w]. Error: [~w].~nStack trace: ~w~n",
+			[Class, Error, erlang:get_stacktrace()]) end.
+		%	[Class, Error, erlang:get_stacktrace()]),
+		%exception(Class, Error) end.
+
 
 -include_lib("eunit/include/eunit.hrl").
 

@@ -133,6 +133,9 @@
          ]).
 -endif.
 
+% creates new Fun with encapsulates orginal fun to Log any Exception 
+-define(FLE(Fun), fun() -> mydlp_api:log_exception(Fun) end).
+
 -define(ACL_LOG(Proto, RuleId, Action, Ip, User, To, Matcher, File, Misc), 
 	mydlp_api:acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, File, Misc)).
 
