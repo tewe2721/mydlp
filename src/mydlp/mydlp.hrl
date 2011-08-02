@@ -52,6 +52,10 @@
 -define(WORK_DIR, "C:/WINDOWS/Temp/mydlp").
 -endif.
 
+-define(ACL, [       
+          {error_action, pass} % [pass/block]
+         ]).
+
 -ifdef(__MYDLP_NETWORK).
 -define(SSL_FILES, [
 		{certfile, "/etc/mydlp/ssl/public.pem"},

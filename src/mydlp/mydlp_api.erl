@@ -1693,9 +1693,19 @@ empty_aclr(Files) -> {{rule, -1}, {file, Files}, {matcher, none}, {misc,""}}.
 mspawn(Fun) -> mspawn(Fun, ?SPAWN_TIMEOUT).
 
 mspawn(Fun, Timeout) ->
-	Pid = spawn_link(Fun),
-	{ok, _} = timer:exit_after(Timeout, Pid, timeout),
+	Pid = spawn(Fun),
+	mspawntimer(Timeout, Pid),
 	Pid.
+
+mspawn_link(Fun) -> mspawn_link(Fun, ?SPAWN_TIMEOUT).
+
+mspawn_link(Fun, Timeout) ->
+	Pid = spawn_link(Fun),
+	mspawntimer(Timeout, Pid),
+	Pid.
+
+mspawntimer(Timeout, Pid) ->
+	{ok, _} = timer:exit_after(Timeout, Pid, timeout).
 
 %%-------------------------------------------------------------------------
 %% @doc Paralel mapping function with managed spawns
@@ -1706,13 +1716,14 @@ pmap(Fun, ListOfArgs) -> pmap(Fun, ListOfArgs, ?SPAWN_TIMEOUT).
 
 pmap(Fun, ListOfArgs, Timeout) ->
 	Self = self(),
-	Pids = lists:map(fun(I) -> mspawn(fun() -> pmap_f(Self, Fun, I) end) end, ListOfArgs),
+	Pids = lists:map(fun(I) -> mspawn_link(fun() -> pmap_f(Self, Fun, I) end) end, ListOfArgs),
 	pmap_gather(Pids, Timeout).
 
 pmap_gather(Pids, Timeout) -> pmap_gather(Pids, Timeout, []).
 
 pmap_gather([Pid|Rest], Timeout, Returns) ->
 	Return = receive
+		{Pid, {ierror, {Class, Error}}} -> exception(Class, Error);
 		{Pid, Ret} -> Ret
 	after Timeout ->
 		exit({timeout, {pmap, Pid}})
@@ -1721,7 +1732,12 @@ pmap_gather([Pid|Rest], Timeout, Returns) ->
 pmap_gather([], _Timeout, Returns) -> lists:reverse(Returns).
 
 pmap_f(Parent, Fun, I) ->
-	Parent ! {self(), Fun(I)}.
+	Message = try
+		Ret = Fun(I),
+		{self(), Ret}
+	catch Class:Error ->
+		{self(), {ierror, {Class, Error}}} end,
+	Parent ! Message.
 
 %%-------------------------------------------------------------------------
 %% @doc Paralel lists:any function with managed spawns, returns for anything other than false or neg
@@ -1732,12 +1748,12 @@ pany(Fun, ListOfArgs) -> pany(Fun, ListOfArgs, ?SPAWN_TIMEOUT).
 
 pany(Fun, ListOfArgs, Timeout) ->
 	Self = self(),
-	Pid = spawn(fun() -> pany_sup_f(Self, Fun, ListOfArgs, Timeout) end),
+	Pid = mspawn(fun() -> pany_sup_f(Self, Fun, ListOfArgs, Timeout) end, Timeout),
 	pany_gather(Pid, Timeout).
 
 pany_gather(Pid, Timeout) ->
 	receive
-		{Pid, {error, I, Reason}} -> throw({error, I, Reason});
+		{Pid, {ierror, {Class, Error}}} -> exception(Class, Error);
 		{Pid, Ret} -> Ret
 	after Timeout ->
 		exit({timeout, {pany, Pid}})
@@ -1745,7 +1761,7 @@ pany_gather(Pid, Timeout) ->
 
 pany_sup_f(Parent, Fun, ListOfArgs, Timeout) -> 
 	Self = self(),
-	Pids = lists:map(fun(I) -> mspawn(fun() -> pany_child_f(Self, Fun, I) end) end, ListOfArgs),
+	Pids = lists:map(fun(I) -> mspawn_link(fun() -> pany_child_f(Self, Fun, I) end) end, ListOfArgs),
 	NumberOfPids = length(Pids),
 	pany_sup_gather(NumberOfPids, Parent, Timeout).
 
@@ -1755,7 +1771,7 @@ pany_sup_gather(NumberOfPids, Parent, Timeout) ->
 		{_Pid, _I, false} -> 		pany_sup_gather(NumberOfPids - 1, Parent, Timeout);
 		{_Pid, _I, neg} -> 		pany_sup_gather(NumberOfPids - 1, Parent, Timeout);
 		{_Pid, _I, negative} -> 	pany_sup_gather(NumberOfPids - 1, Parent, Timeout);
-		{_Pid, {error, I, Reason}} -> 	pany_sup_return(Parent, {error, I, Reason} ),
+		{_Pid, {ierror, Reason}} -> 	pany_sup_return(Parent, {ierror, Reason} ),
 						exit({pany_error});
 		{_Pid, I, Else} -> 		pany_sup_return(Parent, {ok, I, Else} ),
 						exit({pany_returned})
@@ -1766,9 +1782,21 @@ pany_sup_gather(NumberOfPids, Parent, Timeout) ->
 pany_sup_return(Parent, Return) -> Parent ! {self(), Return}.
 
 pany_child_f(Parent, Fun, I) -> 
-	case catch Fun(I) of
-		{error, Reason} -> Parent ! {self(), {error, I, Reason}};
-		ElseRet -> Parent ! {self(), I, ElseRet} end.
+	Message = try
+		Ret = Fun(I),
+		{self(), I, Ret}
+	catch Class:Error ->
+		{self(), {ierror, {Class, Error}}} end,
+	Parent ! Message.
+
+%%-------------------------------------------------------------------------
+%% @doc Reproduces exception for given type
+%% @end
+%%-------------------------------------------------------------------------
+
+exception(error, Reason) -> erlang:error(Reason);
+exception(throw, Reason) -> erlang:throw(Reason);
+exception(exit, Reason) -> erlang:exit(Reason).
 
 
 -include_lib("eunit/include/eunit.hrl").

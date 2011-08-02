@@ -67,7 +67,9 @@ is_match_bin(BInKey, Data) -> async_re_call({i_mbin, BInKey}, Data).
 
 split_bin(BInKey, Data) -> async_re_call({sbin, BInKey}, Data).
 
-score_suite(BInKey, Data) -> async_re_call({score_suite, BInKey}, Data).
+score_suite(BInKey, Data) -> 
+	try async_re_call({score_suite, BInKey}, Data)
+	catch _:{timeout, _} -> 999999999 end.
 
 match([GI|GIs], Data) -> 
 	case match1(GI, Data) of
@@ -85,9 +87,14 @@ match1(GroupId, Data) -> async_re_call({match, GroupId}, Data).
 handle_call({async_re, Call, Data, Timeout}, From, State) ->
 	Worker = self(),
 	mydlp_api:mspawn(fun() -> 
-			Data1 = preregex(Data, State),
-			Ret = handle_re(Call, Data1, State),
-			Worker ! {async_reply, Ret, From}
+			Return = try 
+				Data1 = preregex(Data, State),
+				handle_re(Call, Data1, State)
+			catch Class:Error ->
+				?ERROR_LOG("Error occured on REGEX call: [~w]. Class: [~w]. Error: [~w].~nStack trace: ~w~n",
+					[Call, Class, Error, erlang:get_stacktrace()]),
+					{ierror, {Class, Error}} end,
+			Worker ! {async_reply, Return, From}
 		end, Timeout),
 	{noreply, State};
 
@@ -298,7 +305,7 @@ rec(Regex, ReOpts) ->
 
 % Now we go parallel
 score_regex_suite(Regexes, Data) ->
-	Scores = mydlp_api:pmap(fun(I) -> score_regex_suite1(I, Data) end, Regexes),
+	Scores = mydlp_api:pmap(fun(I) -> score_regex_suite1(I, Data) end, Regexes, 180000),
 	lists:sum(Scores).
 
 score_regex_suite1({RE,Weight}, Data) ->
@@ -309,5 +316,8 @@ score_regex_suite1({RE,Weight}, Data) ->
 
 async_re_call(Query, Data) -> async_re_call(Query, Data, 180000).
 
-async_re_call(Query, Data, Timeout) -> gen_server:call(?MODULE, {async_re, Query, Data, Timeout}, Timeout).
+async_re_call(Query, Data, Timeout) -> 
+	case gen_server:call(?MODULE, {async_re, Query, Data, Timeout}, Timeout) of
+		{ierror, {Class, Reason}} -> mydlp_api:exception(Class, Reason);
+		Else -> Else end.
 

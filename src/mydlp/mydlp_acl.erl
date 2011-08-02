@@ -65,7 +65,10 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
--record(state, {is_multisite=false}).
+-record(state, {
+	is_multisite=false,
+	error_action=pass
+	}).
 
 %%%%%%%%%%%%% MyDLP ACL API
 
@@ -87,6 +90,7 @@ qe(Files) -> acl_call({qe, site, {Files}}).
 
 -endif.
 
+%acl_call(Query) -> acl_call(Query, 1500).
 acl_call(Query) -> acl_call(Query, 1500000).
 acl_call(Query, Timeout) -> gen_server:call(?MODULE, {acl, Query, Timeout}, Timeout).
 
@@ -198,10 +202,9 @@ handle_call({acl, Query, Timeout}, From, State) ->
 			Result = handle_acl(Query, State),
 			{ok, Result}
 		catch Class:Error ->
-			?ERROR_LOG("Error occured on ACL call. Class: [~w]. Error: [~w].~nStack trace: ~w~n",
-				[Class, Error, erlang:get_stacktrace()]),
+			?ERROR_LOG("Error occured on ACL query: [~w]. Class: [~w]. Error: [~w].~nStack trace: ~w~n",
+				[Query, Class, Error, erlang:get_stacktrace()]),
 			{error, {Class,Error}} end,
-
 		Worker ! {async_acl_q, Return, From} 
 	end, Timeout),
 	{noreply, State};
@@ -212,10 +215,10 @@ handle_call(stop, _From, State) ->
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-handle_info({async_acl_q, Res, From}, State) ->
+handle_info({async_acl_q, Res, From}, #state{error_action=Action} = State) ->
 	Reply = case Res of
 		{ok, R} -> R;
-		{error, _} -> pass end, % TODO conf
+		{error, _} -> Action end, % TODO conf
 
 	gen_server:reply(From, Reply),
 	{noreply, State};
@@ -237,8 +240,15 @@ stop() ->
 -ifdef(__MYDLP_NETWORK).
 
 init([]) ->
+	ConfList = case application:get_env(acl) of
+		{ok, CL} -> CL;
+		_Else -> ?ACL
+	end,
+
+	{error_action, Action} = lists:keyfind(error_action, 1, ConfList),
+
 	IsMS = mydlp_mysql:is_multisite(),
-	{ok, #state{is_multisite=IsMS}}.
+	{ok, #state{is_multisite=IsMS, error_action=Action}}.
 
 -endif.
 
