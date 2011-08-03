@@ -21,6 +21,8 @@
 ###    along with MyDLP.  If not, see <http://www.gnu.org/licenses/>.
 ###--------------------------------------------------------------------------
 
+import os
+
 from mydlp import Mydlp
 from mydlp.ttypes import *
 
@@ -29,25 +31,35 @@ from thrift.transport import TTransport
 from thrift.protocol import TBinaryProtocol
 from thrift.server import TServer
 
-import magic
-
 import iban
 import daemon
-import BCFileIntegrity
-
 import lxml.html
 
-import os
+if os.name == "posix":
+	import magic
+else:
+	import mymagic
+
+if os.name == "posix":
+	import BCFileIntegrity
 
 class MydlpHandler:
 	def __init__(self):
-		self.mime = magic.Magic(mime=True)
 		if os.name == "posix":
+			self.mime = magic.open(magic.MAGIC_MIME)
+			self.mime.load()
 			self.bcfi = BCFileIntegrity.BCFileIntegrity()
+		else:
+			self.mime = mymagic.Magic(mime=True)
 
 	def getMagicMime(self, data):
 		try:
-			mtype = self.mime.from_buffer(data)
+			mtype = ''
+			if os.name == "posix":
+				mtype = self.mime.buffer(data)
+			else:
+				mtype = self.mime.from_buffer(data)
+
 			sc = mtype.find(';')
 			if sc == -1:
 				return mtype

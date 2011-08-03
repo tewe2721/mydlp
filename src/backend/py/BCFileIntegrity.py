@@ -16,7 +16,8 @@ class BCFileIntegrity:
 		self.libelfc = ctypes.CDLL("./.libs/libbfi.so")
 	else:
 		self.libelfc = ctypes.CDLL("libbfi.so")
-	self.ms = magic.Magic()
+	self.ms = magic.open(magic.MAGIC_NONE)
+        self.ms.load()
 
     def getElfSize(self, filepath):
         return self.libelfc.get_elf_size(filepath) 
@@ -32,7 +33,7 @@ class BCFileIntegrity:
         return int(result.group(1))
 
     def getType(self, filepath):
-        ftype = self.ms.from_file(filepath)
+        ftype = self.ms.file(filepath)
         return ftype.split()[0]
 
     def getFileSize(self,filepath):

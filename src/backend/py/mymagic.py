@@ -1,16 +1,16 @@
 """
-magic is a wrapper around the libmagic file identification library.
+mymagic is a wrapper around the libmagic file identification library.
 
 See README for more information.
 
 Usage:
 
->>> import magic
->>> magic.from_file("testdata/test.pdf")
+>>> import mymagic
+>>> mymagic.from_file("testdata/test.pdf")
 'PDF document, version 1.2'
->>> magic.from_file("testdata/test.pdf", mime=True)
+>>> mymagic.from_file("testdata/test.pdf", mime=True)
 'application/pdf'
->>> magic.from_buffer(open("testdata/test.pdf").read(1024))
+>>> mymagic.from_buffer(open("testdata/test.pdf").read(1024))
 'PDF document, version 1.2'
 >>>
 

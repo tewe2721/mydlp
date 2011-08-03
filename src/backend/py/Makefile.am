@@ -22,7 +22,6 @@ python_PYTHON = \
 	sitecustomize.py \
 	MyDLPBackendServer.py \
 	BCFileIntegrity.py \
-	magic.py \
 	daemon.py \
 	iban.py
 
