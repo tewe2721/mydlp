@@ -93,6 +93,9 @@
                  {workers, [
 			  {mydlp_smtpc, start_link,[]} 
 			]}
+	  },
+	  {seap, {acceptor, {9099, plain, seap} },
+                 {workers, []}
 	  }
 	 ]},
     {agents, [

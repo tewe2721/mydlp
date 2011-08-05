@@ -257,7 +257,7 @@ cleanup(OT) ->
 		false -> 0 end,
 	
 	MinObjId = 1000000*TSecs + MicroSecs,
-	ObjIds = gb_trees:key(OT),
+	ObjIds = gb_trees:keys(OT),
 	cleanup1(OT, MinObjId, ObjIds).
 	
 cleanup1(OT, MinObjId, [ObjId| Rest]) when ObjId < MinObjId ->

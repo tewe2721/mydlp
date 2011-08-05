@@ -108,6 +108,10 @@ init([]) ->
 'SEAP_REQ'({data, "DESTROY" ++ Rest}, State) -> 
 	{ ObjId } = get_req_args(Rest),
 	'DESTROY_RESP'(State, ObjId);
+'SEAP_REQ'({data, "HELP" ++ _Rest}, State) -> 
+	'HELP_RESP'(State);
+'SEAP_REQ'({data, _Else}, State) -> 
+	'HELP_RESP'(State);
 'SEAP_REQ'(timeout, State) ->
 	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
@@ -147,17 +151,37 @@ init([]) ->
 	send_ok(State),
 	{next_state, 'SEAP_REQ', State, ?TIMEOUT}.
 
+'HELP_RESP'(State) ->
+	Print = "\r\n" ++ "Commands:" ++ "\r\n" ++
+		"\t" ++ "BEGIN -> OK Id" ++ "\r\n" ++
+		"\t" ++ "SETPROP Id Key=Value-> OK" ++ "\r\n" ++
+		"\t" ++ "GETPROP Id Key-> OK Value" ++ "\r\n" ++
+		"\t" ++ "PUSH Id ChunkSize" ++ "\r\n" ++
+		"\t\t" ++ "Chunk -> OK" ++ "\r\n" ++
+		"\t" ++ "END Id -> OK" ++ "\r\n" ++
+		"\t" ++ "ACLQ Id -> OK Action" ++ "\r\n" ++
+		"\t" ++ "DESTROY Id -> OK" ++ "\r\n" ++
+		"\t" ++ "HELP -> This screen" ++ "\r\n" ++
+		"Any other command prints this screen." ++ "\r\n" ++
+		"If an internal error occurs, server respond with ERR instead of OK." ++ "\r\n",
+	send_ok(State, Print),
+	{next_state, 'SEAP_REQ', State, ?TIMEOUT}.
+
 'PUSH_DATA_RECV'({data, Data}, #state{socket=Socket, obj_id=ObjId, recv_size=RecvSize, recv_data=RecvData} = State) -> 
-	case mydlp_api:binary_size(Data) of
-		RecvSize -> 
-			RecvData1 = [Data|RecvData],
+	DataSize = mydlp_api:binary_size(Data),
+	NewSize = RecvSize - DataSize,
+	case NewSize of
+		-2 ->	case Data of
+				<<DataC:RecvSize/binary, "\r\n">> -> 'PUSH_DATA_RECV'({data, DataC}, State);
+				Else -> throw({error, {unexpected_binary_size, Else}}) end;
+		0 -> 	RecvData1 = [Data|RecvData],
 			ObjData = list_to_binary(lists:reverse(RecvData1)),
 			inet:setopts(Socket, [{active, once}, {packet, line}, list]),
 			'PUSH_RESP'(State#state{obj_id=undefined, recv_size=undefined, recv_data=[]}, ObjId, ObjData);
-		Size when Size < RecvSize ->
+		NewSize when NewSize > 0 ->
 			RecvData1 = [Data|RecvData],
-			{next_state, 'PUSH_DATA_RECV', State#state{recv_size=RecvSize - Size, recv_data=RecvData1}, ?TIMEOUT};
-		Else -> throw({error, {unexpected_binary_size, Else}}) end;
+			{next_state, 'PUSH_DATA_RECV', State#state{recv_size=NewSize, recv_data=RecvData1}, ?TIMEOUT};
+		_Else -> throw({error, {unexpected_binary_size, DataSize}}) end;
 'PUSH_DATA_RECV'(timeout, State) ->
 	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
@@ -263,7 +287,7 @@ get_getprop_args(Rest) ->
 	[ObjIdS, Key] = string:tokens(Rest1, " "),
 	{list_to_integer(ObjIdS), Key}.
 
-send(#state{socket=Socket}, Data) -> gen_tcp:send(Socket, Data).
+send(#state{socket=Socket}, Data) -> gen_tcp:send(Socket, <<Data/binary, "\r\n">>).
 
 send_err(State) -> send(State, ?BIN_ERR).
 
