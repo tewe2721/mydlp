@@ -237,7 +237,7 @@ fsm_call(StateName, Args, StateData) ->
 		?ERROR_LOG("Error occured on FSM (~w) call (~w). Class: [~w]. Error: [~w].~nStack trace: ~w~n",
 				[?MODULE, StateName, Class, Error, erlang:get_stacktrace()]),
 		send_err(StateData),
-		{stop, normalStop, StateData} end.
+		{next_state, 'SEAP_REQ', StateData, ?TIMEOUT} end.
 
 %%-------------------------------------------------------------------------
 %% Func: terminate/3
