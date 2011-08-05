@@ -44,6 +44,7 @@ dist_erl_DATA = \
 	mydlp_app.erl \
 	mydlp_archive.erl \
 	mydlp_bayeserl_store.erl \
+	mydlp_container.erl \
 	mydlp_distributor.erl \
 	mydlp_dynamic.erl \
 	mydlp_fsm.erl \

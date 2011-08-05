@@ -68,7 +68,6 @@ start_link() ->
 %%-------------------------------------------------------------------------
 init([]) ->
 	process_flag(trap_exit, true),
-
 	{ok, 'WAIT_FOR_SOCKET', #state{}}.
 
 %%-------------------------------------------------------------------------
@@ -90,6 +89,12 @@ init([]) ->
 %% Notification event coming from client
 'SEAP_REQ'({data, "BEGIN" ++ _Else}, State) -> 
 	'BEGIN_RESP'(State);
+'SEAP_REQ'({data, "SETPROP" ++ Rest}, State) -> 
+	{ ObjId, Key, Value } = get_setprop_args(Rest),
+	'SETPROP_RESP'(State, ObjId, Key, Value);
+'SEAP_REQ'({data, "GETPROP" ++ Rest}, State) -> 
+	{ ObjId, Key } = get_getprop_args(Rest),
+	'GETPROP_RESP'(State, ObjId, Key);
 'SEAP_REQ'({data, "PUSH" ++ Rest}, #state{socket=Socket} = State) -> 
 	{ ObjId, RecvSize} = get_req_args(Rest),
 	inet:setopts(Socket, [{active, once}, {packet, 0}, binary]),
@@ -108,27 +113,37 @@ init([]) ->
 	{stop, normal, State}.
 
 'BEGIN_RESP'(State) ->
-	{ok, ObjId} = mydlp_obj_container:new(),
+	{ok, ObjId} = mydlp_container:new(),
 	send_ok(State, ObjId),
 	{next_state, 'SEAP_REQ', State, ?TIMEOUT}.
 
+'SETPROP_RESP'(State, ObjId, Key, Value) ->
+	ok = mydlp_container:setprop(ObjId, Key, Value),
+	send_ok(State),
+	{next_state, 'SEAP_REQ', State, ?TIMEOUT}.
+
+'GETPROP_RESP'(State, ObjId, Key) ->
+	{ok, Value} = mydlp_container:getprop(ObjId, Key),
+	send_ok(State, Value),
+	{next_state, 'SEAP_REQ', State, ?TIMEOUT}.
+
 'PUSH_RESP'(State, ObjId, ObjData) ->
-	ok = mydlp_obj_container:push(ObjId, ObjData),
+	ok = mydlp_container:push(ObjId, ObjData),
 	send_ok(State),
 	{next_state, 'SEAP_REQ', State, ?TIMEOUT}.
 
 'END_RESP'(State, ObjId) ->
-	ok = mydlp_obj_container:eof(ObjId),
+	ok = mydlp_container:eof(ObjId),
 	send_ok(State),
 	{next_state, 'SEAP_REQ', State, ?TIMEOUT}.
 
 'ACLQ_RESP'(State, ObjId) ->
-	{ok, Action} = mydlp_obj_container:aclq(ObjId),
+	{ok, Action} = mydlp_container:aclq(ObjId),
 	send_ok(State, Action),
 	{next_state, 'SEAP_REQ', State, ?TIMEOUT}.
 
 'DESTROY_RESP'(State, ObjId) ->
-	ok = mydlp_obj_container:destroy(ObjId),
+	ok = mydlp_container:destroy(ObjId),
 	send_ok(State),
 	{next_state, 'SEAP_REQ', State, ?TIMEOUT}.
 
@@ -230,12 +245,23 @@ rm_trailing_crlf(Bin) when is_binary(Bin) ->
 	Buff.
 
 get_req_args(Rest) ->
-	case string:tokens(Rest, " ") of
-		[ObjId, "\r\n"] -> 
-			{ list_to_integer(ObjId) };
-		[ObjId, ChunkSize, "\r\n"] -> 
-			{ list_to_integer(ObjId), list_to_integer(ChunkSize) };
+	Rest1 = rm_trailing_crlf(Rest),
+	case string:tokens(Rest1, " ") of
+		[ObjIdS] -> { list_to_integer(ObjIdS) };
+		[ObjIdS, ChunkSize] -> { list_to_integer(ObjIdS), list_to_integer(ChunkSize) };
 		_Else -> throw({error, {obj_id_not_found, Rest}}) end.
+
+get_setprop_args(Rest) ->
+	Rest1 = rm_trailing_crlf(Rest),
+	[ObjIdS, KeyValuePairS] = string:tokens(Rest1, " "),
+	[Key| ValueL] = string:tokens(KeyValuePairS, "=" ),
+	Value = string:join(ValueL, "="),
+	{list_to_integer(ObjIdS), Key, Value}.
+
+get_getprop_args(Rest) ->
+	Rest1 = rm_trailing_crlf(Rest),
+	[ObjIdS, Key] = string:tokens(Rest1, " "),
+	{list_to_integer(ObjIdS), Key}.
 
 send(#state{socket=Socket}, Data) -> gen_tcp:send(Socket, Data).
 
@@ -247,5 +273,4 @@ send_ok(State, Arg) when is_binary(Arg) -> send(State, <<?BIN_OK/binary, " ", Ar
 send_ok(State, Arg) when is_integer(Arg) -> send_ok(State, integer_to_list(Arg));
 send_ok(State, Arg) when is_atom(Arg) -> send_ok(State, atom_to_list(Arg));
 send_ok(State, Arg) when is_list(Arg)-> send_ok(State, list_to_binary(Arg)).
-
 

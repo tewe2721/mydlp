@@ -161,8 +161,7 @@ delete_cacheref(Ref) ->
 		file:delete(FN) 
 	end), ok.
 
-call_timer() ->
-	timer:send_after(900000, cleanup_now).
+call_timer() -> timer:send_after(900000, cleanup_now).
 
 is_old(Filename, LocalSeconds) ->
 	{ok, FileInfo} = file:read_file_info(Filename),

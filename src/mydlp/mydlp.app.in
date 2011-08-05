@@ -34,6 +34,7 @@
         mydlp_acceptor,
         mydlp_archive,
         mydlp_bayeserl_store,
+        mydlp_container,
         mydlp_dynamic,
         mydlp_fsm,
         mydlp_icap_fsm,
@@ -47,6 +48,7 @@
         mydlp_pg_sup,
         mydlp_quarantine,
         mydlp_regex,
+        mydlp_seap_fsm,
         mydlp_smtp_fsm,
         mydlp_smtpc,
         mydlp_sup,
@@ -80,6 +82,7 @@
           {pg, {mydlp_nlp_tr, start_link,[]}, 2}, 
           {mydlp_trainer, start_link,[]},
           {mydlp_ts, start_link,[]},
+          {mydlp_container, start_link,[]},
           {mydlp_moddlp, start_link,[]}
          ]},
     {protocols, [
