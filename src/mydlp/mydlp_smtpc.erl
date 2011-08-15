@@ -101,13 +101,9 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
-	ConfList = case application:get_env(smtp) of
-		{ok, CL} -> CL;
-		_Else -> ?SMTP
-	end,
-
-	{helo_name, HeloName} = lists:keyfind(helo_name, 1, ConfList),
-	{next_hop, {Host,Port}} = lists:keyfind(next_hop, 1, ConfList),
+	HeloName = ?CFG(smtp_helo_name),
+	Host = ?CFG(smtp_next_hop_host),
+	Port = ?CFG(smtp_next_hop_port),
 
 	{ok, #state{smtp_helo_name=HeloName, smtp_dest_host=Host, smtp_dest_port=Port}}.
 

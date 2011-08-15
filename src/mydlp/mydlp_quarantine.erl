@@ -106,13 +106,10 @@ start_link() ->
 stop() -> gen_server:call(?MODULE, stop).
 
 init([]) ->
-	ConfList = case application:get_env(quarantine) of
-		{ok, CL} -> CL;
-		_Else -> ?QUARANTINE end,
+	Dir = ?CFG(quarantine_dir),
+	Uid = ?CFG(quarantine_uid),
+	Gid = ?CFG(quarantine_gid),
 
-	{dir, Dir} = lists:keyfind(dir, 1, ConfList),
-	{uid, Uid} = lists:keyfind(uid, 1, ConfList),
-	{gid, Gid} = lists:keyfind(gid, 1, ConfList),
 	{ok, #state{quarantine_dir=Dir, quarantine_uid=Uid, quarantine_gid=Gid}}.
 
 terminate(_Reason, _State) ->

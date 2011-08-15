@@ -231,18 +231,13 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
-	ConfList = case application:get_env(mysql) of
-		{ok, CL} -> CL;
-		_Else -> ?MYSQL
-	end,
-
-	{host, Host} = lists:keyfind(host, 1, ConfList),
-	{port, Port} = lists:keyfind(port, 1, ConfList),
-	{user, User} = lists:keyfind(user, 1, ConfList),
-	{password, Password} = lists:keyfind(password, 1, ConfList),
-	{database, DB} = lists:keyfind(database, 1, ConfList),
-	{pool_size, PoolSize} = lists:keyfind(pool_size, 1, ConfList),
-
+	Host = ?CFG(mysql_host),
+	Port = ?CFG(mysql_port),
+	User = ?CFG(mysql_user),
+	Password = ?CFG(mysql_password),
+	DB = ?CFG(mysql_database),
+	PoolSize = ?CFG(mysql_pool_size),
+	
 	{ok, MPid} = mysql:start_link(p, Host, Port, User, Password, DB, fun(_,_,_,_) -> ok end),
 	erlang:monitor(process, MPid), 
 	

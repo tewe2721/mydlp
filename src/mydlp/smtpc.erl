@@ -64,7 +64,7 @@ connect(IPAddress,Port) -> smtpc_fsm:start(IPAddress,Port).
 %% Descrip.: Sends data of email message
 %% Returns : {Code,Response} - {250,String}
 %%--------------------------------------------------------------------
-data(Pid,Message) ->  gen_fsm:sync_send_event(Pid, {data,Message}, ?TIMEOUT).
+data(Pid,Message) ->  gen_fsm:sync_send_event(Pid, {data,Message}, ?CFG(fsm_timeout)).
 
 %%--------------------------------------------------------------------
 %% Function: ehlo(Pid,HostName)
@@ -73,7 +73,7 @@ data(Pid,Message) ->  gen_fsm:sync_send_event(Pid, {data,Message}, ?TIMEOUT).
 %% Descrip.: EHLO handshake
 %% Returns : {Code,Response} - {250,String}
 %%--------------------------------------------------------------------
-ehlo(Pid,HostName) -> gen_fsm:sync_send_event(Pid, {ehlo,HostName}, ?TIMEOUT).
+ehlo(Pid,HostName) -> gen_fsm:sync_send_event(Pid, {ehlo,HostName}, ?CFG(fsm_timeout)).
 
 %%--------------------------------------------------------------------
 %% Function: etrn(Pid,Message)
@@ -82,7 +82,7 @@ ehlo(Pid,HostName) -> gen_fsm:sync_send_event(Pid, {ehlo,HostName}, ?TIMEOUT).
 %% Descrip.: Asks server to process message in Queue
 %% Returns : {Code,Response}
 %%--------------------------------------------------------------------
-etrn(Pid,Queue) -> gen_fsm:sync_send_event(Pid, {etrn,Queue}, ?TIMEOUT).
+etrn(Pid,Queue) -> gen_fsm:sync_send_event(Pid, {etrn,Queue}, ?CFG(fsm_timeout)).
 
 %%--------------------------------------------------------------------
 %% Function: expn(Pid,Alias)
@@ -92,7 +92,7 @@ etrn(Pid,Queue) -> gen_fsm:sync_send_event(Pid, {etrn,Queue}, ?TIMEOUT).
 %%            implimented due to anti-spam practices
 %% Returns : {Code,Response}
 %%--------------------------------------------------------------------
-expn(Pid,Alias) -> gen_fsm:sync_send_event(Pid, {expn,Alias}, ?TIMEOUT).
+expn(Pid,Alias) -> gen_fsm:sync_send_event(Pid, {expn,Alias}, ?CFG(fsm_timeout)).
 
 %%--------------------------------------------------------------------
 %% Function: help(Pid,HostName)
@@ -101,7 +101,7 @@ expn(Pid,Alias) -> gen_fsm:sync_send_event(Pid, {expn,Alias}, ?TIMEOUT).
 %% Descrip.: HELO handshake
 %% Returns : {Code,Response} - {250,String}
 %%--------------------------------------------------------------------
-helo(Pid,HostName) -> gen_fsm:sync_send_event(Pid, {helo,HostName}, ?TIMEOUT).
+helo(Pid,HostName) -> gen_fsm:sync_send_event(Pid, {helo,HostName}, ?CFG(fsm_timeout)).
 
 %%--------------------------------------------------------------------
 %% Function: help(Pid,Message)
@@ -109,7 +109,7 @@ helo(Pid,HostName) -> gen_fsm:sync_send_event(Pid, {helo,HostName}, ?TIMEOUT).
 %% Descrip.: Asks for help about how to use the server
 %% Returns : {Code,Response} - {221,String}
 %%--------------------------------------------------------------------
-help(Pid) -> gen_fsm:sync_send_event(Pid, help, ?TIMEOUT).
+help(Pid) -> gen_fsm:sync_send_event(Pid, help, ?CFG(fsm_timeout)).
 
 %%--------------------------------------------------------------------
 %% Function: mail(Pid,From)
@@ -118,7 +118,7 @@ help(Pid) -> gen_fsm:sync_send_event(Pid, help, ?TIMEOUT).
 %% Descrip.: Tell the server what the from address of the serer is
 %% Returns : {Code,Response}
 %%--------------------------------------------------------------------
-mail(Pid,From) -> gen_fsm:sync_send_event(Pid, {mail,From}, ?TIMEOUT).
+mail(Pid,From) -> gen_fsm:sync_send_event(Pid, {mail,From}, ?CFG(fsm_timeout)).
 
 %%--------------------------------------------------------------------
 %% Function: noop(Pid)
@@ -126,7 +126,7 @@ mail(Pid,From) -> gen_fsm:sync_send_event(Pid, {mail,From}, ?TIMEOUT).
 %% Descrip.: No Operation
 %% Returns : {Code,Response}
 %%--------------------------------------------------------------------
-noop(Pid) -> gen_fsm:sync_send_event(Pid, noop, ?TIMEOUT).
+noop(Pid) -> gen_fsm:sync_send_event(Pid, noop, ?CFG(fsm_timeout)).
 
 %%--------------------------------------------------------------------
 %% Function: quit(Pid)
@@ -135,7 +135,7 @@ noop(Pid) -> gen_fsm:sync_send_event(Pid, noop, ?TIMEOUT).
 %%            the Socket
 %% Returns : {Code,Response} - {250,String}
 %%--------------------------------------------------------------------
-quit(Pid) -> gen_fsm:sync_send_event(Pid, quit, ?TIMEOUT).
+quit(Pid) -> gen_fsm:sync_send_event(Pid, quit, ?CFG(fsm_timeout)).
 
 %%--------------------------------------------------------------------
 %% Function: rcpt(Pid,Message)
@@ -144,7 +144,7 @@ quit(Pid) -> gen_fsm:sync_send_event(Pid, quit, ?TIMEOUT).
 %% Descrip.: Tell server address of recipiant, usually max 100.
 %% Returns : {Code,Response} - {250,"ok"}
 %%--------------------------------------------------------------------
-rcpt(Pid,To) -> gen_fsm:sync_send_event(Pid, {rcpt,To}, ?TIMEOUT).
+rcpt(Pid,To) -> gen_fsm:sync_send_event(Pid, {rcpt,To}, ?CFG(fsm_timeout)).
 
 %%--------------------------------------------------------------------
 %% Function: rset(Pid)
@@ -152,7 +152,7 @@ rcpt(Pid,To) -> gen_fsm:sync_send_event(Pid, {rcpt,To}, ?TIMEOUT).
 %% Descrip.: Reset server state to jsut after HELO or EHLO command
 %% Returns : {Code,Response}
 %%--------------------------------------------------------------------
-rset(Pid) -> gen_fsm:sync_send_event(Pid, rset, ?TIMEOUT).
+rset(Pid) -> gen_fsm:sync_send_event(Pid, rset, ?CFG(fsm_timeout)).
 
 %%--------------------------------------------------------------------
 %% Function: vrfy(Pid,Address)
@@ -162,7 +162,7 @@ rset(Pid) -> gen_fsm:sync_send_event(Pid, rset, ?TIMEOUT).
 %%            disabled to discourage email address harvesting
 %% Returns : {Code,Response}
 %%--------------------------------------------------------------------
-vrfy(Pid,Address) -> gen_fsm:sync_send_event(Pid, {vrfy,Address}, ?TIMEOUT).
+vrfy(Pid,Address) -> gen_fsm:sync_send_event(Pid, {vrfy,Address}, ?CFG(fsm_timeout)).
 
 %%--------------------------------------------------------------------
 %% Function: sendmail(IPAddress,Host,From,To,Message)

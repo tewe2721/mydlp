@@ -61,19 +61,18 @@
 %% top supervisor of the tree.
 %%--------------------------------------------------------------------
 start(_Type, _Args) ->
+	% Prestart Load of dynamic modules
+	mydlp_dynamic:prestart_load(),
 	% Start dependencies
 	mydlp_loglevel:set(4),
 	start_crypto(),
         application:load(thrift),
         application:load(sasl),
         application:load(mydlp),
-        error_logger:add_report_handler(mydlp_logger_h, get_log_dir()),
+        error_logger:add_report_handler(mydlp_logger_h, ?CFG(log_dir)),
 	create_pid_file(),
 
 	Protocols = get_protocols(),
-
-	% Prestart Load of dynamic modules
-	mydlp_dynamic:prestart_load(),
 
 	% Start mydlp
 	SRet = supervisor:start_link({local, ?MODULE}, ?MODULE, [Protocols]),
@@ -130,7 +129,7 @@ init([ProtoConf| Protocols], ChildSpecs) ->
 init([], ChildSpecs) ->
 	{ok,
 		{
-			_SupFlags = {one_for_one, ?MAX_RESTART, ?MAX_TIME},
+			_SupFlags = {one_for_one, ?CFG(supervisor_max_restart_count), ?CFG(supervisor_max_restart_time)},
 			lists:reverse(ChildSpecs)
 		}
 	}.
@@ -152,29 +151,9 @@ stop(_S) ->
 %% If not defined it checks the environment variable EJABBERD_LOG_PATH.
 %% And if that one is neither defined, returns the default value:
 %% "ejabberd.log" in current directory.
-get_log_dir() ->
-        case application:get_env(mydlp, log_dir) of
-        {ok, Dir} -> Dir;
-        undefined ->
-                case os:getenv("MYDLP_LOG_DIR") of
-                        false -> ?LOG_DIR;
-                        Dir -> Dir
-                end
-        end.
-
-get_pid_path() ->
-        case application:get_env(mydlp, pid_file) of
-        {ok, Path} ->
-                Path;
-        undefined ->
-                case os:getenv("MYDLP_PID_FILE") of
-                        false -> ?PID_FILE;
-                        Path -> Path
-                end
-        end.
 
 create_pid_file() ->
-	file:write_file(get_pid_path(), os:getpid()).
+	file:write_file(?CFG(pid_file), os:getpid()).
 
 
 -ifdef(__MYDLP_NETWORK).

@@ -83,7 +83,7 @@ start_mydlp() {
 	check_mysql_db
 
 	log_daemon_msg "Starting MyDLP" "mydlp"
-        if HOME=$HOMEDIR start-stop-daemon --start --quiet --oknodo --chdir $HOMEDIR --pidfile $PIDFILE --exec $ERLANG -- $ERLANG_OPTS -mnesia dir '"/var/lib/mydlp/mnesia"' -config mydlp-production -boot mydlp; then
+        if HOME=$HOMEDIR start-stop-daemon --start --quiet --oknodo --chdir $HOMEDIR --pidfile $PIDFILE --exec $ERLANG -- $ERLANG_OPTS -mnesia dir '"/var/lib/mydlp/mnesia"' -config mydlp-sasl -boot mydlp; then
             log_end_msg 0
         else
             log_end_msg 1

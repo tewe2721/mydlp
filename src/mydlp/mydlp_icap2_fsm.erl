@@ -133,18 +133,13 @@ start_link() ->
 init([]) ->
 	process_flag(trap_exit, true),
 
-	ConfList = case application:get_env(icap) of
-		{ok, CL} -> CL;
-		_Else -> ?ICAP
-	end,
+	P = ?CFG(icap_reqmod_path),
+	PR = ?CFG(icap_respmod_path),
+	MC = ?CFG(icap_max_connections),
+	OT = ?CFG(icap_options_ttl),
 
-	{path, P} = lists:keyfind(path, 1, ConfList),
-	{path_respmod, PR} = lists:keyfind(path_respmod, 1, ConfList),
-	{max_connections, MC} = lists:keyfind(max_connections, 1, ConfList),
-	{options_ttl, OT} = lists:keyfind(options_ttl, 1, ConfList),
-
-	{log_pass, LogPassEnable} = lists:keyfind(log_pass, 1, ConfList),
-	{log_pass_lower_limit, LogPassLowerLimit} = lists:keyfind(log_pass_lower_limit, 1, ConfList),
+	LogPassEnable = ?CFG(icap_log_pass),
+	LogPassLowerLimit = ?CFG(icap_log_pass_lower_limit),
 
 	LogPass = case LogPassEnable of
 		false -> false;
@@ -163,7 +158,7 @@ init([]) ->
 'WAIT_FOR_SOCKET'({socket_ready, Socket, _CommType}, State) when is_port(Socket) ->
 	inet:setopts(Socket, [{active, once}, {packet, line}, list]),
 	{ok, {IP, _Port}} = inet:peername(Socket),
-	{next_state, 'ICAP_REQ_LINE', State#state{socket=Socket, addr=IP}, ?TIMEOUT};
+	{next_state, 'ICAP_REQ_LINE', State#state{socket=Socket, addr=IP}, ?CFG(fsm_timeout)};
 'WAIT_FOR_SOCKET'(Other, State) ->
 	?DEBUG("ICAP FSM: 'WAIT_FOR_SOCKET'. Unexpected message: ~p\n", [Other]),
 	%% Allow to receive async messages
@@ -195,7 +190,7 @@ init([]) ->
 	{next_state, 'ICAP_HEADER', 
 		State#state{icap_request=#icap_request{
 			method=Method, uri=Uri, major_version=MajorVersion, minor_version=MinorVersion},
-			icap_headers=#icap_headers{}, icap_mod_mode=ModMode}, ?TIMEOUT};
+			icap_headers=#icap_headers{}, icap_mod_mode=ModMode}, ?CFG(fsm_timeout)};
 
 'ICAP_REQ_LINE'(timeout, State) ->
 	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
@@ -228,7 +223,7 @@ init([]) ->
 				other=[#http_header{key=Key, value=Value}|Others]}   %% misc other headers
         end,
 
-        {next_state, 'ICAP_HEADER', State#state{icap_headers=IcapHeaders1}, ?TIMEOUT};
+        {next_state, 'ICAP_HEADER', State#state{icap_headers=IcapHeaders1}, ?CFG(fsm_timeout)};
 
 'ICAP_HEADER'(timeout, State) ->
 	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
@@ -240,39 +235,39 @@ encap_next(#state{icap_rencap=[{null_body, _Val}]} = State) -> 'READ_FILES'(Stat
 
 encap_next(#state{icap_rencap=[{req_hdr, _BI}|Rest], 
 		icap_headers=#icap_headers{allow204=false}} = State) -> 
-	{next_state, 'HTTP_REQ_LINE', State#state{icap_rencap=Rest, http_message_type=request, ch_req_h=true}, ?TIMEOUT};
+	{next_state, 'HTTP_REQ_LINE', State#state{icap_rencap=Rest, http_message_type=request, ch_req_h=true}, ?CFG(fsm_timeout)};
 
 encap_next(#state{icap_rencap=[{req_hdr, _BI}|Rest], 
 		icap_headers=#icap_headers{allow204=true}} = State) -> 
-	{next_state, 'HTTP_REQ_LINE', State#state{icap_rencap=Rest, http_message_type=request, ch_req_h=false}, ?TIMEOUT};
+	{next_state, 'HTTP_REQ_LINE', State#state{icap_rencap=Rest, http_message_type=request, ch_req_h=false}, ?CFG(fsm_timeout)};
 
 encap_next(#state{icap_rencap=[{res_hdr, _BI}|Rest], 
 		icap_headers=#icap_headers{allow204=false}} = State) -> 
-	{next_state, 'HTTP_RES_LINE', State#state{icap_rencap=Rest, http_message_type=response, ch_res_h=true}, ?TIMEOUT};
+	{next_state, 'HTTP_RES_LINE', State#state{icap_rencap=Rest, http_message_type=response, ch_res_h=true}, ?CFG(fsm_timeout)};
 
 encap_next(#state{icap_rencap=[{res_hdr, _BI}|Rest], 
 		icap_headers=#icap_headers{allow204=true}} = State) -> 
-	{next_state, 'HTTP_RES_LINE', State#state{icap_rencap=Rest, http_message_type=response, ch_res_h=false}, ?TIMEOUT};
+	{next_state, 'HTTP_RES_LINE', State#state{icap_rencap=Rest, http_message_type=response, ch_res_h=false}, ?CFG(fsm_timeout)};
 
 encap_next(#state{socket=Socket, icap_rencap=[{req_body, _BI}|Rest],
 		icap_headers=#icap_headers{allow204=false}} = State) -> 
 	inet:setopts(Socket, [{packet, line}, binary]),
-	{next_state, 'HTTP_CC_LINE', State#state{icap_rencap=Rest, http_message_type=request, ch_req_b=true}, ?TIMEOUT};
+	{next_state, 'HTTP_CC_LINE', State#state{icap_rencap=Rest, http_message_type=request, ch_req_b=true}, ?CFG(fsm_timeout)};
 
 encap_next(#state{socket=Socket, icap_rencap=[{req_body, _BI}|Rest],
 		icap_headers=#icap_headers{allow204=true}} = State) -> 
 	inet:setopts(Socket, [{packet, line}, binary]),
-	{next_state, 'HTTP_CC_LINE', State#state{icap_rencap=Rest, http_message_type=request, ch_req_b=false}, ?TIMEOUT};
+	{next_state, 'HTTP_CC_LINE', State#state{icap_rencap=Rest, http_message_type=request, ch_req_b=false}, ?CFG(fsm_timeout)};
 
 encap_next(#state{socket=Socket, icap_rencap=[{res_body, _BI}|Rest],
 		icap_headers=#icap_headers{allow204=false}} = State) -> 
 	inet:setopts(Socket, [{packet, line}, binary]),
-	{next_state, 'HTTP_CC_LINE', State#state{icap_rencap=Rest, http_message_type=response, ch_res_b=true}, ?TIMEOUT};
+	{next_state, 'HTTP_CC_LINE', State#state{icap_rencap=Rest, http_message_type=response, ch_res_b=true}, ?CFG(fsm_timeout)};
 
 encap_next(#state{socket=Socket, icap_rencap=[{res_body, _BI}|Rest],
 		icap_headers=#icap_headers{allow204=true}} = State) -> 
 	inet:setopts(Socket, [{packet, line}, binary]),
-	{next_state, 'HTTP_CC_LINE', State#state{icap_rencap=Rest, http_message_type=response, ch_res_b=false}, ?TIMEOUT};
+	{next_state, 'HTTP_CC_LINE', State#state{icap_rencap=Rest, http_message_type=response, ch_res_b=false}, ?CFG(fsm_timeout)};
 
 %encap_next(#state{icap_rencap=[{res_hdr, _BI}|_Rest]}) -> throw({error, {not_implemented, res_hdr}});
 %encap_next(#state{icap_rencap=[{res_body, _BI}|_Rest]}) -> throw({error, {not_implemented, res_body}});
@@ -310,7 +305,7 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 	MinorVersion = MinorVersionC - $0,
         {next_state, 'HTTP_HEADER', State#state{http_request=#http_request{
 			method=Method, path=Uri, version={MajorVersion, MinorVersion}}
-			, http_headers=#http_headers{}}, ?TIMEOUT}.
+			, http_headers=#http_headers{}}, ?CFG(fsm_timeout)}.
 
 'HTTP_RES_LINE'({data, Line}, State) -> read_line(Line, State, 'HTTP_RES_LINE', 'PARSE_RES_LINE');
 
@@ -332,7 +327,7 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 
         {next_state, 'HTTP_HEADER', State#state{http_response=#http_response{
 			code=Code, phrase=PhraseS, version={MajorVersion, MinorVersion}}
-			, http_headers=#http_headers{}}, ?TIMEOUT}.
+			, http_headers=#http_headers{}}, ?CFG(fsm_timeout)}.
 
 'HTTP_HEADER'({data, Line}, State) -> read_line(Line, State, 'HTTP_HEADER', 'PARSE_HEADER');
 
@@ -368,13 +363,13 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 		_ -> Others = HttpHeaders#http_headers.other, HttpHeaders#http_headers{other=[
 				#http_header{key=Key, value=Value}|Others]}   %% misc other headers
 	end,
-	{next_state, 'HTTP_HEADER', State#state{http_headers=HttpHeaders1}, ?TIMEOUT}.
+	{next_state, 'HTTP_HEADER', State#state{http_headers=HttpHeaders1}, ?CFG(fsm_timeout)}.
 
 'HTTP_CC_LINE'({data, Line}, State) ->
 	CSize = mydlp_api:hex2int(Line),
 	case CSize of
-		0 -> {next_state, 'HTTP_CC_TCRLF', State, ?TIMEOUT};
-		_ -> {next_state, 'HTTP_CC_CHUNK', State#state{tmp=CSize}, ?TIMEOUT}
+		0 -> {next_state, 'HTTP_CC_TCRLF', State, ?CFG(fsm_timeout)};
+		_ -> {next_state, 'HTTP_CC_CHUNK', State#state{tmp=CSize}, ?CFG(fsm_timeout)}
 	end;
 
 'HTTP_CC_LINE'(timeout, State) ->
@@ -391,15 +386,15 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 	CSize1 = CSize - size(Line),
 	if
 		CSize1 > 0 -> {next_state, 'HTTP_CC_CHUNK', 
-                                State#state{http_content= <<Content/binary,Line/binary>>, tmp=CSize1}, ?TIMEOUT};
+                                State#state{http_content= <<Content/binary,Line/binary>>, tmp=CSize1}, ?CFG(fsm_timeout)};
 		CSize1 == 0 -> {next_state, 'HTTP_CC_CRLF',
-				State#state{http_content= <<Content/binary,Line/binary>>, tmp=undefined}, ?TIMEOUT};
+				State#state{http_content= <<Content/binary,Line/binary>>, tmp=undefined}, ?CFG(fsm_timeout)};
 		CSize1 == -2 -> {next_state, 'HTTP_CC_LINE',
-				State#state{http_content= <<Content/binary, (rm_trailing_crlf(Line)) /binary>>, tmp=undefined}, ?TIMEOUT}
+				State#state{http_content= <<Content/binary, (rm_trailing_crlf(Line)) /binary>>, tmp=undefined}, ?CFG(fsm_timeout)}
 	end.
 
 'HTTP_CC_CRLF'({data, <<"\r\n">>}, State) ->
-	{next_state, 'HTTP_CC_LINE', State, ?TIMEOUT};
+	{next_state, 'HTTP_CC_LINE', State, ?CFG(fsm_timeout)};
 
 'HTTP_CC_CRLF'(timeout, State) ->
 	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
@@ -796,20 +791,20 @@ binary_last(Bin) when is_binary(Bin) ->
 read_line(Line, #state{buffer=undefined} = State, FSMState, ParseFunc) when is_list(Line) ->
 	case lists:last(Line) of
 		$\n -> ?MODULE:ParseFunc({data, Line}, State);
-		_Else -> {next_state, FSMState, State#state{buffer=[Line]}, ?TIMEOUT} end;
+		_Else -> {next_state, FSMState, State#state{buffer=[Line]}, ?CFG(fsm_timeout)} end;
 
 read_line(Line, #state{buffer=BuffList} = State, FSMState, ParseFunc) when is_list(Line) ->
 	case lists:last(Line) of
 		$\n -> ?MODULE:ParseFunc(
 				{data, lists:append(lists:reverse([Line|BuffList]))}, 
 				State#state{buffer=undefined});
-		_Else -> {next_state, FSMState, State#state{buffer=[Line|BuffList]}, ?TIMEOUT} end;
+		_Else -> {next_state, FSMState, State#state{buffer=[Line|BuffList]}, ?CFG(fsm_timeout)} end;
 
 read_line(Line, #state{buffer=undefined} = State, FSMState, ParseFunc) when is_binary(Line) ->
 	% case binary:last(Line) of % Erlang R14 bif
 	case binary_last(Line) of
 		$\n -> ?MODULE:ParseFunc({data, Line}, State);
-		_Else -> {next_state, FSMState, State#state{buffer=[Line]}, ?TIMEOUT} end;
+		_Else -> {next_state, FSMState, State#state{buffer=[Line]}, ?CFG(fsm_timeout)} end;
 
 read_line(Line, #state{buffer=BuffList} = State, FSMState, ParseFunc) when is_binary(Line) ->
 	% case binary:last(Line) of % Erlang R14 bif
@@ -817,7 +812,7 @@ read_line(Line, #state{buffer=BuffList} = State, FSMState, ParseFunc) when is_bi
 		$\n -> ?MODULE:ParseFunc(
 				{data, list_to_binary(lists:reverse([Line|BuffList]))}, 
 				State#state{buffer=undefined});
-		_Else -> {next_state, FSMState, State#state{buffer=[Line|BuffList]}, ?TIMEOUT} end.
+		_Else -> {next_state, FSMState, State#state{buffer=[Line|BuffList]}, ?CFG(fsm_timeout)} end.
 
 icap_date_hdr_line() -> [<<"Date: ">>, httpd_util:rfc1123_date(), <<"\r\n">>].
 

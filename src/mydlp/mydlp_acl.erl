@@ -240,15 +240,8 @@ stop() ->
 -ifdef(__MYDLP_NETWORK).
 
 init([]) ->
-	ConfList = case application:get_env(acl) of
-		{ok, CL} -> CL;
-		_Else -> ?ACL
-	end,
-
-	{error_action, Action} = lists:keyfind(error_action, 1, ConfList),
-
 	IsMS = mydlp_mysql:is_multisite(),
-	{ok, #state{is_multisite=IsMS, error_action=Action}}.
+	{ok, #state{is_multisite=IsMS, error_action=?CFG(error_action)}}.
 
 -endif.
 

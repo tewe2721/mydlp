@@ -92,11 +92,7 @@ handle_info(_Info, State) ->
 
 %%%%%%%%%%%%%%%% Implicit functions
 
-get_conf_list() -> 
-	case application:get_env(nlp_tr) of
-                {ok, CL} -> CL;
-                _Else -> ?NLP_TR
-        end.
+get_conf_list() -> [{activate, ?CFG(nlp_tr)}, {kokler, ?CFG(nlp_tr_kokler)}].
 
 pre_init(_Args) ->
 	ConfList = get_conf_list(),

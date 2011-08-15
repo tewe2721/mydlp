@@ -41,7 +41,7 @@ init([{Module, Function, Args}, ProcessCount]) ->
 			list_to_atom(atom_to_list(Module) ++ "_w" ++ integer_to_list(I)), % Id       = internal id
 			{Module, Function, Args},                                 % StartFun = {M, F, A}
 			permanent,                              % Restart  = permanent | transient | temporary
-			?KILL_TIMEOUT,                  % Shutdown = brutal_kill | int() >= 0 | infinity
+			?CFG(supervisor_kill_timeout),                  % Shutdown = brutal_kill | int() >= 0 | infinity
 			worker,                                 % Type   = worker | supervisor
 			[Module]                                % Modules  = [Module] | dynamic
 		}
@@ -50,7 +50,7 @@ init([{Module, Function, Args}, ProcessCount]) ->
 	Module:pre_init(Args),
 	{ok,
 		{
-			_SupFlags = {one_for_one, ?MAX_RESTART, ?MAX_TIME},
+			_SupFlags = {one_for_one, ?CFG(supervisor_max_restart_count), ?CFG(supervisor_max_restart_time)},
 			lists:reverse(ChildSpecs)
 		}
 	}.

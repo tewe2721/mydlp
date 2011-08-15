@@ -53,7 +53,7 @@ init([protocol_supervisor, ProtoConf]) ->
 	SocketSupName = list_to_atom(atom_to_list(Proto) ++ "_socket_sup"),
 
 	{ok,
-		{_SupFlags = {one_for_one, ?MAX_RESTART, ?MAX_TIME},
+		{_SupFlags = {one_for_one, ?CFG(supervisor_max_restart_count), ?CFG(supervisor_max_restart_time)},
 			[
 				% TCP Listener
 			  {   AcceptorSupName,							% Id	   = internal id
@@ -61,7 +61,7 @@ init([protocol_supervisor, ProtoConf]) ->
 				  	[AcceptorName, Port, CommType, SocketSupName]
 				  },										% StartFun = {M, F, A}
 				  permanent,								% Restart  = permanent | transient | temporary
-				  ?KILL_TIMEOUT,							% Shutdown = brutal_kill | int() >= 0 | infinity
+				  ?CFG(supervisor_kill_timeout),							% Shutdown = brutal_kill | int() >= 0 | infinity
 				  worker,									% Type	 = worker | supervisor
 				  [mydlp_acceptor]							% Modules  = [Module] | dynamic
 			  },
@@ -88,13 +88,13 @@ init([protocol_supervisor, ProtoConf]) ->
 	};
 init([socket, http]) ->
 	{ok,
-		{_SupFlags = {simple_one_for_one, ?MAX_RESTART, ?MAX_TIME},
+		{_SupFlags = {simple_one_for_one, ?CFG(supervisor_max_restart_count), ?CFG(supervisor_max_restart_time)},
 			[
 				% TCP Client
 			  {   undefined,								% Id	   = internal id
 				  {mydlp_http_fsm,start_link,[]},		% StartFun = {M, F, A}
 				  temporary,								% Restart  = permanent | transient | temporary
-				  ?KILL_TIMEOUT,							% Shutdown = brutal_kill | int() >= 0 | infinity
+				  ?CFG(supervisor_kill_timeout),							% Shutdown = brutal_kill | int() >= 0 | infinity
 				  worker,									% Type	 = worker | supervisor
 				  []										% Modules  = [Module] | dynamic
 			  }
@@ -103,13 +103,13 @@ init([socket, http]) ->
 	};
 init([socket, smtp]) ->
 	{ok,
-		{_SupFlags = {simple_one_for_one, ?MAX_RESTART, ?MAX_TIME},
+		{_SupFlags = {simple_one_for_one, ?CFG(supervisor_max_restart_count), ?CFG(supervisor_max_restart_time)},
 			[
 				% TCP Client
 			  {   undefined,								% Id	   = internal id
 				  {mydlp_smtp_fsm,start_link,[]},		% StartFun = {M, F, A}
 				  temporary,								% Restart  = permanent | transient | temporary
-				  ?KILL_TIMEOUT,							% Shutdown = brutal_kill | int() >= 0 | infinity
+				  ?CFG(supervisor_kill_timeout),							% Shutdown = brutal_kill | int() >= 0 | infinity
 				  worker,									% Type	 = worker | supervisor
 				  []										% Modules  = [Module] | dynamic
 			  }
@@ -118,14 +118,14 @@ init([socket, smtp]) ->
 	};
 init([socket, icap]) ->
 	{ok,
-		{_SupFlags = {simple_one_for_one, ?MAX_RESTART, ?MAX_TIME},
+		{_SupFlags = {simple_one_for_one, ?CFG(supervisor_max_restart_count), ?CFG(supervisor_max_restart_time)},
 			[
 				% TCP Client
 			  {   undefined,								% Id	   = internal id
 				  %{mydlp_icap_fsm,start_link,[]},		% StartFun = {M, F, A}
 				  {mydlp_icap2_fsm,start_link,[]},		% StartFun = {M, F, A}
 				  temporary,								% Restart  = permanent | transient | temporary
-				  ?KILL_TIMEOUT,							% Shutdown = brutal_kill | int() >= 0 | infinity
+				  ?CFG(supervisor_kill_timeout),							% Shutdown = brutal_kill | int() >= 0 | infinity
 				  worker,									% Type	 = worker | supervisor
 				  []										% Modules  = [Module] | dynamic
 			  }
@@ -134,13 +134,13 @@ init([socket, icap]) ->
 	};
 init([socket, seap]) ->
 	{ok,
-		{_SupFlags = {simple_one_for_one, ?MAX_RESTART, ?MAX_TIME},
+		{_SupFlags = {simple_one_for_one, ?CFG(supervisor_max_restart_count), ?CFG(supervisor_max_restart_time)},
 			[
 				% TCP Client
 			  {   undefined,								% Id	   = internal id
 				  {mydlp_seap_fsm,start_link,[]},		% StartFun = {M, F, A}
 				  temporary,								% Restart  = permanent | transient | temporary
-				  ?KILL_TIMEOUT,							% Shutdown = brutal_kill | int() >= 0 | infinity
+				  ?CFG(supervisor_kill_timeout),							% Shutdown = brutal_kill | int() >= 0 | infinity
 				  worker,									% Type	 = worker | supervisor
 				  []										% Modules  = [Module] | dynamic
 			  }
@@ -149,13 +149,13 @@ init([socket, seap]) ->
 	};
 init([socket, FsmModule]) ->
 	{ok,
-		{_SupFlags = {simple_one_for_one, ?MAX_RESTART, ?MAX_TIME},
+		{_SupFlags = {simple_one_for_one, ?CFG(supervisor_max_restart_count), ?CFG(supervisor_max_restart_time)},
 			[
 				% TCP Client
 			  {   undefined,								% Id	   = internal id
 				  {mydlp_fsm,start_link,[FsmModule]},		% StartFun = {M, F, A}
 				  temporary,								% Restart  = permanent | transient | temporary
-				  ?KILL_TIMEOUT,							% Shutdown = brutal_kill | int() >= 0 | infinity
+				  ?CFG(supervisor_kill_timeout),							% Shutdown = brutal_kill | int() >= 0 | infinity
 				  worker,									% Type	 = worker | supervisor
 				  []										% Modules  = [Module] | dynamic
 			  }

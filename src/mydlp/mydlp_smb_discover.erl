@@ -73,16 +73,10 @@ handle_info(_Info, State) ->
 %%%%%%%%%%%%%%%% Implicit functions
 
 start_link() ->
-	ConfList = case application:get_env(smb_discover) of
-		{ok, CL} -> CL;
-		_Else -> ?SMB_DISCOVER
-	end,
-
-	{activate, Activate} = lists:keyfind(activate, 1, ConfList),
-	case Activate of 
+	case ?CFG(smb_discover) of 
 		true ->
-			{interval, Interval} = lists:keyfind(interval, 1, ConfList),
-			{script_path, ScriptPath} = lists:keyfind(script_path, 1, ConfList),
+			Interval = ?CFG(smb_discover_interval),
+			ScriptPath = ?CFG(smb_discover_script_path),
 		
 			case gen_server:start_link({local, ?MODULE}, ?MODULE, 
 						[ScriptPath, Interval], []) of

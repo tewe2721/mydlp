@@ -90,10 +90,9 @@ init([Port, CommType, SocketSup]) ->
 
 get_bops(plain) -> {gen_tcp, []};
 get_bops(ssl) -> 
-	SslFiles = case application:get_env(ssl_files) of
-		{ok, SF} -> SF;
-		_Else -> ?SSL_FILES
-	end,
+	SslFiles = [	{certfile, ?CFG(ssl_cert)},
+			{keyfile, ?CFG(ssl_key)}
+		],
 	{ssl, [{ssl_imp, new}, {verify, verify_none}] ++ SslFiles}.
 
 -endif.

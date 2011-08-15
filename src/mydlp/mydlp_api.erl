@@ -318,7 +318,7 @@ get_text(#file{mime_type=MimeType}) ->
 ]).
 
 xml_to_txt(Data) when is_binary(Data) -> 
-	X = case size(Data) > (?MAX_MEM_OBJ/4) of
+	X = case size(Data) > (?CFG(maximum_memory_object)/4) of
 		true ->	{ok, XmlF} = mktempfile(),
 			ok = file:write_file(XmlF, Data, [raw]),
 			X1 = xmerl_scan:file(XmlF, ?XMERL_OPTS),
@@ -886,7 +886,7 @@ acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, #file{} = File, Misc) ->
 		quarantine ->	acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
 				mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, File, Misc);
 		archive -> 
-			case { Proto, ?BB_S(File#file.dataref) > ?MINIMUM_ARCHIVE_OBJ_SIZE } of % will use new configuration refs
+			case { Proto, ?BB_S(File#file.dataref) > ?CFG(archive_minimum_size) } of % will use new configuration refs
 				{ icap, true } -> acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
 					AFileId = mydlp_mysql:new_afile(),
 					mydlp_archive:a(AFileId, File),
@@ -1619,11 +1619,11 @@ cd_to_fn(ContentDisposition) ->
 get_chunk(Files) -> get_chunk(0, Files, []).
 
 get_chunk(_TotalSize, [], InChunk) -> {InChunk, []};
-get_chunk(TotalSize, [#file{dataref=Ref} = File|Files], InChunk) 
-		when TotalSize < ?CHUNK_THRESHOLD ->
-	FS = ?BB_S(Ref),
-	get_chunk(TotalSize + FS, Files, [File|InChunk]);
-get_chunk(_TotalSize, Rest, InChunk) -> {InChunk, Rest}.
+get_chunk(TotalSize, [#file{dataref=Ref} = File|Files], InChunk) ->
+	case TotalSize < ?CFG(maximum_chunk_size) of
+		true -> FS = ?BB_S(Ref),
+			get_chunk(TotalSize + FS, Files, [File|InChunk]);
+		false -> {InChunk, [File|Files]} end.
 	
 %%-------------------------------------------------------------------------
 %% @doc Prints report browser output to specified file.
@@ -1688,16 +1688,14 @@ empty_aclr(Files) -> {{rule, -1}, {file, Files}, {matcher, none}, {misc,""}}.
 %% @end
 %%-------------------------------------------------------------------------
 
--define(SPAWN_TIMEOUT, 60000).
-
-mspawn(Fun) -> mspawn(Fun, ?SPAWN_TIMEOUT).
+mspawn(Fun) -> mspawn(Fun, ?CFG(spawn_timeout)).
 
 mspawn(Fun, Timeout) ->
 	Pid = spawn(Fun),
 	mspawntimer(Timeout, Pid),
 	Pid.
 
-mspawn_link(Fun) -> mspawn_link(Fun, ?SPAWN_TIMEOUT).
+mspawn_link(Fun) -> mspawn_link(Fun, ?CFG(spawn_timeout)).
 
 mspawn_link(Fun, Timeout) ->
 	Pid = spawn_link(Fun),
@@ -1712,7 +1710,7 @@ mspawntimer(Timeout, Pid) ->
 %% @end
 %%-------------------------------------------------------------------------
 
-pmap(Fun, ListOfArgs) -> pmap(Fun, ListOfArgs, ?SPAWN_TIMEOUT).
+pmap(Fun, ListOfArgs) -> pmap(Fun, ListOfArgs, ?CFG(spawn_timeout)).
 
 pmap(Fun, ListOfArgs, Timeout) ->
 	Self = self(),
@@ -1744,7 +1742,7 @@ pmap_f(Parent, Fun, I) ->
 %% @end
 %%-------------------------------------------------------------------------
 
-pany(Fun, ListOfArgs) -> pany(Fun, ListOfArgs, ?SPAWN_TIMEOUT).
+pany(Fun, ListOfArgs) -> pany(Fun, ListOfArgs, ?CFG(spawn_timeout)).
 
 pany(Fun, ListOfArgs, Timeout) ->
 	Self = self(),

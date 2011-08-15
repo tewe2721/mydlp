@@ -29,13 +29,15 @@
 
 -include("mydlp.hrl").
 
+-define(DEFAULTCONFPATH, "/etc/mydlp/mydlp.conf").
+
 -ifdef(__MYDLP_NETWORK).
 
 prestart_load() ->
+	load_mydlp_config(),
 	load_mydlp_denied_page0().
 
 load() ->
-	load_mydlp_config(),
 	load_mydlp_denied_page().
 
 load_src(Src) ->
@@ -83,15 +85,16 @@ load_mydlp_denied_page0() -> load_src(mydlp_denied_page_src("Denied!!!")).
 
 -ifdef(__MYDLP_ENDPOINT).
 
-prestart_load() -> ok.
+prestart_load() -> load_mydlp_config().
 
-load() -> load_mydlp_config().
+load() -> ok.
 
 -endif.
 
 -define(CONFDEF, [
 	{log_dir, string, "/var/log/mydlp/"},
 	{pid_file, string, "/var/run/mydlp/mydlp.pid"},
+	{work_dir, string, "/var/tmp/mydlp"},
 	{ssl_cert, string, "/etc/mydlp/ssl/public.pem"},
 	{ssl_key, string, "/etc/mydlp/ssl/private.pem"},
 	{mysql_host, string, "localhost"},
@@ -99,7 +102,7 @@ load() -> load_mydlp_config().
 	{mysql_user, string, "root"},
 	{mysql_password, string, ""},
 	{mysql_database, string, "mydlp"},
-	{mysql_pool_size, string, "2"},
+	{mysql_pool_size, integer, "2"},
 	{quarantine_dir, string, "/var/lib/mydlp/quarantine/"},
 	{quarantine_uid, integer, "33"},
 	{quarantine_gid, integer, "33"},
@@ -123,7 +126,15 @@ load() -> load_mydlp_config().
 	{smb_discover, boolean, "false"},
 	{smb_discover_script_path, string, "/usr/sbin/mydlp-smb-discover"},
 	{smb_discover_interval, integer, "3600"},
-	{archive_minimum_size, integer, "256"}
+	{archive_minimum_size, integer, "256"},
+	{maximum_memory_object, integer, "204800"},
+	{maximum_chunk_size, integer, "1048576"},
+	{supervisor_max_restart_count, integer, "5"},
+	{supervisor_max_restart_time, integer, "20"},
+	{supervisor_kill_timeout, integer, "20"},
+	{fsm_timeout, integer, "120000"},
+	{spawn_timeout, integer, "60000"}
+
 ]).
 
 -define(CONFIG_HEAD, "
@@ -136,8 +147,14 @@ load() -> load_mydlp_config().
 
 load_mydlp_config() -> load_src(mydlp_config_src()).
 
+get_mydlp_conf_path() ->
+	case os:getenv("MYDLP_CONF") of
+		false -> ?DEFAULTCONFPATH;
+		Path -> Path end.
+
 mydlp_config_src() ->
-	{ok, Device} = file:open("mydlp.conf", [read]),
+	ConfPath = get_mydlp_conf_path(),
+	{ok, Device} = file:open(ConfPath, [read]),
 	ConfSrc = mydlp_config_parse(Device),
 	?CONFIG_HEAD ++ ConfSrc.
 

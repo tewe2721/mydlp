@@ -114,18 +114,10 @@ handle_info(_Info, State) ->
 %%%%%%%%%%%%%%%% Implicit functions
 
 start_link() ->
-
-	ConfList = case application:get_env(mydlp, auto_distribution) of
-		{ok, CL} -> CL;
-		_Else -> ?AUTO_DIST
-	end,
-
-        case lists:keyfind(activate, 1, ConfList) of
-		{activate, true} ->
-        		{all_nodes, AllNodes} = lists:keyfind(all_nodes, 1, ConfList),
-			Priority = case lists:keyfind(priority, 1, ConfList) of
-				{priority, P} -> P;
-				_Else2 -> 100 end,
+        case ?CFG(auto_distribution) of
+		true ->
+        		AllNodes = ?CFG(auto_distribution_nodes),
+			Priority = ?CFG(auto_distribution_priority),
 
 			case gen_server:start_link({local, ?MODULE}, ?MODULE, [Priority, AllNodes], []) of
 				{ok, Pid} -> {ok, Pid};

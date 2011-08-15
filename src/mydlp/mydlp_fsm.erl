@@ -110,7 +110,7 @@ init([TargetModule]) ->
 	{ok, {IP, _Port}} = BackendOpts:peername(Socket),
 	{next_state, 'WF_DATA', 
 			State#state{socket=Socket, comm_type=CommType, addr=IP}, 
-		?TIMEOUT};
+		?CFG(fsm_timeout)};
 
 'WF_SOCKET'(Other, State) ->
 	?DEBUG("State: 'WF_SOCKET'. Unexpected message: ~p\n", [Other]),
@@ -126,7 +126,7 @@ init([TargetModule]) ->
 
 'WF_DATA'(Data, State) ->
 	?DEBUG("~p Ignoring data: ~p\n", [self(), Data]),
-	{next_state, 'WF_DATA', State, ?TIMEOUT}.
+	{next_state, 'WF_DATA', State, ?CFG(fsm_timeout)}.
 
 consume({data, Data}, #state{module=Module, module_fsm_state=ModuleFSMState, module_state=ModuleState} = State) ->
 	ModuleReply = Module:ModuleFSMState({data, Data}, ModuleState),
@@ -139,12 +139,12 @@ consume({data, Data}, #state{module=Module, module_fsm_state=ModuleFSMState, mod
 					%%%% here should send buff to remote and reset buff
 					'REQ_OK'(State1, Files, {Host, Port});
 				continue ->
-					{next_state, 'WF_DATA', State1, ?TIMEOUT}
+					{next_state, 'WF_DATA', State1, ?CFG(fsm_timeout)}
                         end;
 		{next_state, ModuleFSMState1, ModuleState1} ->
 			{next_state, 'WF_DATA', 
 				State#state{module_state=ModuleState1, module_fsm_state=ModuleFSMState1},
-				?TIMEOUT};
+				?CFG(fsm_timeout)};
                 {error, Error} ->
                         {stop, {error, Error}, State}
         end.
@@ -182,7 +182,7 @@ consume({data, Data}, #state{module=Module, module_fsm_state=ModuleFSMState, mod
 	BackendOpts:setopts(PeerSock, [{packet, 0}, {active, once}]),
 	BackendOpts:setopts(Socket, [{packet, 0}, {active, once}, binary]),
 
-	{next_state, 'WF_DATA', State#state{in_buffer=[]}, ?TIMEOUT}.
+	{next_state, 'WF_DATA', State#state{in_buffer=[]}, ?CFG(fsm_timeout)}.
 
 'BLOCK_REQ'(block, #state{socket=Socket} = State) ->
 	Backend = backend(State),
@@ -191,7 +191,7 @@ consume({data, Data}, #state{module=Module, module_fsm_state=ModuleFSMState, mod
 	BackendOpts = backend_opts(State),
 	BackendOpts:setopts(Socket, [{packet, 0}, {active, once}, binary]),
 
-	{next_state, 'WF_DATA', State#state{in_buffer=[]}, ?TIMEOUT}.
+	{next_state, 'WF_DATA', State#state{in_buffer=[]}, ?CFG(fsm_timeout)}.
 
 %%-------------------------------------------------------------------------
 %% Func: handle_event/3
@@ -242,14 +242,14 @@ handle_info({tcp, PeerSock, Data}, StateName,
 	% Flow control: enable forwarding of next TCP message
 	gen_tcp:send(Socket, Data),
 	inet:setopts(PeerSock, [{active, once}]),
-	{next_state, StateName, StateData, ?TIMEOUT};
+	{next_state, StateName, StateData, ?CFG(fsm_timeout)};
 
 handle_info({ssl, PeerSock, Data}, StateName, 
 		#state{socket=Socket, peer_sock=PeerSock, comm_type=ssl} = StateData) ->
 	% Flow control: enable forwarding of next TCP message
 	ssl:send(Socket, Data),
 	ssl:setopts(PeerSock, [{active, once}]),
-	{next_state, StateName, StateData, ?TIMEOUT};
+	{next_state, StateName, StateData, ?CFG(fsm_timeout)};
 
 handle_info({tcp_closed, _}, _StateName, #state{comm_type=plain, addr=Addr} = StateData) ->
 	?DEBUG("~p Client ~p disconnected.\n", [self(), Addr]),

@@ -81,13 +81,10 @@ start_link() ->
 %%-------------------------------------------------------------------------
 init([]) ->
 	process_flag(trap_exit, true),
-	ConfList = case application:get_env(smtp) of
-		{ok, CL} -> CL;
-		_Else -> ?SMTP
-	end,
 
-	{enable_for_all, EFA} = lists:keyfind(enable_for_all, 1, ConfList),
-	{bypass_on_fail, BOF} = lists:keyfind(bypass_on_fail, 1, ConfList),
+	EFA = ?CFG(smtp_enable_for_all),
+	BOF = ?CFG(smtp_bypass_on_fail),
+
 	{ok, 'WAIT_FOR_SOCKET', #smtpd_fsm{enable_for_all=EFA, bypass_on_fail=BOF}}.
 
 %%-------------------------------------------------------------------------
@@ -107,7 +104,7 @@ init([]) ->
 	NewState = State#smtpd_fsm{socket=Socket, addr=IP, relay = true},
 	?SMTP_LOG(connect, IP),
 	NextState = smtpd_cmd:command({greeting,IP},NewState),
-	{next_state, 'WAIT_FOR_CMD', NextState, ?TIMEOUT};
+	{next_state, 'WAIT_FOR_CMD', NextState, ?CFG(fsm_timeout)};
 'WAIT_FOR_SOCKET'(Other, State) ->
 	?DEBUG("SMTP State: 'WAIT_FOR_SOCKET'. Unexpected message: ~p\n", [Other]),
 	%% Allow to receive async messages
@@ -117,13 +114,13 @@ init([]) ->
 'WAIT_FOR_CMD'({data, Data}, #smtpd_fsm{buff = Buff} = State) ->
 	NewBuff = <<Buff/binary,Data/binary>>,
 	case end_of_cmd(NewBuff) of
-		0 -> {next_state, 'WAIT_FOR_CMD', State#smtpd_fsm{buff = NewBuff}, ?TIMEOUT};
+		0 -> {next_state, 'WAIT_FOR_CMD', State#smtpd_fsm{buff = NewBuff}, ?CFG(fsm_timeout)};
 		Pos -> 
 			<<Line:Pos/binary,13,10,NextBuff/binary>> = NewBuff,
 			NextState = smtpd_cmd:command(Line,State#smtpd_fsm{line = Line}),
 			case NextState#smtpd_fsm.data of
-				undefined -> {next_state, 'WAIT_FOR_CMD', NextState#smtpd_fsm{buff = NextBuff}, ?TIMEOUT};
-				<<>> -> {next_state, 'WAIT_FOR_DATA', NextState#smtpd_fsm{buff = NextBuff}, ?TIMEOUT}
+				undefined -> {next_state, 'WAIT_FOR_CMD', NextState#smtpd_fsm{buff = NextBuff}, ?CFG(fsm_timeout)};
+				<<>> -> {next_state, 'WAIT_FOR_DATA', NextState#smtpd_fsm{buff = NextBuff}, ?CFG(fsm_timeout)}
 			end
 			
 	end;
@@ -136,11 +133,11 @@ init([]) ->
 'WAIT_FOR_DATA'({data, Data}, #smtpd_fsm{buff = Buff} = State) ->
 	NewBuff = <<Buff/binary,Data/binary>>,
 	case end_of_data(NewBuff) of
-		0 -> {next_state, 'WAIT_FOR_DATA', State#smtpd_fsm{buff = NewBuff}, ?TIMEOUT};
+		0 -> {next_state, 'WAIT_FOR_DATA', State#smtpd_fsm{buff = NewBuff}, ?CFG(fsm_timeout)};
 		Pos -> % wait for end of data and return data in state.
 			<<Message:Pos/binary,13,10,46,13,10,NextBuff/binary>> = NewBuff,
 			gen_fsm:send_all_state_event(self(), ok),
-			{next_state, 'PROCESS_DATA', State#smtpd_fsm{message_bin=Message, buff=NextBuff}, ?TIMEOUT} end;
+			{next_state, 'PROCESS_DATA', State#smtpd_fsm{message_bin=Message, buff=NextBuff}, ?CFG(fsm_timeout)} end;
 
 'WAIT_FOR_DATA'(timeout, State) ->
 	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
@@ -216,13 +213,13 @@ archive_req(State, {{rule, RId}, {file, _}, {matcher, _}, {misc, _}}, Files) ->
 	mydlp_smtpc:mail(RepMessage),
 	?SMTP_LOG(sent_deny, MessageR),
 	NextState = reset_statedata(State),
-	{next_state, 'WAIT_FOR_CMD', NextState, ?TIMEOUT}.
+	{next_state, 'WAIT_FOR_CMD', NextState, ?CFG(fsm_timeout)}.
 
 'CONNECT_REMOTE'(connect, #smtpd_fsm{message_record=MessageR} = State) ->
 	mydlp_smtpc:mail(MessageR),
 	?SMTP_LOG(sent_ok, MessageR),
 	NextState = reset_statedata(State),
-	{next_state, 'WAIT_FOR_CMD', NextState, ?TIMEOUT}.
+	{next_state, 'WAIT_FOR_CMD', NextState, ?CFG(fsm_timeout)}.
 
 %%-------------------------------------------------------------------------
 %% Func: handle_event/3
@@ -279,7 +276,7 @@ fsm_call(StateName, Args, StateData) ->
 		(catch case is_bypassable(StateData) of
 			true -> deliver_raw(StateData),
 				NextStateData = reset_statedata(StateData),
-				{next_state, 'WAIT_FOR_CMD', NextStateData, ?TIMEOUT};
+				{next_state, 'WAIT_FOR_CMD', NextStateData, ?CFG(fsm_timeout)};
 			false -> {stop, normal, StateData} end) end.
 
 is_bypassable(#smtpd_fsm{bypass_on_fail=false}) -> false;

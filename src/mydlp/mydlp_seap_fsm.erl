@@ -80,7 +80,7 @@ init([]) ->
 'WAIT_FOR_SOCKET'({socket_ready, Socket, _CommType}, State) when is_port(Socket) ->
 	inet:setopts(Socket, [{active, once}, {packet, line}, list]),
 	{ok, {IP, _Port}} = inet:peername(Socket),
-	{next_state, 'SEAP_REQ', State#state{socket=Socket, addr=IP}, ?TIMEOUT};
+	{next_state, 'SEAP_REQ', State#state{socket=Socket, addr=IP}, ?CFG(fsm_timeout)};
 'WAIT_FOR_SOCKET'(Other, State) ->
 	?DEBUG("ICAP FSM: 'WAIT_FOR_SOCKET'. Unexpected message: ~p\n", [Other]),
 	%% Allow to receive async messages
@@ -98,7 +98,7 @@ init([]) ->
 'SEAP_REQ'({data, "PUSH" ++ Rest}, #state{socket=Socket} = State) -> 
 	{ ObjId, RecvSize} = get_req_args(Rest),
 	inet:setopts(Socket, [{active, once}, {packet, 0}, binary]),
-	{next_state, 'PUSH_DATA_RECV', State#state{obj_id=ObjId, recv_size=RecvSize}, ?TIMEOUT};
+	{next_state, 'PUSH_DATA_RECV', State#state{obj_id=ObjId, recv_size=RecvSize}, ?CFG(fsm_timeout)};
 'SEAP_REQ'({data, "END" ++ Rest}, State) -> 
 	{ ObjId } = get_req_args(Rest),
 	'END_RESP'(State, ObjId);
@@ -119,37 +119,37 @@ init([]) ->
 'BEGIN_RESP'(State) ->
 	{ok, ObjId} = mydlp_container:new(),
 	send_ok(State, ObjId),
-	{next_state, 'SEAP_REQ', State, ?TIMEOUT}.
+	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
 
 'SETPROP_RESP'(State, ObjId, Key, Value) ->
 	ok = mydlp_container:setprop(ObjId, Key, Value),
 	send_ok(State),
-	{next_state, 'SEAP_REQ', State, ?TIMEOUT}.
+	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
 
 'GETPROP_RESP'(State, ObjId, Key) ->
 	{ok, Value} = mydlp_container:getprop(ObjId, Key),
 	send_ok(State, Value),
-	{next_state, 'SEAP_REQ', State, ?TIMEOUT}.
+	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
 
 'PUSH_RESP'(State, ObjId, ObjData) ->
 	ok = mydlp_container:push(ObjId, ObjData),
 	send_ok(State),
-	{next_state, 'SEAP_REQ', State, ?TIMEOUT}.
+	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
 
 'END_RESP'(State, ObjId) ->
 	ok = mydlp_container:eof(ObjId),
 	send_ok(State),
-	{next_state, 'SEAP_REQ', State, ?TIMEOUT}.
+	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
 
 'ACLQ_RESP'(State, ObjId) ->
 	{ok, Action} = mydlp_container:aclq(ObjId),
 	send_ok(State, Action),
-	{next_state, 'SEAP_REQ', State, ?TIMEOUT}.
+	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
 
 'DESTROY_RESP'(State, ObjId) ->
 	ok = mydlp_container:destroy(ObjId),
 	send_ok(State),
-	{next_state, 'SEAP_REQ', State, ?TIMEOUT}.
+	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
 
 'HELP_RESP'(State) ->
 	Print = "\r\n" ++ "Commands:" ++ "\r\n" ++
@@ -165,7 +165,7 @@ init([]) ->
 		"Any other command prints this screen." ++ "\r\n" ++
 		"If an internal error occurs, server respond with ERR instead of OK." ++ "\r\n",
 	send_ok(State, Print),
-	{next_state, 'SEAP_REQ', State, ?TIMEOUT}.
+	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
 
 'PUSH_DATA_RECV'({data, Data}, #state{socket=Socket, obj_id=ObjId, recv_size=RecvSize, recv_data=RecvData} = State) -> 
 	DataSize = mydlp_api:binary_size(Data),
@@ -180,7 +180,7 @@ init([]) ->
 			'PUSH_RESP'(State#state{obj_id=undefined, recv_size=undefined, recv_data=[]}, ObjId, ObjData);
 		NewSize when NewSize > 0 ->
 			RecvData1 = [Data|RecvData],
-			{next_state, 'PUSH_DATA_RECV', State#state{recv_size=NewSize, recv_data=RecvData1}, ?TIMEOUT};
+			{next_state, 'PUSH_DATA_RECV', State#state{recv_size=NewSize, recv_data=RecvData1}, ?CFG(fsm_timeout)};
 		_Else -> throw({error, {unexpected_binary_size, DataSize}}) end;
 'PUSH_DATA_RECV'(timeout, State) ->
 	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
@@ -237,7 +237,7 @@ fsm_call(StateName, Args, StateData) ->
 		?ERROR_LOG("Error occured on FSM (~w) call (~w). Class: [~w]. Error: [~w].~nStack trace: ~w~n",
 				[?MODULE, StateName, Class, Error, erlang:get_stacktrace()]),
 		send_err(StateData),
-		{next_state, 'SEAP_REQ', StateData, ?TIMEOUT} end.
+		{next_state, 'SEAP_REQ', StateData, ?CFG(fsm_timeout)} end.
 
 %%-------------------------------------------------------------------------
 %% Func: terminate/3

@@ -54,6 +54,8 @@
 
 -record(state, {}).
 
+-define(WORK_DIR, ?CFG(work_dir)).
+
 %%%%%%%%%%%%% API
 
 tempfile() ->
@@ -62,7 +64,7 @@ tempfile() ->
 	{ok, FN}.
 
 raw_to_obj({unixfile, FilePath}) -> 
-	case filelib:file_size(FilePath) > ?MAX_MEM_OBJ of
+	case filelib:file_size(FilePath) > ?CFG(maximum_memory_object) of
 		true -> cache_unixfile(FilePath);
 		false -> case file:read_file(FilePath) of
 			{ok, Bin} -> file:delete(FilePath), 
@@ -71,7 +73,7 @@ raw_to_obj({unixfile, FilePath}) ->
 raw_to_obj({memory, Bin}) -> raw_to_obj(Bin);
 raw_to_obj({cacheref, Ref}) -> {cacheref, Ref};
 raw_to_obj(RawData) -> 
-	case mydlp_api:binary_size(RawData) > ?MAX_MEM_OBJ of
+	case mydlp_api:binary_size(RawData) > ?CFG(maximum_memory_object) of
 		true -> cache(RawData);
 		false -> {memory, list_to_binary([RawData])} end.
 

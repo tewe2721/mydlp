@@ -22,7 +22,8 @@ mydlpconfdir = $(sysconfdir)/mydlp
 
 mydlpconf_DATA = \
 	mydlp.app \
-	mydlp-production.config \
+	mydlp-sasl.config \
+	mydlp.conf \
 	denied_page.html
 
 resourcesdir = $(datadir)/mydlp/resources
@@ -82,7 +83,8 @@ dist_hrl_DATA = \
 	mydlp_schema.hrl
 
 beam_DATA = \
-	$(dist_erl_DATA:.erl=.beam)
+	$(dist_erl_DATA:.erl=.beam) \
+	mydlp.app
 
 boot_DATA = \
 	mydlp.boot \
@@ -141,16 +143,12 @@ uniq-console:
 
 run: $(beam_DATA) $(boot_DATA)
 	@echo "Running application..."
-	@$(ERL) -pa ../thrift/gen-erl -sname console -boot mydlp 
+	@MYDLP_CONF=mydlp.conf $(ERL) -pa ../thrift/gen-erl -sname console -boot mydlp 
 
 run-production: $(beam_DATA) $(boot_DATA)
 	@echo "Running application..."
-	@$(ERL) -pa ../thrift/gen-erl -sname console -config mydlp-production -mnesia dir '"/var/lib/mydlp/mnesia"' -boot mydlp 
+	@MYDLP_CONF=mydlp.conf $(ERL) -pa ../thrift/gen-erl -sname console -config mydlp-sasl -mnesia dir '"/var/lib/mydlp/mnesia"' -boot mydlp 
 
 clean-local:
 	rm -rf $(beam_DATA) $(boot_DATA) $(html_DATA) mydlp.rel overview.edoc Mnesia.*
-
-install-data-hook: 
-	cd $(DESTDIR)$(beamdir) && \
-		$(LN_S) $(mydlpconfdir)/mydlp.app mydlp.app
 
