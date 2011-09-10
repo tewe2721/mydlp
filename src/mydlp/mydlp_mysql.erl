@@ -183,7 +183,14 @@ handle_cast({push_smb_discover, XMLResult}, State) ->
 handle_cast({update_afile, AFileId, Filename, MimeType, Size, ArchivePath, ContentText}, State) ->
 	% Probably will create problems in multisite use.
 	mydlp_api:mspawn(?FLE(fun() ->
-		psq(update_archive_file, [Filename, MimeType, Size, ArchivePath, ContentText, AFileId], 60000)
+		ADataId = case psq(archive_data_by_path, [ArchivePath]) of
+			{ok, []} ->	{atomic, ADId} = transaction(fun() ->
+					psqt(insert_archive_data, [MimeType, Size, ArchivePath, ContentText]),
+					last_insert_id_t() 
+				end, 60000), ADId;
+			{ok, [[Id]]} -> Id end,
+
+		psq(update_archive_file, [Filename, ADataId, AFileId])
 	end), 60000),
 	{noreply, State};
 
@@ -272,7 +279,9 @@ init([]) ->
 		{insert_incident_file, <<"INSERT INTO log_incedent_file (id, log_incedent_id, path, mime_type, size) VALUES (NULL, last_insert_id(), ?, ?, ?)">>},
 		{insert_archive, <<"INSERT INTO log_archive (id, customer_id, rule_id, protocol, src_ip, src_user, destination, log_archive_file_id) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)">>},
 		{new_archive_file_entry, <<"INSERT INTO log_archive_file (id) VALUES (NULL)">>},
-		{update_archive_file, <<"UPDATE log_archive_file SET filename=?, mime_type=?, size=?, path=?, content_text=? WHERE id = ?">>},
+		{update_archive_file, <<"UPDATE log_archive_file SET filename=?, log_archive_data_id=? WHERE id = ?">>},
+		{archive_data_by_path, <<"SELECT id FROM log_archive_data WHERE path = ?">>},
+		{insert_archive_data, <<"INSERT INTO log_archive_data (id, mime_type, size, path, content_text) VALUES (NULL, ?, ?, ?, ?)">>},
 		{delete_all_smb_discover, <<"DELETE FROM log_shared_folder">>},
 		{insert_smb_discover, <<"INSERT INTO log_shared_folder (id, customer_id, result) VALUES (NULL, ?, ?)">>}
 	]],
