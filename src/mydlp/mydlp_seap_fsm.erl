@@ -99,6 +99,9 @@ init([]) ->
 	{ ObjId, RecvSize} = get_req_args(Rest),
 	inet:setopts(Socket, [{active, once}, {packet, 0}, binary]),
 	{next_state, 'PUSH_DATA_RECV', State#state{obj_id=ObjId, recv_size=RecvSize}, ?CFG(fsm_timeout)};
+'SEAP_REQ'({data, "PUSHFILE" ++ Rest}, State) -> 
+	{ ObjId, FilePath } = get_getprop_args(Rest),
+	'PUSHFILE_RESP'(State, ObjId, FilePath);
 'SEAP_REQ'({data, "END" ++ Rest}, State) -> 
 	{ ObjId } = get_req_args(Rest),
 	'END_RESP'(State, ObjId);
@@ -133,6 +136,11 @@ init([]) ->
 
 'PUSH_RESP'(State, ObjId, ObjData) ->
 	ok = mydlp_container:push(ObjId, ObjData),
+	send_ok(State),
+	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
+
+'PUSHFILE_RESP'(State, ObjId, FilePath) ->
+	{ok, Value} = mydlp_container:pushfile(ObjId, FilePath),
 	send_ok(State),
 	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
 

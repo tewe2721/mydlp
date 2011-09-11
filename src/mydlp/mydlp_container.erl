@@ -38,6 +38,7 @@
 	setprop/3,
 	getprop/2,
 	push/2,
+	pushfile/2,
 	eof/1,
 	aclq/1,
 	destroy/1,
@@ -73,6 +74,8 @@ setprop(ObjId, Key, Value) -> gen_server:cast(?MODULE, {setprop, ObjId, Key, Val
 getprop(ObjId, Key) -> gen_server:call(?MODULE, {getprop, ObjId, Key}).
 
 push(ObjId, DataChunk) -> gen_server:cast(?MODULE, {push, ObjId, DataChunk}).
+
+pushfile(ObjId, FilePath) -> gen_server:cast(?MODULE, {pushfile, ObjId, FilePath}).
 
 eof(ObjId) -> gen_server:cast(?MODULE, {eof, ObjId}).
 
@@ -163,6 +166,10 @@ handle_cast({setprop, ObjId, Key, Value}, #state{object_tree=OT} = State) ->
 				[ObjId, Key, Value, OT]),
 			{noreply, State}
 			end;
+
+handle_cast({pushfile, ObjId, FilePath}, State) ->
+	{ok, DataChunk} = file:read_file(FilePath),
+	handle_cast({push, ObjId, DataChunk}, State);
 
 % could use dataref appends in push after a certain threshold.
 handle_cast({push, ObjId, DataChunk}, #state{object_tree=OT} = State) ->

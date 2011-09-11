@@ -22,6 +22,9 @@ Data
 
 OK/ERR
 
+PUSHFILE Id FilePath
+OK/ERR
+
 
 END Id
 OK/ERR
