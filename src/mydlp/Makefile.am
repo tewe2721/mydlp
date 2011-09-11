@@ -143,11 +143,11 @@ uniq-console:
 
 run: $(beam_DATA) $(boot_DATA)
 	@echo "Running application..."
-	@MYDLP_CONF=mydlp.conf $(ERL) -pa ../thrift/gen-erl -sname console -boot mydlp 
+	@MYDLP_CONF=mydlp.conf MYDLP_MNESIA_DIR=Mnesia.devel $(ERL) -pa ../thrift/gen-erl -sname console -boot mydlp 
 
 run-production: $(beam_DATA) $(boot_DATA)
 	@echo "Running application..."
-	@MYDLP_CONF=mydlp.conf $(ERL) -pa ../thrift/gen-erl -sname console -config mydlp-sasl -mnesia dir '"/var/lib/mydlp/mnesia"' -boot mydlp 
+	@MYDLP_CONF=mydlp.conf MYDLP_MNESIA_DIR=Mnesia.devel $(ERL) -pa ../thrift/gen-erl -sname console -config mydlp-sasl -boot mydlp 
 
 clean-local:
 	rm -rf $(beam_DATA) $(boot_DATA) $(html_DATA) mydlp.rel overview.edoc Mnesia.*

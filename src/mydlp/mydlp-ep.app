@@ -35,6 +35,7 @@
         mydlp_loglevel,
         mydlp_logger_h,
         mydlp_matchers,
+        mydlp_mnesia,
         mydlp_pg_sup,
         mydlp_regex,
         mydlp_seap_fsm,

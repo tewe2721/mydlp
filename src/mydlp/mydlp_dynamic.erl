@@ -107,7 +107,8 @@ load() -> ok.
 -define(CONFDEF_PLATFORM, [
 	{log_dir, string, "/var/log/mydlp/"},
 	{pid_file, string, "/var/run/mydlp/mydlp.pid"},
-	{work_dir, string, "/var/tmp/mydlp"}
+	{work_dir, string, "/var/tmp/mydlp"},
+	{mnesia_dir, string, "/var/lib/mydlp/mnesia"}
 ]).
 
 -endif.
@@ -117,7 +118,8 @@ load() -> ok.
 -define(CONFDEF_PLATFORM, [
 	{log_dir, string, "C:/Program Files/MyDLP/logs/"},
 	{pid_file, string, "C:/Program Files/MyDLP/run/mydlp.pid"},
-	{work_dir, string, "C:/Program Files/MyDLP"}
+	{work_dir, string, "C:/Program Files/MyDLP"},
+	{mnesia_dir, string, "C:/Program Files/MyDLP/mnesia"}
 ]).
 
 -endif.

@@ -25,8 +25,6 @@
 %%% @end
 %%%-------------------------------------------------------------------
 
--ifdef(__MYDLP_NETWORK).
-
 -module(mydlp_mnesia).
 -author("kerem@medra.com.tr").
 -behaviour(gen_server).
@@ -514,6 +512,8 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
+	mnesia_configure(),
+
 	case mydlp_distributor:is_distributed() of
 		true -> start_distributed();
 		false -> start_single() end,
@@ -530,6 +530,14 @@ code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 
 %%%%%%%%%%%%%%%%%
+
+mnesia_configure() ->
+        MnesiaDir = case os:getenv("MYDLP_MNESIA_DIR") of
+                false -> ?CFG(mnesia_dir);
+                Path -> Path end,
+	application:load(mnesia),
+	application_controller:set_env(mnesia, dir, MnesiaDir),
+	ok.
 
 get_mnesia_nodes() -> mnesia:system_info(db_nodes).
 
@@ -822,6 +830,4 @@ remove_match_group(MGI) ->
 	MIs = qlc:e(Q),
 	remove_matches(MIs),
 	mnesia:delete({match_group, MGI}).
-
--endif.
 

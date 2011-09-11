@@ -16,6 +16,7 @@ PATH=/usr/bin:/usr/sbin:/bin:/sbin
 ERLANG=/usr/bin/erl
 PYTHON=/usr/bin/python
 
+# MNESIA_OPTS="-mnesia dir '\"/var/lib/mydlp/mnesia\"'"
 ERLANG_OPTS="-sname system -noshell -detached"
 
 HOMEDIR=/etc/mydlp
@@ -83,7 +84,7 @@ start_mydlp() {
 	check_mysql_db
 
 	log_daemon_msg "Starting MyDLP" "mydlp"
-        if HOME=$HOMEDIR start-stop-daemon --start --quiet --oknodo --chdir $HOMEDIR --pidfile $PIDFILE --exec $ERLANG -- $ERLANG_OPTS -mnesia dir '"/var/lib/mydlp/mnesia"' -config mydlp-sasl -boot mydlp; then
+        if HOME=$HOMEDIR start-stop-daemon --start --quiet --oknodo --chdir $HOMEDIR --pidfile $PIDFILE --exec $ERLANG -- $ERLANG_OPTS -config mydlp-sasl -boot mydlp; then
             log_end_msg 0
         else
             log_end_msg 1
