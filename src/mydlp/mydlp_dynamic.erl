@@ -29,7 +29,17 @@
 
 -include("mydlp.hrl").
 
+-ifdef(__PLATFORM_LINUX).
+
 -define(DEFAULTCONFPATH, "/etc/mydlp/mydlp.conf").
+
+-endif.
+
+-ifdef(__PLATFORM_WINDOWS).
+
+-define(DEFAULTCONFPATH, "C:/Program Files/MyDLP/conf/mydlp.conf").
+
+-endif.
 
 -ifdef(__MYDLP_NETWORK).
 
@@ -91,10 +101,30 @@ load() -> ok.
 
 -endif.
 
--define(CONFDEF, [
+
+-ifdef(__PLATFORM_LINUX).
+
+-define(CONFDEF_PLATFORM, [
 	{log_dir, string, "/var/log/mydlp/"},
 	{pid_file, string, "/var/run/mydlp/mydlp.pid"},
-	{work_dir, string, "/var/tmp/mydlp"},
+	{work_dir, string, "/var/tmp/mydlp"}
+]).
+
+-endif.
+
+-ifdef(__PLATFORM_WINDOWS).
+
+-define(CONFDEF_PLATFORM, [
+	{log_dir, string, "C:/Program Files/MyDLP/logs/"},
+	{pid_file, string, "C:/Program Files/MyDLP/run/mydlp.pid"},
+	{work_dir, string, "C:/Program Files/MyDLP"}
+]).
+
+-endif.
+
+-ifdef(__MYDLP_NETWORK).
+
+-define(CONFDEF_FUNCTIONAL, [
 	{ssl_cert, string, "/etc/mydlp/ssl/public.pem"},
 	{ssl_key, string, "/etc/mydlp/ssl/private.pem"},
 	{mysql_host, string, "localhost"},
@@ -106,7 +136,6 @@ load() -> ok.
 	{quarantine_dir, string, "/var/lib/mydlp/quarantine/"},
 	{quarantine_uid, integer, "33"},
 	{quarantine_gid, integer, "33"},
-	{error_action, atom, "pass"},
 	{auto_distribution, boolean, "false"},
 	{auto_distribution_priority, integer, "100"},
 	{auto_distribution_nodes, term, "['localhost']"},
@@ -125,7 +154,20 @@ load() -> ok.
 	{icap_log_pass_lower_limit, integer, "10240"},
 	{smb_discover, boolean, "false"},
 	{smb_discover_script_path, string, "/usr/sbin/mydlp-smb-discover"},
-	{smb_discover_interval, integer, "3600"},
+	{smb_discover_interval, integer, "3600"}
+]).
+
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
+-define(CONFDEF_FUNCTIONAL, [
+]).
+
+-endif.
+
+-define(CONFDEF_COMMON, [
+	{error_action, atom, "pass"},
 	{archive_minimum_size, integer, "256"},
 	{maximum_memory_object, integer, "204800"},
 	{maximum_chunk_size, integer, "1048576"},
@@ -134,8 +176,9 @@ load() -> ok.
 	{supervisor_kill_timeout, integer, "20"},
 	{fsm_timeout, integer, "120000"},
 	{spawn_timeout, integer, "60000"}
-
 ]).
+
+-define(CONFDEF, lists:append([?CONFDEF_PLATFORM, ?CONFDEF_FUNCTIONAL, ?CONFDEF_COMMON])).
 
 -define(CONFIG_HEAD, "
 -module(mydlp_config).
