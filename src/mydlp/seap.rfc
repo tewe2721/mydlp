@@ -1,42 +1,80 @@
+SEAP.RFC :)
 
+This document describes how SEAP protocol had been designed.
 
-Id -> Integer
+Default port is 9099 for SEAP communication.
 
+=======================================================
+TYPES:
 
-BEGIN
-ERR/OK Id
+Id 		-> Number
+key 		-> String (format: [a-Z0-9_\.]* ) (can contain only numbers, letters, underscore and dot sign.)
+value 		-> String (format: [^\r\n]* ) (can contain anything other than carriage return and line feed.)
+FilePath	-> String (format: [^\r\n]* ) (can contain anything other than carriage return and line feed.)
+Size		-> Number
+Action		-> ENUM[block, pass]
+DataChunk 	-> Binary
 
+=======================================================
+COMMANDS:
 
-key -> [a-Z0-9]
-value -> anything other than cr or lf
+-BEGIN-
 
-SETPROP Id key=value
-ERR/OK
+Client:	BEGIN
+Server:	ERR/OK Id
 
-GETPROP Id key
-ERR/OK value
+Description: With begin command client can generate a new object in container. This object will be alive for 150 seconds. Returned value 'Id' is unique identifier for this object. Client will need this identifier for every single further operation. For new objects (for exmaple file) client needs to generate a new object. Returns "OK" or "ERR" according to whether an error occured.
 
+-SETPROP-
 
-PUSH Id Size
-Data
+Client:	SETPROP Id key=value
+Server:	ERR/OK
 
-OK/ERR
+Description: Sets given property (key value pair) for object referenced with given identifier. Properties for objects in container are stored in dictionaries. In other words, if you set different values for same key, latter value will be valid. Special keys are listed below:
+	"filename" -> Value of this key will be used as filename when assembling object into a file record for acl queries and other DLP operations.If file name is known, it is stongly recommended to set this key.
+Returns "OK" or "ERR" according to whether an error occured.
 
-PUSHFILE Id FilePath
-OK/ERR
+-GETPROP-
 
+Client:	GETPROP Id key
+Server:	ERR/OK value
 
-END Id
-OK/ERR
+Description: Gets given property ( key ) for object referenced with given identifier. Returns "OK value" or "ERR" according to whether an error occured.
 
+-PUSH-
 
+Client:	PUSH Id Size
+	DataChunk
 
-ACLQ Id
-ERR/OK Action [block, pass]
+Server:	OK/ERR
 
+Description: Pushes given size (Size) of binary data (DataChunk) for object referenced with given identifier. Bytes sent after given gount ( Size ) will be ignored. Client can make any numbers of data push using this command and PUSHFILE . When END command called, container will concat all chunks. Returns "OK" or "ERR" according to whether an error occured.
 
-DESTROY Id
-ERR/OK
+-PUSHFILE-
 
+Client:	PUSHFILE Id FilePath
+Server:	OK/ERR
 
+Description: Same as push, but pushes contents of the file at the given path instad of data chunks.
+
+-END-
+
+Client:	END Id
+Server:	OK/ERR
+
+Description: Behaves like EOF recieved for object with given identifier. No more PUSH or PUSHFILE command can be called after END command. Returns "OK" or "ERR" according to whether an error occured.
+
+-ACLQ-
+
+Client:	ACLQ Id
+Server:	ERR/OK Action [block, pass]
+
+Description: Queries object with given identied using ACL subsystem. It is recommended that call this command after END. Returns "OK Action" or "ERR" according to whether an error occured. Given action should be applied by intercepter that seap client attached to.
+
+-DESTROY-
+
+Client:	DESTROY Id
+Server:	ERR/OK
+
+Description: Destorys object with given identifier in container and frees memory of container. No further operation can be done for this object. It is recomended that call this function after all operation is done. Returns "OK" or "ERR" according to whether an error occured.
 
