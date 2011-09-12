@@ -1,7 +1,7 @@
 MyDLP - Open source data leak prevention solution.
 
 References:
-http://www.mydlp.org
+http://www.mydlp.com
 
 Dependencies:
 Thrift, Python 2.6, python-magic, unrar, catdoc, pstotext, poppler-utils, python-beautifulsoup, bayeserl
