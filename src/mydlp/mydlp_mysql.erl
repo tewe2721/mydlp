@@ -84,11 +84,11 @@ compile_filters() ->
 compile_customer(CustomerId) when is_integer(CustomerId) ->
 	gen_server:call(?MODULE, {compile_customer, CustomerId} , 60000).
 
-is_multisite() -> gen_server:call(?MODULE, is_multisite, 60000).
+is_multisite() -> gen_server:call(?MODULE, is_multisite).
 
-get_denied_page() -> gen_server:call(?MODULE, get_denied_page, 60000).
+get_denied_page() -> gen_server:call(?MODULE, get_denied_page).
 
-new_afile() -> gen_server:call(?MODULE, new_afile, 60000).
+new_afile() -> gen_server:call(?MODULE, new_afile).
 
 update_afile(AFileId, Filename, MimeType, Size, ArchivePath, ContentText) -> 
 	gen_server:cast(?MODULE, {update_afile, AFileId, Filename, MimeType, Size, ArchivePath, ContentText}).
