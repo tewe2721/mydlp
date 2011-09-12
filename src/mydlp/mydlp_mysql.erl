@@ -183,6 +183,17 @@ handle_cast({push_smb_discover, XMLResult}, State) ->
 handle_cast({update_afile, AFileId, Filename, MimeType, Size, ArchivePath, ContentText}, State) ->
 	% Probably will create problems in multisite use.
 	mydlp_api:mspawn(?FLE(fun() ->
+		{atomic, ADataId} = transaction(fun() ->
+			Query =  psqt(archive_data_by_path, [ArchivePath]),
+			case Query of
+				{ok, [] } ->	psqt(insert_archive_data, [MimeType, Size, ArchivePath, ContentText]),
+						last_insert_id_t();
+				{ok, [[Id]]} -> Id end
+			end, 60000),
+		psq(update_archive_file, [Filename, ADataId, AFileId])
+	end), 60000),
+
+	mydlp_api:mspawn(?FLE(fun() ->
 		ADataId = case psq(archive_data_by_path, [ArchivePath]) of
 			{ok, []} ->	{atomic, ADId} = transaction(fun() ->
 					psqt(insert_archive_data, [MimeType, Size, ArchivePath, ContentText]),
