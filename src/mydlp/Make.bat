@@ -1,4 +1,4 @@
-@path %path%;C:\workspace\mydlp-deployment-env\erl5.7.4\bin
+@path %path%;C:\workspace\mydlp-development-env\erl5.7.4\bin
 @set ERLC=erlc
 @set ERLCARGS=-W -D__MYDLP_ENDPOINT -D__PLATFORM_WINDOWS
 
