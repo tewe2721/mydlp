@@ -184,11 +184,13 @@ handle_cast({update_afile, AFileId, Filename, MimeType, Size, ArchivePath, Conte
 	% Probably will create problems in multisite use.
 	mydlp_api:mspawn(?FLE(fun() ->
 		{atomic, ADataId} = transaction(fun() ->
+			mysql:fetch(<<"LOCK TABLE log_archive_data WRITE">>),
 			Query =  psqt(archive_data_by_path, [ArchivePath]),
-			case Query of
+			AId = case Query of
 				{ok, [] } ->	psqt(insert_archive_data, [MimeType, Size, ArchivePath, ContentText]),
 						last_insert_id_t();
-				{ok, [[Id]]} -> Id end
+				{ok, [[Id]]} -> Id end,
+			mysql:fetch(<<"UNLOCK TABLES">>), AId
 			end, 60000),
 		psq(update_archive_file, [Filename, ADataId, AFileId])
 	end), 60000),
