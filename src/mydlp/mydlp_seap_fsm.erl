@@ -140,7 +140,7 @@ init([]) ->
 	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
 
 'PUSHFILE_RESP'(State, ObjId, FilePath) ->
-	{ok, Value} = mydlp_container:pushfile(ObjId, FilePath),
+	ok = mydlp_container:pushfile(ObjId, FilePath),
 	send_ok(State),
 	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
 

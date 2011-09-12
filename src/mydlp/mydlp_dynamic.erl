@@ -50,14 +50,6 @@ prestart_load() ->
 load() ->
 	load_mydlp_denied_page().
 
-load_src(Src) ->
-	try
-		{Mod,Code} = dynamic_compile:from_string(Src),
-		code:load_binary(Mod, "dynamic.erl", Code)
-	catch
-		Type:Error -> throw({dyn_compile, {Type, Error}})
-	end.
-
 denied_page_src() ->
 	DPBin = case mydlp_mysql:get_denied_page() of
 		Page when is_binary(Page) -> Page;
@@ -101,6 +93,13 @@ load() -> ok.
 
 -endif.
 
+load_src(Src) ->
+	try
+		{Mod,Code} = dynamic_compile:from_string(Src),
+		code:load_binary(Mod, "dynamic.erl", Code)
+	catch
+		Type:Error -> throw({dyn_compile, {Type, Error}})
+	end.
 
 -ifdef(__PLATFORM_LINUX).
 
