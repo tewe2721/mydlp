@@ -88,7 +88,7 @@ is_multisite() -> gen_server:call(?MODULE, is_multisite).
 
 get_denied_page() -> gen_server:call(?MODULE, get_denied_page).
 
-new_afile() -> gen_server:call(?MODULE, new_afile).
+new_afile() -> gen_server:call(?MODULE, new_afile, 30000).
 
 update_afile(AFileId, Filename, MimeType, Size, ArchivePath, ContentText) -> 
 	gen_server:cast(?MODULE, {update_afile, AFileId, Filename, MimeType, Size, ArchivePath, ContentText}).
@@ -133,7 +133,7 @@ handle_call(new_afile, _From, State) ->
 	% Probably will create problems in multisite use.
 	{atomic, AFEId} = transaction(fun() ->
 		psqt(new_archive_file_entry),
-		last_insert_id_t() end),
+		last_insert_id_t() end, 30000),
 	Reply = AFEId,	
         {reply, Reply, State};
 
