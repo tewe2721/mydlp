@@ -1340,6 +1340,20 @@ uri_to_hr_str(Uri) ->
 
 	prettify_uri(Str).
 
+get_host(Uri) -> 
+	Str = case string:chr(Uri, $:) of
+		0 -> throw({error, not_a_uri_with_fqdn});
+		I when I < 10 -> case string:substr(Uri, I + 1) of 
+				"//" ++ Rest -> case string:chr(Rest, $/) of
+						0 -> Rest;
+						I2 -> string:substr(Rest, 1, I2 - 1) end;
+				_ -> throw({error, not_a_uri_with_fqdn}) end;
+		_ -> throw({error, not_a_uri_with_fqdn}) end,
+
+	case string:chr(Str, $@) of
+		0 -> Str;
+		I3 -> string:substr(Str, I3 + 1) end.
+
 prettify_uri("") -> "";
 prettify_uri(UriStr) -> 
 	Tokens = string:tokens(UriStr, "?=;&/"),

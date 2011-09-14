@@ -20,7 +20,7 @@
 
 -ifdef(__MYDLP_NETWORK).
 
--module(mydlp_icap2_fsm).
+-module(mydlp_icap_fsm).
 -author('kerem@medratech.com').
 -behaviour(gen_fsm).
 -include("mydlp.hrl").
@@ -424,10 +424,17 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 
 % {Action, {{rule, Id}, {file, File}, {matcher, Func}, {misc, Misc}}}
 'REQ_OK'(#state{icap_request=#icap_request{method=options} } = State) -> 'REPLY_OK'(State);
-'REQ_OK'(#state{addr=SAddr, icap_headers=#icap_headers{x_client_ip=CAddr},
-		http_req_headers=(#http_headers{host=DestHost}) } = State) ->
+'REQ_OK'(#state{addr=SAddr,
+		icap_headers=#icap_headers{x_client_ip=CAddr},
+		http_request=#http_request{path=Uri},
+		http_req_headers=#http_headers{host=DestHost} } = State) ->
 	DFFiles = df_to_files(State),
-	DestList = [list_to_binary(DestHost)],
+
+	DestHost1 = case DestHost of
+		undefined -> mydlp_api:get_host(Uri);
+		DH -> DH end,
+
+	DestList = [list_to_binary(DestHost1)],
 
 	case case mydlp_acl:q(SAddr, CAddr, DestList, DFFiles) of
 		pass -> {pass, mydlp_api:empty_aclr(DFFiles)};
