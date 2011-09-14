@@ -34,7 +34,7 @@
 
 -define(SEAP, 
 			{seap, % Simple endpoint agent protocol
-				{acceptor, {1011, plain, seap} },
+				{acceptor, {9099, plain, seap} },
 		                 {workers, []} 
 			}
 	).
@@ -44,7 +44,8 @@
 			{mydlp_acl, start_link,[]},
 			{mydlp_regex, start_link,[]},
 			{pg, {mydlp_tc, start_link,[]}, 4},
-			{mydlp_workdir, start_link,[]}
+			{mydlp_workdir, start_link,[]},
+			{mydlp_mnesia, start_link,[]}
 		]
 	).
 
