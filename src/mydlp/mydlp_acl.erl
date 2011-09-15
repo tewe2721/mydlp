@@ -96,15 +96,11 @@ acl_call(Query, Timeout) -> gen_server:call(?MODULE, {acl, Query, Timeout}, Time
 
 %%%%%%%%%%%%%% gen_server handles
 
--ifdef(__MYDLP_NETWORK).
-
 acl_exec(_RuleTables, _Source, []) -> pass;
 acl_exec(RuleTables, Source, Files) ->
 	[{cid, CustomerId}|_] = Source,
 	DRules = mydlp_mnesia:get_default_rule(CustomerId),
 	acl_exec2(head_dr(RuleTables, DRules), Source, Files).
-
--endif.
 
 acl_exec2([], _Source, _Files) -> pass;
 % acl_exec2([{{_Id, DefaultAction}, Rules}| Rest], Source, Files)  % Cannot be more than one filter
@@ -377,11 +373,7 @@ has_wf(Rules) ->
 			_Else -> true end end, 
 	Rules).
 
--ifdef(__MYDLP_NETWORK).
-
 head_dr([], []) -> [];
 head_dr([{FilterKey, Rules}], DRules) -> [{FilterKey, lists:append(DRules,Rules)}];
 head_dr([], DRules) -> [{{0, pass}, DRules}].
-
--endif.
 
