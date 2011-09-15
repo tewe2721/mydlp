@@ -113,7 +113,7 @@ handle_call({aclq, ObjId, Timeout}, From, #state{object_tree=OT} = State) ->
 					Return = try 
 						File = object_to_file(Obj),
 						DFFiles = [File],
-						AclRet = case case mydlp_acl:qm(DFFiles) of % TODO filepath as destination 
+						AclRet = case case mydlp_acl:qe(DFFiles) of % TODO filepath as destination 
 							pass -> {pass, mydlp_api:empty_aclr(DFFiles)};
 							log -> {log, mydlp_api:empty_aclr(DFFiles)};
 							archive -> {archive, mydlp_api:empty_aclr(DFFiles)};

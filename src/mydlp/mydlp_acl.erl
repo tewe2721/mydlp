@@ -180,6 +180,8 @@ handle_acl({qm, _Site, {Files}}, _State) ->
 	Rules = mydlp_mnesia:get_all_rules(),
 	acl_exec(Rules, [{cid, mydlp_mnesia:get_dcid()}], Files);
 
+handle_acl({qe, Site, {Files}}, State) -> handle_acl({qm, Site, {Files}}, State);
+
 handle_acl(Q, _State) -> throw({error, {undefined_query, Q}}).
 
 -endif.
@@ -187,8 +189,10 @@ handle_acl(Q, _State) -> throw({error, {undefined_query, Q}}).
 -ifdef(__MYDLP_ENDPOINT).
 
 handle_acl({qe, _Site, {Files}}, _State) ->
-	FinalRuleTable = [],
-	acl_exec2(FinalRuleTable, [{cid, 0}], Files);
+	%FinalRuleTable = [],
+	%acl_exec2(FinalRuleTable, [{cid, 0}], Files);
+	Rules = mydlp_mnesia:get_all_rules(),
+	acl_exec(Rules, [{cid, mydlp_mnesia:get_dcid()}], Files);
 
 handle_acl(Q, _State) -> throw({error, {undefined_query, Q}}).
 
