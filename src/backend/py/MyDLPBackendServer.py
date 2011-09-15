@@ -139,8 +139,9 @@ if __name__ == '__main__':
 
 	s = MyDLPBackendServer(pidfile)
 
-	s.start()
-
-#s.run()
+	if os.name == "posix":
+		s.start()
+	else:
+		s.run()
 
 

@@ -1,4 +1,4 @@
-%
+%%%
 %%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@medra.com.tr>
 %%%
 %%%--------------------------------------------------------------------------
@@ -511,10 +511,22 @@ start_link() ->
 stop() ->
 	gen_server:call(?MODULE, stop).
 
+-ifdef(__MYDLP_NETWORK).
+
+is_mydlp_distributed() -> mydlp_distributor:is_distributed().
+
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
+is_mydlp_distributed() -> false.
+
+-endif.
+
 init([]) ->
 	mnesia_configure(),
 
-	case mydlp_distributor:is_distributed() of
+	case is_mydlp_distributed() of
 		true -> start_distributed();
 		false -> start_single() end,
 
@@ -589,6 +601,18 @@ is_mnesia_distributed() ->
 		[ThisNode] -> false;
 		DBNodeList -> lists:member(ThisNode, DBNodeList) end.
 
+-ifdef(__MYDLP_NETWORK).
+
+repopulate_mnesia() -> mydlp_mysql:repopulate_mnesia().
+
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
+repopulate_mnesia() -> ok.
+
+-endif.
+
 start_tables(IsDistributionInit) ->
 	start_table(IsDistributionInit, {unique_ids, set}),
 	StartResult =  start_tables(IsDistributionInit, ?TABLES),
@@ -597,7 +621,7 @@ start_tables(IsDistributionInit) ->
 
 	case StartResult of
 		{ok, no_change} -> ok;
-		{ok, schema_changed} -> mydlp_mysql:repopulate_mnesia() end,
+		{ok, schema_changed} -> repopulate_mnesia() end,
 	ok.
 
 start_table(IsDistributionInit, RecordAtom) when is_atom(RecordAtom) ->

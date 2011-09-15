@@ -41,11 +41,12 @@
 
 -define(ENDPOINT_SWORKERS,
 		[
+			{mydlp_mnesia, start_link,[]},
 			{mydlp_acl, start_link,[]},
+			{mydlp_container, start_link,[]},
 			{mydlp_regex, start_link,[]},
 			{pg, {mydlp_tc, start_link,[]}, 4},
-			{mydlp_workdir, start_link,[]},
-			{mydlp_mnesia, start_link,[]}
+			{mydlp_workdir, start_link,[]}
 		]
 	).
 
