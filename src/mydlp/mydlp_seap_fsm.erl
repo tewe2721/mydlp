@@ -166,6 +166,7 @@ init([]) ->
 		"\t" ++ "GETPROP Id Key-> OK Value" ++ "\r\n" ++
 		"\t" ++ "PUSH Id ChunkSize" ++ "\r\n" ++
 		"\t\t" ++ "Chunk -> OK" ++ "\r\n" ++
+		"\t" ++ "PUSHFILE Id FilePath" ++ "\r\n" ++
 		"\t" ++ "END Id -> OK" ++ "\r\n" ++
 		"\t" ++ "ACLQ Id -> OK Action" ++ "\r\n" ++
 		"\t" ++ "DESTROY Id -> OK" ++ "\r\n" ++
