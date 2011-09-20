@@ -1838,6 +1838,8 @@ str_to_ip(IpStr) ->
 	[I1,I2,I3,I4] = Ints,
 	{I1,I2,I3,I4}.
 
+-ifdef(__MYDLP_NETWORK).
+
 %%-------------------------------------------------------------------------
 %% @doc Returns ruletable for given ip address if necessary
 %% @end
@@ -1851,6 +1853,30 @@ generate_client_policy(IpAddr, RevisionId) ->
 	case CDBHash of
 		RevisionId -> <<"up-to-date">>;
 		_Else -> erlang:term_to_binary(CDBObj, [compressed]) end.
+
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
+use_client_policy(CDBBin) ->
+	CDBObj = binary_to_term(CDBBin, [safe]),
+	{{rule_table, RuleTable}, {items, ItemDump}} = CDBObj,
+	
+	mydlp_mnesia:truncate_all(),
+	[mydlp_mnesia:write(I) || I <- ItemDump],
+
+	#rule_table{id=mydlp_mnesia:get_dcid(), rule_table = RuleTable},
+	mydlp_mnesia:write(R),
+	ok.
+	
+
+get_client_policy_revision_id() ->
+	RuleTable = mydlp_mnesia:get_rule_table(), 
+	ItemDump = mydlp_mnesia:dump_client_tables(),
+	CDBObj = {{rule_table, RuleTable}, {items, ItemDump}},
+	erlang:phash2(CDBObj).
+
+-endif.
 
 %%-------------------------------------------------------------------------
 %% @doc Converts given binary to an integer.

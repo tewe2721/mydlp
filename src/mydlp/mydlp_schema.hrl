@@ -83,7 +83,6 @@
 
 -record(rule_table, {
 	id,
-	head=false,
 	table=[]
 }).
 

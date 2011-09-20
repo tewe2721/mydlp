@@ -53,6 +53,7 @@
 	is_dr_fh_of_fid/2,
 	get_record_fields/1,
 	write/1,
+	truncate_all/0,
 	truncate_nondata/0,
 	truncate_bayes/0
 	]).
@@ -89,6 +90,7 @@
 
 % API endpoint 
 -export([
+	get_rule_table/0
 	]).
 
 -endif.
@@ -298,6 +300,8 @@ is_dr_fh_of_fid(Hash, FileId) -> async_query_call({is_dr_fh_of_fid, Hash, FileId
 write(RecordList) when is_list(RecordList) -> async_query_call({write, RecordList});
 write(Record) when is_tuple(Record) -> write([Record]).
 
+truncate_all() -> gen_server:call(?MODULE, truncate_all, 15000).
+
 truncate_nondata() -> gen_server:call(?MODULE, truncate_nondata, 15000).
 
 truncate_bayes() -> gen_server:call(?MODULE, truncate_bayes, 15000).
@@ -322,6 +326,13 @@ handle_result({is_dr_fh_of_fid, _, _}, {atomic, Result}) ->
 	case Result of
 		[] -> false;
 		Else when is_list(Else) -> true end;
+
+
+%% TODO: endpoint specific code
+handle_result(get_rule_table, {atomic, Result}) -> 
+	case Result of
+		[] -> [];
+		[Table] -> Table end;
 
 handle_result(_Query, {atomic, Objects}) -> Objects.
 
@@ -499,6 +510,13 @@ handle_query(Query) -> handle_query_common(Query).
 
 -ifdef(__MYDLP_ENDPOINT).
 
+handle_query(get_rule_table) ->
+	Q = qlc:q([ R#rule_table.table ||
+		R <- mnesia:table(rule_table),
+		R#rule_table.id == mydlp_mnesia:get_dcid()
+		]),
+	qlc:e(Q);
+
 handle_query(Query) -> handle_query_common(Query).
 
 -endif.
@@ -561,6 +579,15 @@ handle_call({async_query, Query}, From, State) ->
 		Result = transaction(F),
 		Return = handle_result(Query, Result),
 		Worker ! {async_reply, Return, From}
+	end), 15000),
+	{noreply, State};
+
+handle_call(truncate_all, From, State) ->
+	Worker = self(),
+	mydlp_api:mspawn(?FLE(fun() ->
+		lists:foreach(fun(T) -> mnesia:clear_table(T) end, all_tab_names()),
+		lists:foreach(fun(T) -> mydlp_mnesia:delete({unique_ids, T}) end, all_tab_names()),
+		Worker ! {async_reply, ok, From}
 	end), 15000),
 	{noreply, State};
 
@@ -889,6 +916,8 @@ compile_regex([], Ret) -> lists:reverse(Ret).
 get_unique_id(TableName) -> mnesia:dirty_update_counter(unique_ids, TableName, 1).
 
 async_query_call(Query) -> gen_server:call(?MODULE, {async_query, Query}, 5000).
+
+all_tab_names() -> tab_names1(?TABLES, []).
 
 nondata_tab_names() -> tab_names1(?NONDATA_TABLES, []).
 
