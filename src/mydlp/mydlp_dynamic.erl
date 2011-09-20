@@ -163,6 +163,8 @@ load_src(Src) ->
 -ifdef(__MYDLP_ENDPOINT).
 
 -define(CONFDEF_FUNCTIONAL, [
+	{management_server_address, string, "127.0.0.1"}, % TODO: validation IP address
+	{sync_interval, integer, "300000"}
 ]).
 
 -endif.

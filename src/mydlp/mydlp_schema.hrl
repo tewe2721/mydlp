@@ -1,4 +1,4 @@
-%%%
+%%
 %%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@medra.com.tr>
 %%%
 %%%--------------------------------------------------------------------------
@@ -22,6 +22,8 @@
 -define(_MYDLP_SCHEMA_HRL, true).
 
 -record(unique_ids, {type, id}).
+
+-ifdef(__MYDLP_NETWORK).
 
 -record(filter, {
 	id,
@@ -69,6 +71,23 @@
 	customer_id,
 	resolved_rule
 }).
+
+-record(site_desc, {
+	ipaddr,
+	customer_id
+}).
+
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
+-record(rule_table, {
+	id,
+	head=false,
+	table=[]
+}).
+
+-endif.
 
 -record(regex, {
 	id,
@@ -118,11 +137,6 @@
 -record(bayes_negative, {
 	word_hash,
 	count
-}).
-
--record(site_desc, {
-	ipaddr,
-	customer_id
 }).
 
 -endif.

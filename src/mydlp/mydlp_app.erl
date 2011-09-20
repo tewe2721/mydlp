@@ -46,7 +46,8 @@
 			{mydlp_container, start_link,[]},
 			{mydlp_regex, start_link,[]},
 			{pg, {mydlp_tc, start_link,[]}, 4},
-			{mydlp_workdir, start_link,[]}
+			{mydlp_workdir, start_link,[]},
+			{mydlp_sync, start_link,[]}
 		]
 	).
 
@@ -157,13 +158,12 @@ stop(_S) ->
 create_pid_file() ->
 	file:write_file(?CFG(pid_file), os:getpid()).
 
-
--ifdef(__MYDLP_NETWORK).
-
 start_crypto() ->
         application:start(ssl),
         application:start(crypto),
 	ok.
+
+-ifdef(__MYDLP_NETWORK).
 
 get_protocols() -> 
 	{ok, Protocols} = application:get_env(protocols),
@@ -180,8 +180,6 @@ get_agents() ->
 -endif.
 
 -ifdef(__MYDLP_ENDPOINT).
-
-start_crypto() -> ok.
 
 get_protocols() -> [ ?SEAP ].
 

@@ -102,7 +102,9 @@
 
 -define(DATA_TABLES, lists:append(?OTHER_DATA_TABLES, ?BAYES_TABLES)).
 
--define(NONDATA_TABLES, [
+-ifdef(__MYDLP_NETWORK).
+
+-define(NONDATA_FUNCTIONAL_TABLES, [
 	{filter, ordered_set, 
 		fun() -> mnesia:add_table_index(filter, cid) end},
 	rule, 
@@ -114,23 +116,32 @@
 	{mime_type, ordered_set, 
 		fun() -> mnesia:add_table_index(mime_type, mime) end},
 	site_desc,
-	default_rule,
+	default_rule
+]).
+
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
+-define(NONDATA_FUNCTIONAL_TABLES, [
+	{rule_table, ordered_set, 
+		fun() -> mnesia:add_table_index(rule_table, head) end}
+]).
+
+-endif.
+
+-define(NONDATA_COMMON_TABLES, [
 	{regex, ordered_set, 
 		fun() -> mnesia:add_table_index(regex, group_id) end}
 ]).
 
+-define(NONDATA_TABLES, lists:append(?NONDATA_FUNCTIONAL_TABLES, ?NONDATA_COMMON_TABLES)).
+
 -define(TABLES, lists:append(?DATA_TABLES, ?NONDATA_TABLES)).
 
-
-get_record_fields(Record) -> 
+get_record_fields_common(Record) -> 
         case Record of
 		unique_ids -> record_info(fields, unique_ids);
-		filter -> record_info(fields, filter);
-		rule -> record_info(fields, rule);
-		ipr -> record_info(fields, ipr);
-		m_user -> record_info(fields, m_user);
-		match -> record_info(fields, match);
-		match_group -> record_info(fields, match_group);
 		file_hash -> record_info(fields, file_hash);
 		sentence_hash -> record_info(fields, sentence_hash);
 		file_group -> record_info(fields, file_group);
@@ -139,9 +150,40 @@ get_record_fields(Record) ->
 		bayes_item_count -> record_info(fields, bayes_item_count);
 		bayes_positive -> record_info(fields, bayes_positive);
 		bayes_negative -> record_info(fields, bayes_negative);
-		site_desc -> record_info(fields, site_desc);
-		default_rule -> record_info(fields, default_rule)
+		_Else -> not_found
 	end.
+
+-ifdef(__MYDLP_NETWORK).
+
+get_record_fields_functional(Record) ->
+        case Record of
+		filter -> record_info(fields, filter);
+		rule -> record_info(fields, rule);
+		ipr -> record_info(fields, ipr);
+		m_user -> record_info(fields, m_user);
+		match -> record_info(fields, match);
+		match_group -> record_info(fields, match_group);
+		site_desc -> record_info(fields, site_desc);
+		default_rule -> record_info(fields, default_rule);
+		_Else -> not_found
+	end.
+
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
+get_record_fields_functional(Record) ->
+        case Record of
+		rule_table -> record_info(fields, rule_table);
+		_Else -> not_found
+	end.
+
+-endif.
+
+get_record_fields(Record) -> 
+	case get_record_fields_common(Record) of
+		not_found -> get_record_fields_functional(Record);
+		Else -> Else end.
 
 %%%%%%%%%%%%% MyDLP Mnesia API
 
