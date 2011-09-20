@@ -107,10 +107,10 @@ sync() ->
 	RevisionS = integer_to_list(RevisionI),
 	Url = "https://" ++ ?CFG(management_server_address) ++ "/sync.php?rid=" ++ RevisionS,
 	case catch http:request(Url) of
-		{ok, {{_HttpVer, Code1, _Msg}, _Headers, Body1}} -> 
+		{ok, {{_HttpVer, Code, _Msg}, _Headers, Body}} -> 
 			case {Code, Body} of
-				{200, <<"up-to-date"/binary, _/binary>>} -> ok;
-				{200, RestoreData} -> mydlp_mnesia:restore_db(RestoreData),
+				{200, <<"up-to-date", _/binary>>} -> ok;
+				{200, RestoreData} -> mydlp_mnesia:restore_db(RestoreData);
 				{Else1, _Data} -> ?ERROR_LOG("SYNC: An error occured during HTTP req: Code=~w~n", [Else1]) end;
 		Else -> ?ERROR_LOG("SYNC: An error occured during HTTP req: Obj=~w~n", [Else]) end,
 	ok.
