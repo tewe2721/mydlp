@@ -44,4 +44,7 @@ service Mydlp_ui {
 	void pushData(1: i32 Entityid, 2: binary Data)
 	bool analyze(1: i32 Entityid)
 	oneway void closeEntity(1: i32 Entityid)
+
+	binary getRuletable(1: string Ipaddress, 2: string Revisionid)
+
 }

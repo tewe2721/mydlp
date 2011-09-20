@@ -78,6 +78,8 @@
 	add_fhash/3,
 	add_shash/3,
 	set_gid_by_fid/2,
+	dump_tables/1,
+	dump_client_tables/0,
 	delete/1
 	]).
 
@@ -105,6 +107,16 @@
 -record(state, {}).
 
 %%%%%%%%%%%%%%%% Table definitions
+
+-define(CLIENT_TABLES, [
+	mime_type,
+	file_hash,
+	sentence_hash,
+	bayes_item_count,
+	bayes_positive,
+	bayes_negative,
+	regex
+]).
 
 -define(OTHER_DATA_TABLES,[
 	{file_hash, ordered_set, 
@@ -264,6 +276,11 @@ delete(Item) -> async_query_call({delete, Item}).
 new_authority(Node) -> gen_server:call(?MODULE, {new_authority, Node}, 30000).
 
 -endif.
+
+dump_tables(Tables) when is_list(Tables) -> async_query_call({dump_tables, Tables});
+dump_tables(Table) -> dump_tables([Table]).
+
+dump_client_tables() -> dump_tables(?CLIENT_TABLES).
 
 get_regexes(GroupId) ->	async_query_call({get_regexes, GroupId}).
 
@@ -528,6 +545,12 @@ handle_query_common({get_regexes, GroupId}) ->
 
 handle_query_common({write, RecordList}) when is_list(RecordList) ->
 	lists:foreach(fun(R) -> mnesia:write(R) end, RecordList);
+
+handle_query_common({dump_tables, Tables}) ->
+	L1 = [ {T, mnesia:all_keys(T)} || T <- Tables],
+	L2 = [ [ mnesia:read({T,K}) || K <- Keys ]  || {T, Keys} <- L1 ],
+	L3 = lists:append(L2),
+	lists:append(L3);
 
 handle_query_common(Query) -> throw({error,{unhandled_query,Query}}).
 
@@ -807,7 +830,7 @@ resolve_rule({mgroup, Id}, DestList) ->
 		_Else -> none end;
 resolve_rule({rule, Id}, DestList) ->
 	Q = qlc:q([{R#rule.id, R#rule.action, 
-			lists:any(fun(E) -> not lists:member(E, R#rule.trusted_domains) end, DestList)
+			not lists:any(fun(E) -> lists:member(E, R#rule.trusted_domains) end, DestList)
 			} || 
 			F <- mnesia:table(filter), 
 			R <- mnesia:table(rule), 

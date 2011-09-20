@@ -39,6 +39,7 @@
 -ifdef(__MYDLP_NETWORK).
 
 -export([
+	get_rule_table/1,
 	q/4,
 	qu/3,
 	qa/2,
@@ -73,6 +74,8 @@
 %%%%%%%%%%%%% MyDLP ACL API
 
 -ifdef(__MYDLP_NETWORK).
+
+get_rule_table(Addr) -> acl_call({rule_table, Addr}).
 
 q(Site, Addr, DestList, Files) -> acl_call({q, Site, DestList, {Addr, Files}}).
 
@@ -161,6 +164,12 @@ handle_acl({q, _Site, DestList, {Addr, Files}}, #state{is_multisite=false}) ->
 	CustomerId = mydlp_mnesia:get_dcid(),
 	Rules = mydlp_mnesia:get_rules_for_cid(CustomerId, DestList, Addr),
 	acl_exec(Rules, [{cid, CustomerId}, {addr, Addr}], Files);
+
+handle_acl({rule_table, Addr}, _State) ->
+	CustomerId = mydlp_mnesia:get_dcid(),
+	Rules = mydlp_mnesia:get_rules_for_cid(CustomerId, Addr), % TODO: change needed for multi-site use
+	DRules = mydlp_mnesia:get_default_rule(CustomerId),
+	head_dr(Rules, DRules);
 
 %% now this is used for only SMTP, and in SMTP domain part of, mail adresses itself a siteid for customer.
 %% it needs refactoring for both multisite and trusted domains

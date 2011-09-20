@@ -532,79 +532,79 @@ populate_match(Id, <<"i_binary">>, Parent) ->
 populate_match(Id, <<"p_text">>, Parent) ->
 	Func = p_text_match,
 	[ScoreS] = get_func_params(Id),
-	FuncParams = [{score, binary_to_integer(ScoreS)}],
+	FuncParams = [{score, mydlp_api:binary_to_integer(ScoreS)}],
 	new_match(Id, Parent, Func, FuncParams);
 
 populate_match(Id, <<"trid">>, Parent) ->
 	Func = trid_match,
 	[CountS] = get_func_params(Id),
-	FuncParams = [{count, binary_to_integer(CountS)}],
+	FuncParams = [{count, mydlp_api:binary_to_integer(CountS)}],
 	new_match(Id, Parent, Func, FuncParams);
 
 populate_match(Id, <<"ssn">>, Parent) ->
 	Func = ssn_match,
 	[CountS] = get_func_params(Id),
-	FuncParams = [{count, binary_to_integer(CountS)}],
+	FuncParams = [{count, mydlp_api:binary_to_integer(CountS)}],
 	new_match(Id, Parent, Func, FuncParams);
 
 populate_match(Id, <<"iban">>, Parent) ->
 	Func = iban_match,
 	[CountS] = get_func_params(Id),
-	FuncParams = [{count, binary_to_integer(CountS)}],
+	FuncParams = [{count, mydlp_api:binary_to_integer(CountS)}],
 	new_match(Id, Parent, Func, FuncParams);
 
 populate_match(Id, <<"cc">>, Parent) ->
 	Func = cc_match,
 	[CountS] = get_func_params(Id),
-	FuncParams = [{count, binary_to_integer(CountS)}],
+	FuncParams = [{count, mydlp_api:binary_to_integer(CountS)}],
 	new_match(Id, Parent, Func, FuncParams);
 
 populate_match(Id, <<"canada_sin">>, Parent) ->
 	Func = canada_sin_match,
 	[CountS] = get_func_params(Id),
-	FuncParams = [{count, binary_to_integer(CountS)}],
+	FuncParams = [{count, mydlp_api:binary_to_integer(CountS)}],
 	new_match(Id, Parent, Func, FuncParams);
 
 populate_match(Id, <<"france_insee">>, Parent) ->
 	Func = france_insee_match,
 	[CountS] = get_func_params(Id),
-	FuncParams = [{count, binary_to_integer(CountS)}],
+	FuncParams = [{count, mydlp_api:binary_to_integer(CountS)}],
 	new_match(Id, Parent, Func, FuncParams);
 
 populate_match(Id, <<"uk_nino">>, Parent) ->
 	Func = uk_nino_match,
 	[CountS] = get_func_params(Id),
-	FuncParams = [{count, binary_to_integer(CountS)}],
+	FuncParams = [{count, mydlp_api:binary_to_integer(CountS)}],
 	new_match(Id, Parent, Func, FuncParams);
 
 populate_match(Id, <<"scode">>, Parent) ->
 	Func = scode_match,
 	[ScoreS] = get_func_params(Id),
-	FuncParams = [{score, binary_to_integer(ScoreS)}],
+	FuncParams = [{score, mydlp_api:binary_to_integer(ScoreS)}],
 	new_match(Id, Parent, Func, FuncParams);
 
 populate_match(Id, <<"scode_ada">>, Parent) ->
 	Func = scode_ada_match,
 	[ScoreS] = get_func_params(Id),
-	FuncParams = [{score, binary_to_integer(ScoreS)}],
+	FuncParams = [{score, mydlp_api:binary_to_integer(ScoreS)}],
 	new_match(Id, Parent, Func, FuncParams);
 
 populate_match(Id, <<"mime">>, Parent) ->
 	Func = mime_match,
 	GroupsS = get_func_params(Id),
-	FuncParams = [ binary_to_integer(G) || G <- GroupsS ],
+	FuncParams = [ mydlp_api:binary_to_integer(G) || G <- GroupsS ],
 	new_match(Id, Parent, Func, FuncParams);
 
 populate_match(Id, <<"regex">>, Parent) ->
 	Func = regex_match,
 	GroupsS = get_func_params(Id),
-	FuncParams = [ binary_to_integer(G) || G <- GroupsS ],
+	FuncParams = [ mydlp_api:binary_to_integer(G) || G <- GroupsS ],
 	new_match(Id, Parent, Func, FuncParams);
 
 populate_match(Id, <<"file">>, Parent) ->
 	Func = {group,file},
 	GroupsS = get_func_params(Id),
-	GroupsI = [ binary_to_integer(G) || G <- GroupsS ],
+	GroupsI = [ mydlp_api:binary_to_integer(G) || G <- GroupsS ],
 	{ok, [[SentenceHashI, SHCount, SHPercI, BayesI, BThresI, WhiteFileI]]} = psq(file_params_by_match_id, [Id]),
 	SentenceHash = case SentenceHashI of 0 -> false; _ -> true end,
 	SHPerc = SHPercI / 100,
@@ -622,8 +622,6 @@ populate_match(Id, Matcher, _) -> throw({error, {unsupported_match, Id, Matcher}
 get_func_params(MatchId) ->
 	{ok, PQ} = psq(params_by_match_id, [MatchId]),
 	lists:append(PQ).
-
-binary_to_integer(Bin) -> list_to_integer(binary_to_list(Bin)).
 
 populate_mimes(Rows) -> populate_mimes(Rows, mydlp_mnesia:get_dcid()).
 

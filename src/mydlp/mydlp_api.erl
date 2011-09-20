@@ -1823,6 +1823,40 @@ log_exception(Fun) ->
 		%	[Class, Error, erlang:get_stacktrace()]),
 		%exception(Class, Error) end.
 
+%%-------------------------------------------------------------------------
+%% @doc Converts given string to ip address tuple.
+%% @end
+%%-------------------------------------------------------------------------
+
+str_to_ip(IpStr) -> 
+	Tokens = string:tokens(IpStr,"."),
+	[_,_,_,_] = Tokens,
+	Ints = lists:map(fun(S) -> list_to_integer(S) end, Tokens),
+	case lists:any(fun(I) -> ( I > 255 ) or ( I < 0 ) end, Ints) of
+		true -> throw({error, {bad_ip, Ints}});
+		false -> ok end,
+	[I1,I2,I3,I4] = Ints,
+	{I1,I2,I3,I4}.
+
+%%-------------------------------------------------------------------------
+%% @doc Returns ruletable for given ip address if necessary
+%% @end
+%%-------------------------------------------------------------------------
+%%%%%%%%%%%%% TODO: beware of race condifitons when compile_customer had been called.
+generate_client_policy(IpAddr, RevisionId) -> 
+	RuleTable = mydlp_acl:get_rule_table(IpAddr), 
+	ItemDump = mydlp_mnesia:dump_client_tables(),
+	CDBObj = {{rule_table, RuleTable}, {items, ItemDump}},
+	CDBHash = erlang:phash2(CDBObj),
+	case CDBHash of
+		RevisionId -> <<"up-to-date">>;
+		_Else -> erlang:term_to_binary(CDBObj, [compressed]) end.
+
+%%-------------------------------------------------------------------------
+%% @doc Converts given binary to an integer.
+%% @end
+%%-------------------------------------------------------------------------
+binary_to_integer(Bin) -> list_to_integer(binary_to_list(Bin)).
 
 -include_lib("eunit/include/eunit.hrl").
 

@@ -1,4 +1,4 @@
-%%
+%
 %%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@medra.com.tr>
 %%%
 %%%--------------------------------------------------------------------------
@@ -55,7 +55,8 @@
 	initEntity/0,
 	pushData/2,
 	analyze/1,
-	closeEntity/1
+	closeEntity/1,
+	getRuletable/2
 	]).
 
 %%%%% EXTERNAL INTERFACE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -111,6 +112,12 @@ pushData(Entityid, Data) -> mydlp_moddlp:push_data(Entityid, Data).
 analyze(Entityid) -> mydlp_moddlp:analyze(Entityid).
 
 closeEntity(Entityid) -> mydlp_moddlp:close_entity(Entityid).
+
+getRuletable(Ipaddress, Revisionid) ->
+	RevisionIdI = mydlp_api:binary_to_integer(Revisionid),
+	ClientIpS = binary_to_list(Ipaddress),
+	ClientIp = mydlp_api:str_to_ip(ClientIpS),
+	mydlp_api:generate_client_policy(ClientIp, RevisionIdI).
 
 -endif.
 

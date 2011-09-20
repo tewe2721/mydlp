@@ -215,7 +215,7 @@ init([]) ->
         IcapHeaders1 = case Key of
                 "connection" -> IcapHeaders#icap_headers{connection=Value};
                 "encapsulated" -> IcapHeaders#icap_headers{encapsulated=raw_to_encapsulatedh(Value)};
-                "x-client-ip" -> IcapHeaders#icap_headers{x_client_ip=raw_to_xciph(Value)};
+                "x-client-ip" -> IcapHeaders#icap_headers{x_client_ip=mydlp_api:str_to_ip(Value)};
                 "allow" ->	AllowH = raw_to_allowh(Value),
 				IcapHeaders#icap_headers{allow=AllowH, 
 					allow204=lists:member("204",AllowH)};
@@ -695,16 +695,6 @@ rm_trailing_crlf(Bin) when is_binary(Bin) ->
 	BuffSize = size(Bin) - 2,
 	<<Buff:BuffSize/binary, "\r\n">> = Bin,
 	Buff.
-
-raw_to_xciph(IpStr) -> 
-	Tokens = string:tokens(IpStr,"."),
-	[_,_,_,_] = Tokens,
-	Ints = lists:map(fun(S) -> list_to_integer(S) end, Tokens),
-	case lists:any(fun(I) -> ( I > 255 ) or ( I < 0 ) end, Ints) of
-		true -> throw({error, {bad_ip, Ints}});
-		false -> ok end,
-	[I1,I2,I3,I4] = Ints,
-	{I1,I2,I3,I4}.
 
 raw_to_allowh(AllowStr) ->
 	string:tokens(AllowStr, ", ").
