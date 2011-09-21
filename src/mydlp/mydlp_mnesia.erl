@@ -52,10 +52,13 @@
 	is_mime_of_gid/2,
 	is_dr_fh_of_fid/2,
 	get_record_fields/1,
-	write/1,
+	dump_tables/1,
+	dump_client_tables/0,
 	truncate_all/0,
 	truncate_nondata/0,
-	truncate_bayes/0
+	truncate_bayes/0,
+	write/1,
+	delete/1
 	]).
 
 -ifdef(__MYDLP_NETWORK).
@@ -78,10 +81,7 @@
 	remove_file_from_group/2,
 	add_fhash/3,
 	add_shash/3,
-	set_gid_by_fid/2,
-	dump_tables/1,
-	dump_client_tables/0,
-	delete/1
+	set_gid_by_fid/2
 	]).
 
 -endif.
@@ -148,8 +148,6 @@
 		fun() -> mnesia:add_table_index(m_user, username) end},
 	match, 
 	match_group, 
-	{mime_type, ordered_set, 
-		fun() -> mnesia:add_table_index(mime_type, mime) end},
 	site_desc,
 	default_rule
 ]).
@@ -166,6 +164,8 @@
 -endif.
 
 -define(NONDATA_COMMON_TABLES, [
+	{mime_type, ordered_set, 
+		fun() -> mnesia:add_table_index(mime_type, mime) end},
 	{regex, ordered_set, 
 		fun() -> mnesia:add_table_index(regex, group_id) end}
 ]).
@@ -273,9 +273,13 @@ add_shash(HList, FileId, GroupId) when is_list(HList) ->
 
 set_gid_by_fid(FileId, GroupId) -> async_query_call({set_gid_by_fid, FileId, GroupId}).
 
-delete(Item) -> async_query_call({delete, Item}).
-
 new_authority(Node) -> gen_server:call(?MODULE, {new_authority, Node}, 30000).
+
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
+get_rule_table() -> async_query_call(get_rule_table).
 
 -endif.
 
@@ -299,6 +303,8 @@ is_dr_fh_of_fid(Hash, FileId) -> async_query_call({is_dr_fh_of_fid, Hash, FileId
 
 write(RecordList) when is_list(RecordList) -> async_query_call({write, RecordList});
 write(Record) when is_tuple(Record) -> write([Record]).
+
+delete(Item) -> async_query_call({delete, Item}).
 
 truncate_all() -> gen_server:call(?MODULE, truncate_all, 15000).
 
@@ -501,9 +507,6 @@ handle_query({add_shl, HList, FI, GI}) ->
 
 handle_query({set_gid_by_fid, FI, GI}) -> add_file_group(FI, GI);
 
-handle_query({delete, Item}) ->
-	mnesia:delete(Item);
-
 handle_query(Query) -> handle_query_common(Query).
 
 -endif.
@@ -561,14 +564,17 @@ handle_query_common({get_regexes, GroupId}) ->
 		]),
 	qlc:e(Q);
 
-handle_query_common({write, RecordList}) when is_list(RecordList) ->
-	lists:foreach(fun(R) -> mnesia:write(R) end, RecordList);
-
 handle_query_common({dump_tables, Tables}) ->
 	L1 = [ {T, mnesia:all_keys(T)} || T <- Tables],
 	L2 = [ [ mnesia:read({T,K}) || K <- Keys ]  || {T, Keys} <- L1 ],
 	L3 = lists:append(L2),
 	lists:append(L3);
+
+handle_query_common({write, RecordList}) when is_list(RecordList) ->
+	lists:foreach(fun(R) -> mnesia:write(R) end, RecordList);
+
+handle_query_common({delete, Item}) ->
+	mnesia:delete(Item);
 
 handle_query_common(Query) -> throw({error,{unhandled_query,Query}}).
 

@@ -25,6 +25,7 @@
 -compile(export_all).
 
 -include("mydlp.hrl").
+-include("mydlp_schema.hrl").
 
 -ifdef(__MYDLP_NETWORK).
 
@@ -1858,17 +1859,17 @@ generate_client_policy(IpAddr, RevisionId) ->
 
 -ifdef(__MYDLP_ENDPOINT).
 
+use_client_policy(<<"up-to-date">>) -> ok;
 use_client_policy(CDBBin) ->
-	CDBObj = binary_to_term(CDBBin, [safe]),
+	CDBObj = erlang:binary_to_term(CDBBin), % TODO: binary_to_term/2 with safe option
 	{{rule_table, RuleTable}, {items, ItemDump}} = CDBObj,
 	
 	mydlp_mnesia:truncate_all(),
 	[mydlp_mnesia:write(I) || I <- ItemDump],
 
-	#rule_table{id=mydlp_mnesia:get_dcid(), rule_table = RuleTable},
+	R = #rule_table{id=mydlp_mnesia:get_dcid(), table = RuleTable},
 	mydlp_mnesia:write(R),
 	ok.
-	
 
 get_client_policy_revision_id() ->
 	RuleTable = mydlp_mnesia:get_rule_table(), 

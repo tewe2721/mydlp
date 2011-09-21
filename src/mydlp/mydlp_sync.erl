@@ -105,12 +105,13 @@ call_timer(Interval) -> timer:send_after(Interval, sync_now).
 sync() ->
 	RevisionI = mydlp_api:get_client_policy_revision_id(),
 	RevisionS = integer_to_list(RevisionI),
-	Url = "https://" ++ ?CFG(management_server_address) ++ "/sync.php?rid=" ++ RevisionS,
+	Url = "https://" ++ ?CFG(management_server_address) ++ "/mydlp-web-manager/sync.php?rid=" ++ RevisionS,
 	case catch http:request(Url) of
 		{ok, {{_HttpVer, Code, _Msg}, _Headers, Body}} -> 
 			case {Code, Body} of
 				{200, <<"up-to-date", _/binary>>} -> ok;
-				{200, CDBBin} -> mydlp_api:populate_client_policy(CDBBin);
+				{200, CDBS} -> 	CDBBin = list_to_binary(CDBS),
+						mydlp_api:use_client_policy(CDBBin);
 				{Else1, _Data} -> ?ERROR_LOG("SYNC: An error occured during HTTP req: Code=~w~n", [Else1]) end;
 		Else -> ?ERROR_LOG("SYNC: An error occured during HTTP req: Obj=~w~n", [Else]) end,
 	ok.
