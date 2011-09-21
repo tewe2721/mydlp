@@ -54,7 +54,6 @@ dist_erl_DATA = \
 	mydlp_logger_h.erl \
 	mydlp_matchers.erl \
 	mydlp_mnesia.erl \
-	mydlp_moddlp.erl \
 	mydlp_mysql.erl \
 	mydlp_nlp_tr.erl \
 	mydlp_pg_sup.erl \

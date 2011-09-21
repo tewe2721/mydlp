@@ -105,14 +105,6 @@ updateAFileFP(Afileid, [_|_] = Afilepath, Filename) ->
 			mydlp_archive:a(Afileid, Adata, Filename);
 		false -> ?DEBUG("MyDLP TS: 'updateAFileFP'. Is not a regular file: ~p\n", [Afilepath]) end, ok.
 
-initEntity() -> mydlp_moddlp:init_entity().
-
-pushData(Entityid, Data) -> mydlp_moddlp:push_data(Entityid, Data).
-
-analyze(Entityid) -> mydlp_moddlp:analyze(Entityid).
-
-closeEntity(Entityid) -> mydlp_moddlp:close_entity(Entityid).
-
 getRuletable(Ipaddress, Revisionid) ->
 	RevisionIdI = mydlp_api:binary_to_integer(Revisionid),
 	ClientIpS = binary_to_list(Ipaddress),
