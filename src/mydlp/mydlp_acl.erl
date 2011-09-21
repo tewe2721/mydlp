@@ -194,9 +194,7 @@ handle_acl(Q, _State) -> throw({error, {undefined_query, Q}}).
 -ifdef(__MYDLP_ENDPOINT).
 
 handle_acl({qe, _Site, {Files}}, _State) ->
-	%FinalRuleTable = [],
-	%acl_exec2(FinalRuleTable, [{cid, 0}], Files);
-	Rules = mydlp_mnesia:get_all_rules(),
+	Rules = mydlp_mnesia:get_rule_table(),
 	acl_exec(Rules, [{cid, mydlp_mnesia:get_dcid()}], Files);
 
 handle_acl(Q, _State) -> throw({error, {undefined_query, Q}}).
