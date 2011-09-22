@@ -888,11 +888,11 @@ acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, #file{} = File, Misc) ->
 				mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, File, Misc);
 		archive -> 
 			case { Proto, ?BB_S(File#file.dataref) > ?CFG(archive_minimum_size) } of % will use new configuration refs
-				{ icap, true } -> acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
+				{ icap, false } -> ok;
+				_Else -> acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
 					AFileId = mydlp_mysql:new_afile(),
 					mydlp_archive:a(AFileId, File),
-					mydlp_mysql:archive_log(Proto, RuleId, Ip, User, To, AFileId);
-				_Else -> ok end;
+					mydlp_mysql:archive_log(Proto, RuleId, Ip, User, To, AFileId) end;
 		_Else -> ok end.
 
 -endif.
