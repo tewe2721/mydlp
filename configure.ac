@@ -61,7 +61,6 @@ AC_CONFIG_FILES([
 		src/mydlp/mydlp.app
 		src/mydlp/mydlp.rel
 		src/mydlp/overview.edoc
-		src/mod_dlp/Makefile
 		src/thrift/Makefile
 		src/backend/Makefile
 		src/backend/py/Makefile
