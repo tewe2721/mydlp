@@ -203,9 +203,9 @@ to_lowerchar(C) ->
 
 -ifdef(__PLATFORM_WINDOWS).
 
--define(DOC, {"c:/Program Files/MyDLP/cygwin/bin/catdoc.exe", ["-wx", "-dutf-8"]}).
--define(PPT, {"c:/Program Files/MyDLP/cygwin/bin/catppt.exe", []}).
--define(XLS, {"c:/Program Files/MyDLP/cygwin/bin/xls2csv.exe", ["-x"]}).
+-define(DOC, {?CFG(app_dir) ++ "/cygwin/bin/catdoc.exe", ["-wx", "-dutf-8"]}).
+-define(PPT, {?CFG(app_dir) ++ "/cygwin/bin/catppt.exe", []}).
+-define(XLS, {?CFG(app_dir) ++ "/cygwin/bin/xls2csv.exe", ["-x"]}).
 
 -endif.
 
@@ -644,7 +644,7 @@ uncompress0(_Method, Filename) ->
 
 -ifdef(__PLATFORM_WINDOWS).
 
--define(SEVENZBIN, "c:/Program Files/MyDLP/libexec/7z.exe").
+-define(SEVENZBIN, ?CFG(app_dir) ++ "/libexec/7z.exe").
 
 -endif.
 
@@ -681,7 +681,7 @@ un7zc(ZFNDir, ZFN) ->
 
 -ifdef(__PLATFORM_WINDOWS).
 
--define(GZIPBIN, "c:/Program Files/MyDLP/cygwin/bin/gzip.exe").
+-define(GZIPBIN, ?CFG(app_dir) ++ "/cygwin/bin/gzip.exe").
 
 -endif.
 
@@ -714,7 +714,7 @@ ungzipc(FNDir, FN) ->
 
 -ifdef(__PLATFORM_WINDOWS).
 
--define(ARBIN, "c:/Program Files/MyDLP/cygwin/bin/ar.exe").
+-define(ARBIN, ?CFG(app_dir) ++ "/cygwin/bin/ar.exe").
 
 -endif.
 
@@ -838,7 +838,7 @@ ps_to_text(Bin) -> pdf_to_text(Bin).
 
 -ifdef(__PLATFORM_WINDOWS).
 
--define(PDFTOTEXTBIN, "c:/Program Files/MyDLP/cygwin/bin/pdftotext.exe").
+-define(PDFTOTEXTBIN, ?CFG(app_dir) ++ "/cygwin/bin/pdftotext.exe").
 
 -endif.
 

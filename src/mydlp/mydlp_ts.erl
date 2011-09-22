@@ -52,10 +52,6 @@
         updateAFile/2,
         updateAFileFN/3,
         updateAFileFP/3,
-	initEntity/0,
-	pushData/2,
-	analyze/1,
-	closeEntity/1,
 	getRuletable/2
 	]).
 

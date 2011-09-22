@@ -39,6 +39,8 @@
 
 -define(DEFAULTCONFPATH, "C:/Program Files/MyDLP/conf/mydlp.conf").
 
+-define(DEFAULTAPPDIR, "C:/Program Files/MyDLP").
+
 -endif.
 
 -ifdef(__MYDLP_NETWORK).
@@ -115,10 +117,11 @@ load_src(Src) ->
 -ifdef(__PLATFORM_WINDOWS).
 
 -define(CONFDEF_PLATFORM, [
-	{log_dir, string, "C:/Program Files/MyDLP/logs/"},
-	{pid_file, string, "C:/Program Files/MyDLP/run/mydlp.pid"},
-	{work_dir, string, "C:/Program Files/MyDLP"},
-	{mnesia_dir, string, "C:/Program Files/MyDLP/mnesia"}
+	{app_dir, string, ?DEFAULTAPPDIR},
+	{log_dir, string, "-defined-explicitly-"},
+	{pid_file, string, "-defined-explicitly-"},
+	{work_dir, string, "-defined-explicitly-"},
+	{mnesia_dir, string, "-defined-explicitly-"}
 ]).
 
 -endif.
@@ -221,7 +224,7 @@ line_to_src(ConfDef, Line) ->
 		{KeyStr, ValStr} ->
 			Key = list_to_atom(KeyStr),
 			{Key, Type, _DefaultVal} = lists:keyfind(Key, 1, ConfDef),
-			ValSrcStr = val_to_type_src(Type, ValStr),
+			ValSrcStr = val_to_type_src(Key, Type, ValStr),
 			SLine = KeyStr ++ "() -> " ++ ValSrcStr ++ ".\r\n",
 			ConfDef1 = lists:keydelete(Key, 1, ConfDef),
 			{ConfDef1, SLine} end.
@@ -261,7 +264,36 @@ strip_ws(String) ->
 	case String of
 		S2 -> String;
 		_Else -> strip_ws(S2) end.
-	
+
+-ifdef(__PLATFORM_LINUX).
+
+val_to_type_src(_Key, Type, ValStr) -> val_to_type_src(Type, ValStr).
+
+-endif.
+
+-ifdef(__PLATFORM_WINDOWS).
+
+prettify_path(Path) -> re:replace(Path, "\\\\", "/", [global, {return,list}]).
+
+val_to_type_src(app_dir, string, ValStr) -> 
+	case os:getenv("MYDLP_APPDIR") of
+		false -> val_to_type_src(string, ValStr);
+		Path -> NewValStr = prettify_path(Path),
+			val_to_type_src(string, NewValStr) end;
+val_to_type_src(log_dir, string, "-defined-explicitly-") -> "app_dir() ++ \"/logs/\"";
+val_to_type_src(pid_file, string, "-defined-explicitly-") -> "app_dir() ++ \"/run/mydlp.pid\"";
+val_to_type_src(work_dir, string, "-defined-explicitly-") ->
+	TempPath = case os:getenv("TEMP") of
+		false -> case os:getenv("TMP") of
+			false -> "C:/Temp";
+			P1 -> P1 end;
+		P -> P end,
+	PTP = prettify_path(TempPath),
+	val_to_type_src(string, PTP ++ "/mydlp");
+val_to_type_src(mnesia_dir, string, "-defined-explicitly-") -> "app_dir() ++ \"/mnesia\"";
+val_to_type_src(_Key, Type, ValStr) -> val_to_type_src(Type, ValStr).
+
+-endif.
 
 val_to_type_src(boolean, "yes") -> "true";
 val_to_type_src(boolean, "y") -> "true";
@@ -278,7 +310,7 @@ confdef_to_src(ConfDef) -> confdef_to_src(ConfDef, "").
 
 confdef_to_src([{Key, Type, ValStr}| RestDef], Acc) ->
 	KeyStr = atom_to_list(Key),
-	ValSrcStr = val_to_type_src(Type, ValStr),
+	ValSrcStr = val_to_type_src(Key, Type, ValStr),
 	SLine = KeyStr ++ "() -> " ++ ValSrcStr ++ ".\r\n",
 	confdef_to_src(RestDef, Acc ++ SLine);
 confdef_to_src([], Acc) -> Acc.
