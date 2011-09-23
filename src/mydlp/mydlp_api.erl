@@ -1695,7 +1695,14 @@ term2file(Term) when is_list(Term) ->
 %% @end
 %%-------------------------------------------------------------------------
 
-empty_aclr(Files) -> {{rule, -1}, {file, Files}, {matcher, none}, {misc,""}}.
+empty_aclr(Files) -> empty_aclr(Files, none).
+
+%%-------------------------------------------------------------------------
+%% @doc Creates an empty acl result tuple with given files and matcher
+%% @end
+%%-------------------------------------------------------------------------
+
+empty_aclr(Files, Matcher) -> {{rule, -1}, {file, Files}, {matcher, Matcher}, {misc,""}}.
 
 
 %%-------------------------------------------------------------------------

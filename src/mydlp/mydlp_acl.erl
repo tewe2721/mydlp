@@ -50,11 +50,11 @@
 
 -ifdef(__MYDLP_ENDPOINT).
 
+-endif.
+
 -export([
 	qe/1
 	]).
-
--endif.
 
 %% gen_server callbacks
 -export([init/1,
@@ -77,25 +77,32 @@
 
 get_rule_table(Addr) -> acl_call({rule_table, Addr}).
 
-q(Site, Addr, DestList, Files) -> acl_call({q, Site, DestList, {Addr, Files}}).
+q(Site, Addr, DestList, Files) -> acl_call({q, Site, DestList, Addr}, Files).
 
-qu(User, _Dest, Files) -> acl_call({qu, site, {User, Files}}).
+qu(User, _Dest, Files) -> acl_call({qu, site, User}, Files).
 
-qa(DestList, Files) -> acl_call({qa, site, {DestList, Files}}).
+qa(DestList, Files) -> acl_call({qa, site, DestList}, Files).
 
-qm(Files) -> acl_call({qm, site, {Files}}).
+qm(Files) -> acl_call({qm, site}, Files).
 
 -endif.
 
 -ifdef(__MYDLP_ENDPOINT).
 
-qe(Files) -> acl_call({qe, site, {Files}}).
-
 -endif.
 
-%acl_call(Query) -> acl_call(Query, 1500).
-acl_call(Query) -> acl_call(Query, 1500000).
-acl_call(Query, Timeout) -> gen_server:call(?MODULE, {acl, Query, Timeout}, Timeout).
+qe(Files) -> acl_call({qe, site}, Files).
+
+acl_call(Query) -> acl_call(Query, none).
+
+acl_call(Query, Files) -> acl_call(Query, Files, 1500000).
+
+acl_call(Query, none, Timeout) -> 
+	gen_server:call(?MODULE, {acl, Query, none, Timeout}, Timeout);
+acl_call(Query, Files, Timeout) -> 
+	case lists:any(fun(F) -> ?BB_S(F#file.dataref) > ?CFG(maximum_object_size) end, Files) of
+		true -> {log, mydlp_api:empty_aclr(Files, max_size_exceeded)};
+		false -> gen_server:call(?MODULE, {acl, Query, Files, Timeout}, Timeout) end.
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -155,20 +162,20 @@ acl_exec3(AllRules, Source, Files, ExNewFiles, CleanFiles) ->
 -ifdef(__MYDLP_NETWORK).
 
 %% it needs refactoring for trusted domains
-handle_acl({q, SAddr, DestList, {Addr, Files}}, #state{is_multisite=true}) ->
+handle_acl({q, SAddr, DestList, Addr}, Files, #state{is_multisite=true}) ->
 	case mydlp_mnesia:get_cid(SAddr) of
 		nocustomer -> block;
 		CustomerId -> 
 			Rules = mydlp_mnesia:get_rules_for_cid(CustomerId, DestList, Addr),
 			acl_exec(Rules, [{cid, CustomerId}, {addr, Addr}], Files) end;
 
-handle_acl({q, _Site, DestList, {Addr, Files}}, #state{is_multisite=false}) ->
+handle_acl({q, _Site, DestList, Addr}, Files, #state{is_multisite=false}) ->
 	%Rules = mydlp_mnesia:get_rules(Addr),
 	CustomerId = mydlp_mnesia:get_dcid(),
 	Rules = mydlp_mnesia:get_rules_for_cid(CustomerId, DestList, Addr),
 	acl_exec(Rules, [{cid, CustomerId}, {addr, Addr}], Files);
 
-handle_acl({rule_table, Addr}, _State) ->
+handle_acl({rule_table, Addr}, _Files, _State) ->
 	CustomerId = mydlp_mnesia:get_dcid(),
 	Rules = mydlp_mnesia:get_rules_for_cid(CustomerId, Addr), % TODO: change needed for multi-site use
 	DRules = mydlp_mnesia:get_default_rule(CustomerId),
@@ -176,40 +183,40 @@ handle_acl({rule_table, Addr}, _State) ->
 
 %% now this is used for only SMTP, and in SMTP domain part of, mail adresses itself a siteid for customer.
 %% it needs refactoring for both multisite and trusted domains
-handle_acl({qu, _Site, {User, Files}}, _State) ->
+handle_acl({qu, _Site, User}, Files, _State) ->
 	Rules = mydlp_mnesia:get_rules_by_user(User),
 	acl_exec(Rules, [{cid, mydlp_mnesia:get_dcid()}, {user, User}], Files);
 
-handle_acl({qa, _Site, {DestList, Files}}, _State) ->
+handle_acl({qa, _Site, DestList}, Files, _State) ->
 	Rules = mydlp_mnesia:get_all_rules(DestList),
 	acl_exec(Rules, [{cid, mydlp_mnesia:get_dcid()}], Files);
 
-handle_acl({qm, _Site, {Files}}, _State) ->
+handle_acl({qm, _Site}, Files, _State) ->
 	Rules = mydlp_mnesia:get_all_rules(),
 	acl_exec(Rules, [{cid, mydlp_mnesia:get_dcid()}], Files);
 
-handle_acl({qe, Site, {Files}}, State) -> handle_acl({qm, Site, {Files}}, State);
+handle_acl({qe, Site}, Files, State) -> handle_acl({qm, Site}, Files, State);
 
-handle_acl(Q, _State) -> throw({error, {undefined_query, Q}}).
+handle_acl(Q, _Files, _State) -> throw({error, {undefined_query, Q}}).
 
 -endif.
 
 -ifdef(__MYDLP_ENDPOINT).
 
-handle_acl({qe, _Site, {Files}}, _State) ->
+handle_acl({qe, _Site}, Files, _State) ->
 	Rules = mydlp_mnesia:get_rule_table(),
 	acl_exec2(Rules, [{cid, mydlp_mnesia:get_dcid()}], Files);
 
-handle_acl(Q, _State) -> throw({error, {undefined_query, Q}}).
+handle_acl(Q, _Files, _State) -> throw({error, {undefined_query, Q}}).
 
 -endif.
 
 
-handle_call({acl, Query, Timeout}, From, State) ->
+handle_call({acl, Query, Files, Timeout}, From, State) ->
 	Worker = self(),
 	mydlp_api:mspawn(fun() ->
 		Return = try 
-			Result = handle_acl(Query, State),
+			Result = handle_acl(Query, Files, State),
 			{ok, Result}
 		catch Class:Error ->
 			?ERROR_LOG("Error occured on ACL query: [~w]. Class: [~w]. Error: [~w].~nStack trace: ~w~n",
