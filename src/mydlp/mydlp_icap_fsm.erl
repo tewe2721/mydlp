@@ -73,6 +73,7 @@
 	path_reqmod,
 	path_respmod,
 	icap_mod_mode=reqmod, % icap modification mode
+	archive_inbound=false,
 	http_message_type,
 	buffer,
 	ch_req_h=false,
@@ -145,8 +146,11 @@ init([]) ->
 		false -> false;
 		true -> LogPassLowerLimit end,
 
+	ArchiveInbound = ?CFG(archive_inbound),
+
 	{ok, 'WAIT_FOR_SOCKET', #state{max_connections=MC, 
-		path_reqmod=P, path_respmod=PR, options_ttl=OT, log_pass=LogPass}}.
+		path_reqmod=P, path_respmod=PR, options_ttl=OT, 
+		log_pass=LogPass, archive_inbound=ArchiveInbound}}.
 
 %%-------------------------------------------------------------------------
 %% Func: StateName/2
@@ -424,6 +428,16 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 
 % {Action, {{rule, Id}, {file, File}, {matcher, Func}, {misc, Misc}}}
 'REQ_OK'(#state{icap_request=#icap_request{method=options} } = State) -> 'REPLY_OK'(State);
+'REQ_OK'(#state{icap_mod_mode=respmod, archive_inbound=false } = State) ->
+	DFFiles = df_to_files(State),
+	mydlp_api:clean_files(DFFiles),
+	'REPLY_OK'(State);
+'REQ_OK'(#state{icap_mod_mode=respmod, archive_inbound=true } = State) -> 
+	DFFiles = df_to_files(State),
+	AclR = {archive, mydlp_api:empty_aclr(DFFiles, archive_inbound)},
+	archive_req(State, AclR, DFFiles),
+	% mydlp_archive will clean files.
+	'REPLY_OK'(State);
 'REQ_OK'(#state{addr=SAddr,
 		icap_headers=#icap_headers{x_client_ip=CAddr},
 		http_request=#http_request{path=Uri},

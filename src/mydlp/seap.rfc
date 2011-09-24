@@ -32,6 +32,7 @@ Server:	ERR/OK
 
 Description: Sets given property (key value pair) for object referenced with given identifier. Properties for objects in container are stored in dictionaries. In other words, if you set different values for same key, latter value will be valid. Special keys are listed below:
 	"filename" -> Value of this key will be used as filename when assembling object into a file record for acl queries and other DLP operations.If file name is known, it is stongly recommended to set this key.
+	"direction" -> Can be "in" or "out". Value of this key will be used to determine direction of the data flow.
 Returns "OK" or "ERR" according to whether an error occured.
 
 -GETPROP-
