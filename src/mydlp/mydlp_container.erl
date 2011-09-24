@@ -111,9 +111,18 @@ handle_call({aclq, ObjId, Timeout}, From, #state{object_tree=OT} = State) ->
 		{value, Obj} -> 
 			Worker = self(),
 			mydlp_api:mspawn(fun() -> 
-					Return = case is_inbound(Obj) of
-						true -> inbound_ret(ObjId, Obj, State);
-						false -> acl_ret(ObjId, Obj, State) end,
+					Return = try 
+						File = object_to_file(Obj),
+						DFFiles = [File],
+						QRet = case is_inbound(Obj) of
+							true -> mydlp_acl:qi(DFFiles);
+							false -> mydlp_acl:qe(DFFiles) end,
+						AclRet = acl_ret(QRet, Obj, DFFiles),
+						{ok, AclRet}
+					catch Class:Error ->
+						?ERROR_LOG("ACLQ: Error occured: Class: [~w]. Error: [~w].~nStack trace: ~w~nObjID: [~w].~nState: ~w~n ",
+							[Class, Error, erlang:get_stacktrace(), ObjId, State]),
+							{ierror, {Class, Error}} end,
 					Worker ! {async_reply, Return, From}
 				end, Timeout);
 		none -> gen_server:reply(From, {error, not_in_object_tree}) end,
@@ -212,57 +221,34 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 
-acl_ret(ObjId, Obj, State) ->
-	try 	File = object_to_file(Obj),
-		DFFiles = [File],
-		AclRet = case case mydlp_acl:qe(DFFiles) of % TODO filepath as destination 
-			pass -> {pass, mydlp_api:empty_aclr(DFFiles)};
-			log -> {log, mydlp_api:empty_aclr(DFFiles)};
-			archive -> {archive, mydlp_api:empty_aclr(DFFiles)};
-			block -> {block, mydlp_api:empty_aclr(DFFiles)};
-			quarantine -> {quanratine, mydlp_api:empty_aclr(DFFiles)};
-			{pass, _AR} = T -> T;
-			{log, _AR} = T -> T;
-			{archive, _AR} = T -> T;
-			{block, _AR} = T -> T;
-			{quarantine, _AR} = T -> T
-		end of
-			{pass, _AclR} -> 	mydlp_api:clean_files(DFFiles),
-						pass; 
-			{log, AclR} -> 		log_req(Obj, log, AclR),
-						mydlp_api:clean_files(DFFiles),
-						pass; 
-			{archive, AclR} -> 	archive_req(Obj, AclR, DFFiles),
-						% mydlp_archive will clean files.
-						pass;
-			{block, AclR} -> 	log_req(Obj, block, AclR),
-						mydlp_api:clean_files(DFFiles),
-						block;
-			{quarantine, AclR} -> 	log_req(Obj, quarantine, AclR),
-						mydlp_api:clean_files(DFFiles),
-						block
-		end,
-		{ok, AclRet}
-	catch Class:Error ->
-		?ERROR_LOG("ACLQ: acl_ret: Error occured: Class: [~w]. Error: [~w].~nStack trace: ~w~nObjID: [~w].~nState: ~w~n ",
-			[Class, Error, erlang:get_stacktrace(), ObjId, State]),
-			{ierror, {Class, Error}} end.
-
-inbound_ret(ObjId, Obj, #state{archive_inbound=ArchiveInbound} = State) ->
-	try	File = object_to_file(Obj),
-		DFFiles = [File],
-		InboundRet = case ArchiveInbound of
-			true -> AclR = mydlp_api:empty_aclr(DFFiles, archive_inbound),
-				archive_req(Obj, AclR, DFFiles),
-				% mydlp_archive will clean files.
-				pass;
-			false -> mydlp_api:clean_files(DFFiles),
-				pass end,
-		{ok, InboundRet}
-	catch Class:Error ->
-		?ERROR_LOG("ACLQ: inbound_ret: Error occured: Class: [~w]. Error: [~w].~nStack trace: ~w~nObjID: [~w].~nState: ~w~n ",
-			[Class, Error, erlang:get_stacktrace(), ObjId, State]),
-			{ierror, {Class, Error}} end.
+acl_ret(QRet, Obj, DFFiles) ->
+	case case QRet of % TODO filepath as destination 
+		pass -> {pass, mydlp_api:empty_aclr(DFFiles)};
+		log -> {log, mydlp_api:empty_aclr(DFFiles)};
+		archive -> {archive, mydlp_api:empty_aclr(DFFiles)};
+		block -> {block, mydlp_api:empty_aclr(DFFiles)};
+		quarantine -> {quanratine, mydlp_api:empty_aclr(DFFiles)};
+		{pass, _AR} = T -> T;
+		{log, _AR} = T -> T;
+		{archive, _AR} = T -> T;
+		{block, _AR} = T -> T;
+		{quarantine, _AR} = T -> T
+	end of
+		{pass, _AclR} -> 	mydlp_api:clean_files(DFFiles),
+					pass; 
+		{log, AclR} -> 		log_req(Obj, log, AclR),
+					mydlp_api:clean_files(DFFiles),
+					pass; 
+		{archive, AclR} -> 	archive_req(Obj, AclR, DFFiles),
+					% mydlp_archive will clean files.
+					pass;
+		{block, AclR} -> 	log_req(Obj, block, AclR),
+					mydlp_api:clean_files(DFFiles),
+					block;
+		{quarantine, AclR} -> 	log_req(Obj, quarantine, AclR),
+					mydlp_api:clean_files(DFFiles),
+					block
+	end.
 
 archive_req(Obj, {{rule, RId}, {file, _}, {matcher, _}, {misc, _}}, DFFiles) ->
         case DFFiles of

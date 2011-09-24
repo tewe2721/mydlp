@@ -53,6 +53,7 @@
 -endif.
 
 -export([
+	qi/1,
 	qe/1
 	]).
 
@@ -93,16 +94,25 @@ qm(Files) -> acl_call({qm, site}, Files).
 
 qe(Files) -> acl_call({qe, site}, Files).
 
+% For handling inbound request.
+qi(Files) -> acl_call(qi, Files).
+
 acl_call(Query) -> acl_call(Query, none).
 
 acl_call(Query, Files) -> acl_call(Query, Files, 1500000).
 
-acl_call(Query, none, Timeout) -> 
-	gen_server:call(?MODULE, {acl, Query, none, Timeout}, Timeout);
+acl_call(Query, none, Timeout) -> acl_call1(Query, none, Timeout);
 acl_call(Query, Files, Timeout) -> 
 	case lists:any(fun(F) -> ?BB_S(F#file.dataref) > ?CFG(maximum_object_size) end, Files) of
 		true -> {log, mydlp_api:empty_aclr(Files, max_size_exceeded)};
-		false -> gen_server:call(?MODULE, {acl, Query, Files, Timeout}, Timeout) end.
+		false -> acl_call1(Query, Files, Timeout) end.
+
+% no need to call acl server for inbound requests.
+acl_call1(qi, _Files, _Timeout) -> 
+	case ?CFG(archive_inbound) of
+		true -> archive;
+		false -> pass end;
+acl_call1(Query, Files, Timeout) -> gen_server:call(?MODULE, {acl, Query, Files, Timeout}, Timeout).
 
 %%%%%%%%%%%%%% gen_server handles
 
