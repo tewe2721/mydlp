@@ -604,7 +604,7 @@ uncompress_sl(Src,Dest) ->
 uncompress(Method, {memory, Bin}, Filename) -> uncompress(Method, Bin, Filename);
 
 uncompress(Method, {Type, _Value} = Ref, Filename) when
-		Type == cacheref; Type == unixfile -> 
+		Type == cacheref; Type == tmpfile -> 
 	{FNDir, FN} = uncompress0(Method, Filename),
 
 	uncompress_sl(?BB_P(Ref), FN),
@@ -784,7 +784,7 @@ rr_files([FN|FNs], WorkDir, Ret) ->
 		{ok, _Filename} ->	ok = file:delete(AbsPath),
 					rr_files(FNs, WorkDir, Ret);
 		{error, _Reason} -> case filelib:is_regular(AbsPath) of
-			true -> CacheRef = ?BB_C({unixfile, AbsPath}),
+			true -> CacheRef = ?BB_C({tmpfile, AbsPath}),
 				file:delete(AbsPath), %ensure file deletion
 				rr_files(FNs, WorkDir, [{FN, CacheRef}|Ret]);
 			false -> case filelib:is_dir(AbsPath) of

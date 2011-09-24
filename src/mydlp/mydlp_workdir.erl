@@ -63,9 +63,9 @@ tempfile() ->
 	FN = ref_to_fn("tmp", Ref),
 	{ok, FN}.
 
-raw_to_obj({unixfile, FilePath}) -> 
+raw_to_obj({tmpfile, FilePath}) -> 
 	case filelib:file_size(FilePath) > ?CFG(maximum_memory_object) of
-		true -> cache_unixfile(FilePath);
+		true -> cache_tmpfile(FilePath);
 		false -> case file:read_file(FilePath) of
 			{ok, Bin} -> file:delete(FilePath), 
 				{memory, Bin};
@@ -84,7 +84,7 @@ read_obj({cacheref, Ref}) ->
 		{ok, Bin} -> Bin;
 		Err -> throw(Err) end.
 
-get_obj_fp({unixfile, FilePath}) -> FilePath;
+get_obj_fp({tmpfile, FilePath}) -> FilePath;
 get_obj_fp({cacheref, Ref}) -> ref_to_fn("obj", Ref);
 get_obj_fp(_Else) -> throw({error, obj_type_no_fn}).
 
@@ -145,7 +145,7 @@ cache(RawData) ->
 		ok -> {cacheref, Ref};
 		{error, Err} -> throw({error, Err}) end.
 
-cache_unixfile(FilePath) ->
+cache_tmpfile(FilePath) ->
 	Ref = now(),
 	FN = ref_to_fn("obj", Ref),
 	case file:rename(FilePath, FN) of
