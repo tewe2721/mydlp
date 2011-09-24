@@ -58,6 +58,7 @@
 	buffer=[],
 	data,
 	eof_flag=false,
+	filepath=undefined,
 	prop_dict=dict:new()
 	}).
 
@@ -145,19 +146,33 @@ handle_cast({setprop, ObjId, Key, Value}, #state{object_tree=OT} = State) ->
 			{noreply, State}
 			end;
 
-handle_cast({pushfile, ObjId, FilePath}, State) ->
-	{ok, DataChunk} = file:read_file(FilePath),
-	handle_cast({push, ObjId, DataChunk}, State);
+handle_cast({pushfile, ObjId, FilePath}, #state{object_tree=OT} = State) ->
+	case gb_trees:lookup(ObjId, OT) of
+		{value, #object{eof_flag=false} = Obj} -> 
+			OT1 = gb_trees:enter(ObjId, Obj#object{filepath=FilePath, buffer=[]}, OT),
+			{noreply, State#state{object_tree=OT1}};
+		{value, #object{eof_flag=true} = Obj} -> 
+			?ERROR_LOG("PUSHFILE: eof_flag is true, not pushing file: ObjId=~w, FilePath=~w, Object=~w~n",
+				[ObjId, FilePath, Obj]),
+			{noreply, State};
+		none -> ?ERROR_LOG("PUSHFILE: Object not found in object_tree: ObjId=~w, ObjectTree=~w~n",
+				[ObjId, OT]),
+			{noreply, State}
+			end;
 
 % could use dataref appends in push after a certain threshold.
 handle_cast({push, ObjId, DataChunk}, #state{object_tree=OT} = State) ->
 	case gb_trees:lookup(ObjId, OT) of
-		{value, #object{eof_flag=false, buffer=Buffer} = Obj} -> 
+		{value, #object{eof_flag=false, filepath=undefined, buffer=Buffer} = Obj} -> 
 			OT1 = gb_trees:enter(ObjId, Obj#object{buffer=[DataChunk|Buffer]}, OT),
 			{noreply, State#state{object_tree=OT1}};
 		{value, #object{eof_flag=true} = Obj} -> 
 			?ERROR_LOG("PUSH: eof_flag is true, not pushing: ObjId=~w, DataChunk=~w, Object=~w~n",
 				[ObjId, DataChunk, Obj]),
+			{noreply, State};
+		{value, #object{eof_flag=false, filepath=FilePath} = Obj} -> 
+			?ERROR_LOG("PUSH: Already pushed a file, not pushing data chunk: ObjId=~w, FilePath=~w, DataChunk=~w, Object=~w~n",
+				[ObjId, FilePath, DataChunk, Obj]),
 			{noreply, State};
 		none -> ?ERROR_LOG("PUSH: Object not found in object_tree: ObjId=~w, DataChunk=~w ObjectTree=~w~n",
 				[ObjId, DataChunk, OT]),
@@ -166,9 +181,12 @@ handle_cast({push, ObjId, DataChunk}, #state{object_tree=OT} = State) ->
 
 handle_cast({eof, ObjId}, #state{object_tree=OT} = State) ->
 	case gb_trees:lookup(ObjId, OT) of
-		{value, #object{eof_flag=false, buffer=Buffer} = Obj} -> 
+		{value, #object{eof_flag=false, filepath=undefined, buffer=Buffer} = Obj} -> 
 			Data = list_to_binary(lists:reverse(Buffer)),
 			OT1 = gb_trees:enter(ObjId, Obj#object{buffer=[], eof_flag=true, data=Data}, OT),
+			{noreply, State#state{object_tree=OT1}};
+		{value, #object{eof_flag=false} = Obj} ->  % END after PUSHFILE
+			OT1 = gb_trees:enter(ObjId, Obj#object{eof_flag=true}, OT),
 			{noreply, State#state{object_tree=OT1}};
 		{value, #object{eof_flag=true} = Obj} -> 
 			?ERROR_LOG("EOF: eof_flag is already true, doing nothing: ObjId=~w, Object=~w~n",
@@ -265,11 +283,15 @@ is_inbound(#object{prop_dict=PD}) ->
 		{ok, _Else} -> false;
 		error -> false end.
 
-object_to_file(#object{prop_dict=PD, data=Data}) ->
+object_to_file(#object{prop_dict=PD, filepath=undefined, data=Data}) ->
 	Filename = case dict:find("filename", PD) of
 		{ok, FN} -> FN;
 		error -> "seap-data" end,
-	#file{filename=Filename, dataref=?BB_C(Data)}.
+	#file{filename=Filename, dataref=?BB_C(Data)};
+
+object_to_file(#object{filepath=FilePath}) ->  % created with PUSHFILE
+	Filename = filename:basename(FilePath),
+	#file{filename=Filename, dataref=?BB_C({regularfile, FilePath})}.
 
 call_timer() -> timer:send_after(150000, cleanup_now).
 

@@ -63,6 +63,14 @@ tempfile() ->
 	FN = ref_to_fn("tmp", Ref),
 	{ok, FN}.
 
+raw_to_obj({regularfile, FilePath}) -> 
+	case filelib:is_regular(FilePath) of
+		true -> case filelib:file_size(FilePath) > ?CFG(maximum_memory_object) of
+			true -> {regularfile, FilePath};
+			false -> case file:read_file(FilePath) of
+				{ok, Bin} -> {memory, Bin};
+				Err -> throw(Err) end end;
+		false -> throw({is_not_regularfile, FilePath}) end;
 raw_to_obj({tmpfile, FilePath}) -> 
 	case filelib:file_size(FilePath) > ?CFG(maximum_memory_object) of
 		true -> cache_tmpfile(FilePath);
@@ -77,6 +85,10 @@ raw_to_obj(RawData) ->
 		true -> cache(RawData);
 		false -> {memory, list_to_binary([RawData])} end.
 
+read_obj({regularfile, FilePath}) -> 
+	case file:read_file(FilePath) of
+		{ok, Bin} -> Bin;
+		Err -> throw(Err) end;
 read_obj({memory, Bin}) -> Bin;
 read_obj({cacheref, Ref}) -> 
 	FN = ref_to_fn("obj", Ref),
@@ -84,15 +96,19 @@ read_obj({cacheref, Ref}) ->
 		{ok, Bin} -> Bin;
 		Err -> throw(Err) end.
 
+get_obj_fp({regularfile, FilePath}) -> FilePath;
 get_obj_fp({tmpfile, FilePath}) -> FilePath;
 get_obj_fp({cacheref, Ref}) -> ref_to_fn("obj", Ref);
 get_obj_fp(_Else) -> throw({error, obj_type_no_fn}).
 
+get_obj_size({regularfile, FilePath}) -> filelib:file_size(FilePath);
+get_obj_size({tmpfile, FilePath}) -> filelib:file_size(FilePath);
 get_obj_size({memory, Bin}) -> size(Bin);
 get_obj_size(Ref) ->
 	FP = get_obj_fp(Ref),
 	filelib:file_size(FP).
 
+delete_obj({tmpfile, FilePath}) -> file:delete(FilePath);
 delete_obj({cacheref, Ref}) -> delete_cacheref(Ref);
 delete_obj(_Else) -> ok.
 
