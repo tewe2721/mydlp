@@ -97,7 +97,11 @@ qe(Files) -> acl_call({qe, site}, Files).
 % For handling inbound request.
 qi(Files) -> acl_call(qi, Files).
 
+-ifdef(__MYDLP_NETWORK).
+
 acl_call(Query) -> acl_call(Query, none).
+
+-endif.
 
 acl_call(Query, Files) -> acl_call(Query, Files, 1500000).
 
