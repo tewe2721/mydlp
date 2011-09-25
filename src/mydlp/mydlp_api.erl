@@ -920,10 +920,10 @@ acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, #file{} = File, Misc) ->
 				LogTerm = {Proto, RuleId, Action, Ip, User, To, Matcher, #file{name=FileS}, Misc},
 				mydlp_item_push:p({seap_log, LogTerm});
 		quarantine ->	acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
-				LogTerm = {Proto, RuleId, Action, Ip, User, To, Matcher, File, Misc},
+				LogTerm = {Proto, RuleId, Action, Ip, User, To, Matcher, mydlp_api:load_file(File), Misc},
 				mydlp_item_push:p({seap_log, LogTerm});
 		archive -> 	acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
-				LogTerm = {Proto, RuleId, Action, Ip, User, To, Matcher, File, Misc},
+				LogTerm = {Proto, RuleId, Action, Ip, User, To, Matcher, mydlp_api:load_file(File), Misc},
 				mydlp_item_push:p({seap_log, LogTerm});
 		_Else -> ok end.
 

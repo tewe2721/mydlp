@@ -160,12 +160,14 @@ push_chunk(ItemId, ChunkData, ChunkNum, ChunkNumTotal) ->
 	Url = "https://" ++ ?CFG(management_server_address) ++ "/mydlp-web-manager/receive.php?o=push&" ++
 			"i=" ++ ItemIdS ++ "&c=" ++ ChunkNumS ++ "&t=" ++ ChunkNumTotalS,
 	case http_req(Url, ChunkData) of
+		{ok, "error"} -> throw(http_returned_error);
 		{ok, "ok"} -> ok;
 		Else -> throw(Else) end.
 
 new_item_id() ->
-	Url = "https://" ++ ?CFG(management_server_address) ++ "/mydlp-web-manager/receive.php?o=new",
+	Url = "https://" ++ ?CFG(management_server_address) ++ "/mydlp-web-manager/receive.php?o=begin",
 	case http_req(Url) of
+		{ok, "error"} -> throw(http_returned_error);
 		{ok, Ret} -> list_to_integer(Ret);
 		Else -> throw(Else) end.
 
