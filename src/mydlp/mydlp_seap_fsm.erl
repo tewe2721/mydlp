@@ -98,6 +98,9 @@ init([]) ->
 'SEAP_REQ'({data, "PUSHFILE" ++ Rest}, State) -> 
 	{ ObjId, FilePath } = get_getprop_args(Rest),
 	'PUSHFILE_RESP'(State, ObjId, FilePath);
+'SEAP_REQ'({data, "PUSHCHUNK" ++ Rest}, State) -> 
+	{ ObjId, ChunkPath } = get_getprop_args(Rest),
+	'PUSHCHUNK_RESP'(State, ObjId, ChunkPath);
 'SEAP_REQ'({data, "PUSH" ++ Rest}, #state{socket=Socket} = State) -> 
 	{ ObjId, RecvSize} = get_req_args(Rest),
 	inet:setopts(Socket, [{active, once}, {packet, 0}, binary]),
@@ -144,6 +147,11 @@ init([]) ->
 	send_ok(State),
 	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
 
+'PUSHCHUNK_RESP'(State, ObjId, ChunkPath) ->
+	ok = mydlp_container:pushchunk(ObjId, ChunkPath),
+	send_ok(State),
+	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
+
 'END_RESP'(State, ObjId) ->
 	ok = mydlp_container:eof(ObjId),
 	send_ok(State),
@@ -167,6 +175,7 @@ init([]) ->
 		"\t" ++ "PUSH Id ChunkSize" ++ "\r\n" ++
 		"\t\t" ++ "Chunk -> OK" ++ "\r\n" ++
 		"\t" ++ "PUSHFILE Id FilePath" ++ "\r\n" ++
+		"\t" ++ "PUSHCHUNK Id ChunkPath" ++ "\r\n" ++
 		"\t" ++ "END Id -> OK" ++ "\r\n" ++
 		"\t" ++ "ACLQ Id -> OK Action" ++ "\r\n" ++
 		"\t" ++ "DESTROY Id -> OK" ++ "\r\n" ++

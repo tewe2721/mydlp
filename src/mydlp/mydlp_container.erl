@@ -79,6 +79,8 @@ push(ObjId, DataChunk) -> gen_server:cast(?MODULE, {push, ObjId, DataChunk}).
 
 pushfile(ObjId, FilePath) -> gen_server:cast(?MODULE, {pushfile, ObjId, FilePath}).
 
+pushchunk(ObjId, ChunkPath) -> gen_server:cast(?MODULE, {pushchunk, ObjId, ChunkPath}).
+
 eof(ObjId) -> gen_server:cast(?MODULE, {eof, ObjId}).
 
 aclq(ObjId) -> 	Timeout = 1500000,
@@ -159,6 +161,15 @@ handle_cast({pushfile, ObjId, FilePath}, #state{object_tree=OT} = State) ->
 				[ObjId, OT]),
 			{noreply, State}
 			end;
+
+handle_cast({pushchunk, ObjId, ChunkPath}, State) ->
+	try	{ok, DataChunk} = file:read_file(ChunkPath),
+		handle_cast({push, ObjId, DataChunk}, State)
+	catch Class:Error ->
+		?ERROR_LOG("PUSHCUNK: Error occured: Class: [~w]. Error: [~w].~nStack trace: ~w~nObjID: [~w]. ChunkPath: [~w]~nState: ~w~n ",
+			[Class, Error, erlang:get_stacktrace(), ObjId, ChunkPath, State]),
+		{noreply, State}
+	end;
 
 % could use dataref appends in push after a certain threshold.
 handle_cast({push, ObjId, DataChunk}, #state{object_tree=OT} = State) ->
