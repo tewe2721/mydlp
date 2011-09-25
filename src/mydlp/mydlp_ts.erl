@@ -52,7 +52,9 @@
         updateAFile/2,
         updateAFileFN/3,
         updateAFileFP/3,
-	getRuletable/2
+	getRuletable/2,
+	receiveBegin/1,
+	receiveChunk/5
 	]).
 
 %%%%% EXTERNAL INTERFACE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -106,6 +108,26 @@ getRuletable(Ipaddress, Revisionid) ->
 	ClientIpS = binary_to_list(Ipaddress),
 	ClientIp = mydlp_api:str_to_ip(ClientIpS),
 	mydlp_api:generate_client_policy(ClientIp, RevisionIdI).
+
+receiveBegin(_Ipaddress) -> {ok, Ret} = mydlp_container:new(), Ret.
+
+receiveChunk(Ipaddress, Itemid, Chunkdata, Chunknumtotal, Chunknumtotal) -> 
+	ClientIpS = binary_to_list(Ipaddress),
+	ClientIp = mydlp_api:str_to_ip(ClientIpS),
+	case mydlp_container:push(Itemid, Chunkdata) of
+		ok -> case mydlp_container:eof(Itemid) of
+			ok -> case mydlp_container:getdata(Itemid) of
+				{ok, Data} -> mydlp_item_receive:r(ClientIp, Data),
+					mydlp_container:destroy(Itemid),
+					<<"ok">>;
+				_Else2 -> <<"error">> end;
+			_Else1 -> <<"error">> end;
+		_Else -> <<"error">> end;
+
+receiveChunk(_Ipaddress, Itemid, Chunkdata, _Chunknum, _Chunknumtotal) -> 
+	case mydlp_container:push(Itemid, Chunkdata) of
+		ok -> <<"ok">>;
+		_Else -> <<"error">> end.
 
 -endif.
 

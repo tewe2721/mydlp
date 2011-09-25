@@ -42,6 +42,7 @@
 	pushchunk/2,
 	eof/1,
 	aclq/1,
+	getdata/1,
 	destroy/1,
 	stop/0]).
 
@@ -84,6 +85,8 @@ pushchunk(ObjId, ChunkPath) -> gen_server:cast(?MODULE, {pushchunk, ObjId, Chunk
 
 eof(ObjId) -> gen_server:cast(?MODULE, {eof, ObjId}).
 
+getdata(ObjId) -> gen_server:call(?MODULE, {getdata, ObjId}).
+
 aclq(ObjId) -> 	Timeout = 1500000,
 		case gen_server:call(?MODULE, {aclq, ObjId, Timeout}, Timeout) of
 		{ierror, {Class, Error}} -> mydlp_api:exception(Class, Error);
@@ -112,7 +115,7 @@ handle_call({getprop, ObjId, Key}, _From, #state{object_tree=OT} = State) ->
 
 handle_call({aclq, ObjId, Timeout}, From, #state{object_tree=OT} = State) ->
 	case gb_trees:lookup(ObjId, OT) of
-		{value, Obj} -> 
+		{value, #object{eof_flag=true} = Obj} -> 
 			Worker = self(),
 			mydlp_api:mspawn(fun() -> 
 					Return = try 
@@ -129,8 +132,23 @@ handle_call({aclq, ObjId, Timeout}, From, #state{object_tree=OT} = State) ->
 							{ierror, {Class, Error}} end,
 					Worker ! {async_reply, Return, From}
 				end, Timeout);
+		{value, #object{eof_flag=false} = Obj} -> 
+			?ERROR_LOG("ACLQ: eof_flag is not true, can not ACLQ before EOF: ObjId=~w, Obj=~w OT=~w~n",
+				[ObjId, Obj, OT]),
+			gen_server:reply(From, {error, eof_flag_is_not_true});
 		none -> gen_server:reply(From, {error, not_in_object_tree}) end,
 	{noreply, State};
+
+handle_call({getdata, ObjId}, _From, #state{object_tree=OT} = State) ->
+	Reply = case gb_trees:lookup(ObjId, OT) of
+		{value, #object{eof_flag=true, data=Data}} -> 
+			{ok, Data};
+		{value, #object{eof_flag=false} = Obj} -> 
+			?ERROR_LOG("ACLQ: eof_flag is not true, can not GETDATA before EOF: ObjId=~w, Obj=~w OT=~w~n",
+				[ObjId, Obj, OT]),
+			{error, eof_flag_is_not_true};
+		none -> {error, not_in_object_tree} end,
+	{reply, Reply, State};
 
 handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
@@ -305,12 +323,12 @@ object_to_file(#object{filepath=FilePath}) ->  % created with PUSHFILE
 	Filename = filename:basename(FilePath),
 	#file{filename=Filename, dataref=?BB_C({regularfile, FilePath})}.
 
-call_timer() -> timer:send_after(150000, cleanup_now).
+call_timer() -> timer:send_after(1000000, cleanup_now).
 
 cleanup(OT) ->
 	{_MegaSecs, Secs, MicroSecs} = erlang:now(),
-	TSecs = case Secs > 150 of
-		true -> Secs - 150;
+	TSecs = case Secs > 1000 of % TODO: should use object update age not id
+		true -> Secs - 1000;
 		false -> 0 end,
 	
 	MinObjId = 1000000*TSecs + MicroSecs,

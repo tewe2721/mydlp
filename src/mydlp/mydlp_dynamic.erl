@@ -167,6 +167,7 @@ load_src(Src) ->
 
 -define(CONFDEF_FUNCTIONAL, [
 	{management_server_address, string, "127.0.0.1"}, % TODO: validation IP address
+	{maximum_push_size, integer, "1048576"},
 	{sync_interval, integer, "300000"}
 ]).
 

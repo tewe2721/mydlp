@@ -38,6 +38,7 @@
         mydlp_dynamic,
         mydlp_fsm,
         mydlp_icap_fsm,
+        mydlp_item_receive,
         mydlp_loglevel,
         mydlp_logger_h,
         mydlp_matchers,
@@ -82,7 +83,7 @@
           {mydlp_trainer, start_link,[]},
           {mydlp_ts, start_link,[]},
           {mydlp_container, start_link,[]},
-          {mydlp_moddlp, start_link,[]}
+          {mydlp_item_receive, start_link,[]}
          ]},
     {protocols, [
 	  {icap, {acceptor, {1344, plain, icap} },
