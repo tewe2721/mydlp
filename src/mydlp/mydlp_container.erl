@@ -39,6 +39,7 @@
 	getprop/2,
 	push/2,
 	pushfile/2,
+	pushchunk/2,
 	eof/1,
 	aclq/1,
 	destroy/1,
