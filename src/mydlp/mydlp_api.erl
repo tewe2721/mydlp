@@ -604,7 +604,7 @@ uncompress_sl(Src,Dest) ->
 uncompress(Method, {memory, Bin}, Filename) -> uncompress(Method, Bin, Filename);
 
 uncompress(Method, {Type, _Value} = Ref, Filename) when
-		Type == cacheref; Type == tmpfile -> 
+		Type == cacheref; Type == tmpfile; Type == regularfile -> 
 	{FNDir, FN} = uncompress0(Method, Filename),
 
 	uncompress_sl(?BB_P(Ref), FN),

@@ -109,7 +109,10 @@ getRuletable(Ipaddress, Revisionid) ->
 	ClientIp = mydlp_api:str_to_ip(ClientIpS),
 	mydlp_api:generate_client_policy(ClientIp, RevisionIdI).
 
-receiveBegin(_Ipaddress) -> {ok, Ret} = mydlp_container:new(), Ret.
+receiveBegin(_Ipaddress) -> 
+	{ok, Ret} = mydlp_container:new(), 
+	RetL = integer_to_list(Ret),
+	list_to_binary(RetL).
 
 receiveChunk(Ipaddress, Itemid, Chunkdata, Chunknumtotal, Chunknumtotal) -> 
 	ClientIpS = binary_to_list(Ipaddress),
