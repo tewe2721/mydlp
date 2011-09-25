@@ -41,4 +41,7 @@ service Mydlp_ui {
 
 	binary getRuletable(1: string Ipaddress, 2: string Revisionid)
 
+	string receiveBegin(1: string Ipaddress)
+	string receiveChunk(1: string Ipaddress, 2: i64 Itemid, 3: binary Chunkdata, 4: i32 Chunknum, 5: i32 Chunknumtotal)
+
 }
