@@ -1,5 +1,5 @@
 %%%
-%%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@medra.com.tr>
+%%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@mydlp.com>
 %%%
 %%%--------------------------------------------------------------------------
 %%%    This file is part of MyDLP.
@@ -20,7 +20,7 @@
 
 %%%-------------------------------------------------------------------
 %%% @author Christoph Dornheim
-%%% @author H. Kerem Cevahir <kerem@medratech.com>
+%%% @author H. Kerem Cevahir <kerem@mydlp.com>
 %%% @doc A framework for clustering generic server instances.
 %%% @end
 %%%-------------------------------------------------------------------
@@ -29,7 +29,7 @@
 
 -module(gen_server_cluster).
 -author('Christoph Dornheim').
--author("kerem@medratech.com").
+-author("kerem@mydlp.com").
 
 -behaviour(gen_server).
 

@@ -38,7 +38,7 @@
 
 -module(mydlp_smtp_fsm).
 -author('sjackson@simpleenigma.com').
--author('kerem@medratech.com').
+-author('kerem@mydlp.com').
 -behaviour(gen_fsm).
 -include("mydlp_smtp.hrl").
 

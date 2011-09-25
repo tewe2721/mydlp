@@ -25,7 +25,7 @@
 %%%----------------------------------------------------------------------
 
 %%%
-%%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@medra.com.tr>
+%%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@mydlp.com>
 %%%
 %%%--------------------------------------------------------------------------
 %%%    This file is part of MyDLP.
@@ -45,7 +45,7 @@
 %%%--------------------------------------------------------------------------
 
 -module(mydlp_logger_h).
--author('kerem@medra.com.tr').
+-author('kerem@mydlp.com').
 
 -behaviour(gen_event).
 

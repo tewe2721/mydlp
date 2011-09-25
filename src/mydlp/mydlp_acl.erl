@@ -1,5 +1,5 @@
 %%%
-%%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@medra.com.tr>
+%%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@mydlp.com>
 %%%
 %%%--------------------------------------------------------------------------
 %%%    This file is part of MyDLP.
@@ -19,7 +19,7 @@
 %%%--------------------------------------------------------------------------
 
 %%%-------------------------------------------------------------------
-%%% @author H. Kerem Cevahir <kerem@medratech.com>
+%%% @author H. Kerem Cevahir <kerem@mydlp.com>
 %%% @copyright 2010, H. Kerem Cevahir
 %%% @doc ACL for mydlp.
 %%% @end
@@ -27,7 +27,7 @@
 
 
 -module(mydlp_acl).
--author("kerem@medra.com.tr").
+-author("kerem@mydlp.com").
 -behaviour(gen_server).
 
 -include("mydlp.hrl").

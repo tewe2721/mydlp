@@ -1,5 +1,5 @@
 %%%
-%%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@medra.com.tr>
+%%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@mydlp.com>
 %%%
 %%%--------------------------------------------------------------------------
 %%%    This file is part of MyDLP.
@@ -20,7 +20,7 @@
 
 -module(mydlp_worker_sup).
 
--author('kerem@medratech.com').
+-author('kerem@mydlp.com').
 -author('saleyn@gmail.com').
 
 -behaviour(supervisor).

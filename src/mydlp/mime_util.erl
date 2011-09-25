@@ -37,7 +37,7 @@
 -ifdef(__MYDLP_NETWORK).
 
 -module(mime_util).
--author('kerem@medra.com.tr').
+-author('kerem@mydlp.com').
 -author('sjackson@simpleenigma.com').
 -include("mydlp_smtp.hrl").
 

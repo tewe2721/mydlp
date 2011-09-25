@@ -1,5 +1,5 @@
 %%%
-%%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@medra.com.tr>
+%%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@mydlp.com>
 %%%
 %%%--------------------------------------------------------------------------
 %%%    This file is part of MyDLP.
@@ -20,7 +20,7 @@
 
 -module(mydlp_dynamic).
 
--author('kerem@medratech.com').
+-author('kerem@mydlp.com').
 
 -export([
 	load/0,
@@ -61,7 +61,7 @@ denied_page_src() ->
 
 mydlp_denied_page_src(DeniedPageSrc) when is_list(DeniedPageSrc) ->
 "-module(mydlp_denied_page).
--author('kerem@medratech.com').
+-author('kerem@mydlp.com').
 
 -export([
 	get/0,
@@ -145,7 +145,7 @@ load_src(Src) ->
 	{auto_distribution_nodes, term, "['localhost']"},
 	{nlp_tr, boolean, "false"},
 	{nlp_tr_kokler, string, "/usr/share/mydlp/resources/mydlp_nlp_tr_kokler.txt"},
-	{smtp_helo_name, string, "mydlp.org"},
+	{smtp_helo_name, string, "mydlp.com"},
 	{smtp_next_hop_host, string, "localhost"},
 	{smtp_next_hop_port, integer, "10027"},
 	{smtp_bypass_on_fail, boolean, "true"},
@@ -190,7 +190,7 @@ load_src(Src) ->
 
 -define(CONFIG_HEAD, "
 -module(mydlp_config).
--author('kerem@mydlp.org').
+-author('kerem@mydlp.com').
 
 -compile(export_all).
 

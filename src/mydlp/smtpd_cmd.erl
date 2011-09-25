@@ -37,7 +37,7 @@
 
 -module(smtpd_cmd).
 -author('sjackson@simpleenigma.com').
--author('kerem@medratech.com').
+-author('kerem@mydlp.com').
 -include("mydlp_smtp.hrl").
 
 -export([command/2]).
@@ -49,7 +49,7 @@
 command(Line,State) when is_binary(Line) -> command(parse(Line),State);
 
 command({greeting,_},State) ->
-	send(State,220,"MyDLP http://www.mydlp.org (NO UCE)"),
+	send(State,220,"MyDLP http://www.mydlp.com (NO UCE)"),
 	State;
 
 command({helo = _Command,Domain},State) when is_list(Domain), length(Domain) > 0 -> 

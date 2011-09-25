@@ -1,5 +1,5 @@
 %%
-%%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@medra.com.tr>
+%%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@mydlp.com>
 %%%
 %%%--------------------------------------------------------------------------
 %%%    This file is part of MyDLP.
@@ -21,7 +21,7 @@
 -ifdef(__MYDLP_NETWORK).
 
 -module(mydlp_icap_fsm).
--author('kerem@medratech.com').
+-author('kerem@mydlp.com').
 -behaviour(gen_fsm).
 -include("mydlp.hrl").
 -include("mydlp_http.hrl").
