@@ -295,14 +295,16 @@ get_req_args(Rest) ->
 
 get_setprop_args(Rest) ->
 	Rest1 = rm_trailing_crlf(Rest),
-	[ObjIdS, KeyValuePairS] = string:tokens(Rest1, " "),
+	[ObjIdS| KeyValuePairL] = string:tokens(Rest1, " "),
+	KeyValuePairS = string:join(KeyValuePairL, " "),
 	[Key| ValueL] = string:tokens(KeyValuePairS, "=" ),
 	Value = string:join(ValueL, "="),
 	{list_to_integer(ObjIdS), Key, Value}.
 
 get_getprop_args(Rest) ->
 	Rest1 = rm_trailing_crlf(Rest),
-	[ObjIdS, Key] = string:tokens(Rest1, " "),
+	[ObjIdS, KeyL] = string:tokens(Rest1, " "),
+	Key = string:join(KeyL, " "),
 	{list_to_integer(ObjIdS), Key}.
 
 send(#state{socket=Socket}, Data) -> gen_tcp:send(Socket, <<Data/binary, "\r\n">>).
