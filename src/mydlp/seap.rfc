@@ -64,7 +64,7 @@ Description: Same as push, but pushes contents of the chunk file at the given pa
 Client:	PUSHFILE Id FilePath
 Server:	OK/ERR
 
-Description: Same as push, but pushes contents of the file at the given path instad of data chunks. PUSHFILE deletes previous PUSH request and does not allow any further PUSH requests. "filename" property will be discarded after a PUSHFILE. SEAP server will extract filename from filepath.
+Description: Same as push, but pushes contents of the file at the given path instad of data chunks. PUSHFILE deletes previous PUSH request and does not allow any further PUSH requests. If "filename" property will not be given, SEAP server will extract filename from filepath.
 
 -END-
 

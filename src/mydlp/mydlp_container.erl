@@ -319,8 +319,10 @@ object_to_file(#object{prop_dict=PD, filepath=undefined, data=Data}) ->
 		error -> "seap-data" end,
 	#file{filename=Filename, dataref=?BB_C(Data)};
 
-object_to_file(#object{filepath=FilePath}) ->  % created with PUSHFILE
-	Filename = filename:basename(FilePath),
+object_to_file(#object{prop_dict=PD, filepath=FilePath}) ->  % created with PUSHFILE
+	Filename = case dict:find("filename", PD) of
+		{ok, FN} -> FN;
+		error -> filename:basename(FilePath) end,
 	#file{filename=Filename, dataref=?BB_C({regularfile, FilePath})}.
 
 call_timer() -> timer:send_after(1000000, cleanup_now).
