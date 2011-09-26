@@ -295,17 +295,30 @@ get_req_args(Rest) ->
 
 get_setprop_args(Rest) ->
 	Rest1 = rm_trailing_crlf(Rest),
-	[ObjIdS| KeyValuePairL] = string:tokens(Rest1, " "),
-	KeyValuePairS = string:join(KeyValuePairL, " "),
-	[Key| ValueL] = string:tokens(KeyValuePairS, "=" ),
-	Value = string:join(ValueL, "="),
+	Rest2 = string:strip(Rest1),
+	{ObjIdS, KeyValuePairS} = case string:chr(Rest2, $\s) of
+		0 -> {error, no_space_to_tokenize};
+		I -> OS = string:sub_string(Rest2, 1, I - 1),
+			KVS = string:sub_string(Rest2, I + 1),
+			{OS, KVS} end,
+	KeyValuePairS2 = string:strip(KeyValuePairS),
+	{Key, Value} = case string:chr(KeyValuePairS2, $=) of
+		0 -> {error, no_equal_sign_to_tokenize};
+		I2 -> KS = string:sub_string(KeyValuePairS2, 1, I2 - 1),
+			VS = string:sub_string(KeyValuePairS2, I2 + 1),
+			{KS, VS} end,
 	{list_to_integer(ObjIdS), Key, Value}.
 
 get_getprop_args(Rest) ->
 	Rest1 = rm_trailing_crlf(Rest),
-	[ObjIdS, KeyL] = string:tokens(Rest1, " "),
-	Key = string:join(KeyL, " "),
-	{list_to_integer(ObjIdS), Key}.
+	Rest2 = string:strip(Rest1),
+	{ObjIdS, Key} = case string:chr(Rest2, $\s) of
+		0 -> {error, no_space_to_tokenize};
+		I -> OS = string:sub_string(Rest2, 1, I - 1),
+			KS = string:sub_string(Rest2, I + 1),
+			{OS, KS} end,
+	Key2 = string:strip(Key),
+	{list_to_integer(ObjIdS), Key2}.
 
 send(#state{socket=Socket}, Data) -> gen_tcp:send(Socket, <<Data/binary, "\r\n">>).
 
