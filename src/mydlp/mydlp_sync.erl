@@ -112,6 +112,7 @@ sync() ->
 				{200, <<"up-to-date", _/binary>>} -> ok;
 				{200, CDBS} -> 	CDBBin = list_to_binary(CDBS),
 						mydlp_api:use_client_policy(CDBBin);
+				{200, <<>>} -> ?ERROR_LOG("SYNC: Empty response: Url=~w~n", [Url]);
 				{Else1, _Data} -> ?ERROR_LOG("SYNC: An error occured during HTTP req: Code=~w~n", [Else1]) end;
 		Else -> ?ERROR_LOG("SYNC: An error occured during HTTP req: Obj=~w~n", [Else]) end,
 	ok.

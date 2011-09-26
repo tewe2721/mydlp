@@ -55,9 +55,6 @@
 
 %%%%%%%%%%%%%  API
 
-r(IpAddress, Bin) when is_binary(Bin) -> 
-	Item = erlang:binary_to_term(Bin),
-	r(IpAddress, Item);
 r(IpAddress, Item) -> gen_server:cast(?MODULE, {r, IpAddress, Item}).
 
 %%%%%%%%%%%%%% gen_server handles
@@ -67,6 +64,15 @@ handle_call(stop, _From, State) ->
 
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
+
+handle_cast({r, IpAddress, Bin}, State) when is_binary(Bin) ->
+	try	Term = erlang:binary_to_term(Bin),
+		handle_cast({r, IpAddress, Term}, State)
+	catch Class:Error ->
+		?ERROR_LOG("ITEM_RECEIVE: Error occured: Class: [~w]. Error: [~w].~nStack trace: ~w~nIpAddress: [~w] Bin: ~w.~nState: ~w~n ",
+			[Class, Error, erlang:get_stacktrace(), IpAddress, Bin, State]),
+		{noreply, State}
+	end;
 
 handle_cast({r, IpAddress, Item}, #state{item_queue=Q, item_inprog=false} = State) ->
 	Q1 = queue:in({IpAddress, Item}, Q),

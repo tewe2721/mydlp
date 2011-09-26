@@ -1871,15 +1871,18 @@ generate_client_policy(IpAddr, RevisionId) ->
 
 use_client_policy(<<"up-to-date">>) -> ok;
 use_client_policy(CDBBin) ->
-	CDBObj = erlang:binary_to_term(CDBBin), % TODO: binary_to_term/2 with safe option
-	{{rule_table, RuleTable}, {items, ItemDump}} = CDBObj,
-	
-	mydlp_mnesia:truncate_all(),
-	[mydlp_mnesia:write(I) || I <- ItemDump],
+	try	CDBObj = erlang:binary_to_term(CDBBin), % TODO: binary_to_term/2 with safe option
+		{{rule_table, RuleTable}, {items, ItemDump}} = CDBObj,
+		
+		mydlp_mnesia:truncate_all(),
+		[mydlp_mnesia:write(I) || I <- ItemDump],
 
-	R = #rule_table{id=mydlp_mnesia:get_dcid(), table = RuleTable},
-	mydlp_mnesia:write(R),
-	ok.
+		R = #rule_table{id=mydlp_mnesia:get_dcid(), table = RuleTable},
+		mydlp_mnesia:write(R)
+	catch Class:Error ->
+		?ERROR_LOG("USE_CLIENT_POLICY: Error occured: Class: [~w]. Error: [~w].~nStack trace: ~w~nCDBBin: [~w].~n",
+			[Class, Error, erlang:get_stacktrace(), CDBBin])
+	end, ok.
 
 get_client_policy_revision_id() ->
 	RuleTable = mydlp_mnesia:get_rule_table(), 
