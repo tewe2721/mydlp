@@ -83,7 +83,7 @@ handle_cast(consume_item, #state{item_queue=Q} = State) ->
 		false -> try 	ItemList = queue:to_list(Q),
 				process_item(ItemList),
 				consume_item(?CFG(sync_interval)),
-				{noreply, State#state{item_inprog=false, item_queue=queue:new(), queue_size=0}}
+				{noreply, State#state{item_queue=queue:new(), queue_size=0}}
 			catch Class:Error ->
 			?ERROR_LOG("Recieve Item Consume: Error occured: Class: [~w]. Error: [~w].~nStack trace: ~w~n.~nState: ~w~n ",
 				[Class, Error, erlang:get_stacktrace(), State]),
@@ -191,7 +191,7 @@ http_req1(ReqRet) ->
 
 predict_serialized_size({seap_log, {_Proto, _RuleId, _Action, _Ip, _User, _To, _Matcher, #file{data=Data}, _Misc}}) ->
 	size(Data) + 128;
-predict_serialized_size({seap_log, LogTerm}) -> 128;
+predict_serialized_size({seap_log, _LogTerm}) -> 128;
 predict_serialized_size(Else) -> 
 	?ERROR_LOG("PREDICTSIZE: Unknown item. Cannot predict. Return maximum_push_size+1 as size: Item=~w~n", [Else]),
 	?CFG(maximum_push_size) + 1.
