@@ -50,7 +50,8 @@
 
 -record(state, {
 	item_queue,
-	item_inprog = false
+	queue_size = 0,
+	max_queue_size = 0
 }).
 
 %%%%%%%%%%%%%  API
@@ -65,32 +66,31 @@ handle_call(stop, _From, State) ->
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-handle_cast({p, Item}, #state{item_queue=Q, item_inprog=false} = State) ->
+handle_cast({p, Item}, #state{item_queue=Q, queue_size=QS, max_queue_size=MQS} = State) 
+		when QS < MQS ->
 	Q1 = queue:in(Item, Q),
-	consume_item(),
-	{noreply, State#state{item_queue=Q1, item_inprog=true}};
+	ItemSize = predict_serialized_size(Item),
+	{noreply,State#state{item_queue=Q1, queue_size=QS+ItemSize}};
 
-handle_cast({p, Item}, #state{item_queue=Q, item_inprog=true} = State) ->
+handle_cast({p, Item}, #state{item_queue=Q, queue_size=QS} = State) ->
 	Q1 = queue:in(Item, Q),
-	{noreply,State#state{item_queue=Q1}};
+	ItemSize = predict_serialized_size(Item),
+	consume_item(),
+	{noreply, State#state{item_queue=Q1, queue_size=QS+ItemSize}};
 
 handle_cast(consume_item, #state{item_queue=Q} = State) ->
-	case queue:out(Q) of
-		{{value, Item}, Q1} ->
-			QF = try process_item(Item),
-				consume_item(),
-				Q1
+	case queue:is_empty(Q) of
+		false -> try 	ItemList = queue:to_list(Q),
+				process_item(ItemList),
+				consume_item(?CFG(sync_interval)),
+				{noreply, State#state{item_inprog=false, item_queue=queue:new(), queue_size=0}}
 			catch Class:Error ->
-			?ERROR_LOG("Recieve Item Consume: Error occured: Class: [~w]. Error: [~w].~nStack trace: ~w~n.~nItem: ~w~n.~nState: ~w~n ",
-				[Class, Error, erlang:get_stacktrace(), Item, State]),
-				Q2 = queue:in(Item, Q1),
+			?ERROR_LOG("Recieve Item Consume: Error occured: Class: [~w]. Error: [~w].~nStack trace: ~w~n.~nState: ~w~n ",
+				[Class, Error, erlang:get_stacktrace(), State]),
 				consume_item(15000),
-				Q2
-			end,
-			{noreply, State#state{item_queue=QF}};
-		{empty, _} ->
-			{noreply, State#state{item_inprog=false}}
-	end;
+				{noreply, State} end;
+		true -> consume_item(?CFG(sync_interval)),
+			{noreply, State} end;
 
 handle_cast(_Msg, State) ->
 	{noreply, State}.
@@ -122,7 +122,7 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
-	{ok, #state{item_queue=queue:new()}}.
+	{ok, #state{item_queue=queue:new(), max_queue_size=?CFG(maximum_push_size)}}.
 
 terminate(_Reason, _State) ->
 	ok.
@@ -132,14 +132,14 @@ code_change(_OldVsn, State, _Extra) ->
 
 %%%%%%%%%%%%%%%%% internal
 
-process_item({seap_log, _Term} = Item)  ->  
+process_item(Item)  ->  
 	ItemBin = erlang:term_to_binary(Item, [compressed]),
 	ItemId = new_item_id(),
 	ItemSize = size(ItemBin),
 	ChunkNumTotal = (ItemSize div ?CFG(maximum_push_size)) + 1,
-	process_item(ItemId, ItemBin, ItemSize, 1, ChunkNumTotal);
+	process_item(ItemId, ItemBin, ItemSize, 1, ChunkNumTotal), ok.
 
-process_item(_Item) -> ok. % TODO log unkown item.
+% process_item(_Item) -> ok. % TODO log unkown item.
 
 process_item(_ItemId, _ItemBin, RemainingItemSize, _ChunkNumTotal, _ChunkNumTotal) when RemainingItemSize < 0 ->
 	throw({error, negative_remaining_item_size});
@@ -188,6 +188,13 @@ http_req1(ReqRet) ->
 						{error, {http_code, Else1}} end;
                 Else -> ?ERROR_LOG("ITEMPUSH: An error occured during HTTP req: Obj=~w~n", [Else]),
 				{error, {http_req_not_ok, Else}} end.
+
+predict_serialized_size({seap_log, {_Proto, _RuleId, _Action, _Ip, _User, _To, _Matcher, #file{data=Data}, _Misc}}) ->
+	size(Data) + 128;
+predict_serialized_size({seap_log, LogTerm}) -> 128;
+predict_serialized_size(Else) -> 
+	?ERROR_LOG("PREDICTSIZE: Unknown item. Cannot predict. Return maximum_push_size+1 as size: Item=~w~n", [Else]),
+	?CFG(maximum_push_size) + 1.
 
 
 -endif.
