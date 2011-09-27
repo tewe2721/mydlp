@@ -69,7 +69,7 @@ handle_cast({r, IpAddress, Bin}, State) when is_binary(Bin) ->
 	try	Term = erlang:binary_to_term(Bin),
 		handle_cast({r, IpAddress, Term}, State)
 	catch Class:Error ->
-		?ERROR_LOG("ITEM_RECEIVE: Error occured: Class: [~w]. Error: [~w].~nStack trace: ~w~nIpAddress: [~w] Bin: ~w.~nState: ~w~n ",
+		?ERROR_LOG("ITEM_RECEIVE: Error occured: Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~nIpAddress: ["?S"] Bin: "?S".~nState: "?S"~n ",
 			[Class, Error, erlang:get_stacktrace(), IpAddress, Bin, State]),
 		{noreply, State}
 	end;

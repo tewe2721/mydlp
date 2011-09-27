@@ -670,7 +670,7 @@ handle_info(_Info, StateName, StateData) ->
 fsm_call(StateName, Args, StateData) -> 
 	try ?MODULE:StateName(Args, StateData)
 	catch Class:Error ->
-		?ERROR_LOG("Error occured on FSM (~w) call (~w). Class: [~w]. Error: [~w].~nStack trace: ~w~n",
+		?ERROR_LOG("Error occured on FSM ("?S") call ("?S"). Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
 				[?MODULE, StateName, Class, Error, erlang:get_stacktrace()]),
 		%(catch 'REPLY_OK'(StateData)),
 		{stop, normalStop, StateData} end.
@@ -824,7 +824,7 @@ icap_date_hdr_line() -> [<<"Date: ">>, httpd_util:rfc1123_date(), <<"\r\n">>].
 concat_cache_data(StateName, CacheB, Bin) ->
 	try <<CacheB/binary, Bin/binary>>
 	catch Class:Error ->
-		?ERROR_LOG("Error occured on ICAP FSM call (~w) when caching. Class: [~w]. Error: [~w].~nStack trace: ~w~n",
+		?ERROR_LOG("Error occured on ICAP FSM call ("?S") when caching. Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
 			[StateName, Class, Error, erlang:get_stacktrace()]),
 		Dummy = list_to_binary([CacheB]),
 		<<Dummy/binary, Bin/binary>> end.

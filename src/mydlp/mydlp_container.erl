@@ -127,13 +127,13 @@ handle_call({aclq, ObjId, Timeout}, From, #state{object_tree=OT} = State) ->
 						AclRet = acl_ret(QRet, Obj, DFFiles),
 						{ok, AclRet}
 					catch Class:Error ->
-						?ERROR_LOG("ACLQ: Error occured: Class: [~w]. Error: [~w].~nStack trace: ~w~nObjID: [~w].~nState: ~w~n ",
+						?ERROR_LOG("ACLQ: Error occured: Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~nObjID: ["?S"].~nState: "?S"~n ",
 							[Class, Error, erlang:get_stacktrace(), ObjId, State]),
 							{ierror, {Class, Error}} end,
 					Worker ! {async_reply, Return, From}
 				end, Timeout);
 		{value, #object{eof_flag=false} = Obj} -> 
-			?ERROR_LOG("ACLQ: eof_flag is not true, can not ACLQ before EOF: ObjId=~w, Obj=~w OT=~w~n",
+			?ERROR_LOG("ACLQ: eof_flag is not true, can not ACLQ before EOF: ObjId="?S", Obj="?S" OT="?S"~n",
 				[ObjId, Obj, OT]),
 			gen_server:reply(From, {error, eof_flag_is_not_true});
 		none -> gen_server:reply(From, {error, not_in_object_tree}) end,
@@ -144,7 +144,7 @@ handle_call({getdata, ObjId}, _From, #state{object_tree=OT} = State) ->
 		{value, #object{eof_flag=true, data=Data}} -> 
 			{ok, Data};
 		{value, #object{eof_flag=false} = Obj} -> 
-			?ERROR_LOG("ACLQ: eof_flag is not true, can not GETDATA before EOF: ObjId=~w, Obj=~w OT=~w~n",
+			?ERROR_LOG("ACLQ: eof_flag is not true, can not GETDATA before EOF: ObjId="?S", Obj="?S" OT="?S"~n",
 				[ObjId, Obj, OT]),
 			{error, eof_flag_is_not_true};
 		none -> {error, not_in_object_tree} end,
@@ -162,7 +162,7 @@ handle_cast({setprop, ObjId, Key, Value}, #state{object_tree=OT} = State) ->
 			PD1 = dict:store(Key, Value, PD),
 			OT1 = gb_trees:enter(ObjId, Obj#object{prop_dict=PD1}, OT),
 			{noreply, State#state{object_tree=OT1}};
-		none -> ?ERROR_LOG("SETPROP: Object not found in object_tree: ObjId=~w, Key=~w, Value=~w ObjectTree=~w~n",
+		none -> ?ERROR_LOG("SETPROP: Object not found in object_tree: ObjId="?S", Key="?S", Value="?S" ObjectTree="?S"~n",
 				[ObjId, Key, Value, OT]),
 			{noreply, State}
 			end;
@@ -173,10 +173,10 @@ handle_cast({pushfile, ObjId, FilePath}, #state{object_tree=OT} = State) ->
 			OT1 = gb_trees:enter(ObjId, Obj#object{filepath=FilePath, buffer=[]}, OT),
 			{noreply, State#state{object_tree=OT1}};
 		{value, #object{eof_flag=true} = Obj} -> 
-			?ERROR_LOG("PUSHFILE: eof_flag is true, not pushing file: ObjId=~w, FilePath=~w, Object=~w~n",
+			?ERROR_LOG("PUSHFILE: eof_flag is true, not pushing file: ObjId="?S", FilePath="?S", Object="?S"~n",
 				[ObjId, FilePath, Obj]),
 			{noreply, State};
-		none -> ?ERROR_LOG("PUSHFILE: Object not found in object_tree: ObjId=~w, ObjectTree=~w~n",
+		none -> ?ERROR_LOG("PUSHFILE: Object not found in object_tree: ObjId="?S", ObjectTree="?S"~n",
 				[ObjId, OT]),
 			{noreply, State}
 			end;
@@ -185,7 +185,7 @@ handle_cast({pushchunk, ObjId, ChunkPath}, State) ->
 	try	{ok, DataChunk} = file:read_file(ChunkPath),
 		handle_cast({push, ObjId, DataChunk}, State)
 	catch Class:Error ->
-		?ERROR_LOG("PUSHCUNK: Error occured: Class: [~w]. Error: [~w].~nStack trace: ~w~nObjID: [~w]. ChunkPath: [~w]~nState: ~w~n ",
+		?ERROR_LOG("PUSHCUNK: Error occured: Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~nObjID: ["?S"]. ChunkPath: ["?S"]~nState: "?S"~n ",
 			[Class, Error, erlang:get_stacktrace(), ObjId, ChunkPath, State]),
 		{noreply, State}
 	end;
@@ -197,14 +197,14 @@ handle_cast({push, ObjId, DataChunk}, #state{object_tree=OT} = State) ->
 			OT1 = gb_trees:enter(ObjId, Obj#object{buffer=[DataChunk|Buffer]}, OT),
 			{noreply, State#state{object_tree=OT1}};
 		{value, #object{eof_flag=true} = Obj} -> 
-			?ERROR_LOG("PUSH: eof_flag is true, not pushing: ObjId=~w, DataChunk=~w, Object=~w~n",
+			?ERROR_LOG("PUSH: eof_flag is true, not pushing: ObjId="?S", DataChunk="?S", Object="?S"~n",
 				[ObjId, DataChunk, Obj]),
 			{noreply, State};
 		{value, #object{eof_flag=false, filepath=FilePath} = Obj} -> 
-			?ERROR_LOG("PUSH: Already pushed a file, not pushing data chunk: ObjId=~w, FilePath=~w, DataChunk=~w, Object=~w~n",
+			?ERROR_LOG("PUSH: Already pushed a file, not pushing data chunk: ObjId="?S", FilePath="?S", DataChunk="?S", Object="?S"~n",
 				[ObjId, FilePath, DataChunk, Obj]),
 			{noreply, State};
-		none -> ?ERROR_LOG("PUSH: Object not found in object_tree: ObjId=~w, DataChunk=~w ObjectTree=~w~n",
+		none -> ?ERROR_LOG("PUSH: Object not found in object_tree: ObjId="?S", DataChunk="?S" ObjectTree="?S"~n",
 				[ObjId, DataChunk, OT]),
 			{noreply, State}
 			end;
@@ -219,10 +219,10 @@ handle_cast({eof, ObjId}, #state{object_tree=OT} = State) ->
 			OT1 = gb_trees:enter(ObjId, Obj#object{eof_flag=true}, OT),
 			{noreply, State#state{object_tree=OT1}};
 		{value, #object{eof_flag=true} = Obj} -> 
-			?ERROR_LOG("EOF: eof_flag is already true, doing nothing: ObjId=~w, Object=~w~n",
+			?ERROR_LOG("EOF: eof_flag is already true, doing nothing: ObjId="?S", Object="?S"~n",
 				[ObjId, Obj]),
 			{noreply, State};
-		none -> ?ERROR_LOG("EOF: Object not found in object_tree: ObjId=~w, ObjectTree=~w~n",
+		none -> ?ERROR_LOG("EOF: Object not found in object_tree: ObjId="?S", ObjectTree="?S"~n",
 				[ObjId, OT]),
 			{noreply, State}
 			end;

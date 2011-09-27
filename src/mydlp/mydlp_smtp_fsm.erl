@@ -271,7 +271,7 @@ handle_info(_Info, StateName, StateData) ->
 fsm_call(StateName, Args, StateData) -> 
 	try ?MODULE:StateName(Args, StateData)
 	catch Class:Error ->
-		?ERROR_LOG("Error occured on FSM (~w) call (~w). Class: [~w]. Error: [~w].~nStack trace: ~w~n",
+		?ERROR_LOG("Error occured on FSM ("?S") call ("?S"). Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
 				[?MODULE, StateName, Class, Error, erlang:get_stacktrace()]),
 		(catch case is_bypassable(StateData) of
 			true -> deliver_raw(StateData),
@@ -357,43 +357,43 @@ get_dest_domains(#message{rcpt_to=RcptTo, to=ToH, cc=CCH, bcc=BCCH})->
 
 create_smtp_msg(connect, {Ip1,Ip2,Ip3,Ip4}) ->
 	{
-		"Connected to ~w.~w.~w.~w .",
+		"Connected to "?S"."?S"."?S"."?S" .",
 		[Ip1,Ip2,Ip3,Ip4]
 	};
 create_smtp_msg(received, MessageR) ->
 	From = get_from(MessageR),
 	ToList = get_dest_addresses(MessageR),
 	{
-		"Recieved mail. FROM=~s TO='~s'",
+		"Recieved mail. FROM="?S" TO='"?S"'",
 		[From, ToList]
 	};
 create_smtp_msg(sent_ok, MessageR) ->
 	From = get_from(MessageR),
 	ToList = get_dest_addresses(MessageR),
 	{
-		"Transferred clean message to queue. FROM=~s TO='~s' ",
+		"Transferred clean message to queue. FROM="?S" TO='"?S"' ",
 		[From, ToList]
 	};
 create_smtp_msg(sent_deny, MessageR) ->
 	From = get_from(MessageR),
 	{
-		"Transfer deny message to queue. TO=~s ",
+		"Transfer deny message to queue. TO="?S" ",
 		[From]
 	};
 create_smtp_msg(disconnect, {Ip1,Ip2,Ip3,Ip4}) ->
 	{
-		"Disconnected from ~w.~w.~w.~w .",
+		"Disconnected from "?S"."?S"."?S"."?S" .",
 		[Ip1,Ip2,Ip3,Ip4]
 	};
 create_smtp_msg(Type, Param) ->
 	{
-		"Type=~w Param=~w",
+		"Type="?S" Param="?S"",
 		[Type, Param]
 	}.
 
 smtp_msg(Type, Param) ->
 	{Format, Args} = create_smtp_msg(Type, Param),
-	Format1 = "PID=~w " ++ Format ++ "~n",
+	Format1 = "PID="?S" " ++ Format ++ "~n",
 	Args1 = [self() | Args],
 	mydlp_logger:notify(smtp_msg, Format1, Args1).
 

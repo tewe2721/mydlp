@@ -109,12 +109,12 @@ sync() ->
 	case catch http:request(Url) of
 		{ok, {{_HttpVer, Code, _Msg}, _Headers, Body}} -> 
 			case {Code, Body} of
-				{200, <<>>} -> ?ERROR_LOG("SYNC: Empty response: Url=~w~n", [Url]);
+				{200, <<>>} -> ?ERROR_LOG("SYNC: Empty response: Url="?S"~n", [Url]);
 				{200, <<"up-to-date", _/binary>>} -> ok;
 				{200, CDBS} -> 	CDBBin = list_to_binary(CDBS),
 						mydlp_api:use_client_policy(CDBBin);
-				{Else1, _Data} -> ?ERROR_LOG("SYNC: An error occured during HTTP req: Code=~w~n", [Else1]) end;
-		Else -> ?ERROR_LOG("SYNC: An error occured during HTTP req: Obj=~w~n", [Else]) end,
+				{Else1, _Data} -> ?ERROR_LOG("SYNC: An error occured during HTTP req: Code="?S"~n", [Else1]) end;
+		Else -> ?ERROR_LOG("SYNC: An error occured during HTTP req: Obj="?S"~n", [Else]) end,
 	ok.
 
 -endif.

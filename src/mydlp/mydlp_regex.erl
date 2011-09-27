@@ -91,7 +91,7 @@ handle_call({async_re, Call, Data, Timeout}, From, State) ->
 				Data1 = preregex(Data, State),
 				handle_re(Call, Data1, State)
 			catch Class:Error ->
-				?ERROR_LOG("Error occured on REGEX call: [~w]. Class: [~w]. Error: [~w].~nStack trace: ~w~n",
+				?ERROR_LOG("Error occured on REGEX call: ["?S"]. Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
 					[Call, Class, Error, erlang:get_stacktrace()]),
 					{ierror, {Class, Error}} end,
 			Worker ! {async_reply, Return, From}

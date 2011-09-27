@@ -252,7 +252,7 @@ handle_info(_Info, StateName, StateData) ->
 fsm_call(StateName, Args, StateData) -> 
 	try ?MODULE:StateName(Args, StateData)
 	catch Class:Error ->
-		?ERROR_LOG("Error occured on FSM (~w) call (~w). Class: [~w]. Error: [~w].~nStack trace: ~w~n",
+		?ERROR_LOG("Error occured on FSM ("?S") call ("?S"). Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
 				[?MODULE, StateName, Class, Error, erlang:get_stacktrace()]),
 		send_err(StateData),
 		{next_state, 'SEAP_REQ', StateData, ?CFG(fsm_timeout)} end.

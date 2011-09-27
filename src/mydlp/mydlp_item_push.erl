@@ -85,7 +85,7 @@ handle_cast(consume_item, #state{item_queue=Q} = State) ->
 				consume_item(?CFG(sync_interval)),
 				{noreply, State#state{item_queue=queue:new(), queue_size=0}}
 			catch Class:Error ->
-			?ERROR_LOG("Recieve Item Consume: Error occured: Class: [~w]. Error: [~w].~nStack trace: ~w~n.~nState: ~w~n ",
+			?ERROR_LOG("Recieve Item Consume: Error occured: Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n.~nState: "?S"~n ",
 				[Class, Error, erlang:get_stacktrace(), State]),
 				consume_item(15000),
 				{noreply, State} end;
@@ -184,16 +184,16 @@ http_req1(ReqRet) ->
                 {ok, {{_HttpVer, Code, _Msg}, _Headers, Body}} -> 
                         case {Code, Body} of
                                 {200, RetBody} -> {ok, RetBody};
-                                {Else1, _Data} -> ?ERROR_LOG("ITEMPUSH: An error occured during HTTP req: Code=~w~n", [Else1]),
+                                {Else1, _Data} -> ?ERROR_LOG("ITEMPUSH: An error occured during HTTP req: Code="?S"~n", [Else1]),
 						{error, {http_code, Else1}} end;
-                Else -> ?ERROR_LOG("ITEMPUSH: An error occured during HTTP req: Obj=~w~n", [Else]),
+                Else -> ?ERROR_LOG("ITEMPUSH: An error occured during HTTP req: Obj="?S"~n", [Else]),
 				{error, {http_req_not_ok, Else}} end.
 
 predict_serialized_size({seap_log, {_Proto, _RuleId, _Action, _Ip, _User, _To, _Matcher, #file{data=Data}, _Misc}}) ->
 	size(Data) + 128;
 predict_serialized_size({seap_log, _LogTerm}) -> 128;
 predict_serialized_size(Else) -> 
-	?ERROR_LOG("PREDICTSIZE: Unknown item. Cannot predict. Return maximum_push_size+1 as size: Item=~w~n", [Else]),
+	?ERROR_LOG("PREDICTSIZE: Unknown item. Cannot predict. Return maximum_push_size+1 as size: Item="?S"~n", [Else]),
 	?CFG(maximum_push_size) + 1.
 
 

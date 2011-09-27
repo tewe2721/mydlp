@@ -32,13 +32,15 @@
 	mydlp_api:acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, File, Misc)).
 
 -define(ERROR_LOG(Format, Args),
-	mydlp_logger:notify(error, Format, Args)).
+	mydlp_logger:notify(error, ?MODULE_STRING ":" ++ integer_to_list(?LINE) ++ " " ++ Format, Args)).
 
 -define(DEBUG(Format, Args),
 	mydlp_logger:debug_msg(?MODULE,?LINE,Format, Args)).
 
 -define(INFO_MSG(Format, Args),
 	mydlp_logger:info_msg(?MODULE,?LINE,Format, Args)).
+
+-define(S, "~5000s").
 
 %%%%%%%
 
