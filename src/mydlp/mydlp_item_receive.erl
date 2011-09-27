@@ -127,14 +127,13 @@ code_change(_OldVsn, State, _Extra) ->
 
 %%%%%%%%%%%%%%%%% internal
 
-process_item([]) -> ok;
-process_item([Item|Rest]) -> 
-	process_item(Item),
-	process_item(Rest);
+process_item({_IpAddress, []}) -> ok;
+process_item({IpAddress, [Item|Rest]}) -> 
+	process_item({IpAddress, Item}),
+	process_item({IpAddress, Rest});
 process_item({ IpAddress, {seap_log, LogTerm} }) -> 
 	{Proto, RuleId, Action, _Ip, _User, _To, Matcher, File, Misc} = LogTerm,
 	?ACL_LOG(Proto, RuleId, Action, IpAddress, nil, nil, Matcher, File, Misc);
-
 process_item(_Item) -> ok. % TODO log unkown item.
 
 -endif.
