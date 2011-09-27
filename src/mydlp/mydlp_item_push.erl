@@ -192,6 +192,7 @@ http_req1(ReqRet) ->
                 Else -> ?ERROR_LOG("ITEMPUSH: An error occured during HTTP req: Obj=~w~n", [Else]),
 				{error, {http_req_not_ok, Else}} end.
 
+predict_serialized_size({seap_log, {_Proto, _RuleId, _Action, _Ip, _User, _To, _Matcher, #file{data=undefined}, _Misc}}) -> 128;
 predict_serialized_size({seap_log, {_Proto, _RuleId, _Action, _Ip, _User, _To, _Matcher, #file{data=Data}, _Misc}}) ->
 	size(Data) + 128;
 predict_serialized_size({seap_log, _LogTerm}) -> 128;
