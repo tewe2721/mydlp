@@ -1200,7 +1200,7 @@ parse_multipart(HttpContent, H, Req) ->
 						"find no multipart/form-data",[]), []
 			end;
 		Other ->
-			?DEBUG("Can't parse multipart if get a ~p", [Other]), []
+			?DEBUG("Can't parse multipart if get a "?S"", [Other]), []
 	end,
 	mime_to_files(Res).
 

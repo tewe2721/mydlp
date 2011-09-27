@@ -106,7 +106,7 @@ init([]) ->
 	NextState = smtpd_cmd:command({greeting,IP},NewState),
 	{next_state, 'WAIT_FOR_CMD', NextState, ?CFG(fsm_timeout)};
 'WAIT_FOR_SOCKET'(Other, State) ->
-	?DEBUG("SMTP State: 'WAIT_FOR_SOCKET'. Unexpected message: ~p\n", [Other]),
+	?DEBUG("SMTP State: 'WAIT_FOR_SOCKET'. Unexpected message: "?S"\n", [Other]),
 	%% Allow to receive async messages
 	{next_state, 'WAIT_FOR_SOCKET', State}.
 
@@ -126,7 +126,7 @@ init([]) ->
 	end;
 
 'WAIT_FOR_CMD'(timeout, State) ->
-	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+	?DEBUG(""?S" Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
 %% Notification event coming from client
@@ -140,7 +140,7 @@ init([]) ->
 			{next_state, 'PROCESS_DATA', State#smtpd_fsm{message_bin=Message, buff=NextBuff}, ?CFG(fsm_timeout)} end;
 
 'WAIT_FOR_DATA'(timeout, State) ->
-	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+	?DEBUG(""?S" Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
 'PROCESS_DATA'(ok, #smtpd_fsm{message_bin=Message} = State) ->

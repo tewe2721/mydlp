@@ -160,7 +160,7 @@ init([]) ->
 	{ok, {IP, _Port}} = inet:peername(Socket),
 	{next_state, 'ICAP_REQ_LINE', State#state{socket=Socket, addr=IP}, ?CFG(fsm_timeout)};
 'WAIT_FOR_SOCKET'(Other, State) ->
-	?DEBUG("ICAP FSM: 'WAIT_FOR_SOCKET'. Unexpected message: ~p\n", [Other]),
+	?DEBUG("ICAP FSM: 'WAIT_FOR_SOCKET'. Unexpected message: "?S"\n", [Other]),
 	%% Allow to receive async messages
 	{next_state, 'WAIT_FOR_SOCKET', State}.
 
@@ -193,7 +193,7 @@ init([]) ->
 			icap_headers=#icap_headers{}, icap_mod_mode=ModMode}, ?CFG(fsm_timeout)};
 
 'ICAP_REQ_LINE'(timeout, State) ->
-	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+	?DEBUG(""?S" Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
 
@@ -226,7 +226,7 @@ init([]) ->
         {next_state, 'ICAP_HEADER', State#state{icap_headers=IcapHeaders1}, ?CFG(fsm_timeout)};
 
 'ICAP_HEADER'(timeout, State) ->
-	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+	?DEBUG(""?S" Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
 encap_next(#state{icap_rencap=[]} = State) -> 'READ_FILES'(State#state{http_message_type=undefined});
@@ -276,7 +276,7 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 'HTTP_REQ_LINE'({data, Line}, State) -> read_line(Line, State, 'HTTP_REQ_LINE', 'PARSE_REQ_LINE');
 
 'HTTP_REQ_LINE'(timeout, State) ->
-        ?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+        ?DEBUG(""?S" Client connection timeout - closing.\n", [self()]),
         {stop, normal, State}.
 
 'PARSE_REQ_LINE'({data, ReqLine}, State) ->
@@ -310,7 +310,7 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 'HTTP_RES_LINE'({data, Line}, State) -> read_line(Line, State, 'HTTP_RES_LINE', 'PARSE_RES_LINE');
 
 'HTTP_RES_LINE'(timeout, State) ->
-        ?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+        ?DEBUG(""?S" Client connection timeout - closing.\n", [self()]),
         {stop, normal, State}.
 
 'PARSE_RES_LINE'({data, ResLine}, State) ->
@@ -332,7 +332,7 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 'HTTP_HEADER'({data, Line}, State) -> read_line(Line, State, 'HTTP_HEADER', 'PARSE_HEADER');
 
 'HTTP_HEADER'(timeout, State) ->
-	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+	?DEBUG(""?S" Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
 'PARSE_HEADER'({data, "\r\n"}, #state{http_headers=HttpHeaders} = State) ->
@@ -373,13 +373,13 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 	end;
 
 'HTTP_CC_LINE'(timeout, State) ->
-	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+	?DEBUG(""?S" Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
 'HTTP_CC_CHUNK'({data, Line}, State) -> read_line(Line, State, 'HTTP_CC_CHUNK', 'PARSE_CC_CHUNK');
 
 'HTTP_CC_CHUNK'(timeout, State) ->
-	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+	?DEBUG(""?S" Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
 'PARSE_CC_CHUNK'({data, Line}, #state{http_content=Content, tmp=CSize} = State) ->
@@ -397,7 +397,7 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 	{next_state, 'HTTP_CC_LINE', State, ?CFG(fsm_timeout)};
 
 'HTTP_CC_CRLF'(timeout, State) ->
-	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+	?DEBUG(""?S" Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
 'HTTP_CC_TCRLF'({data, <<"\r\n">>}, #state{http_content=Content} = State) ->
@@ -408,7 +408,7 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 	encap_next(State1#state{http_content= <<>>});
 
 'HTTP_CC_TCRLF'(timeout, State) ->
-	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+	?DEBUG(""?S" Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
 'READ_FILES'(#state{icap_request=#icap_request{method=options}} = State) -> 'REQ_OK'(State);
@@ -661,7 +661,7 @@ handle_info({tcp, Socket, Bin}, StateName, #state{socket=Socket} = StateData) ->
 	Return;
 
 handle_info({tcp_closed, Socket}, _StateName, #state{socket=Socket, addr=_Addr} = StateData) ->
-	% ?ERROR_LOG("~p Client ~p disconnected.\n", [self(), Addr]),
+	% ?ERROR_LOG(""?S" Client "?S" disconnected.\n", [self(), Addr]),
 	{stop, normal, StateData};
 
 handle_info(_Info, StateName, StateData) ->
