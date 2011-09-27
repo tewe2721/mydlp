@@ -70,12 +70,15 @@ handle_cast({p, Item}, #state{item_queue=Q, queue_size=QS, max_queue_size=MQS} =
 		when QS < MQS ->
 	Q1 = queue:in(Item, Q),
 	ItemSize = predict_serialized_size(Item),
-	{noreply,State#state{item_queue=Q1, queue_size=QS+ItemSize}};
+	NextQS = QS+ItemSize,
+	case NextQS > MQS of
+		true -> consume_item();
+		false -> ok end,
+	{noreply,State#state{item_queue=Q1, queue_size=NextQS}};
 
 handle_cast({p, Item}, #state{item_queue=Q, queue_size=QS} = State) ->
 	Q1 = queue:in(Item, Q),
 	ItemSize = predict_serialized_size(Item),
-	consume_item(),
 	{noreply, State#state{item_queue=Q1, queue_size=QS+ItemSize}};
 
 handle_cast(consume_item, #state{item_queue=Q} = State) ->
@@ -189,6 +192,7 @@ http_req1(ReqRet) ->
                 Else -> ?ERROR_LOG("ITEMPUSH: An error occured during HTTP req: Obj="?S"~n", [Else]),
 				{error, {http_req_not_ok, Else}} end.
 
+predict_serialized_size({seap_log, {_Proto, _RuleId, _Action, _Ip, _User, _To, _Matcher, #file{data=undefined}, _Misc}}) -> 128;
 predict_serialized_size({seap_log, {_Proto, _RuleId, _Action, _Ip, _User, _To, _Matcher, #file{data=Data}, _Misc}}) ->
 	size(Data) + 128;
 predict_serialized_size({seap_log, _LogTerm}) -> 128;

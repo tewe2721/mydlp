@@ -297,13 +297,13 @@ get_setprop_args(Rest) ->
 	Rest1 = rm_trailing_crlf(Rest),
 	Rest2 = string:strip(Rest1),
 	{ObjIdS, KeyValuePairS} = case string:chr(Rest2, $\s) of
-		0 -> {error, no_space_to_tokenize};
+		0 -> throw({no_space_to_tokenize, Rest2});
 		I -> OS = string:sub_string(Rest2, 1, I - 1),
 			KVS = string:sub_string(Rest2, I + 1),
 			{OS, KVS} end,
 	KeyValuePairS2 = string:strip(KeyValuePairS),
 	{Key, Value} = case string:chr(KeyValuePairS2, $=) of
-		0 -> {error, no_equal_sign_to_tokenize};
+		0 -> throw({no_equal_sign_to_tokenize, KeyValuePairS2});
 		I2 -> KS = string:sub_string(KeyValuePairS2, 1, I2 - 1),
 			VS = string:sub_string(KeyValuePairS2, I2 + 1),
 			{KS, VS} end,
@@ -313,7 +313,7 @@ get_getprop_args(Rest) ->
 	Rest1 = rm_trailing_crlf(Rest),
 	Rest2 = string:strip(Rest1),
 	{ObjIdS, Key} = case string:chr(Rest2, $\s) of
-		0 -> {error, no_space_to_tokenize};
+		0 -> throw({no_space_to_tokenize, Rest2});
 		I -> OS = string:sub_string(Rest2, 1, I - 1),
 			KS = string:sub_string(Rest2, I + 1),
 			{OS, KS} end,
