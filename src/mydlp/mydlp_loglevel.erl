@@ -111,13 +111,13 @@ mydlp_logger_src(Loglevel) ->
     %% Helper functions
     debug_msg(Module, Line, Format, Args) when " ++ L ++ " >= 5 ->
             notify(info_msg,
-                   \"D("?S":"?S":"?S") : \"++Format++\"~n\",
+                   \"D(~p:~p:~p) : \"++Format++\"~n\",
                    [self(), Module, Line]++Args);
     debug_msg(_,_,_,_) -> ok.
 
     info_msg(Module, Line, Format, Args) when " ++ L ++ " >= 4 ->
             notify(info_msg,
-                   \"I("?S":"?S":"?S") : \"++Format++\"~n\",
+                   \"I(~p:~p:~p) : \"++Format++\"~n\",
                    [self(), Module, Line]++Args);
     info_msg(_,_,_,_) -> ok.
 
