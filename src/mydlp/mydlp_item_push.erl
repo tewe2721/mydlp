@@ -90,8 +90,11 @@ handle_cast(consume_item, #state{item_queue=Q} = State) ->
 			catch Class:Error ->
 			?ERROR_LOG("Recieve Item Consume: Error occured: Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n.~nState: "?S"~n ",
 				[Class, Error, erlang:get_stacktrace(), State]),
-				consume_item(15000),
-				{noreply, State} end;
+				% temporary change for test deployment
+				consume_item(?CFG(sync_interval)),
+				{noreply, State#state{item_queue=queue:new(), queue_size=0}} end; 
+				%consume_item(15000),
+				%{noreply, State} end;
 		true -> consume_item(?CFG(sync_interval)),
 			{noreply, State} end;
 
