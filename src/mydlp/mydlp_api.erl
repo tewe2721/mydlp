@@ -931,19 +931,19 @@ acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, #file{} = File, Misc) ->
 
 acl_msg1(Proto, RuleId, Action, nil, nil, To, Matcher, FileS, Misc) ->
 	mydlp_logger:notify(acl_msg,
-		"PROTOCOL: "?S" , RULE: "?S" , ACTION: "?S" , TO: \""?S"\" , MATCHER: "?S" , FILE: \""?S"\" , MISC: "?S" ~n",
+		"PROTOCOL: ~w , RULE: ~w , ACTION: ~w , TO: \"~s\" , MATCHER: ~w , FILE: \"~s\" , MISC: ~s ~n",
 		[Proto, RuleId, Action, To, Matcher, FileS, Misc]);
 acl_msg1(Proto, RuleId, Action, {Ip1,Ip2,Ip3,Ip4}, nil, To, Matcher, FileS, Misc) ->
 	mydlp_logger:notify(acl_msg,
-		"PROTOCOL: "?S" , RULE: "?S" , ACTION: "?S" , FROM: "?S"."?S"."?S"."?S" , TO: \""?S"\" , MATCHER: "?S" , FILE: \""?S"\" , MISC: "?S" ~n",
+		"PROTOCOL: ~w , RULE: ~w , ACTION: ~w , FROM: ~w.~w.~w.~w , TO: \"~s\" , MATCHER: ~w , FILE: \"~s\" , MISC: ~s ~n",
 		[Proto, RuleId, Action, Ip1,Ip2,Ip3,Ip4, To, Matcher, FileS, Misc]);
 acl_msg1(Proto, RuleId, Action, nil, User, To, Matcher, FileS, Misc) ->
 	mydlp_logger:notify(acl_msg,
-		"PROTOCOL: "?S" , RULE: "?S" , ACTION: "?S" , FROM: "?S" , TO: \""?S"\" , MATCHER: "?S" , FILE: \""?S"\" , MISC: "?S" ~n",
+		"PROTOCOL: ~w , RULE: ~w , ACTION: ~w , FROM: ~s , TO: \"~s\" , MATCHER: ~w , FILE: \"~s\" , MISC: ~s ~n",
 		[Proto, RuleId, Action, User, To, Matcher, FileS, Misc]);
 acl_msg1(Proto, RuleId, Action, {Ip1,Ip2,Ip3,Ip4}, User, To, Matcher, FileS, Misc) ->
 	mydlp_logger:notify(acl_msg,
-		"PROTOCOL: "?S" , RULE: "?S" , ACTION: "?S" , FROM: "?S"."?S"."?S"."?S" ("?S") , TO: \""?S"\" , MATCHER: "?S" , FILE: \""?S"\" , MISC: "?S" ~n",
+		"PROTOCOL: ~w , RULE: ~w , ACTION: ~w , FROM: ~w.~w.~w.~w (~s) , TO: \"~s\" , MATCHER: ~w , FILE: \"~s\" , MISC: ~s ~n",
 		[Proto, RuleId, Action, Ip1,Ip2,Ip3,Ip4, User, To, Matcher, FileS, Misc]);
 acl_msg1(_,_,_,_,_,_,_,_,_) -> ok.
 
@@ -1200,7 +1200,7 @@ parse_multipart(HttpContent, H, Req) ->
 						"find no multipart/form-data",[]), []
 			end;
 		Other ->
-			?DEBUG("Can't parse multipart if get a "?S"", [Other]), []
+			?DEBUG("Can't parse multipart if get a ~p", [Other]), []
 	end,
 	mime_to_files(Res).
 

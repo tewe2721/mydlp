@@ -101,7 +101,7 @@ updateAFileFP(Afileid, [_|_] = Afilepath, Filename) ->
 	case filelib:is_regular(Afilepath) of
 		true ->	{ok, Adata} = file:read_file(Afilepath),
 			mydlp_archive:a(Afileid, Adata, Filename);
-		false -> ?DEBUG("MyDLP TS: 'updateAFileFP'. Is not a regular file: "?S"\n", [Afilepath]) end, ok.
+		false -> ?ERROR_LOG("UPDATEAFILE Is not a regular file: "?S"\n", [Afilepath]) end, ok.
 
 getRuletable(Ipaddress, Revisionid) ->
 	RevisionIdI = mydlp_api:binary_to_integer(Revisionid),

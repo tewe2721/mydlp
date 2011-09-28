@@ -132,7 +132,7 @@ command({saml = _Command,_Param},State) ->
 	State;
 
 command({Command,Param},State) ->
-	io:format("Unknown Command: "?S" "?S"~n",[Command,Param]),
+	io:format("Unknown Command: ~p ~p~n",[Command,Param]),
 	send(State,500),
 	State.
 

@@ -111,7 +111,7 @@ init([TargetModule]) ->
 		?CFG(fsm_timeout)};
 
 'WF_SOCKET'(Other, State) ->
-	?DEBUG("State: 'WF_SOCKET'. Unexpected message: "?S"\n", [Other]),
+	?DEBUG("State: 'WF_SOCKET'. Unexpected message: ~p\n", [Other]),
 	%% Allow to receive async messages
 	{next_state, 'WF_SOCKET', State}.
 
@@ -119,11 +119,11 @@ init([TargetModule]) ->
 	consume({data, Data}, State#state{in_buffer = [Data|Buffer]});
 
 'WF_DATA'(timeout, State) ->
-	?DEBUG(""?S" Client connection timeout - closing.\n", [self()]),
+	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State};
 
 'WF_DATA'(Data, State) ->
-	?DEBUG(""?S" Ignoring data: "?S"\n", [self(), Data]),
+	?DEBUG("~p Ignoring data: ~p\n", [self(), Data]),
 	{next_state, 'WF_DATA', State, ?CFG(fsm_timeout)}.
 
 consume({data, Data}, #state{module=Module, module_fsm_state=ModuleFSMState, module_state=ModuleState} = State) ->
@@ -250,11 +250,11 @@ handle_info({ssl, PeerSock, Data}, StateName,
 	{next_state, StateName, StateData, ?CFG(fsm_timeout)};
 
 handle_info({tcp_closed, _}, _StateName, #state{comm_type=plain, addr=Addr} = StateData) ->
-	?DEBUG(""?S" Client "?S" disconnected.\n", [self(), Addr]),
+	?DEBUG("~p Client ~p disconnected.\n", [self(), Addr]),
 	{stop, normal, StateData};
 
 handle_info({ssl_closed, _}, _StateName, #state{comm_type=ssl, addr=Addr} = StateData) ->
-	?DEBUG(""?S" Client "?S" disconnected.\n", [self(), Addr]),
+	?DEBUG("~p Client ~p disconnected.\n", [self(), Addr]),
 	{stop, normal, StateData};
 
 handle_info(_Info, StateName, StateData) ->

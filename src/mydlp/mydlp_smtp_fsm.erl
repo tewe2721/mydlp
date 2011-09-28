@@ -106,7 +106,7 @@ init([]) ->
 	NextState = smtpd_cmd:command({greeting,IP},NewState),
 	{next_state, 'WAIT_FOR_CMD', NextState, ?CFG(fsm_timeout)};
 'WAIT_FOR_SOCKET'(Other, State) ->
-	?DEBUG("SMTP State: 'WAIT_FOR_SOCKET'. Unexpected message: "?S"\n", [Other]),
+	?DEBUG("SMTP State: 'WAIT_FOR_SOCKET'. Unexpected message: ~p\n", [Other]),
 	%% Allow to receive async messages
 	{next_state, 'WAIT_FOR_SOCKET', State}.
 
@@ -126,7 +126,7 @@ init([]) ->
 	end;
 
 'WAIT_FOR_CMD'(timeout, State) ->
-	?DEBUG(""?S" Client connection timeout - closing.\n", [self()]),
+	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
 %% Notification event coming from client
@@ -140,7 +140,7 @@ init([]) ->
 			{next_state, 'PROCESS_DATA', State#smtpd_fsm{message_bin=Message, buff=NextBuff}, ?CFG(fsm_timeout)} end;
 
 'WAIT_FOR_DATA'(timeout, State) ->
-	?DEBUG(""?S" Client connection timeout - closing.\n", [self()]),
+	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
 'PROCESS_DATA'(ok, #smtpd_fsm{message_bin=Message} = State) ->
@@ -357,43 +357,43 @@ get_dest_domains(#message{rcpt_to=RcptTo, to=ToH, cc=CCH, bcc=BCCH})->
 
 create_smtp_msg(connect, {Ip1,Ip2,Ip3,Ip4}) ->
 	{
-		"Connected to "?S"."?S"."?S"."?S" .",
+		"Connected to ~w.~w.~w.~w .",
 		[Ip1,Ip2,Ip3,Ip4]
 	};
 create_smtp_msg(received, MessageR) ->
 	From = get_from(MessageR),
 	ToList = get_dest_addresses(MessageR),
 	{
-		"Recieved mail. FROM="?S" TO='"?S"'",
+		"Recieved mail. FROM=~s TO='~s'",
 		[From, ToList]
 	};
 create_smtp_msg(sent_ok, MessageR) ->
 	From = get_from(MessageR),
 	ToList = get_dest_addresses(MessageR),
 	{
-		"Transferred clean message to queue. FROM="?S" TO='"?S"' ",
+		"Transferred clean message to queue. FROM=~s TO='~s' ",
 		[From, ToList]
 	};
 create_smtp_msg(sent_deny, MessageR) ->
 	From = get_from(MessageR),
 	{
-		"Transfer deny message to queue. TO="?S" ",
+		"Transfer deny message to queue. TO=~s ",
 		[From]
 	};
 create_smtp_msg(disconnect, {Ip1,Ip2,Ip3,Ip4}) ->
 	{
-		"Disconnected from "?S"."?S"."?S"."?S" .",
+		"Disconnected from ~w.~w.~w.~w .",
 		[Ip1,Ip2,Ip3,Ip4]
 	};
 create_smtp_msg(Type, Param) ->
 	{
-		"Type="?S" Param="?S"",
+		"Type=~w Param=~w",
 		[Type, Param]
 	}.
 
 smtp_msg(Type, Param) ->
 	{Format, Args} = create_smtp_msg(Type, Param),
-	Format1 = "PID="?S" " ++ Format ++ "~n",
+	Format1 = "PID=~w " ++ Format ++ "~n",
 	Args1 = [self() | Args],
 	mydlp_logger:notify(smtp_msg, Format1, Args1).
 

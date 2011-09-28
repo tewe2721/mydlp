@@ -61,8 +61,8 @@ handle_cast(_Msg, State) ->
 handle_info(discover_now, #state{interval=Interval, script_path=ScriptPath} = State) ->
 	case discover_smb(ScriptPath) of
 		{ok, XMLResult} -> mydlp_mysql:push_smb_discover(XMLResult);
-		{error, {retcode, R}} -> ?DEBUG("SMB DISCOVER: Error: Nmap return code: "?S"\n", [R]);
-		{error, Err} -> ?DEBUG("SMB DISCOVER: Error: "?S"\n", [Err]) end,
+		{error, {retcode, R}} -> ?DEBUG("SMB DISCOVER: Error: Nmap return code: ~p\n", [R]);
+		{error, Err} -> ?DEBUG("SMB DISCOVER: Error: ~p\n", [Err]) end,
 
 	call_random(Interval),
 	{noreply, State};

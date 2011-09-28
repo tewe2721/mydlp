@@ -82,7 +82,7 @@ init([]) ->
 	{ok, {IP, _Port}} = inet:peername(Socket),
 	{next_state, 'SEAP_REQ', State#state{socket=Socket, addr=IP}, ?CFG(fsm_timeout)};
 'WAIT_FOR_SOCKET'(Other, State) ->
-	?DEBUG("ICAP FSM: 'WAIT_FOR_SOCKET'. Unexpected message: "?S"\n", [Other]),
+	?DEBUG("ICAP FSM: 'WAIT_FOR_SOCKET'. Unexpected message: ~p\n", [Other]),
 	%% Allow to receive async messages
 	{next_state, 'WAIT_FOR_SOCKET', State}.
 
@@ -119,7 +119,7 @@ init([]) ->
 'SEAP_REQ'({data, _Else}, State) -> 
 	'HELP_RESP'(State);
 'SEAP_REQ'(timeout, State) ->
-	?DEBUG(""?S" Client connection timeout - closing.\n", [self()]),
+	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
 'BEGIN_RESP'(State) ->
@@ -201,7 +201,7 @@ init([]) ->
 			{next_state, 'PUSH_DATA_RECV', State#state{recv_size=NewSize, recv_data=RecvData1}, ?CFG(fsm_timeout)};
 		_Else -> throw({error, {unexpected_binary_size, DataSize}}) end;
 'PUSH_DATA_RECV'(timeout, State) ->
-	?DEBUG(""?S" Client connection timeout - closing.\n", [self()]),
+	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
 %%-------------------------------------------------------------------------
@@ -243,7 +243,7 @@ handle_info({tcp, Socket, Bin}, StateName, #state{socket=Socket} = StateData) ->
 	Return;
 
 handle_info({tcp_closed, Socket}, _StateName, #state{socket=Socket, addr=_Addr} = StateData) ->
-	% ?ERROR_LOG(""?S" Client "?S" disconnected.\n", [self(), Addr]),
+	% ?ERROR_LOG(?S" Client "?S" disconnected.\n", [self(), Addr]),
 	{stop, normal, StateData};
 
 handle_info(_Info, StateName, StateData) ->
