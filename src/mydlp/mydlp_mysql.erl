@@ -69,7 +69,7 @@ push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc) ->
 push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, #file{} = File, Misc) ->
 	gen_server:cast(?MODULE, {push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, File, Misc}}).
 
-archive_log(Proto, RuleId, Ip, User, To, AFileId ) ->
+archive_log(Proto, RuleId, Ip, User, To, AFileId) ->
 	gen_server:cast(?MODULE, {archive_log, {Proto, RuleId, Ip, User, To, AFileId}}).
 
 push_smb_discover(XMLResult) ->
@@ -88,7 +88,7 @@ is_multisite() -> gen_server:call(?MODULE, is_multisite).
 
 get_denied_page() -> gen_server:call(?MODULE, get_denied_page).
 
-new_afile() -> gen_server:call(?MODULE, new_afile, 30000).
+new_afile() -> gen_server:call(?MODULE, new_afile, 60000).
 
 update_afile(AFileId, Filename, MimeType, Size, ArchivePath, ContentText) -> 
 	gen_server:cast(?MODULE, {update_afile, AFileId, Filename, MimeType, Size, ArchivePath, ContentText}).
@@ -147,7 +147,7 @@ handle_call(_Msg, _From, State) ->
 handle_cast({archive_log, {Proto, RuleId, Ip, User, To, AFileId}}, State) ->
 	mydlp_api:mspawn(?FLE(fun() ->
 		{CustomerId, RuleId1, Ip1, User1} = pre_push_log(RuleId, Ip, User),
-		psq(insert_archive, [CustomerId, RuleId1, Proto, Ip1, User1, To, AFileId])
+		psq(insert_archive, [CustomerId, RuleId1, Proto, Ip1, User1, To, AFileId], 30000)
 	end)),
 	{noreply, State};
 
@@ -189,22 +189,11 @@ handle_cast({update_afile, AFileId, Filename, MimeType, Size, ArchivePath, Conte
 			AId = case Query of
 				{ok, [] } ->	psqt(insert_archive_data, [MimeType, Size, ArchivePath, ContentText]),
 						last_insert_id_t();
-				{ok, [[Id]]} -> Id end,
+				{ok, [[Id]|_]} -> Id end,
 			mysql:fetch(<<"UNLOCK TABLES">>), AId
 			end, 60000),
-		psq(update_archive_file, [Filename, ADataId, AFileId])
-	end), 60000),
-
-	mydlp_api:mspawn(?FLE(fun() ->
-		ADataId = case psq(archive_data_by_path, [ArchivePath]) of
-			{ok, []} ->	{atomic, ADId} = transaction(fun() ->
-					psqt(insert_archive_data, [MimeType, Size, ArchivePath, ContentText]),
-					last_insert_id_t() 
-				end, 60000), ADId;
-			{ok, [[Id]]} -> Id end,
-
-		psq(update_archive_file, [Filename, ADataId, AFileId])
-	end), 60000),
+		psq(update_archive_file, [Filename, ADataId, AFileId], 30000)
+	end), 100000),
 	{noreply, State};
 
 handle_cast(repopulate_mnesia, State) ->
