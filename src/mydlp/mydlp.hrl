@@ -33,6 +33,10 @@
                         [Class, Error, erlang:get_stacktrace()]) end
 	 end).
 
+-define(ASYNC(Fun), mydlp_api:mspawn(?FLE(Fun))).
+
+-define(ASYNC(Fun, Timeout), mydlp_api:mspawn(?FLE(Fun), Timeout)).
+
 -define(ACL_LOG(Proto, RuleId, Action, Ip, User, To, Matcher, File, Misc), 
 	mydlp_api:acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, File, Misc)).
 
