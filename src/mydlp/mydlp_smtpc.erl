@@ -71,12 +71,12 @@ handle_call(_Msg, _From, State) ->
 % INSERT INTO log_incedent (id, rule_id, protocol, src_ip, destination, action, matcher, filename, misc)
 handle_cast({mail, #message{mail_from=From, rcpt_to=Rcpt, message=MessageS}}, 
 		#state{smtp_helo_name=Helo, smtp_dest_host=DHost, smtp_dest_port=DPort} = State) ->
-	mydlp_api:mspawn(?FLE(fun() -> smtpc:sendmail(DHost, DPort, Helo, From, Rcpt, MessageS) end), 600000),
+	?ASYNC(fun() -> smtpc:sendmail(DHost, DPort, Helo, From, Rcpt, MessageS) end, 600000),
 	{noreply, State};
 
 handle_cast({mail, From, Rcpt, MessageS}, 
 		#state{smtp_helo_name=Helo, smtp_dest_host=DHost, smtp_dest_port=DPort} = State) ->
-	mydlp_api:mspawn(?FLE(fun() -> smtpc:sendmail(DHost, DPort, Helo, From, Rcpt, MessageS) end), 600000),
+	?ASYNC(fun() -> smtpc:sendmail(DHost, DPort, Helo, From, Rcpt, MessageS) end, 600000),
 	{noreply, State};
 
 handle_cast(_Msg, State) ->

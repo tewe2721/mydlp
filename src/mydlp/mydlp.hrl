@@ -26,7 +26,16 @@
 -define(CFG(Key), mydlp_config:Key()).
 
 % creates new Fun with encapsulates orginal fun to Log any Exception 
--define(FLE(Fun), fun() -> mydlp_api:log_exception(Fun) end).
+-define(FLE(Fun), fun() -> 
+		try Fun()
+		catch Class:Error ->
+			?ERROR_LOG("Logged exception: Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
+                        [Class, Error, erlang:get_stacktrace()]) end
+	 end).
+
+-define(ASYNC0(Fun), mydlp_api:mspawn(?FLE(Fun))).
+
+-define(ASYNC(Fun, Timeout), mydlp_api:mspawn(?FLE(Fun), Timeout)).
 
 -define(ACL_LOG(Proto, RuleId, Action, Ip, User, To, Matcher, File, Misc), 
 	mydlp_api:acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, File, Misc)).
