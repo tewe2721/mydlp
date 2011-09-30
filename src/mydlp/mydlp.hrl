@@ -33,7 +33,7 @@
                         [Class, Error, erlang:get_stacktrace()]) end
 	 end).
 
--define(ASYNC(Fun), mydlp_api:mspawn(?FLE(Fun))).
+-define(ASYNC0(Fun), mydlp_api:mspawn(?FLE(Fun))).
 
 -define(ASYNC(Fun, Timeout), mydlp_api:mspawn(?FLE(Fun), Timeout)).
 

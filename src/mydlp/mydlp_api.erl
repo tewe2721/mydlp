@@ -877,7 +877,7 @@ acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, #file{} = File, Misc) ->
 
 	%acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
 
-	mydlp_api:mspawn(?FLE(fun() ->
+	?ASYNC(fun() ->
 		case Action of
 			pass -> 	acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
 					mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
@@ -895,7 +895,7 @@ acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, #file{} = File, Misc) ->
 						mydlp_archive:a(AFileId, File),
 						mydlp_mysql:archive_log(Proto, RuleId, Ip, User, To, AFileId) end;
 			_Else -> ok end
-        end), 120000), ok.
+        end, 120000), ok.
 
 -endif.
 
@@ -911,7 +911,7 @@ acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, #file{} = File, Misc) ->
 
 	%acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
 
-	mydlp_api:mspawn(?FLE(fun() ->
+	?ASYNC(fun() ->
 		case Action of
 			pass -> 	acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
 					LogTerm = {Proto, RuleId, Action, Ip, User, To, Matcher, #file{name=FileS}, Misc},
@@ -929,7 +929,7 @@ acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, #file{} = File, Misc) ->
 					LogTerm = {Proto, RuleId, Action, Ip, User, To, Matcher, mydlp_api:load_file(File), Misc},
 					mydlp_item_push:p({seap_log, LogTerm});
 			_Else -> ok end
-        end), 60000), ok.
+        end, 60000), ok.
 
 -endif.
 
