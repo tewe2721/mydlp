@@ -73,7 +73,8 @@ init([Port, CommType, SocketSup]) ->
 			{keepalive, true}, {backlog, 30}, {active, false}],
 	
 	{Backend, NOpts} = get_bops(CommType),
-	Opts1 = Opts ++ NOpts,
+	FOpts = get_fops(),
+	Opts1 = Opts ++ NOpts ++ FOpts,
 
 	case Backend:listen(Port, Opts1) of
 		{ok, ListSock} ->
@@ -100,6 +101,18 @@ get_bops(ssl) ->
 -ifdef(__MYDLP_ENDPOINT).
 
 get_bops(plain) -> {gen_tcp, []}.
+
+-endif.
+
+-ifdef(__MYDLP_NETWORK).
+
+get_fops() -> [].
+
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
+get_fops() -> [{ip, {127,0,0,1}}].
 
 -endif.
 
