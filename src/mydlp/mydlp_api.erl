@@ -1826,19 +1826,6 @@ exception(throw, Reason) -> erlang:throw(Reason);
 exception(exit, Reason) -> erlang:exit(Reason).
 
 %%-------------------------------------------------------------------------
-%% @doc Catches and logs exception; this function will catch exception, logs it and rethrows it
-%% @end
-%%-------------------------------------------------------------------------
-
-log_exception(Fun) ->
-	try Fun()
-	catch Class:Error ->
-		?ERROR_LOG("Logged exception: Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
-			[Class, Error, erlang:get_stacktrace()]) end.
-		%	[Class, Error, erlang:get_stacktrace()]),
-		%exception(Class, Error) end.
-
-%%-------------------------------------------------------------------------
 %% @doc Converts given string to ip address tuple.
 %% @end
 %%-------------------------------------------------------------------------
