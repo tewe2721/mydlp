@@ -91,6 +91,8 @@ handle_cast(consume_item, #state{item_queue=Q} = State) ->
 			?ERROR_LOG("Recieve Item Consume: Error occured: Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n.~nState: "?S"~n ",
 				[Class, Error, erlang:get_stacktrace(), State]),
 				% temporary change for test deployment
+				ItemList = queue:to_list(Q),
+				lists:foreach(fun(I) -> mydlp_spool:push("push", I) end, ItemList),
 				consume_item(?CFG(sync_interval)),
 				{noreply, State#state{item_queue=queue:new(), queue_size=0}} end; 
 				%consume_item(15000),
@@ -128,6 +130,7 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
+	mydlp_spool:create_spool("push"),
 	{ok, #state{item_queue=queue:new(), max_queue_size=?CFG(maximum_push_size)}}.
 
 terminate(_Reason, _State) ->
