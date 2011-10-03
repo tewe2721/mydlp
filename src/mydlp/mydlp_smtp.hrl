@@ -54,6 +54,7 @@
 	socket      = [],
 	addr        = [],
 	relay       = false,
+	spool_ref   = undefined, 
 	enable_for_all = false,
 	bypass_on_fail = false,
 	options     = [],
