@@ -64,6 +64,7 @@ dist_erl_DATA = \
 	mydlp_smb_discover.erl \
 	mydlp_smtp_fsm.erl \
 	mydlp_smtpc.erl \
+	mydlp_spool.erl \
 	mydlp_sup.erl \
 	mydlp_tc.erl \
 	mydlp_ts.erl \
