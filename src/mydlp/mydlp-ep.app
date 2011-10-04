@@ -32,6 +32,7 @@
         mydlp_acceptor,
         mydlp_container,
         mydlp_dynamic,
+        mydlp_item_push,
         mydlp_loglevel,
         mydlp_logger_h,
         mydlp_matchers,
@@ -40,6 +41,8 @@
         mydlp_regex,
         mydlp_seap_fsm,
         mydlp_sup,
+        mydlp_spool,
+        mydlp_sync,
         mydlp_tc,
         mydlp_workdir,
         mydlp_worker_sup
