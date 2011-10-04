@@ -51,12 +51,15 @@
 -record(state, {
 	item_queue,
 	queue_size = 0,
-	max_queue_size = 0
+	max_queue_size = 0,
+	refs = []
 }).
 
 %%%%%%%%%%%%%  API
 
 p(Item) -> gen_server:cast(?MODULE, {p, Item}).
+
+p(Ref, Item) -> gen_server:cast(?MODULE, {p, Ref, Item}).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -65,6 +68,8 @@ handle_call(stop, _From, State) ->
 
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
+
+handle_cast({p, Ref, Item}, #state{refs=Refs} = State) -> handle_cast({p,  Item}, State#state{refs=[Ref|Refs]});
 
 handle_cast({p, Item}, #state{item_queue=Q, queue_size=QS, max_queue_size=MQS} = State) 
 		when QS < MQS ->
@@ -81,12 +86,14 @@ handle_cast({p, Item}, #state{item_queue=Q, queue_size=QS} = State) ->
 	ItemSize = predict_serialized_size(Item),
 	{noreply, State#state{item_queue=Q1, queue_size=QS+ItemSize}};
 
-handle_cast(consume_item, #state{item_queue=Q} = State) ->
+handle_cast(consume_item, #state{item_queue=Q, refs=Refs} = State) ->
 	case queue:is_empty(Q) of
 		false -> try 	ItemList = queue:to_list(Q),
 				process_item(ItemList),
+				lists:foreach(fun(R) -> mydlp_spool:delete(R) end, Refs),
+				mydlp_spool:consume_all("push"),
 				consume_item(?CFG(sync_interval)),
-				{noreply, State#state{item_queue=queue:new(), queue_size=0}}
+				{noreply, State#state{item_queue=queue:new(), queue_size=0, refs=[]}}
 			catch Class:Error ->
 			?ERROR_LOG("Recieve Item Consume: Error occured: Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n.~nState: "?S"~n ",
 				[Class, Error, erlang:get_stacktrace(), State]),
@@ -130,7 +137,11 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
+	ConsumeFun = fun(Ref, Item) ->
+		mydlp_item_push:p(Ref, Item)
+	end,
 	mydlp_spool:create_spool("push"),
+	mydlp_spool:register_consumer("push", ConsumeFun),
 	{ok, #state{item_queue=queue:new(), max_queue_size=?CFG(maximum_push_size)}}.
 
 terminate(_Reason, _State) ->

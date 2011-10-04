@@ -34,10 +34,12 @@
 %% API
 -export([start_link/0,
 	create_spool/1,
-%	register_consumer/2,
+	register_consumer/2,
+	consume_next/1,
 	push/2,
 	pop/1,
 	poppush/1,
+	poppush_all/1,
 	delete/1,
 	is_empty/1,
 	stop/0]).
@@ -58,7 +60,7 @@
 
 -record(spool, {
 	name = "",
-	consumer
+	consume_fun
 	}).
 
 -define(SPOOL_DIR(SpoolName), ?CFG(spool_dir) ++ "/" ++ SpoolName).
@@ -69,7 +71,9 @@ create_spool(SpoolName) -> gen_server:cast(?MODULE, {create_spool, SpoolName}).
 
 delete(Ref) -> gen_server:cast(?MODULE, {delete, Ref}).
 
-%register_consumer(SpoolName, ConsumeFun) -> gen_server:cast(?MODULE, {register_consumer, SpoolName, ConsumeFun}).
+register_consumer(SpoolName, ConsumeFun) -> gen_server:cast(?MODULE, {register_consumer, SpoolName, ConsumeFun}).
+
+consume_next(SpoolName) -> gen_server:cast(?MODULE, {consume_next, SpoolName}).
 
 push(SpoolName, Item) -> gen_server:call(?MODULE, {push, SpoolName, Item}).
 
@@ -79,12 +83,14 @@ pop(SpoolName) -> gen_server:call(?MODULE, {pop, SpoolName}).
 
 poppush(SpoolName) -> gen_server:call(?MODULE, {poppush, SpoolName}).
 
+poppush_all(SpoolName) -> gen_server:call(?MODULE, {poppush_all, SpoolName}).
+
 %%%%%%%%%%%%%% gen_server handles
 
 handle_call({pop, SpoolName}, _From, #state{spools = Spools} = State) ->
 	case dict:is_key(SpoolName, Spools) of
 		true ->	Ret = case file:list_dir(?SPOOL_DIR(SpoolName)) of
-				{ok, []} -> {ierror, cannot_list_spool_contents};
+				{ok, []} -> {ierror, spool_is_empty};
 				{ok, [FN0|_]} -> FN = ?SPOOL_DIR(SpoolName) ++ "/" ++ FN0,
 						{ok, Bin} = file:read_file(FN),
 						Item = erlang:binary_to_term(Bin),
@@ -112,16 +118,25 @@ handle_call({is_empty, SpoolName}, _From, #state{spools = Spools} = State) ->
 handle_call({poppush, SpoolName}, _From, #state{spools = Spools} = State) ->
 	case dict:is_key(SpoolName, Spools) of
 		true ->	Ret = case file:list_dir(?SPOOL_DIR(SpoolName)) of
-				{ok, []} -> {ierror, cannot_list_spool_contents};
-				{ok, [FN0|_]} -> FN = ?SPOOL_DIR(SpoolName) ++ "/" ++ FN0,
-						{ok, Bin} = file:read_file(FN),
-						Item = erlang:binary_to_term(Bin),
-						NRef = now(),
-						Ref = {SpoolName, NRef},
-						FP = mydlp_api:ref_to_fn(?SPOOL_DIR(SpoolName), "item", NRef),
-						case file:rename(FN, FP) of
-							ok -> {ok, Ref, Item};
-							{error, Error} -> {ierror, Error} end;
+				{ok, []} -> {ierror, spool_is_empty};
+				{ok, [FN0|_]} -> renew_ref(SpoolName,FN0);
+				{error, Error2} -> {ierror, Error2} end,
+			{reply, Ret, State};
+		false -> ?ERROR_LOG("Spool does not exist: Name: "?S" Dir: "?S, 
+				[SpoolName, ?SPOOL_DIR(SpoolName)]),
+			{reply, {ierror, spool_does_not_exist}, State}
+			end;
+
+handle_call({poppush_all, SpoolName}, _From, #state{spools = Spools} = State) ->
+	case dict:is_key(SpoolName, Spools) of
+		true ->	Ret = case file:list_dir(?SPOOL_DIR(SpoolName)) of
+				{ok, []} -> {ierror, spool_is_empty};
+				{ok, [_|_] = FNs} ->	RefItemPL = [ case renew_ref(SpoolName, FN) of
+									{ok, Ref, Item} -> {Ref, Item};
+									Else -> ?ERROR_LOG("Error with spool file: Error: "?S, [Else]),
+										[] end
+									|| FN <- FNs],
+							{ok, lists:flatten(RefItemPL)};
 				{error, Error2} -> {ierror, Error2} end,
 			{reply, Ret, State};
 		false -> ?ERROR_LOG("Spool does not exist: Name: "?S" Dir: "?S, 
@@ -171,17 +186,46 @@ handle_cast({create_spool, SpoolName}, #state{spools = Spools} = State) ->
 				end
 		end;
 
+handle_cast({register_consumer, SpoolName, ConsumeFun}, #state{spools = Spools} = State) ->
+	case dict:find(SpoolName, Spools) of
+		{ok, Spool} -> NewSpool = Spool#spool{consume_fun=ConsumeFun},
+				{noreply, State#state{spools=dict:store(SpoolName, NewSpool, Spools)}};
+		error -> ?ERROR_LOG("Spool does not exist: Name: "?S" Dir: "?S, 
+				[SpoolName, ?SPOOL_DIR(SpoolName)]),
+				{noreply, State}
+		end;
+
+handle_cast({consume_next, SpoolName}, #state{spools = Spools} = State) ->
+	case dict:find(SpoolName, Spools) of
+		{ok, Spool} ->	?ASYNC(fun() -> case mydlp_spool:is_empty(SpoolName) of
+						true -> ConsumeFun = Spool#spool.consume_fun,
+							{ok, Ref, Item} = mydlp_spool:poppush(SpoolName),
+							ConsumeFun(Ref, Item);
+						false -> ok end
+				end, 120000);
+		error -> ?ERROR_LOG("Spool does not exist: Name: "?S" Dir: "?S, 
+				[SpoolName, ?SPOOL_DIR(SpoolName)]) end,
+	{noreply, State};
+
+handle_cast({consume_all, SpoolName}, #state{spools = Spools} = State) ->
+	case dict:find(SpoolName, Spools) of
+		{ok, Spool} ->	?ASYNC(fun() -> case mydlp_spool:is_empty(SpoolName) of
+						true -> ConsumeFun = Spool#spool.consume_fun,
+							{ok, RefItemPL} = mydlp_spool:poppush_all(SpoolName),
+							[ConsumeFun(Ref, Item) || {Ref, Item} <- RefItemPL],
+							ok;
+						false -> ok end
+				end, 1200000);
+		error -> ?ERROR_LOG("Spool does not exist: Name: "?S" Dir: "?S, 
+				[SpoolName, ?SPOOL_DIR(SpoolName)]) end,
+	{noreply, State};
+
 handle_cast(_Msg, State) ->
 	{noreply, State}.
 
 handle_info({async_reply, Reply, From}, State) ->
 	gen_server:reply(From, Reply),
 	{noreply, State};
-
-handle_info(sync_now, State) ->
-	sync(),
-	call_timer(),
-        {noreply, State};
 
 handle_info(_Info, State) ->
 	{noreply, State}.
@@ -209,23 +253,14 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 
-call_timer() -> call_timer(?CFG(sync_interval)).
-
-call_timer(Interval) -> timer:send_after(Interval, sync_now).
-
-sync() ->
-	RevisionI = mydlp_api:get_client_policy_revision_id(),
-	RevisionS = integer_to_list(RevisionI),
-	Url = "https://" ++ ?CFG(management_server_address) ++ "/mydlp-web-manager/sync.php?rid=" ++ RevisionS,
-	case catch http:request(Url) of
-		{ok, {{_HttpVer, Code, _Msg}, _Headers, Body}} -> 
-			case {Code, Body} of
-				{200, <<>>} -> ?ERROR_LOG("SYNC: Empty response: Url="?S"~n", [Url]);
-				{200, <<"up-to-date", _/binary>>} -> ok;
-				{200, CDBS} -> 	CDBBin = list_to_binary(CDBS),
-						mydlp_api:use_client_policy(CDBBin);
-				{Else1, _Data} -> ?ERROR_LOG("SYNC: An error occured during HTTP req: Code="?S"~n", [Else1]) end;
-		Else -> ?ERROR_LOG("SYNC: An error occured during HTTP req: Obj="?S"~n", [Else]) end,
-	ok.
-
+renew_ref(SpoolName, FN0) -> 
+	FN = ?SPOOL_DIR(SpoolName) ++ "/" ++ FN0,
+	{ok, Bin} = file:read_file(FN),
+	Item = erlang:binary_to_term(Bin),
+	NRef = now(),
+	Ref = {SpoolName, NRef},
+	FP = mydlp_api:ref_to_fn(?SPOOL_DIR(SpoolName), "item", NRef),
+	case file:rename(FN, FP) of
+		ok -> {ok, Ref, Item};
+		{error, Error} -> {ierror, Error} end.
 
