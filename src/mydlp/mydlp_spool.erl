@@ -36,6 +36,7 @@
 	create_spool/1,
 	register_consumer/2,
 	consume_next/1,
+	consume_all/1,
 	push/2,
 	pop/1,
 	poppush/1,
@@ -60,7 +61,8 @@
 
 -record(spool, {
 	name = "",
-	consume_fun
+	consume_fun,
+	consume_prog = false
 	}).
 
 -define(SPOOL_DIR(SpoolName), ?CFG(spool_dir) ++ "/" ++ SpoolName).
@@ -75,15 +77,18 @@ register_consumer(SpoolName, ConsumeFun) -> gen_server:cast(?MODULE, {register_c
 
 consume_next(SpoolName) -> gen_server:cast(?MODULE, {consume_next, SpoolName}).
 
-push(SpoolName, Item) -> gen_server:call(?MODULE, {push, SpoolName, Item}).
+consume_all(SpoolName) -> 
+	gen_server:cast(?MODULE, {consume_all, SpoolName}).
 
-is_empty(SpoolName) -> gen_server:call(?MODULE, {is_empty, SpoolName}).
+push(SpoolName, Item) -> gen_server:call(?MODULE, {push, SpoolName, Item}, 30000).
 
-pop(SpoolName) -> gen_server:call(?MODULE, {pop, SpoolName}).
+is_empty(SpoolName) -> gen_server:call(?MODULE, {is_empty, SpoolName}, 30000).
 
-poppush(SpoolName) -> gen_server:call(?MODULE, {poppush, SpoolName}).
+pop(SpoolName) -> gen_server:call(?MODULE, {pop, SpoolName}, 30000).
 
-poppush_all(SpoolName) -> gen_server:call(?MODULE, {poppush_all, SpoolName}).
+poppush(SpoolName) -> gen_server:call(?MODULE, {poppush, SpoolName}, 30000).
+
+poppush_all(SpoolName) -> gen_server:call(?MODULE, {poppush_all, SpoolName}, 60000).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -196,29 +201,41 @@ handle_cast({register_consumer, SpoolName, ConsumeFun}, #state{spools = Spools} 
 		end;
 
 handle_cast({consume_next, SpoolName}, #state{spools = Spools} = State) ->
+	Worker = self(),
 	case dict:find(SpoolName, Spools) of
-		{ok, Spool} ->	?ASYNC(fun() -> case mydlp_spool:is_empty(SpoolName) of
-						true -> ConsumeFun = Spool#spool.consume_fun,
-							{ok, Ref, Item} = mydlp_spool:poppush(SpoolName),
-							ConsumeFun(Ref, Item);
-						false -> ok end
-				end, 120000);
+		{ok, #spool{consume_prog = false, consume_fun=ConsumeFun} = Spool} ->
+			?ASYNC(fun() -> case mydlp_spool:is_empty(SpoolName) of
+					{ok, false} -> 
+						{ok, Ref, Item} = mydlp_spool:poppush(SpoolName),
+						ConsumeFun(Ref, Item);
+					{ok, true} -> ok end,
+				Worker ! {consume_completed, SpoolName}
+			end, 120000),
+			{noreply, State#state{spools=dict:store(SpoolName, Spool#spool{consume_prog = true}, Spools)}};
+		{ok, #spool{consume_prog = true}} ->
+			{noreply, State};
 		error -> ?ERROR_LOG("Spool does not exist: Name: "?S" Dir: "?S, 
-				[SpoolName, ?SPOOL_DIR(SpoolName)]) end,
-	{noreply, State};
+				[SpoolName, ?SPOOL_DIR(SpoolName)]),
+			{noreply, State} end;
 
 handle_cast({consume_all, SpoolName}, #state{spools = Spools} = State) ->
+	Worker = self(),
 	case dict:find(SpoolName, Spools) of
-		{ok, Spool} ->	?ASYNC(fun() -> case mydlp_spool:is_empty(SpoolName) of
-						true -> ConsumeFun = Spool#spool.consume_fun,
-							{ok, RefItemPL} = mydlp_spool:poppush_all(SpoolName),
-							[ConsumeFun(Ref, Item) || {Ref, Item} <- RefItemPL],
-							ok;
-						false -> ok end
-				end, 1200000);
+		{ok, #spool{consume_prog = false, consume_fun=ConsumeFun} = Spool} ->
+			?ASYNC(fun() -> case mydlp_spool:is_empty(SpoolName) of
+					{ok, false} -> 
+						{ok, RefItemPL} = mydlp_spool:poppush_all(SpoolName),
+						[ConsumeFun(Ref, Item) || {Ref, Item} <- RefItemPL],
+						ok;
+					{ok, true} -> ok end,
+				Worker ! {consume_completed, SpoolName}
+			end, 1200000),
+			{noreply, State#state{spools=dict:store(SpoolName, Spool#spool{consume_prog = true}, Spools)}};
+		{ok, #spool{consume_prog = true}} ->
+			{noreply, State};
 		error -> ?ERROR_LOG("Spool does not exist: Name: "?S" Dir: "?S, 
-				[SpoolName, ?SPOOL_DIR(SpoolName)]) end,
-	{noreply, State};
+				[SpoolName, ?SPOOL_DIR(SpoolName)]),
+			{noreply, State} end;
 
 handle_cast(_Msg, State) ->
 	{noreply, State}.
@@ -226,6 +243,12 @@ handle_cast(_Msg, State) ->
 handle_info({async_reply, Reply, From}, State) ->
 	gen_server:reply(From, Reply),
 	{noreply, State};
+
+handle_info({consume_completed, SpoolName}, #state{spools = Spools} = State) ->
+	case dict:find(SpoolName, Spools) of
+		{ok, #spool{consume_prog = true} = Spool} ->
+			{noreply, State#state{spools=dict:store(SpoolName, Spool#spool{consume_prog = false}, Spools)}};
+		_Else -> {noreply, State} end;
 
 handle_info(_Info, State) ->
 	{noreply, State}.
