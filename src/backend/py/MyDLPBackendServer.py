@@ -112,7 +112,7 @@ class MyDLPBackendServer(daemon.Daemon):
 		self.handler = MydlpHandler()
 
 		self.processor = Mydlp.Processor(self.handler)
-		self.transport = TSocket.TServerSocket(9090)
+		self.transport = TSocket.TServerSocket("127.0.0.1", 9090)
 		self.tfactory = TTransport.TBufferedTransportFactory()
 		self.pfactory = TBinaryProtocol.TBinaryProtocolFactory()
 
