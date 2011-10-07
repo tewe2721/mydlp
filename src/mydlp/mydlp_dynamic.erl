@@ -122,7 +122,6 @@ load_src(Src) ->
 	{log_dir, string, "-defined-explicitly-"},
 	{pid_file, string, "-defined-explicitly-"},
 	{work_dir, string, "-defined-explicitly-"},
-	{spool_dir, string, "-defined-explicitly-"},
 	{mnesia_dir, string, "-defined-explicitly-"}
 ]).
 
@@ -295,7 +294,6 @@ val_to_type_src(work_dir, string, "-defined-explicitly-") ->
 		P -> P end,
 	PTP = prettify_path(TempPath),
 	val_to_type_src(string, PTP ++ "/mydlp");
-val_to_type_src(spool_dir, string, "-defined-explicitly-") -> "app_dir() ++ \"/spool\"";
 val_to_type_src(mnesia_dir, string, "-defined-explicitly-") -> "app_dir() ++ \"/mnesia\"";
 val_to_type_src(_Key, Type, ValStr) -> val_to_type_src(Type, ValStr).
 
