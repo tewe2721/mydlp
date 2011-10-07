@@ -1889,6 +1889,15 @@ get_client_policy_revision_id() ->
 %%-------------------------------------------------------------------------
 binary_to_integer(Bin) -> list_to_integer(binary_to_list(Bin)).
 
+%%-------------------------------------------------------------------------
+%% @doc Converts given reference to an absolute filepath in given directory with given prefix.
+%% @end
+%%-------------------------------------------------------------------------
+ref_to_fn(Dir, Prefix, Ref) ->
+	{A,B,C} = Ref,
+	RN = lists:flatten(io_lib:format("~s-~p.~p.~p",[Prefix,A,B,C])),
+	Dir ++ "/" ++ RN.
+
 -include_lib("eunit/include/eunit.hrl").
 
 escape_regex_test_() -> [

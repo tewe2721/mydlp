@@ -37,6 +37,7 @@
 %% API
 -export([start_link/0,
 	mail/1,
+	mail/2,
 	mail/3,
 	stop/0]).
 
@@ -54,11 +55,11 @@
 
 %%%%%%%%%%%%% MyDLP Thrift RPC API
 
-mail(Message) ->
-	gen_server:cast(?MODULE, {mail, Message}).
+mail(Message) -> gen_server:cast(?MODULE, {mail, Message}).
 
-mail(From, Rcpt, MessageS) ->
-	gen_server:cast(?MODULE, {mail, From, Rcpt, MessageS}).
+mail(Ref, Message) -> gen_server:cast(?MODULE, {mail, Ref, Message}).
+
+mail(From, Rcpt, MessageS) -> gen_server:cast(?MODULE, {mail, From, Rcpt, MessageS}).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -72,6 +73,16 @@ handle_call(_Msg, _From, State) ->
 handle_cast({mail, #message{mail_from=From, rcpt_to=Rcpt, message=MessageS}}, 
 		#state{smtp_helo_name=Helo, smtp_dest_host=DHost, smtp_dest_port=DPort} = State) ->
 	?ASYNC(fun() -> smtpc:sendmail(DHost, DPort, Helo, From, Rcpt, MessageS) end, 600000),
+	{noreply, State};
+
+handle_cast({mail, Ref, #message{mail_from=From, rcpt_to=Rcpt, message=MessageS}}, 
+		#state{smtp_helo_name=Helo, smtp_dest_host=DHost, smtp_dest_port=DPort} = State) ->
+	?ASYNC(fun() -> 
+		smtpc:sendmail(DHost, DPort, Helo, From, Rcpt, MessageS),
+		mydlp_spool:delete(Ref),
+		mydlp_spool:consume_next("smtp"),
+		ok
+	end, 600000),
 	{noreply, State};
 
 handle_cast({mail, From, Rcpt, MessageS}, 
@@ -104,6 +115,12 @@ init([]) ->
 	HeloName = ?CFG(smtp_helo_name),
 	Host = ?CFG(smtp_next_hop_host),
 	Port = ?CFG(smtp_next_hop_port),
+
+	ConsumeFun = fun(Ref, Item) ->
+		mydlp_smtpc:mail(Ref, Item)
+	end,
+	mydlp_spool:create_spool("smtp"),
+	mydlp_spool:register_consumer("smtp", ConsumeFun),
 
 	{ok, #state{smtp_helo_name=HeloName, smtp_dest_host=Host, smtp_dest_port=Port}}.
 

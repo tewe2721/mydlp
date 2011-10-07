@@ -145,9 +145,10 @@ init([]) ->
 
 'PROCESS_DATA'(ok, #smtpd_fsm{message_bin=Message} = State) ->
 	NewState = smtpd_cmd:read_message(Message,State),
+	{ok, Ref} = mydlp_spool:push("smtp", NewState#smtpd_fsm.message_record),
 	smtpd_cmd:send(NewState,250),
 	?SMTP_LOG(received, NewState#smtpd_fsm.message_record),
-	'READ_FILES'(NewState).
+	'READ_FILES'(NewState#smtpd_fsm{spool_ref=Ref}).
 
 'READ_FILES'(#smtpd_fsm{message_mime=MIME} = State) ->
 	Files = mydlp_api:mime_to_files(MIME),
@@ -197,7 +198,7 @@ archive_req(State, {{rule, RId}, {file, _}, {matcher, _}, {misc, _}}, Files) ->
 		_Else -> log_req(State, archive, {{rule, RId}, {file, Files}, {matcher, none}, {misc,""}}) end.
 
 % refined this
-'BLOCK_REQ'(block, #smtpd_fsm{message_record=MessageR} = State) ->
+'BLOCK_REQ'(block, #smtpd_fsm{spool_ref=Ref, message_record=MessageR} = State) ->
 	MailFrom = MessageR#message.mail_from,
 	RepMessage = #message{mail_from=MailFrom, 
 			rcpt_to=MailFrom,
@@ -210,13 +211,13 @@ archive_req(State, {{rule, RId}, {file, _}, {matcher, _}, {misc, _}}, Files) ->
 				"\r\n" ++
 				"\r\n" ++
 				mydlp_api:get_denied_page(html_base64_str)},
-	mydlp_smtpc:mail(RepMessage),
+	mydlp_smtpc:mail(Ref, RepMessage),
 	?SMTP_LOG(sent_deny, MessageR),
 	NextState = reset_statedata(State),
 	{next_state, 'WAIT_FOR_CMD', NextState, ?CFG(fsm_timeout)}.
 
-'CONNECT_REMOTE'(connect, #smtpd_fsm{message_record=MessageR} = State) ->
-	mydlp_smtpc:mail(MessageR),
+'CONNECT_REMOTE'(connect, #smtpd_fsm{spool_ref=Ref, message_record=MessageR} = State) ->
+	mydlp_smtpc:mail(Ref, MessageR),
 	?SMTP_LOG(sent_ok, MessageR),
 	NextState = reset_statedata(State),
 	{next_state, 'WAIT_FOR_CMD', NextState, ?CFG(fsm_timeout)}.

@@ -168,10 +168,7 @@ cache_tmpfile(FilePath) ->
 		ok -> {cacheref, Ref};
 		{error, Err} -> throw({error, Err}) end.
 
-ref_to_fn(Prefix, Ref) ->
-	{A,B,C} = Ref,
-	RN = lists:flatten(io_lib:format("~s-~p.~p.~p",[Prefix,A,B,C])),
-	?WORK_DIR ++ "/" ++ RN.
+ref_to_fn(Prefix, Ref) -> mydlp_api:ref_to_fn(?WORK_DIR, Prefix, Ref).
 
 delete_cacheref(Ref) ->
 	spawn(fun() ->
