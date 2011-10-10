@@ -53,8 +53,6 @@
     'WAIT_FOR_SOCKET'/2,
     'WAIT_FOR_DATA'/2,
     'PARSE_DATA'/2,
-    'WAIT_FOR_DATA_2'/2,
-    'PARSE_DATA_2'/2,
     'WAIT_FOR_CMD'/2,
     'PARSE_CMD'/2
 ]).
@@ -150,22 +148,6 @@ init([]) ->
 					{next_state, 'PROCESS_DATA', NextState1, ?CFG(fsm_timeout)};
 				_Else2 -> {next_state, 'WAIT_FOR_DATA', NextState, ?CFG(fsm_timeout)} end;
 		_Else -> {next_state, 'WAIT_FOR_DATA', NextState, ?CFG(fsm_timeout)} end.
-
-'WAIT_FOR_DATA_2'({data, Data}, State) -> read_line(Data, State, 'WAIT_FOR_DATA_2', 'PARSE_DATA_2');
-
-'WAIT_FOR_DATA_2'(timeout, State) ->
-	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
-	{stop, normal, State}.
-
-'PARSE_DATA_2'({data, Line}, #smtpd_fsm{buff = Buff} = State) ->
-	NewBuff = <<Buff/binary, Line/binary>>,
-	case Line of
-		<<46,13,10>> -> % .CRLF
-			Pos = size(NewBuff) - 5,
-			<<Message:Pos/binary,13,10,46,13,10>> = NewBuff, % CRLF.CRLF smtpd data end.
-			gen_fsm:send_all_state_event(self(), ok),
-			{next_state, 'PROCESS_DATA', State#smtpd_fsm{message_bin=Message, buff= <<>>}, ?CFG(fsm_timeout)};
-		_Else -> {next_state, 'WAIT_FOR_DATA', State#smtpd_fsm{buff=NewBuff}, ?CFG(fsm_timeout)} end.
 
 'PROCESS_DATA'(ok, #smtpd_fsm{message_bin=Message} = State) ->
 	NewState = smtpd_cmd:read_message(Message,State),
