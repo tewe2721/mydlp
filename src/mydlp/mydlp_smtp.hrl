@@ -59,6 +59,7 @@
 	bypass_on_fail = false,
 	options     = [],
 	buff        = <<>>,
+	lbuff       = undefined,
 	line        = [],
 	cmd         = undefined,
 	param       = undefined,
