@@ -107,7 +107,9 @@ acl_call(Query, Files) -> acl_call(Query, Files, 1500000).
 
 acl_call(Query, none, Timeout) -> acl_call1(Query, none, Timeout);
 acl_call(Query, Files, Timeout) -> 
-	case lists:any(fun(F) -> ?BB_S(F#file.dataref) > ?CFG(maximum_object_size) end, Files) of
+	FileSizes = lists:map(fun(F) -> ?BB_S(F#file.dataref) end, Files),
+	TotalSize = lists:sum(FileSizes),
+	case TotalSize > ?CFG(maximum_object_size) of
 		true -> {log, mydlp_api:empty_aclr(Files, max_size_exceeded)};
 		false -> acl_call1(Query, Files, Timeout) end.
 
