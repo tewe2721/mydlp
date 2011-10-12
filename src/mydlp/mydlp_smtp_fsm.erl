@@ -52,7 +52,9 @@
 -export([
     'WAIT_FOR_SOCKET'/2,
     'WAIT_FOR_DATA'/2,
-    'WAIT_FOR_CMD'/2
+    'PARSE_DATA'/2,
+    'WAIT_FOR_CMD'/2,
+    'PARSE_CMD'/2
 ]).
 
 -compile(export_all).
@@ -96,7 +98,7 @@ init([]) ->
 %%-------------------------------------------------------------------------
 'WAIT_FOR_SOCKET'({socket_ready, Socket, _CommType}, State) when is_port(Socket) ->
 	% Now we own the socket
-	inet:setopts(Socket, [{active, once}, binary]),
+	inet:setopts(Socket, [{active, once}, {packet, line}, binary]),
 	{ok, {IP, _Port}} = inet:peername(Socket),
 %	{ok,DNSBL} = erlmail_antispam:dnsbl(IP),
 %	?D({relay,IP,smtpd_queue:checkip(IP)}),
@@ -111,37 +113,41 @@ init([]) ->
 	{next_state, 'WAIT_FOR_SOCKET', State}.
 
 %% Notification event coming from client
-'WAIT_FOR_CMD'({data, Data}, #smtpd_fsm{buff = Buff} = State) ->
-	NewBuff = <<Buff/binary,Data/binary>>,
-	case end_of_cmd(NewBuff) of
-		0 -> {next_state, 'WAIT_FOR_CMD', State#smtpd_fsm{buff = NewBuff}, ?CFG(fsm_timeout)};
-		Pos -> 
-			<<Line:Pos/binary,13,10,NextBuff/binary>> = NewBuff,
-			NextState = smtpd_cmd:command(Line,State#smtpd_fsm{line = Line}),
-			case NextState#smtpd_fsm.data of
-				undefined -> {next_state, 'WAIT_FOR_CMD', NextState#smtpd_fsm{buff = NextBuff}, ?CFG(fsm_timeout)};
-				<<>> -> {next_state, 'WAIT_FOR_DATA', NextState#smtpd_fsm{buff = NextBuff}, ?CFG(fsm_timeout)}
-			end
-			
-	end;
+'WAIT_FOR_CMD'({data, Data}, State) -> read_line(Data, State, 'WAIT_FOR_CMD', 'PARSE_CMD');
 
 'WAIT_FOR_CMD'(timeout, State) ->
 	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
+'PARSE_CMD'({data, Data}, State) ->
+	LineSize = size(Data) - 2,
+	<<Line:LineSize/binary,13,10>> = Data,
+	NextState = smtpd_cmd:command(Line, State#smtpd_fsm{line = Line}),
+	case NextState#smtpd_fsm.data of
+		undefined -> {next_state, 'WAIT_FOR_CMD', NextState, ?CFG(fsm_timeout)};
+		<<>> -> {next_state, 'WAIT_FOR_DATA', NextState, ?CFG(fsm_timeout)}
+	end.
+
 %% Notification event coming from client
-'WAIT_FOR_DATA'({data, Data}, #smtpd_fsm{buff = Buff} = State) ->
-	NewBuff = <<Buff/binary,Data/binary>>,
-	case end_of_data(NewBuff) of
-		0 -> {next_state, 'WAIT_FOR_DATA', State#smtpd_fsm{buff = NewBuff}, ?CFG(fsm_timeout)};
-		Pos -> % wait for end of data and return data in state.
-			<<Message:Pos/binary,13,10,46,13,10,NextBuff/binary>> = NewBuff,
-			gen_fsm:send_all_state_event(self(), ok),
-			{next_state, 'PROCESS_DATA', State#smtpd_fsm{message_bin=Message, buff=NextBuff}, ?CFG(fsm_timeout)} end;
+'WAIT_FOR_DATA'({data, Data}, State) -> read_line(Data, State, 'WAIT_FOR_DATA', 'PARSE_DATA');
 
 'WAIT_FOR_DATA'(timeout, State) ->
 	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
+
+'PARSE_DATA'({data, Line}, #smtpd_fsm{buff = Buff} = State) ->
+	NewBuff = <<Buff/binary, Line/binary>>,
+	NextState = State#smtpd_fsm{buff = NewBuff},
+	case Line of
+		<<46,13,10>> -> % .CRLF
+			Pos = size(NewBuff) - 5,
+			case NewBuff of
+				<<Message:Pos/binary,13,10,46,13,10>> -> % CRLF.CRLF smtpd data end.
+					gen_fsm:send_all_state_event(self(), ok),
+					NextState1 = State#smtpd_fsm{message_bin=Message, buff= <<>>},
+					{next_state, 'PROCESS_DATA', NextState1, ?CFG(fsm_timeout)};
+				_Else2 -> {next_state, 'WAIT_FOR_DATA', NextState, ?CFG(fsm_timeout)} end;
+		_Else -> {next_state, 'WAIT_FOR_DATA', NextState, ?CFG(fsm_timeout)} end.
 
 'PROCESS_DATA'(ok, #smtpd_fsm{message_bin=Message} = State) ->
 	NewState = smtpd_cmd:read_message(Message,State),
@@ -310,18 +316,6 @@ terminate(_Reason, _StateName, #smtpd_fsm{socket=Socket, addr=Addr} = _State) ->
 code_change(_OldVsn, StateName, StateData, _Extra) ->
 	{ok, StateName, StateData}.
 
-end_of_cmd(Bin) ->
-	% Refine this with compiled version for %20 performance improvement
-	case re:run(Bin, ?CRLF_BIN, [{capture,first}]) of
-		{match,[{Pos,2}]} -> Pos;
-		nomatch -> 0 end.
-
-end_of_data(Bin) ->
-	% Refine this with compiled version for %20 performance improvement
-	case re:run(Bin, ?SMTP_DATA_END_REGEX, [{capture,first}]) of
-		{match,[{Pos,5}]} -> Pos;
-		nomatch -> 0 end.
-
 reset_statedata(#smtpd_fsm{} = State) ->
 	State#smtpd_fsm{cmd   = undefined,
 			param = undefined,
@@ -332,6 +326,7 @@ reset_statedata(#smtpd_fsm{} = State) ->
 			message_record = undefined,
 		        message_mime = undefined,
 		        message_bin = undefined,
+		        lbuff = undefined,
 		        files       = [],
 			data  = undefined}.
 
@@ -398,22 +393,38 @@ smtp_msg(Type, Param) ->
 	Args1 = [self() | Args],
 	mydlp_logger:notify(smtp_msg, Format1, Args1).
 
+read_line(Line, #smtpd_fsm{lbuff=undefined} = State, FSMState, ParseFunc) when is_list(Line) ->
+        case lists:last(Line) of
+                $\n -> ?MODULE:ParseFunc({data, Line}, State);
+                _Else -> {next_smtpd_fsm, FSMState, State#smtpd_fsm{lbuff=[Line]}, ?CFG(fsm_timeout)} end;
+
+read_line(Line, #smtpd_fsm{lbuff=BuffList} = State, FSMState, ParseFunc) when is_list(Line) ->
+        case lists:last(Line) of
+                $\n -> ?MODULE:ParseFunc(
+                                {data, lists:append(lists:reverse([Line|BuffList]))},
+                                State#smtpd_fsm{lbuff=undefined});
+                _Else -> {next_smtpd_fsm, FSMState, State#smtpd_fsm{lbuff=[Line|BuffList]}, ?CFG(fsm_timeout)} end;
+
+read_line(Line, #smtpd_fsm{lbuff=undefined} = State, FSMState, ParseFunc) when is_binary(Line) ->
+        % case binary:last(Line) of % Erlang R14 bif
+        case binary_last(Line) of
+                $\n -> ?MODULE:ParseFunc({data, Line}, State);
+                _Else -> {next_smtpd_fsm, FSMState, State#smtpd_fsm{lbuff=[Line]}, ?CFG(fsm_timeout)} end;
+
+read_line(Line, #smtpd_fsm{lbuff=BuffList} = State, FSMState, ParseFunc) when is_binary(Line) ->
+	% case binary:last(Line) of % Erlang R14 bif
+	case binary_last(Line) of
+		$\n -> ?MODULE:ParseFunc(
+				{data, list_to_binary(lists:reverse([Line|BuffList]))},
+				State#smtpd_fsm{lbuff=undefined});
+		_Else -> {next_smtpd_fsm, FSMState, State#smtpd_fsm{lbuff=[Line|BuffList]}, ?CFG(fsm_timeout)} end.
+
+binary_last(Bin) when is_binary(Bin) ->
+	JunkSize = size(Bin) - 1,
+	<<_Junk:JunkSize/binary, Last/integer>> = Bin,
+	Last.
+
 -include_lib("eunit/include/eunit.hrl").
-
-end_of_cmd_test_() -> [
-	?_assertEqual(12, end_of_cmd(<<"hello world!\r\nhello">>)),
-	?_assertEqual(7, end_of_cmd(<<"goodbye\r\nbye\r\nbye">>)),
-	?_assertEqual(0, end_of_cmd(<<"humbara rumbara rumbamba!!!">>))
-	].
-
-end_of_data_test_() -> [
-	?_assertEqual(12, end_of_data(<<"hello world!\r\n.\r\nhello">>)),
-	?_assertEqual(13, end_of_data(<<"hello\r\nworld!\r\n.\r\nhello">>)),
-	?_assertEqual(13, end_of_data(<<"hello\r\nw\r\nld!\r\n.\r\nhello">>)),
-	?_assertEqual(7, end_of_data(<<"goodbye\r\n.\r\nbye\r\n.\r\nbye">>)),
-	?_assertEqual(0, end_of_data(<<"humbara\r\nrumbara\r\nrumbamba!!!">>)),
-	?_assertEqual(0, end_of_data(<<"humbara rumbara rumbamba!!!">>))
-	].
 
 -endif.
 

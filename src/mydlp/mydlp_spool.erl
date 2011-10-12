@@ -25,6 +25,8 @@
 %%% @end
 %%%-------------------------------------------------------------------
 
+-ifdef(__MYDLP_NETWORK).
+
 -module(mydlp_spool).
 -author("kerem@mydlp.com").
 -behaviour(gen_server).
@@ -286,4 +288,6 @@ renew_ref(SpoolName, FN0) ->
 	case file:rename(FN, FP) of
 		ok -> {ok, Ref, Item};
 		{error, Error} -> {ierror, Error} end.
+
+-endif.
 

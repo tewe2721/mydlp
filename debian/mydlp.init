@@ -34,6 +34,8 @@ SQUIDBINNAME=squid3
 
 BEACON=/usr/sbin/mydlp-beacon
 
+ICAPPORT=1344
+
 . /lib/lsb/init-functions
 
 check_piddir() {
@@ -49,6 +51,18 @@ wait_for_mysqld() {
 	for i in $(seq 10); do
 	    sleep 1
 	    if is_mysql_alive; then break; fi
+	done
+}
+
+is_port_open() {
+	local PORTNUM=$1
+	netstat -nltp 2>/dev/null|grep LISTEN|awk '-F ' '{print $4;}'|awk -F: '{print $NF;}'|grep -qe "^$PORTNUM$"
+}
+
+wait_for_icap() {
+	for i in $(seq 10); do
+	    sleep 1
+	    if is_port_open $ICAPPORT; then break; fi
 	done
 }
 
@@ -156,6 +170,7 @@ status_beacon() {
 
 reload_squid() {
 	SQUIDPID=$(pgrep $SQUIDBINNAME)
+	wait_for_icap
 	if [ -n "$SQUIDPID" ]; then
 		echo " * Reloading Squid..."
 		[ -x $SQUIDBIN ] && $SQUIDBIN -k reconfigure

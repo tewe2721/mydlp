@@ -80,7 +80,7 @@ class MydlpHandler:
 	def htmlToText(self, html):
 		try:
 			t = lxml.html.fromstring(html)
-			return  t.text_content().encode('utf-8', 'ignore')
+			return t.text_content().encode('utf-8', 'ignore')
 		except:
 			ge = GeneralException()
 			ge.why = "Python backend internal error..."
@@ -93,7 +93,7 @@ class MydlpHandler:
 			else:
 				return False
 		except:
-			return False	
+			return True
 
 	def checkArchiveIntegrity(self, file_path):
 		try:
@@ -102,7 +102,7 @@ class MydlpHandler:
 			else:
 				return False
 		except:
-			return False	
+			return True
 
 class MyDLPBackendServer(daemon.Daemon):
 
