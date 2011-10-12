@@ -182,21 +182,27 @@ process_aclret(AclRet, #smtpd_fsm{files=Files} = State) ->
 		{block, _AR} = T -> T;
 		{quarantine, _AR} = T -> T
 	end of
-		{pass, _AclR} ->	mydlp_api:clean_files(Files),
+		{pass, AclR} ->		post_query(State, AclR, Files),
 					'CONNECT_REMOTE'(connect, State);
-		{log, AclR} -> log_req(State, log, AclR),
-					mydlp_api:clean_files(Files),
+		{log, AclR} -> 		log_req(State, log, AclR),
+					post_query(State, AclR, Files),
 					'CONNECT_REMOTE'(connect, State);
-		{archive, AclR} -> archive_req(State, AclR, Files),
+		{archive, AclR} -> 	archive_req(State, AclR, Files),
 					% mydlp_archive will clean files.
 					'CONNECT_REMOTE'(connect, State);
-		{block, AclR} -> log_req(State, block, AclR),
-					mydlp_api:clean_files(Files),
+		{block, AclR} -> 	log_req(State, block, AclR),
+					post_query(State, AclR, Files),
 					'BLOCK_REQ'(block, State);
-		{quarantine, AclR} -> log_req(State, quarantine, AclR),
-					mydlp_api:clean_files(Files),
+		{quarantine, AclR} -> 	log_req(State, quarantine, AclR),
+					post_query(State, AclR, Files),
 					'BLOCK_REQ'(block, State)
 	end.
+
+post_query(State, AclR, Files) ->
+	case ?CFG(mail_archive) of
+		true -> archive_req(State, AclR, Files);
+			% mydlp_archive will clean files.
+		false -> mydlp_api:clean_files(Files) end.
 
 archive_req(State, {{rule, RId}, {file, _}, {matcher, _}, {misc, _}}, Files) ->
 	case Files of
