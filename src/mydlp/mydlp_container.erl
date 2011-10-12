@@ -126,10 +126,12 @@ handle_call({aclq, ObjId, Timeout}, From, #state{object_tree=OT} = State) ->
 							false -> mydlp_acl:qe(DFFiles) end,
 						AclRet = acl_ret(QRet, Obj, DFFiles),
 						{ok, AclRet}
-					catch Class:Error ->
-						?ERROR_LOG("ACLQ: Error occured: Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~nObjID: ["?S"].~nState: "?S"~n ",
-							[Class, Error, erlang:get_stacktrace(), ObjId, State]),
-							{ierror, {Class, Error}} end,
+					catch	throw:{error, eacces} -> {ok, pass};
+						Class:Error ->
+							?ERROR_LOG("ACLQ: Error occured: Class: ["?S"]. Error: ["?S"].~n"
+									"Stack trace: "?S"~nObjID: ["?S"].~nState: "?S"~n ",
+								[Class, Error, erlang:get_stacktrace(), ObjId, State]),
+								{ierror, {Class, Error}} end,
 					Worker ! {async_reply, Return, From}
 				end, Timeout);
 		{value, #object{eof_flag=false} = Obj} -> 
