@@ -50,7 +50,8 @@ class MydlpHandler:
 			self.mime.load()
 			self.bcfi = BCFileIntegrity.BCFileIntegrity()
 		else:
-			self.mime = mymagic.Magic(mime=True)
+			magicdb = os.environ['MYDLP_APPDIR'] + "/magic"
+			self.mime = mymagic.Magic(mime=True, magic_file=magicdb)
 
 	def getMagicMime(self, data):
 		try:
