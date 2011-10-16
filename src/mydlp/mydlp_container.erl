@@ -325,7 +325,10 @@ object_to_file(#object{prop_dict=PD, filepath=FilePath}) ->  % created with PUSH
 	Filename = case dict:find("filename", PD) of
 		{ok, FN} -> FN;
 		error -> filename:basename(FilePath) end,
-	#file{filename=Filename, dataref=?BB_C({regularfile, FilePath})}.
+	DataRef = case dict:find("burn_after_reading", PD) of
+		{ok, "true"} ->	?BB_C({tmpfile, FilePath});
+		_Else -> ?BB_C({regularfile, FilePath}) end,
+	#file{filename=Filename, dataref=DataRef}.
 
 call_timer() -> timer:send_after(1000000, cleanup_now).
 
