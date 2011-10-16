@@ -1775,20 +1775,20 @@ pany(Fun, ListOfArgs) -> pany(Fun, ListOfArgs, ?CFG(spawn_timeout)).
 
 pany(Fun, ListOfArgs, Timeout) ->
 	Self = self(),
-	Pid = mspawn(fun() -> pany_sup_f(Self, Fun, ListOfArgs, Timeout) end, Timeout),
+	Pid = mspawn(fun() -> pany_sup_f(Self, Fun, ListOfArgs, Timeout) end, Timeout + 2000),
 	pany_gather(Pid, Timeout).
 
 pany_gather(Pid, Timeout) ->
 	receive
 		{Pid, {ierror, {Class, Error}}} -> exception(Class, Error);
 		{Pid, Ret} -> Ret
-	after Timeout ->
+	after Timeout + 1500 ->
 		exit({timeout, {pany, Pid}})
 	end.
 
 pany_sup_f(Parent, Fun, ListOfArgs, Timeout) -> 
 	Self = self(),
-	Pids = lists:map(fun(I) -> mspawn_link(fun() -> pany_child_f(Self, Fun, I) end) end, ListOfArgs),
+	Pids = lists:map(fun(I) -> mspawn_link(fun() -> pany_child_f(Self, Fun, I, Timeout) end) end, ListOfArgs),
 	NumberOfPids = length(Pids),
 	pany_sup_gather(NumberOfPids, Parent, Timeout).
 
@@ -1800,20 +1800,24 @@ pany_sup_gather(NumberOfPids, Parent, Timeout) ->
 		{_Pid, _I, negative} -> 	pany_sup_gather(NumberOfPids - 1, Parent, Timeout);
 		{_Pid, {ierror, Reason}} -> 	pany_sup_return(Parent, {ierror, Reason} ),
 						exit({pany_error});
+		{_Pid, {timeout, I, T}} -> 	pany_sup_return(Parent, {ierror, {exit, {timeout, I, T}}} ),
+						exit({pany_timeout});
 		{_Pid, I, Else} -> 		pany_sup_return(Parent, {ok, I, Else} ),
 						exit({pany_returned})
-	after Timeout ->
+	after Timeout + 1000 -> % delay for receiving other timeout messages
 		exit({timeout, pany_sup_gather}) % not needed to emit to parent
 	end.
 
 pany_sup_return(Parent, Return) -> Parent ! {self(), Return}.
 
-pany_child_f(Parent, Fun, I) -> 
+pany_child_f(Parent, Fun, I, Timeout) -> 
+	{ok, TRef} = timer:send_after(Timeout, Parent, {self(), {timeout, I, Timeout}}),
 	Message = try
 		Ret = Fun(I),
 		{self(), I, Ret}
 	catch Class:Error ->
 		{self(), {ierror, {Class, Error}}} end,
+	timer:cancel(TRef),
 	Parent ! Message.
 
 %%-------------------------------------------------------------------------
