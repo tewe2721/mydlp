@@ -26,16 +26,24 @@
 %%%-------------------------------------------------------------------
 -module(mydlp_nlp_tr).
 -author("kerem@mydlp.com").
+
+-ifdef(__MYDLP_NETWORK).
+
 -behaviour(gen_server).
+
+-endif.
 
 -include("mydlp.hrl").
 
 %% API
+-export([normalize/1,
+	safe_norm/1,
+	to_ulower/1]).
+
+-ifdef(__MYDLP_NETWORK).
+
 -export([start_link/0,
 	pre_init/1,
-	normalize/1,
-	safe_norm/1,
-	to_ulower/1,
 	stop/0]).
 
 %% gen_server callbacks
@@ -55,6 +63,8 @@
 		dus=false,
 		dus_fi=false
 	}).
+
+-endif.
 
 %%%%%%%%%%%%% API
 normalize(Word) -> kok_ozeti_bul(Word).
@@ -131,8 +141,6 @@ terminate(_Reason, _State) ->
 
 code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
-
--endif.
 
 find_leaf(WT, Word) -> 
 	case find_leaf(WT, Word, none) of
@@ -383,8 +391,10 @@ unlu_dusur([252|Rest], Acc) -> lists:reverse(Rest) ++ Acc;
 unlu_dusur([C|Rest], Acc) -> unlu_dusur(Rest, [C|Acc]);
 unlu_dusur([], Acc) -> Acc.
 
+-endif.
+
 to_ulower(Str) -> 
-	Str1 = case unicode:characters_to_list(list_to_binary(Str)) of
+	Str1 = case unicode:characters_to_list(list_to_binary([Str])) of
 		{error, _, _} -> Str;
 		{incomplete, _, _} -> Str;
 		Else -> Else end,
