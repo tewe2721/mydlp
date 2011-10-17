@@ -42,6 +42,8 @@ else:
 
 if os.name == "posix":
 	import BCFileIntegrity
+else:
+	import atexit
 
 class MydlpHandler:
 	def __init__(self):
@@ -122,6 +124,12 @@ class MyDLPBackendServer(daemon.Daemon):
 		self.server = TServer.TThreadPoolServer(self.processor, self.transport, self.tfactory, self.pfactory)
 
 	def run(self):
+		if os.name != "posix":
+			# write pidfile
+			atexit.register(self.delpid)
+			pid = str(os.getpid())
+			file(self.pidfile,'w+').write("%s\n" % pid)
+		
 		print 'Starting MyDLP Backend server...'
 		self.server.serve()
 		print 'done.'
@@ -133,10 +141,14 @@ class MyDLPBackendServer(daemon.Daemon):
 		print 'done.'
 
 if __name__ == '__main__':
-	pidfile = "/var/run/mydlp/backend-py.pid"
+	pidfile = "mydlp-backend-py.pid"
 
-	if len(sys.argv) > 1:
-		pidfile = sys.argv[1]
+	if os.name == "posix":
+		pidfile = "/var/run/mydlp/backend-py.pid"
+		if len(sys.argv) > 1:
+			pidfile = sys.argv[1]
+	else:
+		pidfile = os.environ['MYDLP_APPDIR'] + "/run/backend-py.pid"
 
 	s = MyDLPBackendServer(pidfile)
 
