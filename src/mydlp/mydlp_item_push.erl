@@ -178,11 +178,11 @@ new_item_id() ->
 		Else -> throw(Else) end.
 
 http_req(Url) ->
-        ReqRet = (catch http:request(Url)),
+        ReqRet = (catch httpc:request(Url)),
 	http_req1(ReqRet).
 
 http_req(Url, Data) when is_binary(Data) ->
-	ReqRet = (catch http:request(post, {Url, [], "application/octet-stream", Data}, [], [])),
+	ReqRet = (catch httpc:request(post, {Url, [], "application/octet-stream", Data}, [], [])),
 	http_req1(ReqRet).
 
 http_req1(ReqRet) -> 
