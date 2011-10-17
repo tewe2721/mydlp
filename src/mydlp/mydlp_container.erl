@@ -351,6 +351,9 @@ qp_decode(Str) when is_list(Str) -> qp_decode(list_to_binary(Str));
 qp_decode(Str) when is_binary(Str) ->
 	DBin = mydlp_api:quoted_to_raw(Str),
 	unicode:characters_to_list(DBin).
+	%DList = unicode:characters_to_list(DBin, {utf16, little}),
+	%DList = unicode:characters_to_list(DBin).
+	%filename:nativename(DList).
 
 	
 
