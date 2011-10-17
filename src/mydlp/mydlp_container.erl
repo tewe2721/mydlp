@@ -172,7 +172,7 @@ handle_cast({setprop, ObjId, Key, Value}, #state{object_tree=OT} = State) ->
 handle_cast({pushfile, ObjId, FilePath}, #state{object_tree=OT} = State) ->
 	case gb_trees:lookup(ObjId, OT) of
 		{value, #object{eof_flag=false} = Obj} -> 
-			OT1 = gb_trees:enter(ObjId, Obj#object{filepath=FilePath, buffer=[]}, OT),
+			OT1 = gb_trees:enter(ObjId, Obj#object{filepath=qp_decode(FilePath), buffer=[]}, OT),
 			{noreply, State#state{object_tree=OT1}};
 		{value, #object{eof_flag=true} = Obj} -> 
 			?ERROR_LOG("PUSHFILE: eof_flag is true, not pushing file: ObjId="?S", FilePath="?S", Object="?S"~n",
@@ -317,13 +317,13 @@ is_inbound(#object{prop_dict=PD}) ->
 
 object_to_file(#object{prop_dict=PD, filepath=undefined, data=Data}) ->
 	Filename = case dict:find("filename", PD) of
-		{ok, FN} -> FN;
+		{ok, FN} -> qp_decode(FN);
 		error -> "seap-data" end,
 	#file{filename=Filename, dataref=?BB_C(Data)};
 
 object_to_file(#object{prop_dict=PD, filepath=FilePath}) ->  % created with PUSHFILE
 	Filename = case dict:find("filename", PD) of
-		{ok, FN} -> FN;
+		{ok, FN} -> qp_decode(FN);
 		error -> filename:basename(FilePath) end,
 	DataRef = case dict:find("burn_after_reading", PD) of
 		{ok, "true"} ->	?BB_C({tmpfile, FilePath});
@@ -346,5 +346,11 @@ cleanup1(OT, MinObjId, [ObjId| Rest]) when ObjId < MinObjId ->
 	OT1 = gb_trees:delete_any(ObjId, OT),
 	cleanup1(OT1, MinObjId, Rest);
 cleanup1(OT, _MinObjId, _ObjIds) -> OT.
+
+qp_decode(Str) when is_list(Str) -> qp_decode(list_to_binary(Str));
+qp_decode(Str) when is_binary(Str) ->
+	DBin = mydlp_api:quoted_to_raw(Str),
+	unicode:characters_to_list(DBin).
+
 	
 
