@@ -61,15 +61,13 @@ replace_bin(BInKey, Data, Replace) -> async_re_call({rbin, BInKey, Replace}, Dat
 
 match_bin(BInKey, Data) -> async_re_call({mbin, BInKey}, Data).
 
-longest_bin(BInKey, Data) -> async_re_call({longest_bin, BInKey}, Data, 600000).
+longest_bin(BInKey, Data) -> async_re_call({longest_bin, BInKey}, Data).
 
 is_match_bin(BInKey, Data) -> async_re_call({i_mbin, BInKey}, Data).
 
 split_bin(BInKey, Data) -> async_re_call({sbin, BInKey}, Data).
 
-score_suite(BInKey, Data) -> 
-	try async_re_call({score_suite, BInKey}, Data)
-	catch _:{timeout, _} -> 999999999 end.
+score_suite(BInKey, Data) -> async_re_call({score_suite, BInKey}, Data).
 
 match([GI|GIs], Data) -> 
 	case match1(GI, Data) of
