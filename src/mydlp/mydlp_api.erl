@@ -236,7 +236,6 @@ office_to_text(Data, [Prog|Progs]) ->
 %			[{args, Args},
 			binary,
 			use_stdio,
-			eof,
 			exit_status,
 			stderr_to_stdout]),
 
@@ -267,7 +266,6 @@ get_port_resp(Port) ->
 	receive
 		{ Port, {data, _Data}} -> get_port_resp(Port);
 		{ Port, {exit_status, 0}} -> ok;
-		{ Port, eof} -> ok;
 		{ Port, {exit_status, RetCode}} -> { error, {retcode, RetCode} }
 	after 180000 -> { error, timeout }
 	end.
@@ -663,7 +661,6 @@ un7zc(ZFNDir, ZFN) ->
 			[{args, ?SEVENZARGS(WorkDir1, ZFN)},
 			use_stdio,
 			exit_status,
-			eof,
 			stderr_to_stdout]),
 
 	Ret = case get_port_resp(Port) of
@@ -698,7 +695,6 @@ ungzipc(FNDir, FN) ->
 	Port = open_port({spawn_executable, ?GZIPBIN}, 
 			[{args, ?GZIPARGS(FN)},
 			use_stdio,
-			eof,
 			exit_status,
 			stderr_to_stdout]),
 
@@ -735,7 +731,6 @@ unarc(ArFNDir, ArFN) ->
 			[{args, ?ARARGS(ArFN)},
 			{cd, WorkDir1},
 			use_stdio,
-			eof,
 			exit_status,
 			stderr_to_stdout]),
 
@@ -814,7 +809,6 @@ ps_to_text(Bin) when is_binary(Bin) ->
 	Port = open_port({spawn_executable, ?PSTOTEXTBIN}, 
 			[{args, ?PSTOTEXTARGS(Ps)},
 			use_stdio,
-			eof,
 			exit_status,
 			stderr_to_stdout]),
 
@@ -857,7 +851,6 @@ pdf_to_text(Bin) when is_binary(Bin) ->
 	Port = open_port({spawn_executable, ?PDFTOTEXTBIN}, 
 			[{args, ?PDFTOTEXTARGS(Pdf, TextFN)},
 			use_stdio,
-			eof,
 			exit_status,
 			stderr_to_stdout]),
 
