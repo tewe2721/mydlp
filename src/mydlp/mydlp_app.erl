@@ -69,7 +69,7 @@ start(_Type, _Args) ->
 	mydlp_dynamic:prestart_load(),
 	% Start dependencies
 	mydlp_loglevel:set(4),
-	start_crypto(),
+	ssl:start(),
         application:load(thrift),
         application:load(sasl),
         application:load(mydlp),
@@ -158,11 +158,6 @@ stop(_S) ->
 
 create_pid_file() ->
 	file:write_file(?CFG(pid_file), os:getpid()).
-
-start_crypto() ->
-        application:start(ssl),
-        application:start(crypto),
-	ok.
 
 -ifdef(__MYDLP_NETWORK).
 
