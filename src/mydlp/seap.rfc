@@ -10,8 +10,8 @@ TYPES:
 Id 		-> Number
 key 		-> String (format: [a-Z0-9_\.]* ) (can contain only numbers, letters, underscore and dot sign.)
 value 		-> String (format: [^\r\n]* ) (can contain anything other than carriage return and line feed.)
-FilePath	-> String (format: [^\r\n]* ) (can contain anything other than carriage return and line feed.)
-ChunkPath	-> String (format: [^\r\n]* ) (can contain anything other than carriage return and line feed.)
+FilePath	-> String (should be encoded in quouted-printable format [http://en.wikipedia.org/wiki/Quoted-printable])
+ChunkPath	-> String (should be encoded in quouted-printable format [http://en.wikipedia.org/wiki/Quoted-printable])
 Size		-> Number
 Action		-> ENUM[block, pass]
 DataChunk 	-> Binary
@@ -34,6 +34,7 @@ Server:	ERR/OK
 Description: Sets given property (key value pair) for object referenced with given identifier. Properties for objects in container are stored in dictionaries. In other words, if you set different values for same key, latter value will be valid. Special keys are listed below:
 	"filename" -> Value of this key will be used as filename when assembling object into a file record for acl queries and other DLP operations.If file name is known, it is stongly recommended to set this key.
 	"direction" -> Can be "in" or "out". Value of this key will be used to determine direction of the data flow.
+	"burn_after_reading" -> Can be "true" or "false". Value of this key will be used to determine whether a pushed file (Any file intorduced with PUSHFILE command) will be deleted after processing.
 Returns "OK" or "ERR" according to whether an error occured.
 
 -GETPROP-
