@@ -238,17 +238,6 @@ get_header(Key,Header,Default) ->
 		_ -> Default
 	end.
 
-quoted_to_raw(EncContent) when is_list(EncContent) -> quoted_to_raw(list_to_binary(EncContent));
-quoted_to_raw(EncContent) when is_binary(EncContent) -> quoted_to_raw(EncContent, <<>>).
-
-quoted_to_raw(<<$=, 13, 10, Rest/binary>>, Acc ) -> quoted_to_raw(Rest, Acc);
-quoted_to_raw(<<$=, 10, Rest/binary>>, Acc ) -> quoted_to_raw(Rest, Acc);
-quoted_to_raw(<<$=, H1, H2, Rest/binary>>, Acc ) -> 
-	I = try mydlp_api:hex2int([H1,H2]) catch _:_ -> $\s end,
-	quoted_to_raw(Rest, <<Acc/binary, I/integer>>);
-quoted_to_raw(<<C/integer, Rest/binary>>, Acc ) -> quoted_to_raw(Rest, <<Acc/binary, C/integer>>);
-quoted_to_raw(<<>>, Acc ) -> Acc.
-
 decode_content("7bit", EncContent) -> decode_content('7bit', EncContent);
 decode_content('7bit', EncContent) -> list_to_binary([EncContent]);
 decode_content("8bit", EncContent) -> decode_content('8bit', EncContent);
@@ -258,7 +247,7 @@ decode_content('binary', EncContent) -> list_to_binary([EncContent]);
 decode_content("base64", EncContent) -> decode_content('base64', EncContent);
 decode_content('base64', EncContent) -> base64:decode(EncContent);
 decode_content("quoted-printable", EncContent) -> decode_content('quoted-printable', EncContent);
-decode_content('quoted-printable', EncContent) -> quoted_to_raw(EncContent);
+decode_content('quoted-printable', EncContent) -> mydlp_api:quoted_to_raw(EncContent);
 decode_content(_Other, EncContent) -> decode_content('7bit', EncContent).
 
 get_wo_quote_after(Value) ->

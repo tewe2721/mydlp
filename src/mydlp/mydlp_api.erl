@@ -264,7 +264,7 @@ get_port_resp(Port, Ret) ->
 
 get_port_resp(Port) ->
 	receive
-		{ Port, {data, _}} -> get_port_resp(Port);
+		{ Port, {data, _Data}} -> get_port_resp(Port);
 		{ Port, {exit_status, 0}} -> ok;
 		{ Port, {exit_status, RetCode}} -> { error, {retcode, RetCode} }
 	after 180000 -> { error, timeout }
@@ -644,7 +644,7 @@ uncompress0(_Method, Filename) ->
 
 -ifdef(__PLATFORM_WINDOWS).
 
--define(SEVENZBIN, ?CFG(app_dir) ++ "/libexec/7z.exe").
+-define(SEVENZBIN, ?CFG(app_dir) ++ "/cygwin/bin/7z.exe").
 
 -endif.
 
@@ -1901,6 +1901,21 @@ ref_to_fn(Dir, Prefix, Ref) ->
 	{A,B,C} = Ref,
 	RN = lists:flatten(io_lib:format("~s-~p.~p.~p",[Prefix,A,B,C])),
 	Dir ++ "/" ++ RN.
+
+%%-------------------------------------------------------------------------
+%% @doc Decodes given quoted-printable string.
+%% @end
+%%-------------------------------------------------------------------------
+quoted_to_raw(EncContent) when is_list(EncContent) -> quoted_to_raw(list_to_binary(EncContent));
+quoted_to_raw(EncContent) when is_binary(EncContent) -> quoted_to_raw(EncContent, <<>>).
+
+quoted_to_raw(<<$=, 13, 10, Rest/binary>>, Acc ) -> quoted_to_raw(Rest, Acc);
+quoted_to_raw(<<$=, 10, Rest/binary>>, Acc ) -> quoted_to_raw(Rest, Acc);
+quoted_to_raw(<<$=, H1, H2, Rest/binary>>, Acc ) -> 
+	I = try mydlp_api:hex2int([H1,H2]) catch _:_ -> $\s end,
+	quoted_to_raw(Rest, <<Acc/binary, I/integer>>);
+quoted_to_raw(<<C/integer, Rest/binary>>, Acc ) -> quoted_to_raw(Rest, <<Acc/binary, C/integer>>);
+quoted_to_raw(<<>>, Acc ) -> Acc.
 
 -include_lib("eunit/include/eunit.hrl").
 

@@ -106,7 +106,7 @@ sync() ->
 	RevisionI = mydlp_api:get_client_policy_revision_id(),
 	RevisionS = integer_to_list(RevisionI),
 	Url = "https://" ++ ?CFG(management_server_address) ++ "/mydlp-web-manager/sync.php?rid=" ++ RevisionS,
-	case catch http:request(Url) of
+	case catch httpc:request(Url) of
 		{ok, {{_HttpVer, Code, _Msg}, _Headers, Body}} -> 
 			case {Code, Body} of
 				{200, <<>>} -> ?ERROR_LOG("SYNC: Empty response: Url="?S"~n", [Url]);
