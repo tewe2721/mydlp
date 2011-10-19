@@ -220,6 +220,14 @@ get_record_fields(Record) ->
 		not_found -> get_record_fields_functional(Record);
 		Else -> Else end.
 
+%-define(QLCQ(ListC), qlc:q(ListC, [{cache, ets}])).
+
+%-define(QLCE(Query), qlc:e(Query, [{cache_all, ets}])).
+
+-define(QLCQ(ListC), qlc:q(ListC)).
+
+-define(QLCE(Query), qlc:e(Query)).
+
 %%%%%%%%%%%%% MyDLP Mnesia API
 
 get_cgid() -> -1.
@@ -240,38 +248,38 @@ wait_for_tables() ->
 
 -ifdef(__MYDLP_NETWORK).
 
-get_rules(Who) -> async_query_call({get_rules, Who}).
+get_rules(Who) -> aqc({get_rules, Who}, cache).
 
-get_all_rules() -> async_query_call(get_all_rules).
+get_all_rules() -> aqc(get_all_rules, cache).
 
-get_all_rules(DestList) -> async_query_call({get_all_rules, DestList}).
+get_all_rules(DestList) -> aqc({get_all_rules, DestList}, cache).
 
 get_rules_for_cid(CustomerId, Who) -> get_rules_for_cid(CustomerId, [], Who).
 
-get_rules_for_cid(CustomerId, DestList, Who) -> async_query_call({get_rules_for_cid, CustomerId, DestList, Who}).
+get_rules_for_cid(CustomerId, DestList, Who) -> aqc({get_rules_for_cid, CustomerId, DestList, Who}, cache).
 
-get_rules_by_user(Who) -> async_query_call({get_rules_by_user, Who}).
+get_rules_by_user(Who) -> aqc({get_rules_by_user, Who}, cache).
 
-get_cid(SIpAddr) -> async_query_call({get_cid, SIpAddr}).
+get_cid(SIpAddr) -> aqc({get_cid, SIpAddr}, cache).
 
-get_default_rule(CustomerId) -> async_query_call({get_default_rule, CustomerId}).
+get_default_rule(CustomerId) -> aqc({get_default_rule, CustomerId}, cache).
 
-remove_site(CustomerId) -> async_query_call({remove_site, CustomerId}).
+remove_site(CustomerId) -> aqc({remove_site, CustomerId}, flush).
 
-remove_file_entry(FileId) -> async_query_call({remove_file_entry, FileId}).
+remove_file_entry(FileId) -> aqc({remove_file_entry, FileId}, flush).
 
-remove_group(GroupId) -> async_query_call({remove_group, GroupId}).
+remove_group(GroupId) -> aqc({remove_group, GroupId}, flush).
 
-remove_file_from_group(FileId, GroupId) -> async_query_call({remove_file_from_group, FileId, GroupId}).
+remove_file_from_group(FileId, GroupId) -> aqc({remove_file_from_group, FileId, GroupId}, flush).
 
 add_fhash(Hash, FileId, GroupId) when is_binary(Hash) -> 
-	async_query_call({add_fhash, Hash, FileId, GroupId}).
+	aqc({add_fhash, Hash, FileId, GroupId}, flush).
 
 add_shash(Hash, FileId, GroupId) when is_integer(Hash) -> add_shash([Hash], FileId, GroupId);
 add_shash(HList, FileId, GroupId) when is_list(HList) -> 
-	async_query_call({add_shl, HList, FileId, GroupId}).
+	aqc({add_shl, HList, FileId, GroupId}, flush).
 
-set_gid_by_fid(FileId, GroupId) -> async_query_call({set_gid_by_fid, FileId, GroupId}).
+set_gid_by_fid(FileId, GroupId) -> aqc({set_gid_by_fid, FileId, GroupId}, flush).
 
 new_authority(Node) -> gen_server:call(?MODULE, {new_authority, Node}, 30000).
 
@@ -279,32 +287,32 @@ new_authority(Node) -> gen_server:call(?MODULE, {new_authority, Node}, 30000).
 
 -ifdef(__MYDLP_ENDPOINT).
 
-get_rule_table() -> async_query_call(get_rule_table).
+get_rule_table() -> aqc(get_rule_table, cache).
 
 -endif.
 
-dump_tables(Tables) when is_list(Tables) -> async_query_call({dump_tables, Tables});
+dump_tables(Tables) when is_list(Tables) -> aqc({dump_tables, Tables}, cache);
 dump_tables(Table) -> dump_tables([Table]).
 
 dump_client_tables() -> dump_tables(?CLIENT_TABLES).
 
-get_regexes(GroupId) ->	async_query_call({get_regexes, GroupId}).
+get_regexes(GroupId) ->	aqc({get_regexes, GroupId}, cache).
 
 is_fhash_of_gid(Hash, GroupIds) -> 
-	async_query_call({is_fhash_of_gid, Hash, GroupIds}).
+	aqc({is_fhash_of_gid, Hash, GroupIds}, nocache).
 
 is_shash_of_gid(Hash, GroupIds) -> 
-	async_query_call({is_shash_of_gid, Hash, GroupIds}).
+	aqc({is_shash_of_gid, Hash, GroupIds}, nocache).
 
 is_mime_of_gid(Mime, GroupIds) -> 
-	async_query_call({is_mime_of_gid, Mime, GroupIds}).
+	aqc({is_mime_of_gid, Mime, GroupIds}, cache).
 
-is_dr_fh_of_fid(Hash, FileId) -> async_query_call({is_dr_fh_of_fid, Hash, FileId}).
+is_dr_fh_of_fid(Hash, FileId) -> aqc({is_dr_fh_of_fid, Hash, FileId}, nocache).
 
-write(RecordList) when is_list(RecordList) -> async_query_call({write, RecordList});
+write(RecordList) when is_list(RecordList) -> aqc({write, RecordList}, flush);
 write(Record) when is_tuple(Record) -> write([Record]).
 
-delete(Item) -> async_query_call({delete, Item}).
+delete(Item) -> aqc({delete, Item}, flush).
 
 truncate_all() -> gen_server:call(?MODULE, truncate_all, 15000).
 
@@ -345,98 +353,98 @@ handle_result(_Query, {atomic, Objects}) -> Objects.
 -ifdef(__MYDLP_NETWORK).
 
 handle_query({get_rules_for_cid, CustomerId, DestList, Who}) ->
-	Q = qlc:q([I#ipr.parent || I <- mnesia:table(ipr),
+	Q = ?QLCQ([I#ipr.parent || I <- mnesia:table(ipr),
 			I#ipr.customer_id == CustomerId,
 			ip_band(I#ipr.ipbase, I#ipr.ipmask) == ip_band(Who, I#ipr.ipmask)
 			]),
-	Parents = qlc:e(Q),
+	Parents = ?QLCE(Q),
 	Parents1 = lists:usort(Parents),
 	resolve_all(Parents1, DestList);
 
 handle_query({get_rules, Who}) ->
-	Q = qlc:q([I#ipr.parent || I <- mnesia:table(ipr),
+	Q = ?QLCQ([I#ipr.parent || I <- mnesia:table(ipr),
 			ip_band(I#ipr.ipbase, I#ipr.ipmask) == ip_band(Who, I#ipr.ipmask)
 			]),
-	Parents = qlc:e(Q),
+	Parents = ?QLCE(Q),
 	Parents1 = lists:usort(Parents),
 	resolve_all(Parents1);
 
 handle_query(get_all_rules) ->
-	Q = qlc:q([{rule, R#rule.id} || R <- mnesia:table(rule)]),
-	Parents = qlc:e(Q),
+	Q = ?QLCQ([{rule, R#rule.id} || R <- mnesia:table(rule)]),
+	Parents = ?QLCE(Q),
 	Parents1 = lists:usort(Parents),
 	resolve_all(Parents1);
 
 handle_query({get_all_rules, DestList}) ->
-	Q = qlc:q([{rule, R#rule.id} || R <- mnesia:table(rule)]),
-	Parents = qlc:e(Q),
+	Q = ?QLCQ([{rule, R#rule.id} || R <- mnesia:table(rule)]),
+	Parents = ?QLCE(Q),
 	Parents1 = lists:usort(Parents),
 	resolve_all(Parents1, DestList);
 
 handle_query({get_rules_by_user, Who}) ->
-	Q = qlc:q([U#m_user.parent || U <- mnesia:table(m_user),
+	Q = ?QLCQ([U#m_user.parent || U <- mnesia:table(m_user),
 			U#m_user.username == Who
 			]),
-	Parents = qlc:e(Q),
+	Parents = ?QLCE(Q),
 	Parents1 = lists:usort(Parents),
 	resolve_all(Parents1);
 
 handle_query({get_cid, SIpAddr}) ->
-	Q = qlc:q([S#site_desc.customer_id ||
+	Q = ?QLCQ([S#site_desc.customer_id ||
 		S <- mnesia:table(site_desc),
 		S#site_desc.ipaddr == SIpAddr
 		]),
-	qlc:e(Q);
+	?QLCE(Q);
 
 handle_query({get_default_rule, CustomerId}) ->
-	Q = qlc:q([ D#default_rule.resolved_rule ||
+	Q = ?QLCQ([ D#default_rule.resolved_rule ||
 		D <- mnesia:table(default_rule),
 		D#default_rule.customer_id == CustomerId
 		]),
-	qlc:e(Q);
+	?QLCE(Q);
 
 handle_query({remove_site, CI}) ->
-	Q = qlc:q([F#filter.id ||
+	Q = ?QLCQ([F#filter.id ||
 		F <- mnesia:table(filter),
 		F#filter.customer_id == CI
 		]),
-	FIs = qlc:e(Q),
+	FIs = ?QLCE(Q),
 
-	Q1 = qlc:q([I#ipr.id ||
+	Q1 = ?QLCQ([I#ipr.id ||
 		I <- mnesia:table(ipr),
 		I#ipr.customer_id == CI
 		]),
-	IIs = qlc:e(Q1),
+	IIs = ?QLCE(Q1),
 
-	Q2 = qlc:q([R#regex.id ||
+	Q2 = ?QLCQ([R#regex.id ||
 		R <- mnesia:table(regex),
 		R#regex.customer_id == CI
 		]),
-	RIs = qlc:e(Q2),
+	RIs = ?QLCE(Q2),
 
-	Q3 = qlc:q([M#mime_type.id ||	
+	Q3 = ?QLCQ([M#mime_type.id ||	
 		M <- mnesia:table(mime_type),
 		M#mime_type.customer_id == CI
 		]),
-	MIs = qlc:e(Q3),
+	MIs = ?QLCE(Q3),
 
-	Q4 = qlc:q([S#site_desc.ipaddr ||	
+	Q4 = ?QLCQ([S#site_desc.ipaddr ||	
 		S <- mnesia:table(site_desc),
 		S#site_desc.customer_id == CI
 		]),
-	RQ4 = qlc:e(Q4),
+	RQ4 = ?QLCE(Q4),
 
-	Q5 = qlc:q([F#file_hash.id ||	
+	Q5 = ?QLCQ([F#file_hash.id ||	
 		F <- mnesia:table(file_hash),
 		F#file_hash.file_id == {wl, CI}
 		]),
-	WFIs = qlc:e(Q5),
+	WFIs = ?QLCE(Q5),
 
-	Q6 = qlc:q([F#file_hash.id ||	
+	Q6 = ?QLCQ([F#file_hash.id ||	
 		F <- mnesia:table(file_hash),
 		F#file_hash.file_id == {bl, CI}
 		]),
-	BFIs = qlc:e(Q6),
+	BFIs = ?QLCE(Q6),
 	
 
 	case RQ4 of
@@ -452,43 +460,43 @@ handle_query({remove_site, CI}) ->
 	lists:foreach(fun(Id) -> mnesia:delete({mime_type, Id}) end, MIs);
 
 handle_query({remove_file_entry, FI}) ->
-	Q = qlc:q([H#file_hash.id ||
+	Q = ?QLCQ([H#file_hash.id ||
 		H <- mnesia:table(file_hash),
 		H#file_hash.file_id == FI
 		]),
-	FHIs = qlc:e(Q),
+	FHIs = ?QLCE(Q),
 
-	Q2 = qlc:q([H#sentence_hash.id ||
+	Q2 = ?QLCQ([H#sentence_hash.id ||
 		H <- mnesia:table(sentence_hash),
 		H#sentence_hash.file_id == FI
 		]),
-	SHIs = qlc:e(Q2),
+	SHIs = ?QLCE(Q2),
 
-	Q3 = qlc:q([G#file_group.id ||	
+	Q3 = ?QLCQ([G#file_group.id ||	
 		G <- mnesia:table(file_group),
 		G#file_group.file_id == FI
 		]),
-	FGIs = qlc:e(Q3),
+	FGIs = ?QLCE(Q3),
 
 	lists:foreach(fun(Id) -> mnesia:delete({file_hash, Id}) end, FHIs),
 	lists:foreach(fun(Id) -> mnesia:delete({sentence_hash, Id}) end, SHIs),
 	lists:foreach(fun(Id) -> mnesia:delete({file_group, Id}) end, FGIs);
 
 handle_query({remove_group, GI}) ->
-	Q = qlc:q([G#file_group.id ||
+	Q = ?QLCQ([G#file_group.id ||
 		G <- mnesia:table(file_group),
 		G#file_group.group_id == GI 
 		]),
-	FGIs = qlc:e(Q),
+	FGIs = ?QLCE(Q),
 	lists:foreach(fun(Id) -> mnesia:delete({file_group, Id}) end, FGIs);
 
 handle_query({remove_file_from_group, FI, GI}) ->
-	Q = qlc:q([G#file_group.id ||
+	Q = ?QLCQ([G#file_group.id ||
 		G <- mnesia:table(file_group),
 		G#file_group.file_id == FI,
 		G#file_group.group_id == GI
 		]),
-	FGIs = qlc:e(Q),
+	FGIs = ?QLCE(Q),
 	lists:foreach(fun(Id) -> mnesia:delete({file_group, Id}) end, FGIs);
 
 handle_query({add_fhash, Hash, FI, GI}) ->
@@ -514,55 +522,55 @@ handle_query(Query) -> handle_query_common(Query).
 -ifdef(__MYDLP_ENDPOINT).
 
 handle_query(get_rule_table) ->
-	Q = qlc:q([ R#rule_table.table ||
+	Q = ?QLCQ([ R#rule_table.table ||
 		R <- mnesia:table(rule_table),
 		R#rule_table.id == mydlp_mnesia:get_dcid()
 		]),
-	qlc:e(Q);
+	?QLCE(Q);
 
 handle_query(Query) -> handle_query_common(Query).
 
 -endif.
 
 handle_query_common({is_fhash_of_gid, Hash, _HGIs}) ->
-	Q = qlc:q([G#file_group.group_id ||
+	Q = ?QLCQ([G#file_group.group_id ||
 		H <- mnesia:table(file_hash),
 		G <- mnesia:table(file_group),
 		H#file_hash.md5 == Hash,
 		H#file_hash.file_id == G#file_group.file_id
 		]),
-	qlc:e(Q);
+	?QLCE(Q);
 
 handle_query_common({is_shash_of_gid, Hash, _HGIs}) ->
-	Q = qlc:q([G#file_group.group_id ||
+	Q = ?QLCQ([G#file_group.group_id ||
 		H <- mnesia:table(sentence_hash),
 		G <- mnesia:table(file_group),
 		H#sentence_hash.phash2 == Hash,
 		H#sentence_hash.file_id == G#file_group.file_id
 		]),
-	qlc:e(Q);
+	?QLCE(Q);
 
 handle_query_common({is_mime_of_gid, Mime, _MGIs}) ->
-	Q = qlc:q([M#mime_type.group_id ||
+	Q = ?QLCQ([M#mime_type.group_id ||
 		M <- mnesia:table(mime_type),
 		M#mime_type.mime == Mime
 		]),
-	qlc:e(Q);
+	?QLCE(Q);
 
 handle_query_common({is_dr_fh_of_fid, Hash, FileId}) ->
-	Q = qlc:q([F#file_hash.id ||
+	Q = ?QLCQ([F#file_hash.id ||
 		F <- mnesia:table(file_hash),
 		F#file_hash.file_id == FileId,
 		F#file_hash.md5 == Hash
 		]),
-	qlc:e(Q);
+	?QLCE(Q);
 
 handle_query_common({get_regexes, GroupId}) ->
-	Q = qlc:q([ { R#regex.id, R#regex.compiled } ||
+	Q = ?QLCQ([ { R#regex.id, R#regex.compiled } ||
 		R <- mnesia:table(regex),
 		R#regex.group_id == GroupId
 		]),
-	qlc:e(Q);
+	?QLCE(Q);
 
 handle_query_common({dump_tables, Tables}) ->
 	L1 = [ {T, mnesia:all_keys(T)} || T <- Tables],
@@ -578,12 +586,31 @@ handle_query_common({delete, Item}) ->
 
 handle_query_common(Query) -> throw({error,{unhandled_query,Query}}).
 
-handle_call({async_query, Query}, From, State) ->
+handle_call({async_query, flush, Query}, From, State) ->
 	Worker = self(),
 	?ASYNC(fun() ->
-		F = fun() -> handle_query(Query) end,
-		Result = transaction(F),
-		Return = handle_result(Query, Result),
+		Return = evaluate_query(Query),
+		cache_clean(),
+		Worker ! {async_reply, Return, From}
+	end, 15000),
+	{noreply, State};
+
+handle_call({async_query, cache, Query}, From, State) ->
+	Worker = self(),
+	?ASYNC(fun() ->
+		Return = case cache_lookup(Query) of
+			{hit, R} -> R;
+			miss ->	R = evaluate_query(Query),
+				cache_insert(Query, R),
+				R end,
+		Worker ! {async_reply, Return, From}
+	end, 15000),
+	{noreply, State};
+
+handle_call({async_query, nocache, Query}, From, State) ->
+	Worker = self(),
+	?ASYNC(fun() ->
+		Return = evaluate_query(Query),
 		Worker ! {async_reply, Return, From}
 	end, 15000),
 	{noreply, State};
@@ -593,6 +620,7 @@ handle_call(truncate_all, From, State) ->
 	?ASYNC(fun() ->
 		lists:foreach(fun(T) -> mnesia:clear_table(T) end, all_tab_names()),
 		lists:foreach(fun(T) -> mydlp_mnesia:delete({unique_ids, T}) end, all_tab_names()),
+		cache_clean(),
 		Worker ! {async_reply, ok, From}
 	end, 15000),
 	{noreply, State};
@@ -602,6 +630,7 @@ handle_call(truncate_nondata, From, State) ->
 	?ASYNC(fun() ->
 		lists:foreach(fun(T) -> mnesia:clear_table(T) end, nondata_tab_names()),
 		lists:foreach(fun(T) -> mydlp_mnesia:delete({unique_ids, T}) end, nondata_tab_names()),
+		cache_clean(),
 		Worker ! {async_reply, ok, From}
 	end, 15000),
 	{noreply, State};
@@ -610,6 +639,7 @@ handle_call(truncate_bayes, From, State) ->
 	Worker = self(),
 	?ASYNC(fun() ->
 		lists:foreach(fun(T) -> mnesia:clear_table(T) end, bayes_tab_names()),
+		cache_clean(),
 		Worker ! {async_reply, ok, From}
 	end, 15000),
 	{noreply, State};
@@ -663,6 +693,8 @@ init([]) ->
 	case is_mydlp_distributed() of
 		true -> start_distributed();
 		false -> start_single() end,
+
+	cache_start(),
 
 	{ok, #state{}}.
 
@@ -734,6 +766,14 @@ is_mnesia_distributed() ->
 	case mnesia:system_info(db_nodes) of
 		[ThisNode] -> false;
 		DBNodeList -> lists:member(ThisNode, DBNodeList) end.
+
+cache_start() ->
+	ets:new(query_cache, [
+			public,
+			named_table,
+			{write_concurrency, true}
+			%{read_concurrency, true}
+		]).
 
 -ifdef(__MYDLP_NETWORK).
 
@@ -830,6 +870,24 @@ transaction(F) ->
 			{aborted, Reason}
 	end.
 
+evaluate_query(Query) ->
+	F = fun() -> handle_query(Query) end,
+	Result = transaction(F),
+	handle_result(Query, Result).
+
+cache_lookup(Query) ->
+	case ets:lookup(query_cache, Query) of
+		[] -> miss;
+		[I|_] -> {hit, I} end.
+
+cache_insert(Query, Return) ->
+	ets:insert(query_cache, {Query, Return}),
+	ok.
+
+cache_clean() ->
+	ets:delete_all_objects(query_cache),
+	ok.
+
 -ifdef(__MYDLP_NETWORK).
 
 ip_band({A1,B1,C1,D1}, {A2,B2,C2,D2}) -> {A1 band A2, B1 band B2, C1 band C2, D1 band D2}.
@@ -837,10 +895,10 @@ ip_band({A1,B1,C1,D1}, {A2,B2,C2,D2}) -> {A1 band A2, B1 band B2, C1 band C2, D1
 resolve_all(ParentList) -> resolve_all(ParentList, []).
 
 resolve_all(ParentList, DestList) ->
-	Q = qlc:q([{F#filter.id, F#filter.default_action} || 
+	Q = ?QLCQ([{F#filter.id, F#filter.default_action} || 
 			F <- mnesia:table(filter)
 			]),
-	case qlc:e(Q) of
+	case ?QLCE(Q) of
 		[FilterKey] -> 	
 			Rules = resolve_rules(ParentList, DestList),
 			[{FilterKey, Rules}];
@@ -854,15 +912,15 @@ resolve_rules([P|PS], DestList, Rules) ->
 resolve_rules([], _DestList, Rules) -> lists:reverse(Rules).
 
 resolve_rule({mgroup, Id}, DestList) ->
-	Q = qlc:q([MG#match_group.parent || 
+	Q = ?QLCQ([MG#match_group.parent || 
 			MG <- mnesia:table(match_group),
 			MG#match_group.id == Id
 			]),
-	case qlc:e(Q) of
+	case ?QLCE(Q) of
 		[Parent] -> resolve_rule(Parent, DestList);
 		_Else -> none end;
 resolve_rule({rule, Id}, DestList) ->
-	Q = qlc:q([{R#rule.id, R#rule.action, 
+	Q = ?QLCQ([{R#rule.id, R#rule.action, 
 			not lists:any(fun(E) -> lists:member(E, R#rule.trusted_domains) end, DestList)
 			} || 
 			F <- mnesia:table(filter), 
@@ -871,7 +929,7 @@ resolve_rule({rule, Id}, DestList) ->
 			R#rule.id == Id
 			]),
 	
-	case qlc:e(Q) of
+	case ?QLCE(Q) of
 		[{RId, RAction, true = _IsNotWhiteDomain}] -> {RId, RAction, find_funcs({rule, RId})};
 		[{RId, RAction, false = _IsNotWhiteDomain}] -> {RId, RAction, []};
 		_Else -> none end.
@@ -882,15 +940,15 @@ find_funcss([Parent|Parents], Funcs) ->
 find_funcss([], Funcs) -> lists:reverse(Funcs).
 
 find_funcs(ParentId) ->
-	QM = qlc:q([{M#match.func, M#match.func_params} ||
+	QM = ?QLCQ([{M#match.func, M#match.func_params} ||
 			M <- mnesia:table(match),
 			M#match.parent == ParentId
 		]),
-	QMG = qlc:q([{mgroup, MG#match_group.id} ||
+	QMG = ?QLCQ([{mgroup, MG#match_group.id} ||
 			MG <- mnesia:table(match_group),
 			MG#match_group.parent == ParentId
 		]),
-	lists:flatten([qlc:e(QM), find_funcss(qlc:e(QMG))]).
+	lists:flatten([?QLCE(QM), find_funcss(?QLCE(QMG))]).
 
 -endif.
 
@@ -900,12 +958,12 @@ consistency_chk() ->
 compile_regex() ->
 	mnesia:wait_for_tables([regex], 5000),
 	RegexC = fun() ->
-		Q = qlc:q([R || R <- mnesia:table(regex),
+		Q = ?QLCQ([R || R <- mnesia:table(regex),
 			R#regex.plain /= undefined,
 			R#regex.compiled == undefined,
 			R#regex.error == undefined
 			]),
-		[mnesia:write(R) || R <- compile_regex(qlc:e(Q))]
+		[mnesia:write(R) || R <- compile_regex(?QLCE(Q))]
 	end,
 	transaction(RegexC).
 
@@ -921,7 +979,13 @@ compile_regex([], Ret) -> lists:reverse(Ret).
 
 get_unique_id(TableName) -> mnesia:dirty_update_counter(unique_ids, TableName, 1).
 
-async_query_call(Query) -> gen_server:call(?MODULE, {async_query, Query}, 5000).
+% aqc(Query) -> aqc(Query, nocache).
+
+aqc(Query, flush) -> async_query_call(Query, flush);
+aqc(Query, cache) -> async_query_call(Query, cache);
+aqc(Query, nocache) -> async_query_call(Query, nocache).
+
+async_query_call(Query, CacheOption) -> gen_server:call(?MODULE, {async_query, CacheOption, Query}, 5000).
 
 all_tab_names() -> tab_names1(?TABLES, []).
 
@@ -941,12 +1005,12 @@ tab_names1([], Returns) -> lists:reverse(Returns).
 %% File Group functions
 
 add_file_group(FI, GI) ->
-	Q = qlc:q([G#file_group.id ||	
+	Q = ?QLCQ([G#file_group.id ||	
 		G <- mnesia:table(file_group),
 		G#file_group.file_id == FI,
 		G#file_group.group_id == GI 
 		]),
-	case qlc:e(Q) of
+	case ?QLCE(Q) of
 		[] -> 	NewId = get_unique_id(file_hash),
 			FG = #file_group{id=NewId, file_id=FI, group_id=GI},
 			mnesia:write(FG);
@@ -955,29 +1019,29 @@ add_file_group(FI, GI) ->
 remove_filters(FIs) -> lists:foreach(fun(Id) -> remove_filter(Id) end, FIs), ok.
 
 remove_filter(FI) ->
-	Q = qlc:q([R#rule.id ||	
+	Q = ?QLCQ([R#rule.id ||	
 		R <- mnesia:table(rule),
 		R#rule.filter_id == FI
 		]),
-	RIs = qlc:e(Q),
+	RIs = ?QLCE(Q),
 	remove_rules(RIs),
 	mnesia:delete({filter, FI}).
 
 remove_rules(RIs) -> lists:foreach(fun(Id) -> remove_rule(Id) end, RIs), ok.
 
 remove_rule(RI) ->
-	Q = qlc:q([M#match.id ||	
+	Q = ?QLCQ([M#match.id ||	
 		M <- mnesia:table(match),
 		M#match.parent == {rule, RI}
 		]),
-	MIs = qlc:e(Q),
+	MIs = ?QLCE(Q),
 	remove_matches(MIs),
 
-	Q2 = qlc:q([MG#match_group.id ||	
+	Q2 = ?QLCQ([MG#match_group.id ||	
 		MG <- mnesia:table(match_group),
 		MG#match_group.parent == {rule, RI}
 		]),
-	MGIs = qlc:e(Q2),
+	MGIs = ?QLCE(Q2),
 	remove_match_groups(MGIs),
 
 	mnesia:delete({rule, RI}).
@@ -989,11 +1053,11 @@ remove_match(MI) -> mnesia:delete({match, MI}).
 remove_match_groups(MGIs) -> lists:foreach(fun(Id) -> remove_match_group(Id) end, MGIs), ok.
 
 remove_match_group(MGI) ->
-	Q = qlc:q([M#match.id ||	
+	Q = ?QLCQ([M#match.id ||	
 		M <- mnesia:table(match),
 		M#match.parent == {mgroup, MGI}
 		]),
-	MIs = qlc:e(Q),
+	MIs = ?QLCE(Q),
 	remove_matches(MIs),
 	mnesia:delete({match_group, MGI}).
 
