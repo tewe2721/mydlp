@@ -192,7 +192,10 @@ split_multipart(Boundary,Body) -> split_multipart(Boundary,Body,[]).
 %%-------------------------------------------------------------------------
 split_multipart(_Boundary,<<>>,Acc) -> lists:reverse(Acc);
 split_multipart(Boundary,Body,Acc) when is_binary(Body)-> 
-	EBoundary = mydlp_api:escape_regex(Boundary),
+	Boundary1 = case Boundary of
+		"-" ++ _Rest -> "--" ++ Boundary;
+		_Else -> Boundary end,
+	EBoundary = mydlp_api:escape_regex(Boundary1),
 	case re:run(Body, EBoundary, [{capture,first}]) of
 		nomatch -> split_multipart(Boundary,<<>>,Acc);
 		{match,[{Start,Length}]} when is_integer(Start) ->
@@ -201,16 +204,18 @@ split_multipart(Boundary,Body,Acc) when is_binary(Body)->
 				<<_Pre:JSize/binary, "\r\n", N1/binary>> -> N1;
 				<<_Pre:JSize/binary, "\n", N1/binary>> -> N1;
 				<<_Pre:JSize/binary, N1/binary>> -> N1;
-				_Else -> <<>> end,
+				_Else2 -> <<>> end,
 			case re:run(New, EBoundary, [{capture,first}]) of
 				nomatch -> split_multipart(Boundary,<<>>,Acc);
 				{match, [{Start2, _Length2}]} when is_integer(Start2) ->
-					PSize = Start2 - 4,
+					PSize  = case Start2 - 4 of
+						I when I > 0 -> I;
+						_Else3 -> 0 end,
 					<<P1:PSize/binary, Nx1/binary>> = New,
 					{Part, Next} = case Nx1 of
 						<<"\r\n--", _/binary>> -> {P1, Nx1};
 						<<PS:1/binary, Nx2/binary>> -> {<<P1/binary, PS/binary>>, Nx2};
-						_Else2 -> {P1, Nx1} end,
+						_Else4 -> {P1, Nx1} end,
 					case is_invalid_part(Part) of
 						true -> split_multipart(Boundary,Next, Acc);
 						false -> split_multipart(Boundary,Next,[Part|Acc])
@@ -293,7 +298,29 @@ multipart_test() ->
       <<"This is a message with multiple parts in MIME format.\r\n--frontier\r\nContent-Type: text/plain\r\n\r\nThis is the body of the message.\r\n--frontier\r\nContent-Type: application/octet-stream\r\nContent-Transfer-Encoding: base64\r\n\r\nPGh0bWw+CiAgPGhlYWQ+CiAgPC9oZWFkPgogIDxib2R5PgogICAgPHA+VGhpcyBpcyB0aGUg\r\nYm9keSBvZiB0aGUgbWVzc2FnZS48L3A+CiAgPC9ib2R5Pgo8L2h0bWw+Cg==\r\n--frontier-x1 -\r\n">>,
       <<"This is a message with multiple parts in MIME format.\r\n">>,
       []},
-	?assertEqual(ParsedMessage, decode(RawMessage)).
+	RawMessage2 = <<"Subject: ugh\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"--\"\r\n\r\nThis is a message with multiple parts in MIME format.\r\n----\r\nContent-Type: text/plain\r\n\r\nThis is the body of the message.\r\n----\r\nContent-Type: application/octet-stream\r\nContent-Transfer-Encoding: base64\r\n\r\nPGh0bWw+CiAgPGhlYWQ+CiAgPC9oZWFkPgogIDxib2R5PgogICAgPHA+VGhpcyBpcyB0aGUg\r\nYm9keSBvZiB0aGUgbWVzc2FnZS48L3A+CiAgPC9ib2R5Pgo8L2h0bWw+Cg==\r\n-----x1 -\r\n">>,
+	ParsedMessage2 = {mime,[{subject,"ugh"},
+       {'mime-version',"1.0"},
+       {'content-type',"multipart/mixed; boundary=\"--\""}],
+      <<"Subject: ugh\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"--\"\r\n\r\n">>,
+      [{mime,[{'content-type',"text/plain"}],
+             <<"Content-Type: text/plain\r\n\r\n">>,[],
+             <<"This is the body of the message.">>,
+             <<"This is the body of the message.">>,[]},
+       {mime,[{'content-type',"application/octet-stream"},
+              {'content-transfer-encoding',"base64"}],
+             <<"Content-Type: application/octet-stream\r\nContent-Transfer-Encoding: base64\r\n\r\n">>,
+             [],
+             <<"PGh0bWw+CiAgPGhlYWQ+CiAgPC9oZWFkPgogIDxib2R5PgogICAgPHA+VGhpcyBpcyB0aGUg\r\nYm9keSBvZiB0aGUgbWVzc2FnZS48L3A+CiAgPC9ib2R5Pgo8L2h0bWw+Cg==">>,
+             <<"PGh0bWw+CiAgPGhlYWQ+CiAgPC9oZWFkPgogIDxib2R5PgogICAgPHA+VGhpcyBpcyB0aGUg\r\nYm9keSBvZiB0aGUgbWVzc2FnZS48L3A+CiAgPC9ib2R5Pgo8L2h0bWw+Cg==">>,
+             []}],
+      <<"This is a message with multiple parts in MIME format.\r\n----\r\nContent-Type: text/plain\r\n\r\nThis is the body of the message.\r\n----\r\nContent-Type: application/octet-stream\r\nContent-Transfer-Encoding: base64\r\n\r\nPGh0bWw+CiAgPGhlYWQ+CiAgPC9oZWFkPgogIDxib2R5PgogICAgPHA+VGhpcyBpcyB0aGUg\r\nYm9keSBvZiB0aGUgbWVzc2FnZS48L3A+CiAgPC9ib2R5Pgo8L2h0bWw+Cg==\r\n-----x1 -\r\n">>,
+      <<"This is a message with multiple parts in MIME format.\r\n">>,
+      []},
+	[
+	?_assertEqual(ParsedMessage, decode(RawMessage)),
+	?_assertEqual(ParsedMessage2, decode(RawMessage2))
+	].
 
 -endif.
 
