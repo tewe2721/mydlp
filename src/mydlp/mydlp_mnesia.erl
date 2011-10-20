@@ -590,7 +590,7 @@ handle_call({async_query, flush, Query}, From, State) ->
 	Worker = self(),
 	?ASYNC(fun() ->
 		Return = evaluate_query(Query),
-		cache_clean(),
+		cache_clean(), % TODO: This should be reflected to other nodes in distributed configuration.
 		Worker ! {async_reply, Return, From}
 	end, 15000),
 	{noreply, State};
@@ -599,7 +599,7 @@ handle_call({async_query, cache, Query}, From, State) ->
 	Worker = self(),
 	?ASYNC(fun() ->
 		Return = case cache_lookup(Query) of
-			{hit, R} -> R;
+			{hit, {Query, R}} -> R;
 			miss ->	R = evaluate_query(Query),
 				cache_insert(Query, R),
 				R end,
@@ -661,6 +661,11 @@ handle_info({async_reply, Reply, From}, State) ->
 	gen_server:reply(From, Reply),
 	{noreply, State};
 
+handle_info(cleanup_now, State) ->
+	cache_clean(),
+	call_timer(),
+	{noreply, State};
+
 handle_info(_Info, State) ->
 	{noreply, State}.
 
@@ -695,7 +700,7 @@ init([]) ->
 		false -> start_single() end,
 
 	cache_start(),
-
+	call_timer(),
 	{ok, #state{}}.
 
 handle_cast(_Msg, State) ->
@@ -887,6 +892,8 @@ cache_insert(Query, Return) ->
 cache_clean() ->
 	ets:delete_all_objects(query_cache),
 	ok.
+
+call_timer() -> timer:send_after(900000, cleanup_now).
 
 -ifdef(__MYDLP_NETWORK).
 
