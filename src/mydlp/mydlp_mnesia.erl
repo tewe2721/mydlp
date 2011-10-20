@@ -662,7 +662,7 @@ handle_info({async_reply, Reply, From}, State) ->
 	{noreply, State};
 
 handle_info(cleanup_now, State) ->
-	cache_clean(),
+	cache_cleanup_handle(),
 	call_timer(),
 	{noreply, State};
 
@@ -893,7 +893,15 @@ cache_clean() ->
 	ets:delete_all_objects(query_cache),
 	ok.
 
-call_timer() -> timer:send_after(900000, cleanup_now).
+cache_cleanup_handle() ->
+	MaxSize = ?CFG(query_cache_maximum_size),
+	case ets:info(query_cache, memory) of
+		I when I > MaxSize -> cache_clean();
+		_Else -> ok end.
+	
+
+call_timer() -> timer:send_after(5000, cleanup_now).
+%call_timer() -> timer:send_after(?CFG(query_cache_cleanup_interval), cleanup_now).
 
 -ifdef(__MYDLP_NETWORK).
 

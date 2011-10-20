@@ -160,7 +160,8 @@ load_src(Src) ->
 	{icap_log_pass_lower_limit, integer, "10240"},
 	{smb_discover, boolean, "false"},
 	{smb_discover_script_path, string, "/usr/sbin/mydlp-smb-discover"},
-	{smb_discover_interval, integer, "3600"}
+	{smb_discover_interval, integer, "3600"},
+	{query_cache_maximum_size, integer, "2000000"}
 ]).
 
 -endif.
@@ -170,7 +171,8 @@ load_src(Src) ->
 -define(CONFDEF_FUNCTIONAL, [
 	{management_server_address, string, "127.0.0.1"}, % TODO: validation IP address
 	{maximum_push_size, integer, "1048576"},
-	{sync_interval, integer, "300000"}
+	{sync_interval, integer, "300000"},
+	{query_cache_maximum_size, integer, "500000"}
 ]).
 
 -endif.
@@ -186,7 +188,8 @@ load_src(Src) ->
 	{supervisor_max_restart_time, integer, "20"},
 	{supervisor_kill_timeout, integer, "20"},
 	{fsm_timeout, integer, "120000"},
-	{spawn_timeout, integer, "60000"}
+	{spawn_timeout, integer, "60000"},
+	{query_cache_cleanup_interval, integer, "900000"}
 ]).
 
 -define(CONFDEF, lists:append([?CONFDEF_PLATFORM, ?CONFDEF_FUNCTIONAL, ?CONFDEF_COMMON])).
