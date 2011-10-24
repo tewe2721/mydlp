@@ -633,10 +633,12 @@ populate_regexes1([[Id, GroupId, Regex]|Rows], CustomerId) ->
 	populate_regexes1(Rows, CustomerId);
 populate_regexes1([], _CustomerId) -> ok.
 
-populate_site_desc([[Id, StaticIpI]]) ->
+populate_site_desc([[Id, StaticIpI]|Rows]) ->
 	IpAddr = int_to_ip(StaticIpI),
 	S = #site_desc{customer_id=Id, ipaddr=IpAddr},
-	mydlp_mnesia:write(S), ok.
+	mydlp_mnesia:write(S),
+	populate_site_desc(Rows);
+populate_site_desc([]) -> ok.
 
 populate_file_hashes([[Hash]|Rows], Tag, CustomerId) ->
 	F = #file_hash{id=mydlp_mnesia:get_unique_id(file_hash),
