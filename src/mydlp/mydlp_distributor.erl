@@ -38,6 +38,7 @@
 	is_distributed/0,
 	find_authority/0,
 	bcast_cluster/1,
+	flush_cache/1,
 	stop/0]).
 
 %% gen_server callbacks
@@ -61,6 +62,9 @@ find_authority() ->
 
 bcast_cluster(ClusterNodes) ->
 	gen_server:cast(?MODULE, {bcast_cluster, ClusterNodes}).
+
+flush_cache(ClusterNodes) ->
+	gen_server:cast(?MODULE, {cluster_flush_cache, ClusterNodes}).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -103,6 +107,15 @@ handle_cast({we_are_up, ClusterNodes, PeerPriority, PeerInitEpoch},
 						{PeerPriority, PeerInitEpoch}) of 
 				yes -> bcast_cluster(MnesiaNodes);
 				no -> ok end end end,
+	{noreply, State};
+
+handle_cast({cluster_flush_cache, ClusterNodes}, State) ->
+	OtherClusterNodes = ClusterNodes -- [node()],
+	gen_server:abcast(OtherClusterNodes, ?MODULE, mnesia_flush_cache),
+	{noreply, State};
+
+handle_cast(mnesia_flush_cache, State) ->
+	mydlp_mnesia:flush_cache(),
 	{noreply, State};
 
 handle_cast(_Msg, State) ->

@@ -58,7 +58,8 @@
 	truncate_nondata/0,
 	truncate_bayes/0,
 	write/1,
-	delete/1
+	delete/1,
+	flush_cache/0
 	]).
 
 -ifdef(__MYDLP_NETWORK).
@@ -319,6 +320,8 @@ truncate_all() -> gen_server:call(?MODULE, truncate_all, 15000).
 truncate_nondata() -> gen_server:call(?MODULE, truncate_nondata, 15000).
 
 truncate_bayes() -> gen_server:call(?MODULE, truncate_bayes, 15000).
+
+flush_cache() -> cache_clean0().
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -889,7 +892,15 @@ cache_insert(Query, Return) ->
 	ets:insert(query_cache, {Query, Return}),
 	ok.
 
-cache_clean() ->
+cache_clean() -> 
+	cache_clean0(),
+	MnesiaNodes = get_mnesia_nodes(),
+	case is_mnesia_distributed() of
+		true -> mydlp_distributor:flush_cache(MnesiaNodes);
+		false -> ok end,
+	ok.
+
+cache_clean0() ->
 	ets:delete_all_objects(query_cache),
 	ok.
 
