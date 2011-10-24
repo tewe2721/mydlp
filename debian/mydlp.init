@@ -32,8 +32,6 @@ MYSQLADM=/usr/bin/mysqladmin
 SQUIDBIN=/usr/sbin/squid3
 SQUIDBINNAME=squid3
 
-BEACON=/usr/sbin/mydlp-beacon
-
 ICAPPORT=1344
 
 . /lib/lsb/init-functions
@@ -145,29 +143,6 @@ status_backend_py() {
         status_of_proc -p $PIDFILE2 mydlp "MyDLP Python Backend" 2>&1 > /dev/null 
 }
 
-start_beacon() {
-	log_daemon_msg "Starting MyDLP Beacon" "mydlp"
-        if start-stop-daemon --start --quiet --oknodo --exec $BEACON ; then
-            log_end_msg 0
-        else
-            log_end_msg 1
-        fi
-}
-
-stop_beacon() {
-	log_daemon_msg "Stopping MyDLP Beacon" "mydlp"
-        if start-stop-daemon --stop --quiet --oknodo --exec $BEACON; then
-            rm -f /var/lock/subsys/mydlp-beacon
-            log_end_msg 0
-        else
-            log_end_msg 1
-        fi
-}
-
-status_beacon() {
-        status_of_proc $BEACON mydlp "MyDLP Beacon" 2>&1 > /dev/null 
-}
-
 reload_squid() {
 	SQUIDPID=$(pgrep $SQUIDBINNAME)
 	wait_for_icap
@@ -183,14 +158,12 @@ case "$1" in
 	cleanpids
 	start_backend_py
 	start_mydlp
-	start_beacon
 	cleanpids
 	reload_squid
 	;;
   stop)
 	check_piddir
 	cleanpids
-	stop_beacon
 	stop_mydlp
 	stop_backend_py
 	cleanpids
@@ -202,13 +175,11 @@ case "$1" in
   restart)
 	check_piddir
 	cleanpids
-	stop_beacon
 	stop_mydlp
 	stop_backend_py
 	cleanpids
 	start_backend_py
 	start_mydlp
-	start_beacon
 	cleanpids
 	reload_squid
 	;;

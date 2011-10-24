@@ -1,1 +1,1 @@
-SUBDIRS = thrift backend mydlp ui beacon
+SUBDIRS = thrift backend mydlp ui

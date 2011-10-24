@@ -64,7 +64,6 @@ AC_CONFIG_FILES([
 		src/thrift/Makefile
 		src/backend/Makefile
 		src/backend/py/Makefile
-		src/beacon/Makefile
 		src/ui/Makefile
 		src/ui/web/Makefile
 	])
