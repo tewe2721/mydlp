@@ -231,11 +231,13 @@ line_to_src(ConfDef, Line) ->
 		none -> {ConfDef, ""};
 		{KeyStr, ValStr} ->
 			Key = list_to_atom(KeyStr),
-			{Key, Type, _DefaultVal} = lists:keyfind(Key, 1, ConfDef),
-			ValSrcStr = val_to_type_src(Key, Type, ValStr),
-			SLine = KeyStr ++ "() -> " ++ ValSrcStr ++ ".\r\n",
-			ConfDef1 = lists:keydelete(Key, 1, ConfDef),
-			{ConfDef1, SLine} end.
+			case lists:keyfind(Key, 1, ConfDef) of
+				{Key, Type, _DefaultVal} ->
+					ValSrcStr = val_to_type_src(Key, Type, ValStr),
+					SLine = KeyStr ++ "() -> " ++ ValSrcStr ++ ".\r\n",
+					ConfDef1 = lists:keydelete(Key, 1, ConfDef),
+					{ConfDef1, SLine};
+				false -> {ConfDef, ""} end end.
 
 get_kv(Line) -> get_kv(Line, {"", false, false}, {"", false, false}).
 
