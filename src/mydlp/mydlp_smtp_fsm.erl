@@ -285,8 +285,8 @@ handle_info(_Info, StateName, StateData) ->
 fsm_call(StateName, Args, StateData) -> 
 	try ?MODULE:StateName(Args, StateData)
 	catch Class:Error ->
-		?ERROR_LOG("Error occured on FSM ("?S") call ("?S"). Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
-				[?MODULE, StateName, Class, Error, erlang:get_stacktrace()]),
+		?ERROR_LOG("Error occured on FSM ("?S") call ("?S"). Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~nState: "?S"~n",
+				[?MODULE, StateName, Class, Error, erlang:get_stacktrace(), StateData]),
 		(catch case is_bypassable(StateData) of
 			true -> deliver_raw(StateData),
 				NextStateData = reset_statedata(StateData),
