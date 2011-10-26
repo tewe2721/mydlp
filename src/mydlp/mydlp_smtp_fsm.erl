@@ -152,6 +152,7 @@ init([]) ->
 'PROCESS_DATA'(ok, #smtpd_fsm{message_bin=Message} = State) ->
 	NewState = smtpd_cmd:read_message(Message,State),
 	{ok, Ref} = mydlp_spool:push("smtp", NewState#smtpd_fsm.message_record),
+	mydlp_spool:lock(Ref),
 	smtpd_cmd:send(NewState,250),
 	?SMTP_LOG(received, NewState#smtpd_fsm.message_record),
 	'READ_FILES'(NewState#smtpd_fsm{spool_ref=Ref}).

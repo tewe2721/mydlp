@@ -40,6 +40,8 @@
 	consume_next/1,
 	consume_all/1,
 	push/2,
+	lock/1,
+	release/1,
 	pop/1,
 	poppush/1,
 	poppush_all/1,
@@ -79,8 +81,11 @@ register_consumer(SpoolName, ConsumeFun) -> gen_server:cast(?MODULE, {register_c
 
 consume_next(SpoolName) -> gen_server:cast(?MODULE, {consume_next, SpoolName}).
 
-consume_all(SpoolName) -> 
-	gen_server:cast(?MODULE, {consume_all, SpoolName}).
+consume_all(SpoolName) -> gen_server:cast(?MODULE, {consume_all, SpoolName}).
+
+lock(Item) -> gen_server:cast(?MODULE, {lock, Item}).
+
+release(Item) -> gen_server:cast(?MODULE, {release, Item}).
 
 push(SpoolName, Item) -> gen_server:call(?MODULE, {push, SpoolName, Item}, 30000).
 
@@ -126,7 +131,10 @@ handle_call({poppush, SpoolName}, _From, #state{spools = Spools} = State) ->
 	case dict:is_key(SpoolName, Spools) of
 		true ->	Ret = case file:list_dir(?SPOOL_DIR(SpoolName)) of
 				{ok, []} -> {ierror, spool_is_empty};
-				{ok, [FN0|_]} -> renew_ref(SpoolName,FN0);
+				{ok, [_|_] = FNs} -> 
+						case acquire_fn(FNs) of
+							none -> {ierror, spool_is_empty};
+							FN0 -> renew_ref(SpoolName,FN0) end;
 				{error, Error2} -> {ierror, Error2} end,
 			{reply, Ret, State};
 		false -> ?ERROR_LOG("Spool does not exist: Name: "?S" Dir: "?S, 
@@ -142,7 +150,7 @@ handle_call({poppush_all, SpoolName}, _From, #state{spools = Spools} = State) ->
 									{ok, Ref, Item} -> {Ref, Item};
 									Else -> ?ERROR_LOG("Error with spool file: Error: "?S, [Else]),
 										[] end
-									|| FN <- FNs],
+									|| FN <- FNs, lock_item(FN) == true ],
 							{ok, lists:flatten(RefItemPL)};
 				{error, Error2} -> {ierror, Error2} end,
 			{reply, Ret, State};
@@ -163,6 +171,10 @@ handle_call({push, SpoolName, Item}, _From, #state{spools = Spools} = State) ->
 				[SpoolName, ?SPOOL_DIR(SpoolName)]),
 			{reply, {ierror, spool_does_not_exist}, State}
 			end;
+
+handle_call({lock, Item}, _From, State) ->
+	Reply = lock_item(Item),
+	{reply, Reply, State};
 
 handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
@@ -227,6 +239,7 @@ handle_cast({consume_all, SpoolName}, #state{spools = Spools} = State) ->
 			?ASYNC(fun() -> case mydlp_spool:is_empty(SpoolName) of
 					{ok, false} -> 
 						{ok, RefItemPL} = mydlp_spool:poppush_all(SpoolName),
+						%% TODO: lock
 						[ConsumeFun(Ref, Item) || {Ref, Item} <- RefItemPL],
 						ok;
 					{ok, true} -> ok end,
@@ -238,6 +251,10 @@ handle_cast({consume_all, SpoolName}, #state{spools = Spools} = State) ->
 		error -> ?ERROR_LOG("Spool does not exist: Name: "?S" Dir: "?S, 
 				[SpoolName, ?SPOOL_DIR(SpoolName)]),
 			{noreply, State} end;
+
+handle_cast({release, Item}, State) ->
+	release_item(Item),
+	{noreply, State};
 
 handle_cast(_Msg, State) ->
 	{noreply, State}.
@@ -286,8 +303,33 @@ renew_ref(SpoolName, FN0) ->
 	Ref = {SpoolName, NRef},
 	FP = mydlp_api:ref_to_fn(?SPOOL_DIR(SpoolName), "item", NRef),
 	case file:rename(FN, FP) of
-		ok -> {ok, Ref, Item};
+		ok -> 	release_item(FN),
+			lock_item(FP),
+			{ok, Ref, Item};
 		{error, Error} -> {ierror, Error} end.
+
+lock_item(FilePath) when is_list(FilePath)->
+	Reply = global:set_lock({FilePath, spool}, nodes(), 0),
+	timer:apply_after(600000, global, del_lock, [{FilePath, spool}, nodes()]),
+	Reply;
+
+lock_item({SpoolName, NRef}) ->
+	FP = mydlp_api:ref_to_fn(?SPOOL_DIR(SpoolName), "item", NRef),
+	lock_item(FP).
+
+acquire_fn([FN|Rest]) ->
+	case lock_item(FN) of
+		true -> FN;
+		false -> acquire_fn(Rest) end;
+acquire_fn([]) -> none.
+
+release_item(FilePath) when is_list(FilePath)->
+	global:del_lock({FilePath, spool}, nodes()),
+	ok;
+
+release_item({SpoolName, NRef}) ->
+	FP = mydlp_api:ref_to_fn(?SPOOL_DIR(SpoolName), "item", NRef),
+	release_item(FP).
 
 -endif.
 

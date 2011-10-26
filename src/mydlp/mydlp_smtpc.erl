@@ -80,6 +80,7 @@ handle_cast({mail, Ref, #message{mail_from=From, rcpt_to=Rcpt, message=MessageS}
 	?ASYNC(fun() -> 
 		smtpc:sendmail(DHost, DPort, Helo, From, Rcpt, MessageS),
 		mydlp_spool:delete(Ref),
+		mydlp_spool:release(Ref),
 		mydlp_spool:consume_next("smtp"),
 		ok
 	end, 600000),
