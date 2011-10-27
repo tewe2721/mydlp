@@ -42,6 +42,7 @@
 	pushchunk/2,
 	eof/1,
 	aclq/1,
+	aclq/2,
 	getdata/1,
 	destroy/1,
 	stop/0]).
@@ -87,10 +88,12 @@ eof(ObjId) -> gen_server:cast(?MODULE, {eof, ObjId}).
 
 getdata(ObjId) -> gen_server:call(?MODULE, {getdata, ObjId}).
 
-aclq(ObjId) -> 	Timeout = 1500000,
-		case gen_server:call(?MODULE, {aclq, ObjId, Timeout}, Timeout) of
-		{ierror, {Class, Error}} -> mydlp_api:exception(Class, Error);
-		Else -> Else end.
+aclq(ObjId) -> aclq(ObjId, 1500000).
+
+aclq(ObjId, Timeout) ->
+	case gen_server:call(?MODULE, {aclq, ObjId, Timeout}, Timeout) of
+	{ierror, {Class, Error}} -> mydlp_api:exception(Class, Error);
+	Else -> Else end.
 
 destroy(ObjId) -> gen_server:cast(?MODULE, {destroy, ObjId}).
 
