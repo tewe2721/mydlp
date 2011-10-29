@@ -1038,6 +1038,31 @@ clean_file(#file{} = File) ->
 	File#file{dataref=undefined}.
 
 %%--------------------------------------------------------------------
+%% @doc Remove cache references.
+%% @end
+%%----------------------------------------------------------------------
+remove_crs(#file{} = File) -> [Ret] = remove_crs([File]), Ret;
+remove_crs(Files) when is_list(Files) ->
+	lists:map(fun(F) -> remove_cr(F) end, Files).
+
+remove_cr(#file{} = File) -> 
+	File1 = load_file(File),
+	File1#file{dataref=undefined}.
+
+%%--------------------------------------------------------------------
+%% @doc Reconstructs cache references.
+%% @end
+%%----------------------------------------------------------------------
+reconstruct_crs(#file{} = File) -> [Ret] = reconstruct_crs([File]), Ret;
+reconstruct_crs(Files) when is_list(Files) ->
+	lists:map(fun(F) -> reconstruct_cr(F) end, Files).
+
+reconstruct_cr(#file{} = File) -> 
+	File1 = load_file(File),
+	Data = File1#file.data,
+	File1#file{dataref=?BB_C(Data)}.
+
+%%--------------------------------------------------------------------
 %% @doc Detects mimetypes of all files given, 
 %% @end
 %%----------------------------------------------------------------------
