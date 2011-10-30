@@ -1626,7 +1626,13 @@ mime_to_files([#mime{content=Content, header=Headers, body=Body}|Rest], Acc) ->
 		{value,{'content-transfer-encoding',Value}} -> Value;
 		_ -> '7bit'
 	end,
-	Data = mime_util:decode_content(CTE, Content),
+	Data = 	try	mime_util:decode_content(CTE, Content)
+		catch 	Class:Error ->
+			?ERROR_LOG("Error occured when decoding: "
+				"Class: ["?S"]. Error: ["?S"].~n"
+				"Content-Transfer-Encoding: "?S"~n.Content: "?S"~n",
+				[Class, Error, CTE, Content]),
+			Content end,
 	mime_to_files(lists:append(Body, Rest), [File#file{dataref=?BB_C(Data)}|Acc]);
 mime_to_files([], Acc) -> lists:reverse(Acc).
 
