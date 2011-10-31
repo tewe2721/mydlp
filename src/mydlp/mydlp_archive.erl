@@ -86,9 +86,15 @@ handle_cast({a, Item}, #state{file_queue=Q, file_inprog=true} = State) ->
 handle_cast(consume_file, #state{file_queue=Q} = State) ->
 	case queue:out(Q) of
 		{{value, Item}, Q1} ->
-			archive_file(Item),
-			consume_file(),
-			{noreply, State#state{file_queue=Q1}};
+			try	archive_file(Item),
+				consume_file(),
+				{noreply, State#state{file_queue=Q1}}
+			catch Class:Error ->
+				?ERROR_LOG("Archive Item Consume: Error occured: "
+						"Class: ["?S"]. Error: ["?S"].~n"
+						"Stack trace: "?S"~n.Item: "?S"~nState: "?S"~n ",	
+						[Class, Error, erlang:get_stacktrace(), Item, State]),
+					{noreply, State#state{file_queue=Q1}} end;
 		{empty, _} ->
 			{noreply, State#state{file_inprog=false}}
 	end;

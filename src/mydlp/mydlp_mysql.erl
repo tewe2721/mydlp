@@ -271,6 +271,7 @@ init([]) ->
 		{mimes_by_cid, <<"SELECT m.id, c.group_id, m.mime, m.extension FROM nw_mime_type_cross AS c, nw_mime_type m WHERE c.mime_id=m.id and m.customer_id=?">>},
 		{regexes, <<"SELECT r.id, c.group_id, r.regex FROM sh_regex_cross AS c, sh_regex r WHERE c.regex_id=r.id">>},
 		{regexes_by_cid, <<"SELECT r.id, c.group_id, r.regex FROM sh_regex_cross AS c, sh_regex r WHERE c.regex_id=r.id and r.customer_id=?">>},
+		{usb_device_by_cid, <<"SELECT device_id, action FROM ep_usb_device WHERE customer_id=?">>},
 		{customer_by_id, <<"SELECT id,static_ip FROM sh_customer WHERE id=?">>},
 		{app_type, <<"SELECT type FROM app_type">>},
 		{denied_page_by_cid, <<"SELECT html_text FROM sh_warning_page WHERE customer_id=?">>},
@@ -354,6 +355,8 @@ populate_site(CustomerId) ->
 	populate_file_hashes(FHQ, bl, CustomerId),
 	{ok, WFHQ} = psq(dr_wfhash_by_cid, [CustomerId]),
 	populate_file_hashes(WFHQ, wl, CustomerId),
+	{ok, UDQ} = psq(usb_device_by_cid, [CustomerId]),
+	populate_usb_devices(UDQ, CustomerId),
 	ok.
 
 populate_filters(Rows) -> populate_filters(Rows, mydlp_mnesia:get_dcid()).
@@ -647,6 +650,13 @@ populate_file_hashes([[Hash]|Rows], Tag, CustomerId) ->
 	mydlp_mnesia:write(F),
 	populate_file_hashes(Rows, Tag, CustomerId);
 populate_file_hashes([], _Tag, _CustomerId) -> ok.
+
+populate_usb_devices([[DeviceId, Action]|Rows], CustomerId) ->
+	U = #usb_device{id=mydlp_mnesia:get_unique_id(usb_device), 
+			customer_id=CustomerId, device_id=DeviceId, action=Action},
+	mydlp_mnesia:write(U),
+	populate_usb_devices(Rows, CustomerId);
+populate_usb_devices([], _CustomerId) -> ok.
 
 get_rule_cid(RuleId) ->
 	case psq(cid_of_rule_by_id, [RuleId]) of

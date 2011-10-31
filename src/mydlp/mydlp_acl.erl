@@ -219,6 +219,14 @@ handle_acl(Q, _Files, _State) -> throw({error, {undefined_query, Q}}).
 
 -ifdef(__MYDLP_ENDPOINT).
 
+handle_acl({qe, _Site}, [#file{mime_type= <<"mydlp-internal/usb-device;id=unknown">>}], _State) ->
+	{?CFG(error_action), mydlp_api:empty_aclr(Files, usb_device_id_unknown)};
+
+handle_acl({qe, _Site}, [#file{mime_type= <<"mydlp-internal/usb-device;id=", DeviceID/binary>>}], _State) ->
+	case mydlp_mnesia:is_valid_usb_device_id(DeviceId) of % TODO: need refinements for multi-user usage.
+		true -> pass;
+		false -> {block, mydlp_api:empty_aclr(Files, usb_device_rejected)} end;
+
 handle_acl({qe, _Site}, Files, _State) ->
 	Rules = mydlp_mnesia:get_rule_table(),
 	acl_exec2(Rules, [{cid, mydlp_mnesia:get_dcid()}], Files);

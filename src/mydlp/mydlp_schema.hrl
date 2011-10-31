@@ -88,6 +88,13 @@
 
 -endif.
 
+-record(usb_device, {
+	id,
+	customer_id,
+	device_id,
+	action
+}).
+
 -record(regex, {
 	id,
 	customer_id,

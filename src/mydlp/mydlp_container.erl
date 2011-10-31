@@ -318,20 +318,40 @@ is_inbound(#object{prop_dict=PD}) ->
 		{ok, _Else} -> false;
 		error -> false end.
 
-object_to_file(#object{prop_dict=PD, filepath=undefined, data=Data}) ->
+get_type(#object{prop_dict=PD}) ->
+	case dict:find("type", PD) of
+		{ok, "usb_device"} -> usb_device;
+		{ok, "regular"} -> regular;
+		{ok, _Else} -> regular;
+		error -> regular  end.
+
+object_to_file(Obj) ->
+	Type = get_type(Obj),
+	object_to_file(Type, Obj).
+
+object_to_file(regular,#object{prop_dict=PD, filepath=undefined, data=Data}) ->
 	Filename = case dict:find("filename", PD) of
 		{ok, FN} -> qp_decode(FN);
 		error -> "seap-data" end,
 	#file{filename=Filename, dataref=?BB_C(Data)};
 
-object_to_file(#object{prop_dict=PD, filepath=FilePath}) ->  % created with PUSHFILE
+object_to_file(regular, #object{prop_dict=PD, filepath=FilePath}) ->  % created with PUSHFILE
 	Filename = case dict:find("filename", PD) of
 		{ok, FN} -> qp_decode(FN);
 		error -> filename:basename(FilePath) end,
 	DataRef = case dict:find("burn_after_reading", PD) of
 		{ok, "true"} ->	?BB_C({tmpfile, FilePath});
 		_Else -> ?BB_C({regularfile, FilePath}) end,
-	#file{filename=Filename, dataref=DataRef}.
+	#file{filename=Filename, dataref=DataRef};
+
+object_to_file(usb_device, #object{prop_dict=PD}) ->
+	DeviceId = case dict:find("device_id", PD) of
+		{ok, DId} -> DId;
+		error -> "unknown" end,
+	DeviceIdB = list_to_binary(DeviceId),
+	#file{name="USB Device, device_id=" ++ DeviceId,
+		mime_type= <<"mydlp-internal/usb-device;id=", DeviceIdB/binary>>}.
+
 
 call_timer() -> timer:send_after(1000000, cleanup_now).
 

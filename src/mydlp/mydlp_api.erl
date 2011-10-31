@@ -923,10 +923,10 @@ acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, #file{} = File, Misc) ->
 					LogTerm = {Proto, RuleId, Action, Ip, User, To, Matcher, #file{name=FileS}, Misc},
 					mydlp_item_push:p({seap_log, LogTerm});
 			quarantine ->	acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
-					LogTerm = {Proto, RuleId, Action, Ip, User, To, Matcher, mydlp_api:load_file(File), Misc},
+					LogTerm = {Proto, RuleId, Action, Ip, User, To, Matcher, mydlp_api:remove_cr(File), Misc},
 					mydlp_item_push:p({seap_log, LogTerm});
 			archive -> 	acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
-					LogTerm = {Proto, RuleId, Action, Ip, User, To, Matcher, mydlp_api:load_file(File), Misc},
+					LogTerm = {Proto, RuleId, Action, Ip, User, To, Matcher, mydlp_api:remove_cr(File), Misc},
 					mydlp_item_push:p({seap_log, LogTerm});
 			_Else -> ok end
         end, 60000), ok.
@@ -1036,6 +1036,31 @@ clean_file(#file{dataref=undefined} = File) -> File;
 clean_file(#file{} = File) -> 
 	?BB_D(File#file.dataref), % no need for reference to exist
 	File#file{dataref=undefined}.
+
+%%--------------------------------------------------------------------
+%% @doc Remove cache references.
+%% @end
+%%----------------------------------------------------------------------
+remove_crs(#file{} = File) -> [Ret] = remove_crs([File]), Ret;
+remove_crs(Files) when is_list(Files) ->
+	lists:map(fun(F) -> remove_cr(F) end, Files).
+
+remove_cr(#file{} = File) -> 
+	File1 = load_file(File),
+	File1#file{dataref=undefined}.
+
+%%--------------------------------------------------------------------
+%% @doc Reconstructs cache references.
+%% @end
+%%----------------------------------------------------------------------
+reconstruct_crs(#file{} = File) -> [Ret] = reconstruct_crs([File]), Ret;
+reconstruct_crs(Files) when is_list(Files) ->
+	lists:map(fun(F) -> reconstruct_cr(F) end, Files).
+
+reconstruct_cr(#file{} = File) -> 
+	File1 = load_file(File),
+	Data = File1#file.data,
+	File1#file{dataref=?BB_C(Data)}.
 
 %%--------------------------------------------------------------------
 %% @doc Detects mimetypes of all files given, 
@@ -1601,7 +1626,14 @@ mime_to_files([#mime{content=Content, header=Headers, body=Body}|Rest], Acc) ->
 		{value,{'content-transfer-encoding',Value}} -> Value;
 		_ -> '7bit'
 	end,
-	Data = mime_util:decode_content(CTE, Content),
+	Data = 	try	mime_util:decode_content(CTE, Content)
+		catch 	Class:Error ->
+			?ERROR_LOG("Error occured when decoding: "
+				"Class: ["?S"]. Error: ["?S"].~n"
+				"Stacktrace: "?S"~n"
+				"Content-Transfer-Encoding: "?S"~n.Content: "?S"~n",
+				[Class, Error, CTE, erlang:get_stacktrace(), Content]),
+			Content end,
 	mime_to_files(lists:append(Body, Rest), [File#file{dataref=?BB_C(Data)}|Acc]);
 mime_to_files([], Acc) -> lists:reverse(Acc).
 

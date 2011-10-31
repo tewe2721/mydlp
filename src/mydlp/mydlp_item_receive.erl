@@ -133,7 +133,8 @@ process_item({IpAddress, [Item|Rest]}) ->
 	process_item({IpAddress, Rest});
 process_item({ IpAddress, {seap_log, LogTerm} }) -> 
 	{Proto, RuleId, Action, _Ip, _User, _To, Matcher, File, Misc} = LogTerm,
-	?ACL_LOG(Proto, RuleId, Action, IpAddress, nil, nil, Matcher, File, Misc);
+	File1 = mydlp_api:reconstruct_cr(File), % To clean invalid cachrefs
+	?ACL_LOG(Proto, RuleId, Action, IpAddress, nil, nil, Matcher, File1, Misc);
 process_item(_Item) -> ok. % TODO log unkown item.
 
 -endif.
