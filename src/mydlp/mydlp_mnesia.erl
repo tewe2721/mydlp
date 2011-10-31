@@ -91,7 +91,8 @@
 
 % API endpoint 
 -export([
-	get_rule_table/0
+	get_rule_table/0,
+	is_valid_usb_device_id/1
 	]).
 
 -endif.
@@ -114,6 +115,7 @@
 -define(CLIENT_TABLES, [
 	mime_type,
 	file_hash,
+	usb_device,
 	sentence_hash,
 	bayes_item_count,
 	bayes_positive,
@@ -124,6 +126,8 @@
 -define(OTHER_DATA_TABLES,[
 	{file_hash, ordered_set, 
 		fun() -> mnesia:add_table_index(file_hash, md5) end},
+	{usb_device, ordered_set, 
+		fun() -> mnesia:add_table_index(usb_device, device_id) end},
 	{sentence_hash, ordered_set, 
 		fun() -> mnesia:add_table_index(sentence_hash, phash2) end},
 	{file_group, ordered_set, 
@@ -178,6 +182,7 @@
 get_record_fields_common(Record) -> 
         case Record of
 		unique_ids -> record_info(fields, unique_ids);
+		usb_device -> record_info(fields, usb_device);
 		file_hash -> record_info(fields, file_hash);
 		sentence_hash -> record_info(fields, sentence_hash);
 		file_group -> record_info(fields, file_group);
@@ -290,6 +295,8 @@ new_authority(Node) -> gen_server:call(?MODULE, {new_authority, Node}, 30000).
 
 get_rule_table() -> aqc(get_rule_table, cache).
 
+is_valid_usb_device_id(DeviceId) -> aqc({is_valid_usb_device_id, DeviceId}, cache).
+
 -endif.
 
 dump_tables(Tables) when is_list(Tables) -> aqc({dump_tables, Tables}, cache);
@@ -334,6 +341,7 @@ handle_result({is_shash_of_gid, _Hash, HGIs}, {atomic, GIs}) ->
 handle_result({is_fhash_of_gid, _Hash, HGIs}, {atomic, GIs}) -> 
 	lists:any(fun(I) -> lists:member(I, HGIs) end,GIs);
 
+% TODO: instead of case statements, refining function definitions will make queries faster.
 handle_result({get_cid, _SIpAddr}, {atomic, Result}) -> 
 	case Result of
 		[] -> nocustomer;
@@ -344,12 +352,16 @@ handle_result({is_dr_fh_of_fid, _, _}, {atomic, Result}) ->
 		[] -> false;
 		Else when is_list(Else) -> true end;
 
-
 %% TODO: endpoint specific code
 handle_result(get_rule_table, {atomic, Result}) -> 
 	case Result of
 		[] -> [];
 		[Table] -> Table end;
+
+handle_result({is_valid_usb_device_id, _DeviceId}, {atomic, Result}) -> 
+	case Result of
+		[] -> true;
+		[_|_] -> false end;
 
 handle_result(_Query, {atomic, Objects}) -> Objects.
 
@@ -449,6 +461,11 @@ handle_query({remove_site, CI}) ->
 		]),
 	BFIs = ?QLCE(Q6),
 	
+	Q7 = ?QLCQ([U#usb_device.id ||	
+		U <- mnesia:table(usb_device),
+		U#usb_device.customer_id == CI
+		]),
+	UDIs = ?QLCE(Q7),
 
 	case RQ4 of
 		[] -> ok;
@@ -459,6 +476,7 @@ handle_query({remove_site, CI}) ->
 	lists:foreach(fun(Id) -> mnesia:delete({ipr, Id}) end, IIs),
 	lists:foreach(fun(Id) -> mnesia:delete({file_hash, Id}) end, WFIs),
 	lists:foreach(fun(Id) -> mnesia:delete({file_hash, Id}) end, BFIs),
+	lists:foreach(fun(Id) -> mnesia:delete({usb_device, Id}) end, UDIs),
 	lists:foreach(fun(Id) -> mnesia:delete({regex, Id}) end, RIs),
 	lists:foreach(fun(Id) -> mnesia:delete({mime_type, Id}) end, MIs);
 
@@ -524,10 +542,21 @@ handle_query(Query) -> handle_query_common(Query).
 
 -ifdef(__MYDLP_ENDPOINT).
 
+% TODO: should be refined for multi-site usage
 handle_query(get_rule_table) ->
 	Q = ?QLCQ([ R#rule_table.table ||
 		R <- mnesia:table(rule_table),
 		R#rule_table.id == mydlp_mnesia:get_dcid()
+		]),
+	?QLCE(Q);
+
+% TODO: should be refined for multi-site usage
+handle_query({is_valid_usb_device_id, DeviceId}) ->
+	Q = ?QLCQ([ U#usb_device.id ||
+		U <- mnesia:table(usb_device),
+		U#usb_device.device_id == DeviceId,
+		U#usb_device.customer_id == mydlp_mnesia:get_dcid(),
+		U#usb_device.action == <<"block">>
 		]),
 	?QLCE(Q);
 
@@ -593,7 +622,7 @@ handle_call({async_query, flush, Query}, From, State) ->
 	Worker = self(),
 	?ASYNC(fun() ->
 		Return = evaluate_query(Query),
-		cache_clean(), % TODO: This should be reflected to other nodes in distributed configuration.
+		cache_clean(),
 		Worker ! {async_reply, Return, From}
 	end, 15000),
 	{noreply, State};
