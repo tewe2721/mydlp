@@ -1059,8 +1059,9 @@ reconstruct_crs(Files) when is_list(Files) ->
 
 reconstruct_cr(#file{} = File) -> 
 	File1 = load_file(File),
-	Data = File1#file.data,
-	File1#file{dataref=?BB_C(Data)}.
+	case File1#file.data of
+		undefined -> File1;
+		Data ->	File1#file{dataref=?BB_C(Data)} end.
 
 %%--------------------------------------------------------------------
 %% @doc Detects mimetypes of all files given, 
