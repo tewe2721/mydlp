@@ -1902,7 +1902,7 @@ use_client_policy(CDBBin) ->
 		{{rule_table, RuleTable}, {items, ItemDump}} = CDBObj,
 		
 		mydlp_mnesia:truncate_all(),
-		[mydlp_mnesia:write(I) || I <- ItemDump],
+		[ (catch mydlp_mnesia:write(I)) || I <- ItemDump],
 
 		R = #rule_table{id=mydlp_mnesia:get_dcid(), table = RuleTable},
 		mydlp_mnesia:write(R)
