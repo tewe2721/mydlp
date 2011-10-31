@@ -618,31 +618,32 @@ handle_query_common({delete, Item}) ->
 
 handle_query_common(Query) -> throw({error,{unhandled_query,Query}}).
 
-handle_call({async_query, flush, Query}, From, State) ->
-	Worker = self(),
-	?ASYNC(fun() ->
-		Return = evaluate_query(Query),
-		cache_clean(),
-		Worker ! {async_reply, Return, From}
-	end, 15000),
-	{noreply, State};
+handle_async_query(flush, Query) ->
+	Return = evaluate_query(Query),
+	cache_clean(),
+	Return;
 
-handle_call({async_query, cache, Query}, From, State) ->
-	Worker = self(),
-	?ASYNC(fun() ->
-		Return = case cache_lookup(Query) of
-			{hit, {Query, R}} -> R;
-			miss ->	R = evaluate_query(Query),
-				cache_insert(Query, R),
-				R end,
-		Worker ! {async_reply, Return, From}
-	end, 15000),
-	{noreply, State};
+handle_async_query(cache, Query) ->
+	case cache_lookup(Query) of
+		{hit, {Query, R}} -> R;
+		miss ->	R = evaluate_query(Query),
+			cache_insert(Query, R),
+			R end;
 
-handle_call({async_query, nocache, Query}, From, State) ->
+handle_async_query(nocache, Query) ->
+	evaluate_query(Query).
+
+handle_call({async_query, CacheOption, Query}, From, State) ->
 	Worker = self(),
-	?ASYNC(fun() ->
-		Return = evaluate_query(Query),
+	mydlp_api:mspawn(fun() ->
+		Return= try	handle_async_query(CacheOption, Query)
+			catch  	Class:Error ->
+				?ERROR_LOG("MNESIAQ: Error occured: Class: ["?S"]. Error: ["?S"].~n"
+						"Stack trace: "?S"~n"
+						"CacheOption: ["?S"]. Query: ["?S"]~n"
+						"State: "?S"~n ",
+					[Class, Error, erlang:get_stacktrace(), CacheOption, Query, State]),
+					{ierror, {Class, Error}} end,
 		Worker ! {async_reply, Return, From}
 	end, 15000),
 	{noreply, State};
@@ -1040,7 +1041,10 @@ aqc(Query, flush) -> async_query_call(Query, flush);
 aqc(Query, cache) -> async_query_call(Query, cache);
 aqc(Query, nocache) -> async_query_call(Query, nocache).
 
-async_query_call(Query, CacheOption) -> gen_server:call(?MODULE, {async_query, CacheOption, Query}, 5000).
+async_query_call(Query, CacheOption) -> 
+	case gen_server:call(?MODULE, {async_query, CacheOption, Query}, 5000) of
+		{ierror, {Class, Error}} -> mydlp_api:exception(Class, Error);
+		Else -> Else end.
 
 all_tab_names() -> tab_names1(?TABLES, []).
 
