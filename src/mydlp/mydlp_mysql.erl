@@ -651,7 +651,10 @@ populate_file_hashes([[Hash]|Rows], Tag, CustomerId) ->
 	populate_file_hashes(Rows, Tag, CustomerId);
 populate_file_hashes([], _Tag, _CustomerId) -> ok.
 
-populate_usb_devices([[DeviceId, Action]|Rows], CustomerId) ->
+populate_usb_devices([[DeviceId, ActionB]|Rows], CustomerId) ->
+	Action = case ActionB of
+		<<"pass">> -> pass;
+		<<"block">> -> block end,
 	U = #usb_device{id=mydlp_mnesia:get_unique_id(usb_device), 
 			customer_id=CustomerId, device_id=DeviceId, action=Action},
 	mydlp_mnesia:write(U),
