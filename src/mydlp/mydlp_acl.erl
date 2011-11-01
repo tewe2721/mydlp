@@ -106,6 +106,7 @@ acl_call(Query) -> acl_call(Query, none).
 acl_call(Query, Files) -> acl_call(Query, Files, 1500000).
 
 acl_call(Query, none, Timeout) -> acl_call1(Query, none, Timeout);
+acl_call(Query, [#file{mime_type= <<"mydlp-internal/", _/binary>>}] = Files, Timeout) -> acl_call1(Query, Files, Timeout);
 acl_call(Query, Files, Timeout) -> 
 	FileSizes = lists:map(fun(F) -> ?BB_S(F#file.dataref) end, Files),
 	TotalSize = lists:sum(FileSizes),
