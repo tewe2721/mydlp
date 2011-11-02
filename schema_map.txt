@@ -21,3 +21,4 @@ mydlp-sql-20.patch: 0.6.0.dev-2 -> 0.6.0.dev-3
 mydlp-sql-21.patch: 0.6.0.dev-4 -> 0.6.0.dev-5
 mydlp-sql-22.patch: 0.6.0.dev-13 -> 0.6.0.dev-14
 mydlp-sql-23.patch: 0.6.0.dev-23 -> 0.6.0.dev-24
+mydlp-sql-24.patch: 0.6.0.dev-25 -> 0.6.0.dev-26
