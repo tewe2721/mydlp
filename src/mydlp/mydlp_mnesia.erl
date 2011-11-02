@@ -360,8 +360,8 @@ handle_result(get_rule_table, {atomic, Result}) ->
 
 handle_result({is_valid_usb_device_id, _DeviceId}, {atomic, Result}) -> 
 	case Result of
-		[] -> true;
-		[_|_] -> false end;
+		[] -> false;
+		[_|_] -> true end;
 
 handle_result(_Query, {atomic, Objects}) -> Objects.
 
@@ -556,7 +556,7 @@ handle_query({is_valid_usb_device_id, DeviceId}) ->
 		U <- mnesia:table(usb_device),
 		U#usb_device.device_id == DeviceId,
 		U#usb_device.customer_id == mydlp_mnesia:get_dcid(),
-		U#usb_device.action == <<"block">>
+		U#usb_device.action == pass
 		]),
 	?QLCE(Q);
 
