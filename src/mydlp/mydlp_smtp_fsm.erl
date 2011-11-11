@@ -176,7 +176,7 @@ process_aclret(AclRet, #smtpd_fsm{files=Files} = State) ->
 		log -> {log, mydlp_api:empty_aclr(Files)};
 		archive -> {archive, mydlp_api:empty_aclr(Files)};
 		block -> {block, mydlp_api:empty_aclr(Files)};
-		quarantine -> {quanratine, mydlp_api:empty_aclr(Files)};
+		quarantine -> {quarantine, mydlp_api:empty_aclr(Files)};
 		{pass, _AR} = T -> T;
 		{log, _AR} = T -> T;
 		{archive, _AR} = T -> T;
