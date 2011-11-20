@@ -72,10 +72,25 @@ get_mime(Data) when is_binary(Data) ->
 		true -> <<D:?MMLEN/binary, _/binary>> = Data, D;
 		false -> Data
 	end,
-	try
+	TRet = try
 		call_pool({thrift, py, getMagicMime, [Data1]})
 	catch _:_Exception ->
-		unknown_type end.
+		unknown_type end,
+
+	case TRet of
+		<<"application/zip">> -> get_mime_zip(Data);
+		Else -> Else end.
+
+-define(MIME_OOXML_WORD, <<"application/vnd.openxmlformats-officedocument.wordprocessingml.document">>).
+-define(MIME_OOXML_EXCEL, <<"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">>).
+-define(MIME_OOXML_POWERPOINT, <<"application/vnd.openxmlformats-officedocument.presentationml.presentation">>).
+
+get_mime_zip(Data) ->
+	{ok, FL} = zip:list_dir(Data),
+	case 		lists:keymember("word/document.xml", 2, FL) of true -> ?MIME_OOXML_WORD;
+	false -> case	lists:keymember("xl/workbook.xml", 2, FL) of true -> ?MIME_OOXML_EXCEL;
+	false -> case	lists:keymember("ppt/presentation.xml", 2, FL) of true -> ?MIME_OOXML_POWERPOINT;
+	false -> <<"application/zip">> end end end.
 
 is_valid_iban(IbanStr) ->
 	call_pool({thrift, py, isValidIban, [IbanStr]}).
