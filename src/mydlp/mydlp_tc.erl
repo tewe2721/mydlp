@@ -66,6 +66,16 @@ get_mime(Data) when is_list(Data) ->
 
 get_mime(<<"Rar!", _Rest/binary>>) -> <<"application/x-rar">>; % WinRAR
 get_mime(<<202,254,186,190, _Rest/binary>>) -> <<"application/java-vm">>; % CAFE BABE -> java class
+get_mime(<<	16#00,16#01,16#00,16#00,
+		16#53,16#74,15#61,15#6E,
+		16#64,16#61,16#72,16#64,
+		16#20,16#4A,16#65,16#74,
+		16#20,16#44,16#42, _Rest/binary>>) -> <<"application/msaccess">>;
+get_mime(<<	16#00,16#01,16#00,16#00,
+		16#53,16#74,16#61,16#6E,
+		16#64,16#61,16#72,16#64,
+		16#20,16#41,16#43,16#45,
+		16#20,16#44,16#42, _Rest/binary>>) -> <<"application/msaccess">>;
 get_mime(Data) when is_binary(Data) ->
 	S = size(Data),
 	Data1 = case S > ?MMLEN of
