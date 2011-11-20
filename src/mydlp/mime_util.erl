@@ -192,10 +192,7 @@ split_multipart(Boundary,Body) -> split_multipart(Boundary,Body,[]).
 %%-------------------------------------------------------------------------
 split_multipart(_Boundary,<<>>,Acc) -> lists:reverse(Acc);
 split_multipart(Boundary,Body,Acc) when is_binary(Body)-> 
-	Boundary1 = case Boundary of
-		"-" ++ _Rest -> "--" ++ Boundary;
-		_Else -> Boundary end,
-	EBoundary = mydlp_api:escape_regex(Boundary1),
+	EBoundary = mydlp_api:escape_regex("--" ++ Boundary),
 	case re:run(Body, EBoundary, [{capture,first}]) of
 		nomatch -> split_multipart(Boundary,<<>>,Acc);
 		{match,[{Start,Length}]} when is_integer(Start) ->
@@ -208,13 +205,14 @@ split_multipart(Boundary,Body,Acc) when is_binary(Body)->
 			case re:run(New, EBoundary, [{capture,first}]) of
 				nomatch -> split_multipart(Boundary,<<>>,Acc);
 				{match, [{Start2, _Length2}]} when is_integer(Start2) ->
-					PSize  = case Start2 - 4 of
+					PSize  = case Start2 - 2 of
 						I when I > 0 -> I;
 						_Else3 -> 0 end,
 					<<P1:PSize/binary, Nx1/binary>> = New,
 					{Part, Next} = case Nx1 of
 						<<"\r\n--", _/binary>> -> {P1, Nx1};
-						<<PS:1/binary, Nx2/binary>> -> {<<P1/binary, PS/binary>>, Nx2};
+						<<PS:1/binary, "\n--", Nx2/binary>> -> 
+							{<<P1/binary, PS/binary>>, <<"\n--", Nx2/binary>>};
 						_Else4 -> {P1, Nx1} end,
 					case is_invalid_part(Part) of
 						true -> split_multipart(Boundary,Next, Acc);
