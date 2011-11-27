@@ -129,7 +129,7 @@ int get_elf_size(char * filepath)
         
         if (unstripped && !sparc){
             fsize = shdr32->sh_offset + shdr32->sh_size;
-            return fsize;
+            return -fsize;
 
         /* file size = Last section offset + section table size */    
         /* 4 byte alignment for 32bit */    

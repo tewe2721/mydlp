@@ -3,6 +3,7 @@ import ctypes
 import sys
 import magic
 import os
+import os.path
 import subprocess
 import re
 from  string  import lower
@@ -40,7 +41,20 @@ class BCFileIntegrity:
         return os.path.getsize(filepath)       
 
     def checkBinarySize(self, filepath):
-        return (self.getFileSize(filepath) == self.getElfSize(filepath))    
+	elfsize = self.getElfSize(filepath)
+	filesize = self.getFileSize(filepath)
+	if elfsize > 0:
+        	return (filesize == elfsize)
+	else:
+		multiplier = 2
+		mconffile = "/etc/mydlp/unstripped_x86_multiplier"
+		if os.path.isfile(mconffile):
+			try:
+				mfloatstring = open(mconffile, 'r').read()
+				multiplier = float(mfloatstring)
+			except:
+				multiplier = 2
+		return (filesize < ( -(elfsize*multiplier) + 1024))
 
     def checkArchiveSize(self, filepath):
         return (self.getFileSize(filepath) == self.get7zSize(filepath))    
@@ -53,5 +67,6 @@ class BCFileIntegrity:
 #print bfa.getFileSize(file_path)
 #print bfa.getType(file_path)
 #print bfa.get7zSize(file_path)
-#print bfa.checkSizeIntegrity(file_path)
+#print bfa.checkBinarySize(file_path)
+#print bfa.checkArchiveSize(file_path)
 
