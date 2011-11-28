@@ -19,6 +19,14 @@ class BCFileIntegrity:
 		self.libelfc = ctypes.CDLL("libbfi.so")
 	self.ms = magic.open(magic.MAGIC_NONE)
         self.ms.load()
+	self.unstripped_x86_multiplier = 2
+	mconffile = "/etc/mydlp/unstripped_x86_multiplier"
+	if os.path.isfile(mconffile):
+		try:
+			mfloatstring = open(mconffile, 'r').read()
+			self.unstripped_x86_multiplier = float(mfloatstring)
+		except:
+			self.unstripped_x86_multiplier = 2
 
     def getElfSize(self, filepath):
         return self.libelfc.get_elf_size(filepath) 
@@ -46,15 +54,7 @@ class BCFileIntegrity:
 	if elfsize > 0:
         	return (filesize == elfsize)
 	else:
-		multiplier = 2
-		mconffile = "/etc/mydlp/unstripped_x86_multiplier"
-		if os.path.isfile(mconffile):
-			try:
-				mfloatstring = open(mconffile, 'r').read()
-				multiplier = float(mfloatstring)
-			except:
-				multiplier = 2
-		return (filesize < ( -(elfsize*multiplier) + 1024))
+		return (filesize < ( -(elfsize*self.unstripped_x86_multiplier) + 1024))
 
     def checkArchiveSize(self, filepath):
         return (self.getFileSize(filepath) == self.get7zSize(filepath))    
