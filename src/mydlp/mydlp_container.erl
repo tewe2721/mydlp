@@ -308,8 +308,9 @@ archive_req(Obj, {{rule, RId}, {file, _}, {matcher, _}, {misc, _}}, DFFiles) ->
                 [] -> ok;
                 _Else -> log_req(Obj, archive, {{rule, RId}, {file, DFFiles}, {matcher, none}, {misc,""}}) end.
 
-log_req(_Obj, Action, {{rule, RuleId}, {file, File}, {matcher, Matcher}, {misc, Misc}}) ->
-        ?ACL_LOG(seap, RuleId, Action, nil, nil, nil, Matcher, File, Misc).
+log_req(Obj, Action, {{rule, RuleId}, {file, File}, {matcher, Matcher}, {misc, Misc}}) ->
+	User = get_user(Obj),
+        ?ACL_LOG(seap, RuleId, Action, nil, User, nil, Matcher, File, Misc).
 
 is_inbound(#object{prop_dict=PD}) ->
 	case dict:find("direction", PD) of
@@ -324,6 +325,11 @@ get_type(#object{prop_dict=PD}) ->
 		{ok, "regular"} -> regular;
 		{ok, _Else} -> regular;
 		error -> regular  end.
+
+get_user(#object{prop_dict=PD}) ->
+	case dict:find("user", PD) of
+		{ok, User} -> User;
+		error -> nil  end.
 
 object_to_file(Obj) ->
 	Type = get_type(Obj),
