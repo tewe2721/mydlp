@@ -1,3 +1,3 @@
 echo start python
 set
-python MyDLPBackendServer.py mydlp-backend-py.pid
+..\..\Python26\python.exe MyDLPBackendServer.py mydlp-backend-py.pid
