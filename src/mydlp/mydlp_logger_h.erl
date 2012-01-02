@@ -162,18 +162,25 @@ write_event(#state{error_fd=Fd}, {Time, {error_report, _GL, {Pid, Format, Args}}
 	write_event1(Fd, "ERROR", Time, Pid, Format, Args);
 write_event(_, _) -> ok.
 
+file_write(Fd, String) ->
+	Len = string:len(String),
+	String1 = case string:substr(String,Len) of
+		"\n" -> String;
+		_Else -> String ++ "\n" end,
+	file:write(Fd, String1).
+
 write_event1(Fd, Prefix, Time, Pid, Format, Args) when is_list(Format)->
 	T = write_time(Time, Prefix),
 	case catch io_lib:format(add_node(Format,Pid), Args) of
 		S when is_list(S) ->
-			file:write(Fd, io_lib:format(T ++ S, []));
+			file_write(Fd, io_lib:format(T ++ S, []));
 		_ ->
 			F = add_node("ERROR: ~p - ~p~n", Pid),
-			file:write(Fd, io_lib:format(T ++ F, [Format,Args])) end;
+			file_write(Fd, io_lib:format(T ++ F, [Format,Args])) end;
 write_event1(Fd, Prefix, Time, Pid, Format, Args) ->
 	T = write_time(Time, Prefix),
 	F = add_node("~p - ~p~n", Pid),
-	file:write(Fd, io_lib:format(T ++ F, [Format,Args])).
+	file_write(Fd, io_lib:format(T ++ F, [Format,Args])).
 
 add_node(X, Pid) when is_atom(X) ->
 	add_node(atom_to_list(X), Pid);
