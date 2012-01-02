@@ -44,6 +44,12 @@
 	mydlp_logger:notify(error, "~P:~P " ++ Format, lists:append([ [I,32] || I <- ([?MODULE_STRING, ?LINE] ++ Args)]))
 	).
 
+-define(BINARY_LOG(ItemName, Binary),
+	FN = mydlp_api:ref_to_fn(?CFG(log_dir), "binlog", erlang:now()),
+	file:write_file(FN, Binary),
+	?ERROR_LOG("Binary item ("?S") logged: "?S"~n", [ItemName, FN])
+	).
+
 -define(DEBUG(Format, Args),
 	mydlp_logger:debug_msg(?MODULE,?LINE,Format, Args)).
 
