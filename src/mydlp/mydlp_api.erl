@@ -1566,6 +1566,13 @@ binary_size(_Obj) -> throw({error, bad_element}).
 
 -ifdef(__MYDLP_NETWORK).
 
+heads_to_file_int1(Str, QS, CT) ->
+	case string:str(Str, QS) of
+		0 -> ?ERROR_LOG("Improper composition of Content-Type line "
+				"Content-Type: "?S"~n", [CT]), "noname";
+		1 -> "noname";
+		L -> string:substr(Str, 1, L - 1) end.
+
 heads_to_file(Headers) -> heads_to_file(Headers, #file{}).
 
 heads_to_file([{'content-disposition', "inline"}|Rest], #file{filename=undefined, name=undefined} = File) ->
@@ -1599,14 +1606,8 @@ heads_to_file([{'content-type', CT}|Rest], #file{filename=undefined} = F) ->
 		0 -> heads_to_file(Rest, File);
 		I2 when is_integer(I2) -> 
 			FN = case string:strip(string:substr(CT, I2 + 5)) of
-				"\\\"" ++ Str -> 
-					Len = string:len(Str),
-					"\"\\" = string:substr(Str, Len - 1),
-					string:substr(Str, 1, Len - 2);
-				"\"" ++ Str -> 
-					Len = string:len(Str),
-					"\"" = string:substr(Str, Len),
-					string:substr(Str, 1, Len - 1);
+				"\\\"" ++ Str -> heads_to_file_int1(Str, "\\\"", CT);
+				"\"" ++ Str -> heads_to_file_int1(Str, "\"", CT);
 				Str -> Str
 			end,
 			heads_to_file(Rest, File#file{filename=FN})
