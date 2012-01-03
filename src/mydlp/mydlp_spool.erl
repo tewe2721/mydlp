@@ -187,7 +187,7 @@ handle_cast({delete, {SpoolName, NRef}}, #state{spools = Spools} = State) ->
 		true ->	FP = mydlp_api:ref_to_fn(?SPOOL_DIR(SpoolName), "item", NRef),
 			case file:delete(FP) of
 				ok ->  ok;
-				Error -> ?ERROR_LOG("Can not delete spool ref. SpoolName: "?S" RefPath: "?S" Error: "?S"", 
+				Error -> ?ERROR_LOG("Can not delete spool ref. SpoolName: "?S"~nRefPath: "?S"~nError: "?S"", 
 					[SpoolName, FP, Error]) end;
 		false -> ?ERROR_LOG("Spool does not exist: Name: "?S" Dir: "?S, 
 				[SpoolName, ?SPOOL_DIR(SpoolName)]) end,
@@ -199,7 +199,7 @@ handle_cast({create_spool, SpoolName}, #state{spools = Spools} = State) ->
 		false -> case filelib:ensure_dir(?SPOOL_DIR(SpoolName) ++ "/") of
 				ok -> NewSpool = #spool{name=SpoolName},
 					{noreply, State#state{spools=dict:store(SpoolName, NewSpool, Spools)}};
-				Error -> ?ERROR_LOG("Can not create spool directory. Name: "?S" Dir: "?S" Error: "?S"", 
+				Error -> ?ERROR_LOG("Can not create spool directory. Name: "?S"~nDir: "?S"~nError: "?S"", 
 						[SpoolName, ?SPOOL_DIR(SpoolName), Error]),
 					{noreply, State}
 				end
