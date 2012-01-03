@@ -1,0 +1,199 @@
+#!/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games
+
+ERLPIDFILE=/var/run/mydlp/mydlp.pid
+ERLPROCNAME=beam
+PYPIDFILE=/var/run/mydlp/backend-py.pid
+PYPROCNAME=python
+SQUIDPIDFILE=/var/run/squid3.pid
+SQUIDPROCNAME=squid3
+
+INITSCRIPT=/etc/init.d/mydlp
+POSTFIXINIT=/etc/init.d/postfix
+SQUIDINIT=/etc/init.d/squid3
+
+ERRORLOGFILE=/var/log/mydlp/error.log
+
+WATCHDOGLOGFILE=/var/log/mydlp/watchdog.log
+
+MQLIMIT=100
+
+function isAlive {
+        local PIDFILE=$1
+        local PROCNAME=$2
+
+        if [ ! -e "$PIDFILE" ]; then
+                return false
+        fi
+
+        local PID=$(cat $PIDFILE)
+        ps -p $PID|grep -q $PROCNAME
+}
+
+function isPortOpen() {
+        local PORTNUM=$1
+        netstat -nltp 2>/dev/null|grep LISTEN|awk '-F ' '{print $4;}'|awk -F: '{print $NF;}'|grep -qe "^$PORTNUM$"
+}
+
+function waitForPort() {
+        local PORTNUM=$1
+        for i in $(seq 15); do
+                sleep 1
+                if isPortOpen $PORTNUM; then break; fi
+        done
+}
+
+function isIcapOpen() {
+        isPortOpen 1344 || \
+                ( echo "ICAP port is not open !!!" && false )
+}
+
+function isSmtpCFOpen() {
+        isPortOpen 10026 || \
+                ( echo "SMTP CF port is not open !!!" && false )
+}
+
+function isCachePortOpen() {
+        isPortOpen 3128 || \
+                ( echo "HTTP cache port is not open !!!" && false )
+}
+
+function waitForIcap() {
+        waitForPort 1344
+}
+
+function waitForSmtpCF() {
+        waitForPort 10026
+}
+
+function isSquidProcAlive {
+        isAlive $SQUIDPIDFILE $SQUIDPROCNAME || \
+                ( echo "Squid cache is dead !!!" && false )
+}
+
+function isErlAlive {
+        isAlive $ERLPIDFILE $ERLPROCNAME || \
+                ( echo "MyDLP Erlang Engine is dead !!!" && false )
+}
+
+function isPyAlive {
+        isAlive $PYPIDFILE $PYPROCNAME || \
+                ( echo "MyDLP Python Backend is dead !!!" && false )
+}
+
+function stopSquid() {
+        echo "Killing Squid..."
+        killall $SQUIDPROCNAME
+        sleep 2
+        killall $SQUIDPROCNAME
+        sleep 1
+        killall -9 $SQUIDPROCNAME
+        sleep 1
+        echo "Killed Squid..."
+        true
+}
+
+function cleanSquidCache() {
+        echo "Cleaning Squid cache directories..."
+        rm -rf /var/spool/squid3/*
+        echo "Cleaned."
+}
+
+function startSquid {
+        echo "Starting Squid..."
+        $SQUIDINIT start > /dev/null 2>&1
+        echo "Started Squid."
+}
+
+function stopMyDLP {
+        echo "Stopping MyDLP..."
+        $INITSCRIPT stop > /dev/null 2>&1
+        sleep 2
+        $INITSCRIPT stop > /dev/null 2>&1
+        sleep 2
+        echo "Stopped MyDLP..."
+}
+
+function startMyDLP {
+        echo "Starting MyDLP..."
+        $INITSCRIPT start > /dev/null 2>&1
+        waitForIcap
+        echo "Started MyDLP."
+        echo "Reconfiguring Squid..."
+        squid3 -k reconfigure
+        echo "Flushing Postfix Mail Queue..."
+}
+
+function stopPostfix {
+        $POSTFIXINIT stop > /dev/null 2>&1
+}
+
+function startPostfix {
+        waitForSmtpCF
+        $POSTFIXINIT start > /dev/null 2>&1
+}
+
+function backupErrorLog {
+        echo "Backing up error log."
+        local CURRENTEPOCH=$(date +%s)
+        local NEWERRORLOGFILE="$ERRORLOGFILE.$CURRENTEPOCH"
+        mv -f $ERRORLOGFILE $NEWERRORLOGFILE
+        echo "Backed up error log. Compression process is running at background."
+        gzip $NEWERRORLOGFILE &
+}
+
+function logRestart {
+        echo "$(date) -> MyDLP is not running! Restarting. " >> $WATCHDOGLOGFILE
+}
+
+function restartMyDLP {
+        stopPostfix
+        stopMyDLP
+        backupErrorLog
+        startMyDLP
+        startPostfix
+}
+
+function restartSquid {
+        stopSquid
+        cleanSquidCache
+        startSquid
+}
+
+function isMyDLPAlive {
+        isPyAlive && isErlAlive && isIcapOpen && isSmtpCFOpen
+}
+
+function isSquidAlive {
+        isSquidProcAlive && isCachePortOpen
+}
+
+function getMQSize {
+	local PQRESP=$(postqueue -p|tail -1)
+	if [ -n "$PQRESP" ]; then
+		if [  -a "$PQRESP" == "Mail queue is empty" ]; then
+			echo 0
+		else
+			echo $PQRESP|cut -d' ' -f5
+		fi
+	else
+		echo 0
+	fi
+}
+
+function isMQFull() {
+	local MQSIZE=$(getMQSize)
+	[ "$MQSIZE" -ge "$MQLIMIT" ]
+}
+
+function flushMQ() {
+	postqueue -f
+}
+
+
+isMyDLPAlive || ( echo "MyDLP is not properly running. Restarting MyDLP..." && restartMyDLP )
+
+isSquidAlive || ( echo "Squid is not properly running. Restarting Squid..." && restartSquid )
+
+isMQFull || ( echo "There are more than $MQLIMIT mails in the MQ, flushing MQ..." && flushMQ )
+
