@@ -872,6 +872,14 @@ acl_msg(_Proto, _RuleId, _Action, _Ip, _User, _To, _Matcher, [], _Misc) -> ok;
 acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, [_|_] = FileList, Misc) ->
 	lists:foreach(fun(File) -> acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, File, Misc) end, FileList);
 
+acl_msg(_Proto, -1, log, _Ip, _User, _To, _Matcher, #file{name="post-data"}, _Misc) -> ok;
+acl_msg(_Proto, -1, log, _Ip, _User, _To, _Matcher, #file{name="urlencoded-data"}, _Misc) -> ok;
+acl_msg(_Proto, -1, log, _Ip, _User, _To, _Matcher, #file{name="uri-data"}, _Misc) -> ok;
+acl_msg(_Proto, -1, log, _Ip, _User, _To, _Matcher, #file{name="seap-data"}, _Misc) -> ok;
+acl_msg(_Proto, -1, log, _Ip, _User, _To, _Matcher, #file{name="resp-data"}, _Misc) -> ok;
+acl_msg(_Proto, -1, log, _Ip, _User, _To, _Matcher, #file{name="data"}, _Misc) -> ok;
+acl_msg(_Proto, -1, log, _Ip, _User, _To, _Matcher, #file{name=undefined, filename=undefined}, _Misc) -> ok;
+
 acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, #file{} = File, Misc) ->
 	FileS = file_to_str(File),
 
@@ -905,6 +913,14 @@ acl_msg(_Proto, _RuleId, _Action, _Ip, _User, _To, _Matcher, [], _Misc) -> ok;
 
 acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, [_|_] = FileList, Misc) ->
 	lists:foreach(fun(File) -> acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, File, Misc) end, FileList);
+
+acl_msg(_Proto, -1, log, _Ip, _User, _To, _Matcher, #file{name="post-data"}, _Misc) -> ok;
+acl_msg(_Proto, -1, log, _Ip, _User, _To, _Matcher, #file{name="urlencoded-data"}, _Misc) -> ok;
+acl_msg(_Proto, -1, log, _Ip, _User, _To, _Matcher, #file{name="uri-data"}, _Misc) -> ok;
+acl_msg(_Proto, -1, log, _Ip, _User, _To, _Matcher, #file{name="seap-data"}, _Misc) -> ok;
+acl_msg(_Proto, -1, log, _Ip, _User, _To, _Matcher, #file{name="resp-data"}, _Misc) -> ok;
+acl_msg(_Proto, -1, log, _Ip, _User, _To, _Matcher, #file{name="data"}, _Misc) -> ok;
+acl_msg(_Proto, -1, log, _Ip, _User, _To, _Matcher, #file{name=undefined, filename=undefined}, _Misc) -> ok;
 
 acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, #file{} = File, Misc) ->
 	FileS = file_to_str(File),
