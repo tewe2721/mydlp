@@ -7,6 +7,13 @@ if [ -n "$1" ]; then
 fi
 
 VERSION=$(git describe |sed -s 's/-.*$//')
+NEXTVERSION=""
+
+function incrementVersion {
+        local PRE=$(echo $CURRENTVERSION|sed -e 's/\.[0-9]$//')
+        local LAST=$(echo $CURRENTVERSION|sed -e 's/^v[0-9]\.[0-9]\.//')
+        NEXTVERSION="$PRE"".""$(( $LAST + 1 ))"
+}
 
 function applyTemplate {
 	local TMPL=$1
@@ -14,12 +21,14 @@ function applyTemplate {
 	local TMPFILE="$OUT""~"
 
 	cp -af $TMPL $TMPFILE
-	sed -i -e "s/%%%VERSION%%%/$VERSION/g" $TMPFILE
+	sed -i -e "s/%%%VERSION%%%/$NEXTVERSION/g" $TMPFILE
 	sed -i -e "s/%%%REVISION%%%/$REVISION/g" $TMPFILE
 	mv -f $TMPFILE $OUT
 }
 
-echo "Current version is $VERSION-$REVISION"
+incrementVersion
+
+echo "Current version is $NEXTVERSION-$REVISION"
 
 applyTemplate configure.ac.tmpl configure.ac
 applyTemplate debian/changelog.tmpl debian/changelog

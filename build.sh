@@ -9,7 +9,7 @@ function incrementVersion {
 	NEXTVERSION="$PRE"".""$(( $LAST + 1 ))"
 }
 
-if [ -n "$1" -a "$1" == "incrementVersion" ]; then
+if [ -n "$1" -a "$1" == "updateVC" ]; then
 	git tag -a $NEXTVERSION -m "Tag for release $CURRENTVERSION"
 	git push --tags
 fi
