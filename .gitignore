@@ -9,6 +9,7 @@ config.status
 config.sub
 config.sub.cdbs-orig
 configure
+configure.ac
 configure.lineno
 configure.tmp
 depcomp
@@ -40,6 +41,7 @@ src/thrift/gen-java/
 src/thrift/gen-php/
 src/thrift/gen-py/
 src/thrift/gen-cpp/
+debian/changelog
 debian/files
 debian/mydlp.debhelper.log
 debian/mydlp.substvars
