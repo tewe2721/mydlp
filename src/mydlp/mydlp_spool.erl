@@ -287,7 +287,16 @@ stop() ->
 init([]) ->
 	case filelib:ensure_dir(?CFG(spool_dir) ++ "/") of
 		ok -> {ok, #state{}};
-		Error -> Error end.
+		Error -> Error end,
+
+        ConsumeFun = fun(Ref, Item) ->
+                mydlp_smtpc:mail(Ref, Item)
+        end,
+        mydlp_spool:create_spool("smtp"),
+        mydlp_spool:register_consumer("smtp", ConsumeFun),
+
+	ok.
+
 
 terminate(_Reason, _State) ->
 	ok.

@@ -117,12 +117,6 @@ init([]) ->
 	Host = ?CFG(smtp_next_hop_host),
 	Port = ?CFG(smtp_next_hop_port),
 
-	ConsumeFun = fun(Ref, Item) ->
-		mydlp_smtpc:mail(Ref, Item)
-	end,
-	mydlp_spool:create_spool("smtp"),
-	mydlp_spool:register_consumer("smtp", ConsumeFun),
-
 	{ok, #state{smtp_helo_name=HeloName, smtp_dest_host=Host, smtp_dest_port=Port}}.
 
 terminate(_Reason, _State) ->
