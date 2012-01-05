@@ -285,7 +285,7 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
-	case filelib:ensure_dir(?CFG(spool_dir) ++ "/") of
+	Ret = case filelib:ensure_dir(?CFG(spool_dir) ++ "/") of
 		ok -> {ok, #state{}};
 		Error -> Error end,
 
@@ -295,7 +295,7 @@ init([]) ->
         mydlp_spool:create_spool("smtp"),
         mydlp_spool:register_consumer("smtp", ConsumeFun),
 
-	ok.
+	Ret.
 
 
 terminate(_Reason, _State) ->
