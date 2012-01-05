@@ -9,10 +9,10 @@ function incrementVersion {
 	NEXTVERSION="$PRE"".""$(( $LAST + 1 ))"
 }
 
+dpkg-buildpackage || exit 1
+
 if [ -n "$1" -a "$1" == "updateVC" ]; then
 	git tag -a $NEXTVERSION -m "Tag for release $CURRENTVERSION"
 	git push --tags
 fi
-
-dpkg-buildpackage
 
