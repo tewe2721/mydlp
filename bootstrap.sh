@@ -6,12 +6,12 @@ if [ -n "$1" ]; then
 	REVISION=$1
 fi
 
-VERSION=$(git describe |sed -s 's/-.*$//')
+CURRENTVERSION=$(git describe |sed -s 's/-.*$//')
 NEXTVERSION=""
 
 function incrementVersion {
-        local PRE=$(echo $CURRENTVERSION|sed -e 's/\.[0-9]$//')
-        local LAST=$(echo $CURRENTVERSION|sed -e 's/^v[0-9]\.[0-9]\.//')
+        PRE=$(echo $CURRENTVERSION|sed -e 's/\.[0-9]$//')
+        LAST=$(echo $CURRENTVERSION|sed -e 's/^v[0-9]\.[0-9]\.//')
         NEXTVERSION="$PRE"".""$(( $LAST + 1 ))"
 }
 
