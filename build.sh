@@ -9,6 +9,8 @@ function incrementVersion {
 	NEXTVERSION="$PRE"".""$(( $LAST + 1 ))"
 }
 
+bash bootstrap.sh
+
 dpkg-buildpackage || exit 1
 
 if [ -n "$1" -a "$1" == "updateVC" ]; then
