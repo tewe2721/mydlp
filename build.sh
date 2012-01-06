@@ -1,6 +1,7 @@
 #!/bin/bash
 
-CURRENTVERSION=$(git describe |sed -s 's/-.*$//')
+#CURRENTVERSION=$(git describe |sed -s 's/-.*$//')
+CURRENTVERSION=$(git tag|tail -1)
 NEXTVERSION=""
 
 function incrementVersion {
