@@ -15,7 +15,7 @@ dpkg-buildpackage || exit 1
 
 if [ -n "$1" -a "$1" == "updateVC" ]; then
 	incrementVersion
-	git tag -a $NEXTVERSION -m "Tag for release $CURRENTVERSION"
-	git push --tags git@github.com:mydlp/mydlp.git
+	git tag -a $NEXTVERSION -m "Tag for release $CURRENTVERSION" || exit 1
+	git push --tags git@github.com:mydlp/mydlp.git || exit 1
 fi
 
