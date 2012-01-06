@@ -15,7 +15,7 @@ dpkg-buildpackage || exit 1
 
 if [ -n "$1" -a "$1" == "updateVC" ]; then
 	incrementVersion
-	if [ (git tag|grep -q $NEXTVERSION) ]; then
+	if (git tag|grep -q $NEXTVERSION) ; then
 		echo "This revision is tagged already."
 	else
 		git tag -a $NEXTVERSION -m "Tag for release $NEXTVERSION" || exit 1
