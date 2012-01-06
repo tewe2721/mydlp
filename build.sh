@@ -12,7 +12,7 @@ function incrementVersion {
 
 bash bootstrap.sh
 
-dpkg-buildpackage || exit 1
+dpkg-buildpackage -I.git || exit 1
 
 if [ -n "$1" -a "$1" == "updateVC" ]; then
 	incrementVersion
