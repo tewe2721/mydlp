@@ -27,54 +27,55 @@
 
 -record(filter, {
 	id,
-	customer_id,
-	name,
 	default_action
 }).
 
 -record(rule, {
 	id,
+	orig_id,
 	filter_id,
-	trusted_domains=[],
+	channel,
 	action
 }).
 
 -record(ipr, {
 	id,
-	customer_id,
-	parent,
+	rule_id,
 	ipbase,
 	ipmask
 }).
 
 -record(m_user, {
 	id,
-	parent,
+	rule_id,
 	username
+}).
+
+-record(itype, {
+	id,
+	rule_id,
+	orig_id,
+	data_formats=[],
+	threshold
+}).
+
+-record(ifeature, {
+	id,
+	itype_id,
+	weight
 }).
 
 -record(match, {
 	id,
 	orig_id,
-	parent,
+	ifeature_id,
 	func,
 	func_params=[]
 }).
 
--record(match_group, {
-	id,
-	parent,
-	name
-}).
-
--record(default_rule, {
-	customer_id,
-	resolved_rule
-}).
-
 -record(site_desc, {
 	ipaddr,
-	customer_id
+	filter_id
 }).
 
 -endif.
@@ -90,32 +91,34 @@
 
 -record(usb_device, {
 	id,
-	customer_id,
+	filter_id,
 	device_id,
 	action
 }).
 
 -record(regex, {
 	id,
-	customer_id,
 	group_id,
 	plain,
 	compiled,
 	error
 }).
 
+% TODO: refine
 -record(file_hash, {
 	id,
 	file_id,
 	md5
 }).
 
+% TODO: refine
 -record(sentence_hash, {
 	id,
 	file_id,
 	phash2
 }).
 
+% TODO: refine
 -record(file_group, {
 	id,
 	file_id,
@@ -124,22 +127,23 @@
 
 -record(mime_type, {
 	id,
-	customer_id,
-	group_id,
-	extension,
+	data_format_id,
 	mime
 }).
 
+% TODO: refine
 -record(bayes_item_count, {
 	type,
 	count
 }).
 
+% TODO: refine
 -record(bayes_positive, {
 	word_hash,
 	count
 }).
 
+% TODO: refine
 -record(bayes_negative, {
 	word_hash,
 	count
