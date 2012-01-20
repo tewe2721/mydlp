@@ -80,18 +80,10 @@ check_mysql_db() {
 	# Import MySQL schema
 	if (echo|$MYSQLC); then
 		if [ -z "$(echo 'show databases'|$MYSQLC|grep -e '^mydlp$')" ]; then
-			( $MYSQLADM create mydlp && \
-			$MYSQLC mydlp < /usr/share/mydlp/schema/mydlp.sql && \
-			echo "Initialized database 'mydlp' successfully..." && \
-			echo "Please go to https://127.0.0.1/ and complete installation...") || \
-			      ( echo "================================================="; \
-				echo "|   A problem occured while importing schema.   |"; \
-				echo "|   Please create a database and import         |"; \
-				echo "|   /usr/share/mydlp/schema/mydlp.sql manually. |"; \
-				echo "================================================="; \
-				echo; )
-		#else
-			#echo "Database 'mydlp' already exists..."
+			$MYSQLADM create mydlp
+		fi
+		if [ -z "$(echo 'show databases'|$MYSQLC|grep -e '^mydlp_log$')" ]; then
+			$MYSQLADM create mydlp_log
 		fi
 	else
 		echo "Cannot find mysql-client!!!"
