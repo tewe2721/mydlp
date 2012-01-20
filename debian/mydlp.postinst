@@ -60,20 +60,6 @@ chown_quarantine() {
 	$CHOWN -R 33.33 $QUARANTINE_DIR
 }
 
-update_mysql_schema() {
-	OLDVER=$1
-	while read line 
-	do
-		PATCHVER="$($ECHOBIN $line|$AWKBIN '{print $NF}')"
-		PATCHFILE="$($ECHOBIN $line|$AWKBIN -F: '{print $1}')"
-		if $DPKGBIN --compare-versions "$PATCHVER" gt "$OLDVER"; then
-			( $MYSQLC mydlp < $SCHEMADIR/patch/$PATCHFILE && \
-				echo "MySQL schema updated to $PATCHVER ($PATCHFILE)..."
-			) || $ECHOBIN "Failed to apply MySQL patch ($PATCHFILE) automatically. Should be applied manually."
-		fi
-	done < $SCHEMADIR/schema_map.txt
-}
-
 case "$1" in
     configure)
 	if [ -z "$2" ]; then
@@ -81,8 +67,6 @@ case "$1" in
 		generate_keys
 		configure_apache
 		chown_quarantine
-	else
-		update_mysql_schema $2
 	fi
 	;;
 
