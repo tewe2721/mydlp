@@ -205,10 +205,10 @@ post_query(State, AclR, Files) ->
 			% mydlp_archive will clean files.
 		false -> mydlp_api:clean_files(Files) end.
 
-archive_req(State, {{rule, RId}, {file, _}, {matcher, _}, {misc, _}}, Files) ->
+archive_req(State, {{rule, RId}, {file, _}, {itype, IType}, {misc, _}}, Files) ->
 	case Files of
 		[] -> ok;
-		_Else -> log_req(State, archive, {{rule, RId}, {file, Files}, {matcher, none}, {misc,""}}) end.
+		_Else -> log_req(State, archive, {{rule, RId}, {file, Files}, {itype, IType}, {misc,""}}) end.
 
 % refined this
 'BLOCK_REQ'(block, #smtpd_fsm{spool_ref=Ref, message_record=MessageR} = State) ->
@@ -347,10 +347,10 @@ get_dest_addresses(MessageR) ->
 	string:join(DestList, ", ").
 
 log_req(#smtpd_fsm{message_record=MessageR}, Action,
-                {{rule, RuleId}, {file, File}, {matcher, Matcher}, {misc, Misc}}) ->
+                {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
 	Src = get_from(MessageR),
 	Dest = get_dest_addresses(MessageR),
-        ?ACL_LOG(smtp, RuleId, Action, nil, Src, Dest, Matcher, File, Misc).
+        ?ACL_LOG(smtp, RuleId, Action, nil, Src, Dest, IType, File, Misc).
 
 get_dest_domains(#message{rcpt_to=RcptTo, to=ToH, cc=CCH, bcc=BCCH})->
 	RcptToA = lists:map(fun(S) -> mime_util:dec_addr(S) end, RcptTo),

@@ -303,14 +303,14 @@ acl_ret(QRet, Obj, DFFiles) ->
 					block
 	end.
 
-archive_req(Obj, {{rule, RId}, {file, _}, {matcher, _}, {misc, _}}, DFFiles) ->
+archive_req(Obj, {{rule, RId}, {file, _}, {itype, IType}, {misc, _}}, DFFiles) ->
         case DFFiles of
                 [] -> ok;
-                _Else -> log_req(Obj, archive, {{rule, RId}, {file, DFFiles}, {matcher, none}, {misc,""}}) end.
+                _Else -> log_req(Obj, archive, {{rule, RId}, {file, DFFiles}, {itype, IType}, {misc,""}}) end.
 
-log_req(Obj, Action, {{rule, RuleId}, {file, File}, {matcher, Matcher}, {misc, Misc}}) ->
+log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
 	User = get_user(Obj),
-        ?ACL_LOG(seap, RuleId, Action, nil, User, nil, Matcher, File, Misc).
+        ?ACL_LOG(seap, RuleId, Action, nil, User, nil, IType, File, Misc).
 
 is_inbound(#object{prop_dict=PD}) ->
 	case dict:find("direction", PD) of

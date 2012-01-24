@@ -473,10 +473,10 @@ acl_ret(QRet, DFFiles, State) ->
 					'BLOCK_REQ'(block, State)
 	end.
 
-archive_req(State, {{rule, RId}, {file, _}, {matcher, _}, {misc, _}}, DFFiles) ->
+archive_req(State, {{rule, RId}, {file, _}, {itype, IType}, {misc, _}}, DFFiles) ->
 	case DFFiles of
 		[] -> ok;
-		_Else -> log_req(State, archive, {{rule, RId}, {file, DFFiles}, {matcher, none}, {misc,""}}) end.
+		_Else -> log_req(State, archive, {{rule, RId}, {file, DFFiles}, {itype, IType}, {misc,""}}) end.
 
 pass_req(#state{log_pass=false}, _Files) -> ok;
 pass_req(#state{log_pass=LogPassLL, icap_mod_mode=reqmod} = State, Files) -> 
@@ -484,7 +484,7 @@ pass_req(#state{log_pass=LogPassLL, icap_mod_mode=reqmod} = State, Files) ->
 	RId = {dr, mydlp_mnesia:get_dcid()}, % this will create problem for multisite users.
 	case UTLFiles of
 		[] -> ok;
-		_Else -> log_req(State, pass, {{rule, RId}, {file, UTLFiles}, {matcher, none}, {misc,""}}) end;
+		_Else -> log_req(State, pass, {{rule, RId}, {file, UTLFiles}, {itype, -1}, {misc,""}}) end;
 pass_req(_State, _Files) -> ok.
 
 'REPLY_OK'(State) -> reply(ok, State).
@@ -773,13 +773,13 @@ uri_to_fn(Uri) ->
 
 log_req(#state{icap_headers=#icap_headers{x_client_ip=Addr},
 		http_req_headers=(#http_headers{host=DestHost})}, Action,
-		{{rule, RuleId}, {file, File}, {matcher, Matcher}, {misc, Misc}}) ->
-	?ACL_LOG(icap, RuleId, Action, Addr, nil, DestHost, Matcher, File, Misc);
+		{{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
+	?ACL_LOG(icap, RuleId, Action, Addr, nil, DestHost, IType, File, Misc);
 
 log_req(#state{icap_headers=#icap_headers{x_client_ip=Addr},
 		http_res_headers=(#http_headers{host=DestHost})}, Action, 
-		{{rule, RuleId}, {file, File}, {matcher, Matcher}, {misc, Misc}}) ->
-	?ACL_LOG(icap, RuleId, Action, Addr, nil, DestHost, Matcher, File, Misc).
+		{{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
+	?ACL_LOG(icap, RuleId, Action, Addr, nil, DestHost, IType, File, Misc).
 
 get_path(("/" ++ _Str) = Uri) -> Uri;
 get_path("icap://" ++ Str) ->
