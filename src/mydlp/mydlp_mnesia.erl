@@ -918,8 +918,30 @@ resolve_all(Rules, FilterId) ->
 		[FilterKey] -> 	
 			Rules1 = lists:usort(Rules),
 			RRules = resolve_rules(Rules1),
-			[{FilterKey, RRules}];
-		_Else -> [{{0, pass}, []}] end.
+			TextExtraction = predict_need4te(RRules),
+			{{true}, FilterKey, RRules};
+		_Else -> {{false}, {0, pass}, []} end.
+
+predict_need4te([{_RId, _RAction, ITypes}|Rules]) ->
+	case predict_need4te_1(ITypes) of
+		true -> true;
+		false -> predict_need4te(Rules) end;
+predict_need4te([]) -> false.
+
+predict_need4te_1([{_ITId, _Threshold, _DataFormats, IFeatures}|ITypes]) ->
+	case predict_need4te_2(IFeatures) of
+		true -> true;
+		false -> predict_need4te_1(ITypes) end;
+predict_need4te_1([]) -> false.
+
+predict_need4te_2([{_Weight, {Func, _FuncParams}}|IFeatures]) ->
+	case get_matcher_req(Func) of
+                raw -> predict_need4te_2(IFeatures);
+                analyzed -> true;
+                text -> true end;
+predict_need4te_2([]) -> false.
+
+get_matcher_req(Func) -> apply(mydlp_matchers, Func, []).
 
 resolve_rules(PS) -> resolve_rules(PS, []).
 resolve_rules([{RId, ROrigId,RAction}|PS], Rules) -> 
@@ -932,22 +954,22 @@ find_itypes(RuleId) ->
 			T <- mnesia:table(itype),
 			T#itype.rule_id == RuleId
 		]),
-	lists:flatten(?QLCE(QM)).
+	?QLCE(QM).
 
 find_ifeatures(ITypeId) ->
 	QM = ?QLCQ([{F#ifeature.weight, find_func(F#ifeature.id)} ||
 			F <- mnesia:table(ifeature),
 			F#ifeature.itype_id == ITypeId
 		]),
-	lists:flatten(?QLCE(QM)).
+	?QLCE(QM).
 
 find_func(IFeatureId) ->
 	QM = ?QLCQ([{M#match.func, M#match.func_params} ||
 			M <- mnesia:table(match),
 			M#match.ifeature_id == IFeatureId
 		]),
-	case lists:flatten(?QLCE(QM)) of
-		[Func] -> Func;
+	case ?QLCE(QM) of
+		[FuncTuple] -> FuncTuple;
 		_Else -> throw({ierror, cannot_be_more_than_one_matcher}) end.
 
 -endif.
