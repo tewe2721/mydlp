@@ -58,6 +58,10 @@
 
 -define(S, "~P").
 
+-define(MIME_OOXML_WORD, <<"application/vnd.openxmlformats-officedocument.wordprocessingml.document">>).
+-define(MIME_OOXML_EXCEL, <<"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">>).
+-define(MIME_OOXML_POWERPOINT, <<"application/vnd.openxmlformats-officedocument.presentationml.presentation">>).
+
 %%%%%%%
 
 %% end of import

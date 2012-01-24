@@ -91,10 +91,6 @@ get_mime(Data) when is_binary(Data) ->
 		<<"application/zip">> -> get_mime_zip(Data);
 		Else -> Else end.
 
--define(MIME_OOXML_WORD, <<"application/vnd.openxmlformats-officedocument.wordprocessingml.document">>).
--define(MIME_OOXML_EXCEL, <<"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">>).
--define(MIME_OOXML_POWERPOINT, <<"application/vnd.openxmlformats-officedocument.presentationml.presentation">>).
-
 get_mime_zip(Data) ->
 	{ok, FL} = zip:list_dir(Data),
 	case 		lists:keymember("word/document.xml", 2, FL) of true -> ?MIME_OOXML_WORD;

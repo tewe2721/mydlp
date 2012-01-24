@@ -1105,7 +1105,11 @@ ctf_ok(Files, File, ExtFiles, Processed, New) ->
 ctf_err_enc(Files, File, Processed, New) -> 
 	comp_to_files(Files, [File#file{is_encrypted=true}|Processed], New).
 
-comp_to_files([#file{mime_type= <<"application/zip">>, compressed_copy=false, is_encrypted=false} = File|Files], Processed, New) -> 
+comp_to_files([#file{mime_type=MT, compressed_copy=false, is_encrypted=false} = File|Files], Processed, New) 
+	when	MT == <<"application/zip">>;
+		MT == ?MIME_OOXML_WORD;
+		MT == ?MIME_OOXML_EXCEL;
+		MT == ?MIME_OOXML_POWERPOINT -> 
 	case zip:extract(File#file.data, [memory]) of
 		{ok, Ext} -> 
 			ExtFiles = ext_to_file(Ext),
