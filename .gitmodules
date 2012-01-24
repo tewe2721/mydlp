@@ -1,0 +1,3 @@
+[submodule "src/ui"]
+	path = src/ui
+	url = http://github.com/mydlp/mydlp-ui
