@@ -179,18 +179,18 @@ handle_acl({q, Channel, SAddr, DestList, Addr}, Files, #state{is_multisite=true}
 	case mydlp_mnesia:get_cid(SAddr) of
 		nocustomer -> block;
 		CustomerId -> 
-			Rules = mydlp_mnesia:get_rules_for_cid(Channel, CustomerId, DestList, Addr),
+			Rules = mydlp_mnesia:get_rules_for_fid(Channel, CustomerId, DestList, Addr),
 			acl_exec(Rules, [{cid, CustomerId}, {addr, Addr}], Files) end;
 
 handle_acl({q, Channel, _Site, DestList, Addr}, Files, #state{is_multisite=false}) ->
 	%Rules = mydlp_mnesia:get_rules(Addr),
 	CustomerId = mydlp_mnesia:get_dcid(),
-	Rules = mydlp_mnesia:get_rules_for_cid(Channel, CustomerId, DestList, Addr),
+	Rules = mydlp_mnesia:get_rules_for_fid(Channel, CustomerId, DestList, Addr),
 	acl_exec(Rules, [{cid, CustomerId}, {addr, Addr}], Files);
 
 handle_acl({rule_table, Channel, Addr}, _Files, _State) ->
 	CustomerId = mydlp_mnesia:get_dcid(),
-	Rules = mydlp_mnesia:get_rules_for_cid(Channel, CustomerId, Addr), % TODO: change needed for multi-site use
+	Rules = mydlp_mnesia:get_rules_for_fid(Channel, CustomerId, Addr), % TODO: change needed for multi-site use
 	Rules;
 
 %% now this is used for only SMTP, and in SMTP domain part of, mail adresses itself a siteid for customer.

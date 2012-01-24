@@ -71,8 +71,8 @@
 	get_rules/2,
 	get_all_rules/1,
 	get_all_rules/2,
-	get_rules_for_cid/3,
-	get_rules_for_cid/4,
+	get_rules_for_fid/3,
+	get_rules_for_fid/4,
 	get_rules_by_user/2,
 	get_cid/1,
 	remove_site/1,
@@ -258,9 +258,9 @@ get_all_rules(Channel) -> aqc({get_all_rules, Channel}, cache).
 
 get_all_rules(Channel, DestList) -> aqc({get_all_rules, Channel, DestList}, cache).
 
-get_rules_for_cid(Channel, FilterId, Who) -> get_rules_for_cid(Channel, FilterId, [], Who).
+get_rules_for_fid(Channel, FilterId, Who) -> get_rules_for_fid(Channel, FilterId, [], Who).
 
-get_rules_for_cid(Channel, FilterId, DestList, Who) -> aqc({get_rules_for_cid, Channel, FilterId, DestList, Who}, cache).
+get_rules_for_fid(Channel, FilterId, DestList, Who) -> aqc({get_rules_for_fid, Channel, FilterId, DestList, Who}, cache).
 
 get_rules_by_user(Channel, Who) -> aqc({get_rules_by_user, Channel, Who}, cache).
 
@@ -363,7 +363,7 @@ handle_result(_Query, {atomic, Objects}) -> Objects.
 
 -ifdef(__MYDLP_NETWORK).
 
-handle_query({get_rules_for_cid, Channel, FilterId, _DestList, Who}) ->
+handle_query({get_rules_for_fid, Channel, FilterId, _DestList, Who}) ->
 	Q = ?QLCQ([{R#rule.id, R#rule.orig_id, R#rule.action} || 
 			R <- mnesia:table(rule),
 			I <- mnesia:table(ipr),
