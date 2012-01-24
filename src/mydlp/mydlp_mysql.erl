@@ -42,7 +42,7 @@
 	push_log/10,
 	archive_log/6,
 	push_smb_discover/1,
-	is_multisite/0,
+%	is_multisite/0,
 	get_denied_page/0,
 	new_afile/0,
 	update_afile/6,
@@ -84,7 +84,7 @@ compile_filters() ->
 compile_customer(FilterId) when is_integer(FilterId) ->
 	gen_server:call(?MODULE, {compile_customer, FilterId} , 60000).
 
-is_multisite() -> gen_server:call(?MODULE, is_multisite).
+%is_multisite() -> gen_server:call(?MODULE, is_multisite).
 
 get_denied_page() -> gen_server:call(?MODULE, get_denied_page).
 
@@ -113,17 +113,17 @@ handle_call(compile_filters, From, State) ->
 		end, 60000),
         {noreply, State};
 
-handle_call(is_multisite, _From, State) ->
-	{ok, ATQ} = psq(app_type),
-	Reply = case ATQ of
-		[] -> false;
-		[[0]] -> false;
-		[[1]] -> true end,
-        {reply, Reply, State};
+%handle_call(is_multisite, _From, State) ->
+%	{ok, ATQ} = psq(app_type),
+%	Reply = case ATQ of
+%		[] -> false;
+%		[[0]] -> false;
+%		[[1]] -> true end,
+%        {reply, Reply, State};
 
 handle_call(get_denied_page, _From, State) ->
 	% Probably will create problems in multisite use.
-	{ok, DPQ} = psq(denied_page_by_cid, [mydlp_mnesia:get_dcid()]),
+	{ok, DPQ} = psq(denied_page),
 	Reply = case DPQ of
 		[[DeniedPage]] when is_binary(DeniedPage) -> DeniedPage;
 		_Else -> not_found end,
@@ -256,29 +256,30 @@ init([]) ->
 
 	[ mysql:prepare(Key, Query) || {Key, Query} <- [
 		{last_insert_id, <<"SELECT last_insert_id()">>},
-		{rules, <<"SELECT id,DTYPE,action FROM Rules WHERE enabled=1 order by priority desc">>},
-		{cid_of_rule_by_id, <<"SELECT f.customer_id FROM sh_rule AS r, sh_filter AS f WHERE r.filter_id=f.id AND r.id=?">>},
+		{rules, <<"SELECT id,DTYPE,action FROM Rule WHERE enabled=1 order by priority desc">>},
+		%{cid_of_rule_by_id, <<"SELECT f.customer_id FROM sh_rule AS r, sh_filter AS f WHERE r.filter_id=f.id AND r.id=?">>},
 		{network_by_rule_id, <<"SELECT n.ipBase,n.ipMask FROM Network AS n, RuleItem AS ri WHERE ri.rule_id=? AND n.id=ri.item_id">>},
 		{itype_by_rule_id, <<"SELECT t.id,d.threshold FROM InformationType AS t, InformationDescription AS d, RuleItem AS ri WHERE ri.rule_id=? AND t.id=ri.item_id AND d.id=t.informationDescription_id">>},
 		{data_formats_by_itype_id, <<"SELECT df.dataFormats_id FROM InformationType_DataFormat AS df WHERE df.InformationType_id=?">>},
-		{ifeature_by_itype_id, <<"SELECT f.id,f.weight,f.matcher_id FROM InformationFeature AS f, InformationDescription_InformationFeature df, InformationType t WHERE t.id=? AND t.informationDescription_id=df.InformationDescription_id AND df.features_id=f.id">>},
+		{ifeature_by_itype_id, <<"SELECT f.weight,f.matcher_id FROM InformationFeature AS f, InformationDescription_InformationFeature df, InformationType t WHERE t.id=? AND t.informationDescription_id=df.InformationDescription_id AND df.features_id=f.id">>},
 		{match_by_id, <<"SELECT m.id,m.functionName FROM Matcher AS m WHERE m.id=?">>},
+		{regex_by_matcher_id, <<"SELECT re.regex FROM MatcherParam AS mp, RegularExpression AS re WHERE mp.matcher_id=? AND mp.id=re.id">>},
 		%{user_by_rule_id, <<"SELECT eu.id, eu.username FROM sh_ad_entry_user AS eu, sh_ad_cross AS c, sh_ad_entry AS e, sh_ad_group AS g, sh_ad_rule_cross AS rc WHERE rc.parent_rule_id=? AND rc.group_id=g.id AND rc.group_id=c.group_id AND c.entry_id=e.id AND c.entry_id=eu.entry_id">>},
 		%{user_by_rule_id, <<"SELECT eu.id, eu.username FROM sh_ad_entry_user AS eu, sh_ad_cross AS c, sh_ad_rule_cross AS rc WHERE rc.parent_rule_id=? AND rc.group_id=c.group_id AND c.entry_id=eu.entry_id">>},
-		{mimes_by_data_format_id, <<"SELECT m.mime FROM MIMEType AS m, DataFormat_MIMEType dm WHERE dm.DataFormat_id=? and dm.mimeTypes_id=m.id">>},
+		{mimes_by_data_format_id, <<"SELECT m.mimeType FROM MIMEType AS m, DataFormat_MIMEType dm WHERE dm.DataFormat_id=? and dm.mimeTypes_id=m.id">>},
 		%{usb_device_by_cid, <<"SELECT device_id, action FROM ep_usb_device WHERE customer_id=?">>},
 		%{customer_by_id, <<"SELECT id,static_ip FROM sh_customer WHERE id=?">>},
-		%{denied_page_by_cid, <<"SELECT html_text FROM sh_warning_page WHERE customer_id=?">>},
+		{denied_page, <<"SELECT c.value FROM Config AS c WHERE c.configKey=\"denied_page_html\"">>}
 
-		{insert_incident, <<"INSERT INTO log_incedent (id, customer_id, rule_id, protocol, src_ip, src_user, destination, action, matcher, filename, misc) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)">>},
-		{insert_incident_file, <<"INSERT INTO log_incedent_file (id, log_incedent_id, path, mime_type, size) VALUES (NULL, last_insert_id(), ?, ?, ?)">>},
-		{insert_archive, <<"INSERT INTO log_archive (id, customer_id, rule_id, protocol, src_ip, src_user, destination, log_archive_file_id) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)">>},
-		{new_archive_file_entry, <<"INSERT INTO log_archive_file (id) VALUES (NULL)">>},
-		{update_archive_file, <<"UPDATE log_archive_file SET filename=?, log_archive_data_id=? WHERE id = ?">>},
-		{archive_data_by_path, <<"SELECT id FROM log_archive_data WHERE path = ?">>},
-		{insert_archive_data, <<"INSERT INTO log_archive_data (id, mime_type, size, path, content_text) VALUES (NULL, ?, ?, ?, ?)">>},
-		{delete_all_smb_discover, <<"DELETE FROM log_shared_folder">>},
-		{insert_smb_discover, <<"INSERT INTO log_shared_folder (id, customer_id, result) VALUES (NULL, ?, ?)">>}
+%		{insert_incident, <<"INSERT INTO log_incedent (id, customer_id, rule_id, protocol, src_ip, src_user, destination, action, matcher, filename, misc) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)">>},
+%		{insert_incident_file, <<"INSERT INTO log_incedent_file (id, log_incedent_id, path, mime_type, size) VALUES (NULL, last_insert_id(), ?, ?, ?)">>},
+%		{insert_archive, <<"INSERT INTO log_archive (id, customer_id, rule_id, protocol, src_ip, src_user, destination, log_archive_file_id) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)">>},
+%		{new_archive_file_entry, <<"INSERT INTO log_archive_file (id) VALUES (NULL)">>},
+%		{update_archive_file, <<"UPDATE log_archive_file SET filename=?, log_archive_data_id=? WHERE id = ?">>},
+%		{archive_data_by_path, <<"SELECT id FROM log_archive_data WHERE path = ?">>},
+%		{insert_archive_data, <<"INSERT INTO log_archive_data (id, mime_type, size, path, content_text) VALUES (NULL, ?, ?, ?, ?)">>},
+%		{delete_all_smb_discover, <<"DELETE FROM log_shared_folder">>},
+%		{insert_smb_discover, <<"INSERT INTO log_shared_folder (id, customer_id, result) VALUES (NULL, ?, ?)">>}
 	]],
 
 	{ok, #state{host=Host, port=Port, 
@@ -345,7 +346,7 @@ populate_site(FilterId) ->
 
 populate_filters([[Id, DActionS]|Rows], Id) ->
 	DAction = rule_action_to_atom(DActionS),
-	{ok, RQ} = psq(rules_by_fid, [Id]),
+	{ok, RQ} = psq(rules),
 	populate_rules(RQ, Id),
 	F = #filter{id=Id, default_action=DAction},
 	mydlp_mnesia:write(F),
@@ -359,13 +360,14 @@ populate_rules([[Id, DTYPE, ActionS] |Rows], FilterId) ->
 	populate_rules(Rows, FilterId);
 populate_rules([], _FilterId) -> ok.
 
-populate_rule(RuleId, Channel, Action, FilterId) ->
-	{ok, IQ} = psq(network_by_rule_id, [RuleId]),
+populate_rule(OrigId, Channel, Action, FilterId) ->
+	{ok, IQ} = psq(network_by_rule_id, [OrigId]),
+	RuleId = mydlp_mnesia:get_unique_id(rule),
 	populate_iprs(IQ, RuleId),
 	%{ok, UQ} = psq(user_by_rule_id, [Id]),
 	%populate_users(UQ, Parent),
 
-	{ok, ITQ} = psq(itype_by_rule_id, [RuleId]),
+	{ok, ITQ} = psq(itype_by_rule_id, [OrigId]),
 	populate_itypes(ITQ, RuleId),
 
 	%{ok, MQ} = psq(match_by_rule_id, [Id]),
@@ -374,8 +376,7 @@ populate_rule(RuleId, Channel, Action, FilterId) ->
 	%populate_matchGroups(MGQ, Parent),
 	%{ok, TDQ} = psq(tdomains_by_rid, [Id]),
 	%TDs = lists:flatten(TDQ),
-	Id = mydlp_mnesia:get_unique_id(rule),
-	R = #rule{id=Id, orig_id=RuleId, channel=Channel, action=Action, filter_id=FilterId},
+	R = #rule{id=RuleId, orig_id=OrigId, channel=Channel, action=Action, filter_id=FilterId},
 	mydlp_mnesia:write(R).
 
 populate_iprs([[Base, Subnet]| Rows], RuleId) ->
@@ -409,21 +410,31 @@ ip_to_int(nil) -> nil;
 ip_to_int({I1,I2,I3,I4}) ->
 	(I1*256*256*256)+(I2*256*256)+(I3*256)+I4.
 
-populate_itypes([[OrigId, Threshold]| Rows], RuleId) ->
-	{ok, DFQ} = psq(data_formats_by_itype_id, [OrigId]),
+pr_data_formats(ITypeOrigId) ->
+	{ok, DFQ} = psq(data_formats_by_itype_id, [ITypeOrigId]),
 	DataFormats = lists:usort(lists:flatten(DFQ)),
 	populate_data_formats(DataFormats),
-	Id = mydlp_mnesia:get_unique_id(itype),
-	T = #itype{id=Id, orig_id=OrigId, rule_id=RuleId, data_formats=DataFormats, threshold=Threshold},
-	{ok, IFQ} = psq(ifeature_by_itype_id, [Id]),
-	populate_ifeatures(IFQ, OrigId),
+	case DataFormats of
+		[DFId] ->
+			{ok, MQ} = psq(mimes_by_data_format_id, [DFId]),
+			case MQ of
+				[[<<"mydlp-internal/all">>]] -> all;
+				_Else2 -> DataFormats end;
+		_Else -> DataFormats end.
+
+populate_itypes([[OrigId, Threshold]| Rows], RuleId) ->
+	DataFormats = pr_data_formats(OrigId),
+	ITypeId = mydlp_mnesia:get_unique_id(itype),
+	T = #itype{id=ITypeId, orig_id=OrigId, rule_id=RuleId, data_formats=DataFormats, threshold=Threshold},
+	{ok, IFQ} = psq(ifeature_by_itype_id, [OrigId]),
+	populate_ifeatures(IFQ, ITypeId),
 	mydlp_mnesia:write(T),
 	populate_itypes(Rows, RuleId);
 populate_itypes([], _RuleId) -> ok.
 
-populate_ifeatures([[IFeatureId, Weight, MatcherId]| Rows], ITypeId) ->
-	Id = mydlp_mnesia:get_unique_id(ifeature),
-	F = #ifeature{id=Id, itype_id=ITypeId, weight=Weight},
+populate_ifeatures([[Weight, MatcherId]| Rows], ITypeId) ->
+	IFeatureId = mydlp_mnesia:get_unique_id(ifeature),
+	F = #ifeature{id=IFeatureId, itype_id=ITypeId, weight=Weight},
 	{ok, MQ} = psq(match_by_id, [MatcherId]),
 	populate_matches(MQ, IFeatureId),
 	mydlp_mnesia:write(F),
@@ -514,11 +525,11 @@ populate_match(Id, <<"scode_ada">>, IFeatureId) ->
 populate_match(Id, <<"keyword">>, IFeatureId) ->
 	Func = regex_match,
 	{ok, REQ} = psq(regex_by_matcher_id, [Id]),
-	[RegexS]=lists:flatten(REQ),
+	[[RegexS]] = REQ,
 	RegexId = mydlp_mnesia:get_unique_id(regex),
 	RegexGroupId = mydlp_mnesia:get_unique_id(regex_group_id),
 	R = #regex{id=RegexId, group_id=RegexGroupId, plain=RegexS},
-	mnesia:write(R),
+	mydlp_mnesia:write(R),
 	FuncParams=[RegexGroupId],
 	new_match(Id, IFeatureId, Func, FuncParams);
 

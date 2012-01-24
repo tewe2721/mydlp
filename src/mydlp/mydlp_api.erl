@@ -1182,6 +1182,15 @@ more_than_count(Fun, Count, [I|List], Curr) ->
 	end;
 more_than_count(_, _, [], _) -> false.
 
+filter_count(Fun, List) -> filter_count(Fun, List, 0).
+
+filter_count(Fun, [I|List], Curr) ->
+	case Fun(I) of
+		true -> filter_count(Fun, List, Curr + 1);
+		_Else -> filter_count(Fun, List, Curr)
+	end;
+filter_count(_, [], Curr) -> Curr.
+
 %%-------------------------------------------------------------------------
 %% @spec (String::string()) -> {string(),string()}
 %% @doc Splits the given string into two strings at the last SPACE (chr(32))
@@ -1813,7 +1822,7 @@ pmap_f(Parent, Fun, I) ->
 		Ret = Fun(I),
 		{self(), Ret}
 	catch Class:Error ->
-		{self(), {ierror, {Class, Error}}} end,
+		{self(), {ierror, {Class, {Error, erlang:get_stacktrace()}}}} end,
 	Parent ! Message.
 
 %%-------------------------------------------------------------------------
@@ -1866,7 +1875,7 @@ pany_child_f(Parent, Fun, I, Timeout) ->
 		Ret = Fun(I),
 		{self(), I, Ret}
 	catch Class:Error ->
-		{self(), {ierror, {Class, Error}}} end,
+		{self(), {ierror, {Class, {Error, erlang:get_stacktrace()}}}} end,
 	timer:cancel(TRef),
 	Parent ! Message.
 

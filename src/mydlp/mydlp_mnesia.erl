@@ -49,7 +49,7 @@
 	get_regexes/1,
 	is_fhash_of_gid/2,
 	is_shash_of_gid/2,
-	is_mime_of_gid/2,
+	is_mime_of_dfid/2,
 	is_dr_fh_of_fid/2,
 	get_record_fields/1,
 	dump_tables/1,
@@ -144,8 +144,7 @@
 -ifdef(__MYDLP_NETWORK).
 
 -define(NONDATA_FUNCTIONAL_TABLES, [
-	{filter, ordered_set, 
-		fun() -> mnesia:add_table_index(filter, customer_id) end},
+	filter,
 	rule,
 	ipr, 
 	{m_user, ordered_set, 
@@ -153,8 +152,7 @@
 	itype,
 	ifeature,
 	match, 
-	site_desc,
-	default_rule
+	site_desc
 ]).
 
 -endif.
@@ -198,6 +196,7 @@ get_record_fields_common(Record) ->
 
 get_record_fields_functional(Record) ->
         case Record of
+		filter -> record_info(fields, filter);
 		rule -> record_info(fields, rule);
 		ipr -> record_info(fields, ipr);
 		m_user -> record_info(fields, m_user);
@@ -309,8 +308,8 @@ is_fhash_of_gid(Hash, GroupIds) ->
 is_shash_of_gid(Hash, GroupIds) -> 
 	aqc({is_shash_of_gid, Hash, GroupIds}, nocache).
 
-is_mime_of_gid(Mime, GroupIds) -> 
-	aqc({is_mime_of_gid, Mime, GroupIds}, cache).
+is_mime_of_dfid(Mime, DataFormatIds) -> 
+	aqc({is_mime_of_dfid, Mime, DataFormatIds}, cache).
 
 is_dr_fh_of_fid(Hash, FileId) -> aqc({is_dr_fh_of_fid, Hash, FileId}, nocache).
 
@@ -329,8 +328,8 @@ flush_cache() -> cache_clean0().
 
 %%%%%%%%%%%%%% gen_server handles
 
-handle_result({is_mime_of_gid, _Mime, MGIs}, {atomic, GIs}) -> 
-	lists:any(fun(I) -> lists:member(I, MGIs) end,GIs);
+handle_result({is_mime_of_dfid, _Mime, DFIs}, {atomic, MDFIs}) -> 
+	lists:any(fun(I) -> lists:member(I, DFIs) end, MDFIs);
 
 handle_result({is_shash_of_gid, _Hash, HGIs}, {atomic, GIs}) -> 
 	lists:any(fun(I) -> lists:member(I, HGIs) end,GIs);
@@ -365,7 +364,7 @@ handle_result(_Query, {atomic, Objects}) -> Objects.
 -ifdef(__MYDLP_NETWORK).
 
 handle_query({get_rules_for_cid, FilterId, _DestList, Who}) ->
-	Q = ?QLCQ([{R#rule.id, R#rule.action} || 
+	Q = ?QLCQ([{R#rule.id, R#rule.orig_id, R#rule.action} || 
 			R <- mnesia:table(rule),
 			I <- mnesia:table(ipr),
 			R#rule.filter_id == FilterId,
@@ -376,7 +375,7 @@ handle_query({get_rules_for_cid, FilterId, _DestList, Who}) ->
 	resolve_all(Rules, FilterId);
 
 handle_query({get_rules, Who}) ->
-	Q = ?QLCQ([{R#rule.id, R#rule.action} || 
+	Q = ?QLCQ([{R#rule.id, R#rule.orig_id, R#rule.action} || 
 			R <- mnesia:table(rule),
 			I <- mnesia:table(ipr),
 			I#ipr.rule_id == R#rule.id,
@@ -386,7 +385,7 @@ handle_query({get_rules, Who}) ->
 	resolve_all(Rules);
 
 handle_query(get_all_rules) ->
-	Q = ?QLCQ([{R#rule.id, R#rule.action} || 
+	Q = ?QLCQ([{R#rule.id, R#rule.orig_id, R#rule.action} || 
 			F <- mnesia:table(filter),
 			R <- mnesia:table(rule),
 			R#rule.filter_id == F#filter.id
@@ -395,7 +394,7 @@ handle_query(get_all_rules) ->
 	resolve_all(Rules);
 
 handle_query({get_all_rules, _DestList}) ->
-	Q = ?QLCQ([{R#rule.id, R#rule.action} || 
+	Q = ?QLCQ([{R#rule.id, R#rule.orig_id, R#rule.action} || 
 			F <- mnesia:table(filter),
 			R <- mnesia:table(rule),
 			R#rule.filter_id == F#filter.id
@@ -404,7 +403,7 @@ handle_query({get_all_rules, _DestList}) ->
 	resolve_all(Rules);
 
 handle_query({get_rules_by_user, Who}) ->
-	Q = ?QLCQ([{R#rule.id, R#rule.action} || 
+	Q = ?QLCQ([{R#rule.id, R#rule.orig_id, R#rule.action} || 
 			R <- mnesia:table(rule),
 			U <- mnesia:table(m_user),
 			U#m_user.rule_id == R#rule.id,
@@ -542,7 +541,7 @@ handle_query_common({is_shash_of_gid, Hash, _HGIs}) ->
 		]),
 	?QLCE(Q);
 
-handle_query_common({is_mime_of_gid, Mime, _MGIs}) ->
+handle_query_common({is_mime_of_dfid, Mime, _DFIs}) ->
 	Q = ?QLCQ([M#mime_type.data_format_id ||
 		M <- mnesia:table(mime_type),
 		M#mime_type.mime == Mime
@@ -558,7 +557,7 @@ handle_query_common({is_dr_fh_of_fid, Hash, FileId}) ->
 	?QLCE(Q);
 
 handle_query_common({get_regexes, GroupId}) ->
-	Q = ?QLCQ([ { R#regex.id, R#regex.compiled } ||
+	Q = ?QLCQ([ R#regex.compiled ||
 		R <- mnesia:table(regex),
 		R#regex.group_id == GroupId
 		]),
@@ -923,12 +922,12 @@ resolve_all(Rules, FilterId) ->
 		_Else -> [{{0, pass}, []}] end.
 
 resolve_rules(PS) -> resolve_rules(PS, []).
-resolve_rules([{RId,RAction}|PS], Rules) -> 
-	resolve_rules(PS, [{RId, RAction, find_itypes(RId)}| Rules]);
+resolve_rules([{RId, ROrigId,RAction}|PS], Rules) -> 
+	resolve_rules(PS, [{ROrigId, RAction, find_itypes(RId)}| Rules]);
 resolve_rules([], Rules) -> lists:reverse(Rules).
 
 find_itypes(RuleId) ->
-	QM = ?QLCQ([{T#itype.id, T#itype.threshold, 
+	QM = ?QLCQ([{T#itype.orig_id, T#itype.threshold, 
 			T#itype.data_formats, find_ifeatures(T#itype.id)} ||
 			T <- mnesia:table(itype),
 			T#itype.rule_id == RuleId
@@ -936,18 +935,20 @@ find_itypes(RuleId) ->
 	lists:flatten(?QLCE(QM)).
 
 find_ifeatures(ITypeId) ->
-	QM = ?QLCQ([{F#ifeature.weight, find_funcs(F#ifeature.id)} ||
+	QM = ?QLCQ([{F#ifeature.weight, find_func(F#ifeature.id)} ||
 			F <- mnesia:table(ifeature),
 			F#ifeature.itype_id == ITypeId
 		]),
 	lists:flatten(?QLCE(QM)).
 
-find_funcs(IFeatureId) ->
+find_func(IFeatureId) ->
 	QM = ?QLCQ([{M#match.func, M#match.func_params} ||
 			M <- mnesia:table(match),
 			M#match.ifeature_id == IFeatureId
 		]),
-	lists:flatten(?QLCE(QM)).
+	case lists:flatten(?QLCE(QM)) of
+		[Func] -> Func;
+		_Else -> throw({ierror, cannot_be_more_than_one_matcher}) end.
 
 -endif.
 
