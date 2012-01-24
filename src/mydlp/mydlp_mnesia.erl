@@ -68,12 +68,12 @@
 -export([
 	new_authority/1,
 	get_mnesia_nodes/0,
-	get_rules/1,
-	get_all_rules/0,
+	get_rules/2,
 	get_all_rules/1,
-	get_rules_for_cid/2,
+	get_all_rules/2,
 	get_rules_for_cid/3,
-	get_rules_by_user/1,
+	get_rules_for_cid/4,
+	get_rules_by_user/2,
 	get_cid/1,
 	remove_site/1,
 	remove_file_entry/1,
@@ -252,17 +252,17 @@ wait_for_tables() ->
 
 -ifdef(__MYDLP_NETWORK).
 
-get_rules(Who) -> aqc({get_rules, Who}, cache).
+get_rules(Channel, Who) -> aqc({get_rules, Channel, Who}, cache).
 
-get_all_rules() -> aqc(get_all_rules, cache).
+get_all_rules(Channel) -> aqc({get_all_rules, Channel}, cache).
 
-get_all_rules(DestList) -> aqc({get_all_rules, DestList}, cache).
+get_all_rules(Channel, DestList) -> aqc({get_all_rules, Channel, DestList}, cache).
 
-get_rules_for_cid(FilterId, Who) -> get_rules_for_cid(FilterId, [], Who).
+get_rules_for_cid(Channel, FilterId, Who) -> get_rules_for_cid(Channel, FilterId, [], Who).
 
-get_rules_for_cid(FilterId, DestList, Who) -> aqc({get_rules_for_cid, FilterId, DestList, Who}, cache).
+get_rules_for_cid(Channel, FilterId, DestList, Who) -> aqc({get_rules_for_cid, Channel, FilterId, DestList, Who}, cache).
 
-get_rules_by_user(Who) -> aqc({get_rules_by_user, Who}, cache).
+get_rules_by_user(Channel, Who) -> aqc({get_rules_by_user, Channel, Who}, cache).
 
 get_cid(SIpAddr) -> aqc({get_cid, SIpAddr}, cache).
 
@@ -363,50 +363,55 @@ handle_result(_Query, {atomic, Objects}) -> Objects.
 
 -ifdef(__MYDLP_NETWORK).
 
-handle_query({get_rules_for_cid, FilterId, _DestList, Who}) ->
+handle_query({get_rules_for_cid, Channel, FilterId, _DestList, Who}) ->
 	Q = ?QLCQ([{R#rule.id, R#rule.orig_id, R#rule.action} || 
 			R <- mnesia:table(rule),
 			I <- mnesia:table(ipr),
 			R#rule.filter_id == FilterId,
+			R#rule.channel == Channel,
 			I#ipr.rule_id == R#rule.id,
 			ip_band(I#ipr.ipbase, I#ipr.ipmask) == ip_band(Who, I#ipr.ipmask)
 			]),
 	Rules = ?QLCE(Q),
 	resolve_all(Rules, FilterId);
 
-handle_query({get_rules, Who}) ->
+handle_query({get_rules, Channel, Who}) ->
 	Q = ?QLCQ([{R#rule.id, R#rule.orig_id, R#rule.action} || 
 			R <- mnesia:table(rule),
 			I <- mnesia:table(ipr),
+			R#rule.channel == Channel,
 			I#ipr.rule_id == R#rule.id,
 			ip_band(I#ipr.ipbase, I#ipr.ipmask) == ip_band(Who, I#ipr.ipmask)
 			]),
 	Rules = ?QLCE(Q),
 	resolve_all(Rules);
 
-handle_query(get_all_rules) ->
+handle_query({get_all_rules, Channel}) ->
 	Q = ?QLCQ([{R#rule.id, R#rule.orig_id, R#rule.action} || 
 			F <- mnesia:table(filter),
 			R <- mnesia:table(rule),
-			R#rule.filter_id == F#filter.id
+			R#rule.filter_id == F#filter.id,
+			R#rule.channel == Channel
 			]),
 	Rules = ?QLCE(Q),
 	resolve_all(Rules);
 
-handle_query({get_all_rules, _DestList}) ->
+handle_query({get_all_rules, Channel, _DestList}) ->
 	Q = ?QLCQ([{R#rule.id, R#rule.orig_id, R#rule.action} || 
 			F <- mnesia:table(filter),
 			R <- mnesia:table(rule),
-			R#rule.filter_id == F#filter.id
+			R#rule.filter_id == F#filter.id,
+			R#rule.channel == Channel
 			]),
 	Rules = ?QLCE(Q),
 	resolve_all(Rules);
 
-handle_query({get_rules_by_user, Who}) ->
+handle_query({get_rules_by_user, Channel, Who}) ->
 	Q = ?QLCQ([{R#rule.id, R#rule.orig_id, R#rule.action} || 
 			R <- mnesia:table(rule),
 			U <- mnesia:table(m_user),
 			U#m_user.rule_id == R#rule.id,
+			R#rule.channel == Channel,
 			U#m_user.username == Who
 			]),
 	Rules = ?QLCE(Q),

@@ -163,11 +163,11 @@ init([]) ->
 
 % {Action, {{rule, Id}, {file, File}, {matcher, Func}, {misc, Misc}}}
 'REQ_OK'(#smtpd_fsm{enable_for_all=true, files=Files, message_record=MessageR} = State) ->
-	AclRet = mydlp_acl:qa(get_dest_domains(MessageR), Files),
+	AclRet = mydlp_acl:qa(mail, get_dest_domains(MessageR), Files),
 	process_aclret(AclRet, State);
 'REQ_OK'(#smtpd_fsm{enable_for_all=false, files=Files, 
 		message_record=(#message{mail_from=MailFrom} = MessageR)} = State) ->
-	AclRet = mydlp_acl:qu(list_to_binary([MailFrom]), get_dest_domains(MessageR), Files),
+	AclRet = mydlp_acl:qu(mail, list_to_binary([MailFrom]), get_dest_domains(MessageR), Files),
 	process_aclret(AclRet, State).
 
 process_aclret(AclRet, #smtpd_fsm{files=Files} = State) ->
@@ -350,7 +350,7 @@ log_req(#smtpd_fsm{message_record=MessageR}, Action,
                 {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
 	Src = get_from(MessageR),
 	Dest = get_dest_addresses(MessageR),
-        ?ACL_LOG(smtp, RuleId, Action, nil, Src, Dest, IType, File, Misc).
+        ?ACL_LOG(mail, RuleId, Action, nil, Src, Dest, IType, File, Misc).
 
 get_dest_domains(#message{rcpt_to=RcptTo, to=ToH, cc=CCH, bcc=BCCH})->
 	RcptToA = lists:map(fun(S) -> mime_util:dec_addr(S) end, RcptTo),

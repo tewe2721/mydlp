@@ -25,7 +25,6 @@
 %%% @end
 %%%-------------------------------------------------------------------
 
-
 -module(mydlp_acl).
 -author("kerem@mydlp.com").
 -behaviour(gen_server).
@@ -39,11 +38,11 @@
 -ifdef(__MYDLP_NETWORK).
 
 -export([
-	get_rule_table/1,
-	q/4,
-	qu/3,
-	qa/2,
-	qm/1
+	get_rule_table/2,
+	q/5,
+	qu/4,
+	qa/3,
+	qm/2
 	]).
 
 -endif.
@@ -53,8 +52,8 @@
 -endif.
 
 -export([
-	qi/1,
-	qe/1
+	qi/2,
+	qe/2
 	]).
 
 %% gen_server callbacks
@@ -76,15 +75,15 @@
 
 -ifdef(__MYDLP_NETWORK).
 
-get_rule_table(Addr) -> acl_call({rule_table, Addr}).
+get_rule_table(Channel, Addr) -> acl_call({rule_table, Channel, Addr}).
 
-q(Site, Addr, DestList, Files) -> acl_call({q, Site, DestList, Addr}, Files).
+q(Channel, Site, Addr, DestList, Files) -> acl_call({q, Channel, Site, DestList, Addr}, Files).
 
-qu(User, _Dest, Files) -> acl_call({qu, site, User}, Files).
+qu(Channel, User, _Dest, Files) -> acl_call({qu, Channel, site, User}, Files).
 
-qa(DestList, Files) -> acl_call({qa, site, DestList}, Files).
+qa(Channel, DestList, Files) -> acl_call({qa, Channel, site, DestList}, Files).
 
-qm(Files) -> acl_call({qm, site}, Files).
+qm(Channel, Files) -> acl_call({qm, Channel, site}, Files).
 
 -endif.
 
@@ -93,9 +92,9 @@ qm(Files) -> acl_call({qm, site}, Files).
 -endif.
 
 % For handling inbound request.
-qi(Files) -> acl_call(qi, Files).
+qi(Channel, Files) -> acl_call({qi, Channel}, Files).
 
-qe(Files) -> acl_call({qe, site}, Files).
+qe(Channel, Files) -> acl_call({qe, Channel, site}, Files).
 
 -ifdef(__MYDLP_NETWORK).
 
@@ -115,7 +114,7 @@ acl_call(Query, Files, Timeout) ->
 		false -> acl_call1(Query, Files, Timeout) end.
 
 % no need to call acl server for inbound requests.
-acl_call1(qi, _Files, _Timeout) -> 
+acl_call1({qi, _Channel}, _Files, _Timeout) -> 
 	case ?CFG(archive_inbound) of
 		true -> archive;
 		false -> pass end;
@@ -176,39 +175,39 @@ acl_exec3({TextExtraction} = ACLOpts, AllRules, Source, Files, ExNewFiles, Clean
 -ifdef(__MYDLP_NETWORK).
 
 %% it needs refactoring for trusted domains
-handle_acl({q, SAddr, DestList, Addr}, Files, #state{is_multisite=true}) ->
+handle_acl({q, Channel, SAddr, DestList, Addr}, Files, #state{is_multisite=true}) ->
 	case mydlp_mnesia:get_cid(SAddr) of
 		nocustomer -> block;
 		CustomerId -> 
-			Rules = mydlp_mnesia:get_rules_for_cid(CustomerId, DestList, Addr),
+			Rules = mydlp_mnesia:get_rules_for_cid(Channel, CustomerId, DestList, Addr),
 			acl_exec(Rules, [{cid, CustomerId}, {addr, Addr}], Files) end;
 
-handle_acl({q, _Site, DestList, Addr}, Files, #state{is_multisite=false}) ->
+handle_acl({q, Channel, _Site, DestList, Addr}, Files, #state{is_multisite=false}) ->
 	%Rules = mydlp_mnesia:get_rules(Addr),
 	CustomerId = mydlp_mnesia:get_dcid(),
-	Rules = mydlp_mnesia:get_rules_for_cid(CustomerId, DestList, Addr),
+	Rules = mydlp_mnesia:get_rules_for_cid(Channel, CustomerId, DestList, Addr),
 	acl_exec(Rules, [{cid, CustomerId}, {addr, Addr}], Files);
 
-handle_acl({rule_table, Addr}, _Files, _State) ->
+handle_acl({rule_table, Channel, Addr}, _Files, _State) ->
 	CustomerId = mydlp_mnesia:get_dcid(),
-	Rules = mydlp_mnesia:get_rules_for_cid(CustomerId, Addr), % TODO: change needed for multi-site use
+	Rules = mydlp_mnesia:get_rules_for_cid(Channel, CustomerId, Addr), % TODO: change needed for multi-site use
 	Rules;
 
 %% now this is used for only SMTP, and in SMTP domain part of, mail adresses itself a siteid for customer.
 %% it needs refactoring for both multisite and trusted domains
-handle_acl({qu, _Site, User}, Files, _State) ->
-	Rules = mydlp_mnesia:get_rules_by_user(User),
+handle_acl({qu, Channel, _Site, User}, Files, _State) ->
+	Rules = mydlp_mnesia:get_rules_by_user(Channel, User),
 	acl_exec(Rules, [{cid, mydlp_mnesia:get_dcid()}, {user, User}], Files);
 
-handle_acl({qa, _Site, DestList}, Files, _State) ->
-	Rules = mydlp_mnesia:get_all_rules(DestList),
+handle_acl({qa, Channel, _Site, DestList}, Files, _State) ->
+	Rules = mydlp_mnesia:get_all_rules(Channel, DestList),
 	acl_exec(Rules, [{cid, mydlp_mnesia:get_dcid()}], Files);
 
-handle_acl({qm, _Site}, Files, _State) ->
-	Rules = mydlp_mnesia:get_all_rules(),
+handle_acl({qm, Channel, _Site}, Files, _State) ->
+	Rules = mydlp_mnesia:get_all_rules(Channel),
 	acl_exec(Rules, [{cid, mydlp_mnesia:get_dcid()}], Files);
 
-handle_acl({qe, Site}, Files, State) -> handle_acl({qm, Site}, Files, State);
+handle_acl({qe, Channel, Site}, Files, State) -> handle_acl({qm, Channel, Site}, Files, State);
 
 handle_acl(Q, _Files, _State) -> throw({error, {undefined_query, Q}}).
 
@@ -216,16 +215,16 @@ handle_acl(Q, _Files, _State) -> throw({error, {undefined_query, Q}}).
 
 -ifdef(__MYDLP_ENDPOINT).
 
-handle_acl({qe, _Site}, [#file{mime_type= <<"mydlp-internal/usb-device;id=unknown">>}] = Files, _State) ->
+handle_acl({qe, _Channel, _Site}, [#file{mime_type= <<"mydlp-internal/usb-device;id=unknown">>}] = Files, _State) ->
 	{?CFG(error_action), mydlp_api:empty_aclr(Files, usb_device_id_unknown)};
 
-handle_acl({qe, _Site}, [#file{mime_type= <<"mydlp-internal/usb-device;id=", DeviceId/binary>>}] = Files, _State) ->
+handle_acl({qe, _Channel, _Site}, [#file{mime_type= <<"mydlp-internal/usb-device;id=", DeviceId/binary>>}] = Files, _State) ->
 	case mydlp_mnesia:is_valid_usb_device_id(DeviceId) of % TODO: need refinements for multi-user usage.
 		true -> pass;
 		false -> {block, mydlp_api:empty_aclr(Files, usb_device_rejected)} end;
 
-handle_acl({qe, _Site}, Files, _State) ->
-	Rules = mydlp_mnesia:get_rule_table(),
+handle_acl({qe, Channel, _Site}, Files, _State) ->
+	Rules = mydlp_mnesia:get_rule_table(Channel),
 	acl_exec2(Rules, [{cid, mydlp_mnesia:get_dcid()}], Files);
 
 handle_acl(Q, _Files, _State) -> throw({error, {undefined_query, Q}}).

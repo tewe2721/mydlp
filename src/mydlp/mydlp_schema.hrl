@@ -84,6 +84,7 @@
 
 -record(rule_table, {
 	id,
+	channel,
 	table=[]
 }).
 

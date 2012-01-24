@@ -426,7 +426,7 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 'REQ_OK'(#state{icap_request=#icap_request{method=options} } = State) -> 'REPLY_OK'(State);
 'REQ_OK'(#state{icap_mod_mode=respmod} = State) ->
 	DFFiles = df_to_files(State),
-	QRet = mydlp_acl:qi(DFFiles),
+	QRet = mydlp_acl:qi(web,DFFiles),
 	acl_ret(QRet, DFFiles, State);
 'REQ_OK'(#state{addr=SAddr,
 		icap_headers=#icap_headers{x_client_ip=CAddr},
@@ -440,7 +440,7 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 
 	DestList = [list_to_binary(DestHost1)],
 
-	QRet = mydlp_acl:q(SAddr, CAddr, DestList, DFFiles),
+	QRet = mydlp_acl:q(web, SAddr, CAddr, DestList, DFFiles),
 	acl_ret(QRet, DFFiles, State).
 
 acl_ret(QRet, DFFiles, State) -> 
@@ -774,12 +774,12 @@ uri_to_fn(Uri) ->
 log_req(#state{icap_headers=#icap_headers{x_client_ip=Addr},
 		http_req_headers=(#http_headers{host=DestHost})}, Action,
 		{{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
-	?ACL_LOG(icap, RuleId, Action, Addr, nil, DestHost, IType, File, Misc);
+	?ACL_LOG(web, RuleId, Action, Addr, nil, DestHost, IType, File, Misc);
 
 log_req(#state{icap_headers=#icap_headers{x_client_ip=Addr},
 		http_res_headers=(#http_headers{host=DestHost})}, Action, 
 		{{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
-	?ACL_LOG(icap, RuleId, Action, Addr, nil, DestHost, IType, File, Misc).
+	?ACL_LOG(web, RuleId, Action, Addr, nil, DestHost, IType, File, Misc).
 
 get_path(("/" ++ _Str) = Uri) -> Uri;
 get_path("icap://" ++ Str) ->
