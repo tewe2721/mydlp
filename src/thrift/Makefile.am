@@ -73,7 +73,7 @@ $(mydlp_erl) $(mydlp_hrl) $(pkgpython_PYTHON): mydlp.thrift
 
 $(mydlp_ui_erl) $(mydlp_ui_hrl) $(mydlpphplib_DATA) $(mydlp_ui_cpp) $(mydlp_ui_h): mydlp_ui.thrift
 	@$(THRIFT) --gen erl --gen java $<
-	cp -af gen-java/com/mydlp/ui/thrift/Mydlp_ui.java ../web/mydlp-ui-thrift/src/main/java/com/mydlp/ui/thrift/Mydlp_ui.java
+	cp -af gen-java/com/mydlp/ui/thrift/Mydlp_ui.java ../ui/mydlp-ui-thrift/src/main/java/com/mydlp/ui/thrift/Mydlp_ui.java
 
 .erl.beam:
 	@echo "Compiling $<..."
