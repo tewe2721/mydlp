@@ -89,11 +89,11 @@ $(mydlp_erl) $(mydlp_hrl) $(pkgpython_PYTHON): mydlp.thrift
 	@$(THRIFT) --gen erl --gen py $<
 
 $(mydlp_ui_erl) $(mydlp_ui_hrl) $(mydlpphplib_DATA) $(mydlp_ui_cpp) $(mydlp_ui_h): mydlp_ui.thrift
-	@$(THRIFT) --gen erl --gen php --gen cpp $<
+	@$(THRIFT) --gen erl --gen java $<
 
 .erl.beam:
 	@echo "Compiling $<..."
 	@$(ERLC) $(ERLCFLAGS) $<
 
 clean-local:
-	rm -rf gen-erl gen-py gen-php gen-cpp
+	rm -rf gen-erl gen-py gen-java

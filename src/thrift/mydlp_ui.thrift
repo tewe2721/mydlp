@@ -18,26 +18,11 @@
  *     along with MyDLP.  If not, see <http://www.gnu.org/licenses/>.
  ***************************************************************************/
 
+namespace java com.mydlp.ui.thrift
+
 service Mydlp_ui {
 
-	// Web UI calls
-	oneway void trainConfidential(1: binary Data, 2: i32 Fileid)
-	oneway void setConfidentialGroup(1: i32 Fileid, 2: i32 Groupid)
-	oneway void trainPublic(1: binary Data, 2: i32 Fileid)
-
-	oneway void removeFile(1: i32 Fileid)
-	oneway void removeGroup(1: i32 Groupid)
-
-	oneway void removeFileFromGroup(1: i32 Fileid, 2: i32 Groupid)
-
-	void compileFilters()
-
 	void compileCustomer(1: i32 Customerid)
-
-	i64 newAFileEntry()
-	oneway void updateAFile(1: i64 Afileid, 2: binary Adata)
-	oneway void updateAFileFN(1: i64 Afileid, 2: binary Adata, 3: string Filename)
-	oneway void updateAFileFP(1: i64 Afileid, 2: string Afilepath, 3: string Filename)
 
 	binary getRuletable(1: string Ipaddress, 2: string Revisionid)
 
