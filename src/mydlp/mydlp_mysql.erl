@@ -41,7 +41,6 @@
 	push_log/9,
 	push_log/10,
 	archive_log/6,
-	push_smb_discover/1,
 %	is_multisite/0,
 	get_denied_page/0,
 	new_afile/0,
@@ -71,9 +70,6 @@ push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, #file{} = File, Mi
 
 archive_log(Proto, RuleId, Ip, User, To, AFileId) ->
 	gen_server:cast(?MODULE, {archive_log, {Proto, RuleId, Ip, User, To, AFileId}}).
-
-push_smb_discover(XMLResult) ->
-	gen_server:cast(?MODULE, {push_smb_discover, XMLResult}).
 
 repopulate_mnesia() ->
 	gen_server:cast(?MODULE, repopulate_mnesia).
@@ -169,14 +165,6 @@ handle_cast({push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Fil
 		transaction( fun() ->
 			psqt(insert_incident, [FilterId, RuleId1, Proto, Ip1, User1, To, Action, Matcher, FileS, Misc]),
 			psqt(insert_incident_file, [Path, MimeType, Size]) end)
-	end),
-	{noreply, State};
-
-handle_cast({push_smb_discover, XMLResult}, State) ->
-	?ASYNC0(fun() ->
-		transaction( fun() ->
-			psqt(delete_all_smb_discover),
-			psqt(insert_smb_discover, [mydlp_mnesia:get_dcid(), XMLResult]) end )
 	end),
 	{noreply, State};
 
@@ -278,8 +266,6 @@ init([]) ->
 %		{update_archive_file, <<"UPDATE log_archive_file SET filename=?, log_archive_data_id=? WHERE id = ?">>},
 %		{archive_data_by_path, <<"SELECT id FROM log_archive_data WHERE path = ?">>},
 %		{insert_archive_data, <<"INSERT INTO log_archive_data (id, mime_type, size, path, content_text) VALUES (NULL, ?, ?, ?, ?)">>},
-%		{delete_all_smb_discover, <<"DELETE FROM log_shared_folder">>},
-%		{insert_smb_discover, <<"INSERT INTO log_shared_folder (id, customer_id, result) VALUES (NULL, ?, ?)">>}
 	]],
 
 	{ok, #state{host=Host, port=Port, 

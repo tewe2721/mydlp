@@ -101,7 +101,6 @@
 	  }
 	 ]},
     {agents, [
-          {mydlp_smb_discover, start_link,[]} 
 	 ]}
    ]}
  ]

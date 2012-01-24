@@ -132,26 +132,26 @@ acl_exec(RuleTables, Source, Files) ->
 -endif.
 
 % acl_exec2([{{_Id, DefaultAction}, Rules}| Rest], Source, Files)  % Cannot be more than one filter
-acl_exec2({RuleOpts, {_Id, DefaultAction}, Rules}, Source, Files) ->
-	case { DefaultAction, acl_exec3(RuleOpts, Rules, Source, Files) } of
+acl_exec2({ACLOpts, {_Id, DefaultAction}, Rules}, Source, Files) ->
+	case { DefaultAction, acl_exec3(ACLOpts, Rules, Source, Files) } of
 		% {return, return}-> acl_exec2(Rest, Source, Files);  % Cannot be more than one filter
 		{DefaultAction, return} -> DefaultAction;
 		{_DefaultAction, Action} -> Action end.
 
-acl_exec3(_RuleOpts, [], _Source, _Files) -> return;
-acl_exec3(_RuleOpts, _AllRules, _Source, []) -> return;
-acl_exec3(RuleOpts, AllRules, Source, Files) ->
-	acl_exec3(RuleOpts, AllRules, Source, Files, [], false).
+acl_exec3(_ACLOpts, [], _Source, _Files) -> return;
+acl_exec3(_ACLOpts, _AllRules, _Source, []) -> return;
+acl_exec3(ACLOpts, AllRules, Source, Files) ->
+	acl_exec3(ACLOpts, AllRules, Source, Files, [], false).
 
-acl_exec3(_RuleOpts, _AllRules, _Source, [], [], _CleanFiles) -> return;
+acl_exec3(_ACLOpts, _AllRules, _Source, [], [], _CleanFiles) -> return;
 
-acl_exec3(RuleOpts, AllRules, Source, [], ExNewFiles, false) ->
-	acl_exec3(RuleOpts, AllRules, Source, [], ExNewFiles, true);
+acl_exec3(ACLOpts, AllRules, Source, [], ExNewFiles, false) ->
+	acl_exec3(ACLOpts, AllRules, Source, [], ExNewFiles, true);
 
-acl_exec3(RuleOpts, AllRules, Source, [], ExNewFiles, CleanFiles) ->
-	acl_exec3(RuleOpts, AllRules, Source, ExNewFiles, [], CleanFiles);
+acl_exec3(ACLOpts, AllRules, Source, [], ExNewFiles, CleanFiles) ->
+	acl_exec3(ACLOpts, AllRules, Source, ExNewFiles, [], CleanFiles);
 	
-acl_exec3({TextExtraction} = RuleOpts, AllRules, Source, Files, ExNewFiles, CleanFiles) ->
+acl_exec3({TextExtraction} = ACLOpts, AllRules, Source, Files, ExNewFiles, CleanFiles) ->
 	{InChunk, RestOfFiles} = mydlp_api:get_chunk(Files),
 	Files1 = mydlp_api:load_files(InChunk),
 	
@@ -169,7 +169,7 @@ acl_exec3({TextExtraction} = RuleOpts, AllRules, Source, Files, ExNewFiles, Clea
 		false -> PFiles2 end,
 
 	case apply_rules(AllRules, Source, FFiles) of
-		return -> acl_exec3(RuleOpts, AllRules, Source, RestOfFiles,
+		return -> acl_exec3(ACLOpts, AllRules, Source, RestOfFiles,
 				lists:append(ExNewFiles, NewFiles), CleanFiles);
 		Else -> Else end.
 

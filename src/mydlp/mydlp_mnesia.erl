@@ -919,7 +919,7 @@ resolve_all(Rules, FilterId) ->
 			Rules1 = lists:usort(Rules),
 			RRules = resolve_rules(Rules1),
 			TextExtraction = predict_need4te(RRules),
-			{{true}, FilterKey, RRules};
+			{{TextExtraction}, FilterKey, RRules};
 		_Else -> {{false}, {0, pass}, []} end.
 
 predict_need4te([{_RId, _RAction, ITypes}|Rules]) ->

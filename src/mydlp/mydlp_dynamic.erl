@@ -158,9 +158,6 @@ load_src(Src) ->
 	{icap_options_ttl, integer, "0"},
 	{icap_log_pass, boolean, "false"},
 	{icap_log_pass_lower_limit, integer, "10240"},
-	{smb_discover, boolean, "false"},
-	{smb_discover_script_path, string, "/usr/sbin/mydlp-smb-discover"},
-	{smb_discover_interval, integer, "3600"},
 	{query_cache_maximum_size, integer, "2000000"}
 ]).
 
