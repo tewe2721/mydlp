@@ -83,7 +83,6 @@
 -ifdef(__MYDLP_ENDPOINT).
 
 -record(rule_table, {
-	id,
 	channel,
 	table=[]
 }).

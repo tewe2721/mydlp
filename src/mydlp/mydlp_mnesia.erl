@@ -71,6 +71,7 @@
 	get_rules/2,
 	get_all_rules/1,
 	get_all_rules/2,
+	get_remote_rule_tables/2,
 	get_rules_for_fid/3,
 	get_rules_for_fid/4,
 	get_rules_by_user/2,
@@ -90,7 +91,7 @@
 
 % API endpoint 
 -export([
-	get_rule_table/0,
+	get_rule_table/1,
 	is_valid_usb_device_id/1
 	]).
 
@@ -258,6 +259,8 @@ get_all_rules(Channel) -> aqc({get_all_rules, Channel}, cache).
 
 get_all_rules(Channel, DestList) -> aqc({get_all_rules, Channel, DestList}, cache).
 
+get_remote_rule_tables(FilterId, Who) -> aqc({get_remote_rule_tables, FilterId, Who}, cache).
+
 get_rules_for_fid(Channel, FilterId, Who) -> get_rules_for_fid(Channel, FilterId, [], Who).
 
 get_rules_for_fid(Channel, FilterId, DestList, Who) -> aqc({get_rules_for_fid, Channel, FilterId, DestList, Who}, cache).
@@ -289,7 +292,7 @@ new_authority(Node) -> gen_server:call(?MODULE, {new_authority, Node}, 30000).
 
 -ifdef(__MYDLP_ENDPOINT).
 
-get_rule_table() -> aqc(get_rule_table, cache).
+get_rule_table(Channel) -> aqc({get_rule_table, Channel}, cache).
 
 is_valid_usb_device_id(DeviceId) -> aqc({is_valid_usb_device_id, DeviceId}, cache).
 
@@ -349,7 +352,7 @@ handle_result({is_dr_fh_of_fid, _, _}, {atomic, Result}) ->
 		Else when is_list(Else) -> true end;
 
 %% TODO: endpoint specific code
-handle_result(get_rule_table, {atomic, Result}) -> 
+handle_result({get_rule_table, _Channel}, {atomic, Result}) -> 
 	case Result of
 		[] -> [];
 		[Table] -> Table end;
@@ -362,6 +365,18 @@ handle_result({is_valid_usb_device_id, _DeviceId}, {atomic, Result}) ->
 handle_result(_Query, {atomic, Objects}) -> Objects.
 
 -ifdef(__MYDLP_NETWORK).
+
+handle_query({get_remote_rule_tables, FilterId, Who}) ->
+	WebRuleTable = get_rules_for_fid(web, FilterId, Who),
+	MailRuleTable = get_rules_for_fid(mail, FilterId, Who),
+	EndpointRuleTable = get_rules_for_fid(endpoint, FilterId, Who),
+	PrinterRuleTable = get_rules_for_fid(printer, FilterId, Who),
+	[
+		{web, WebRuleTable},
+		{mail, MailRuleTable},
+		{endpoint, EndpointRuleTable},
+		{printer, PrinterRuleTable}
+	];
 
 handle_query({get_rules_for_fid, Channel, FilterId, _DestList, Who}) ->
 	Q = ?QLCQ([{R#rule.id, R#rule.orig_id, R#rule.action} || 
@@ -507,10 +522,10 @@ handle_query(Query) -> handle_query_common(Query).
 -ifdef(__MYDLP_ENDPOINT).
 
 % TODO: should be refined for multi-site usage
-handle_query(get_rule_table) ->
+handle_query({get_rule_table, Channel}) ->
 	Q = ?QLCQ([ R#rule_table.table ||
 		R <- mnesia:table(rule_table),
-		R#rule_table.id == mydlp_mnesia:get_dcid()
+		R#rule_table.channel == Channel
 		]),
 	?QLCE(Q);
 

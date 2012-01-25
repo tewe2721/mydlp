@@ -1884,9 +1884,9 @@ str_to_ip(IpStr) ->
 %%-------------------------------------------------------------------------
 %%%%%%%%%%%%% TODO: beware of race condifitons when compile_customer had been called.
 generate_client_policy(IpAddr, RevisionId) -> 
-	RuleTable = mydlp_acl:get_rule_table(IpAddr), 
+	RuleTables = mydlp_acl:get_remote_rule_tables(IpAddr), 
 	ItemDump = mydlp_mnesia:dump_client_tables(),
-	CDBObj = {{rule_table, RuleTable}, {items, ItemDump}},
+	CDBObj = {{rule_tables, RuleTables}, {items, ItemDump}},
 	CDBHash = erlang:phash2(CDBObj),
 	case CDBHash of
 		RevisionId -> <<"up-to-date">>;
@@ -1899,24 +1899,33 @@ generate_client_policy(IpAddr, RevisionId) ->
 use_client_policy(<<"up-to-date">>) -> ok;
 use_client_policy(CDBBin) ->
 	try	CDBObj = erlang:binary_to_term(CDBBin), % TODO: binary_to_term/2 with safe option
-		{{rule_table, RuleTable}, {items, ItemDump}} = CDBObj,
+		{{rule_tables, RuleTables}, {items, ItemDump}} = CDBObj,
 		
 		mydlp_mnesia:truncate_all(),
-		[ (catch mydlp_mnesia:write(I)) || I <- ItemDump],
+		[ ( catch mydlp_mnesia:write(I) ) || I <- ItemDump],
+		[ ( catch mydlp_mnesia:write(#rule_table{channel=C, table = RT}) )
+				|| {C, RT} <- RuleTables ]
 
-		R = #rule_table{id=mydlp_mnesia:get_dcid(), table = RuleTable},
-		mydlp_mnesia:write(R)
 	catch Class:Error ->
 		?ERROR_LOG("USE_CLIENT_POLICY: Error occured: Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~nCDBBin: ["?S"].~n",
 			[Class, Error, erlang:get_stacktrace(), CDBBin])
 	end, ok.
 
 get_client_policy_revision_id() ->
-	RuleTable = mydlp_mnesia:get_rule_table(), 
+	% sequence should be same with mydlp_mnesia:get_remote_rule_tables
+	WebRuleTable = mydlp_mnesia:get_rule_table(web),
+	MailRuleTable = mydlp_mnesia:get_rule_table(mail),
+	EndpointRuleTable = mydlp_mnesia:get_rule_table(endpoint),
+	PrinterRuleTable = mydlp_mnesia:get_rule_table(printer),
+	RuleTables = [
+		{web, WebRuleTable},
+		{mail, MailRuleTable},
+		{endpoint, EndpointRuleTable},
+		{printer, PrinterRuleTable}
+	],
 	ItemDump = mydlp_mnesia:dump_client_tables(),
-	CDBObj = {{rule_table, RuleTable}, {items, ItemDump}},
+	CDBObj = {{rule_tables, RuleTables}, {items, ItemDump}},
 	erlang:phash2(CDBObj).
-
 -endif.
 
 %%-------------------------------------------------------------------------
