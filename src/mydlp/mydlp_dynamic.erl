@@ -137,6 +137,7 @@ load_src(Src) ->
 	{mysql_user, string, "root"},
 	{mysql_password, string, ""},
 	{mysql_database, string, "mydlp"},
+	{mysql_log_database, string, "mydlp_log"},
 	{mysql_pool_size, integer, "2"},
 	{quarantine_dir, string, "/var/lib/mydlp/quarantine/"},
 	{quarantine_uid, integer, "33"},

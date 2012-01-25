@@ -162,7 +162,6 @@ acl_exec3({TextExtraction} = ACLOpts, AllRules, Source, Files, ExNewFiles, Clean
 		false -> PFiles end,
 
 	PFiles2 = drop_nodata(PFiles1),
-	% TODO: check whether this itype set analysis needs text extraction.
 	FFiles = case TextExtraction of
 		true -> pl_text(PFiles2);
 		false -> PFiles2 end,

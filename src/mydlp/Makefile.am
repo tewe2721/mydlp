@@ -42,13 +42,13 @@ dist_erl_DATA = \
 	mydlp_acl.erl \
 	mydlp_api.erl \
 	mydlp_app.erl \
-	mydlp_archive.erl \
 	mydlp_bayeserl_store.erl \
 	mydlp_container.erl \
 	mydlp_distributor.erl \
 	mydlp_dynamic.erl \
 	mydlp_fsm.erl \
 	mydlp_icap_fsm.erl \
+	mydlp_incident.erl \
 	mydlp_item_receive.erl \
 	mydlp_loglevel.erl \
 	mydlp_logger_h.erl \

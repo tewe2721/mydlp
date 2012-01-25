@@ -131,10 +131,10 @@ process_item({_IpAddress, []}) -> ok;
 process_item({IpAddress, [Item|Rest]}) -> 
 	process_item({IpAddress, Item}),
 	process_item({IpAddress, Rest});
-process_item({ IpAddress, {seap_log, LogTerm} }) -> 
-	{Proto, RuleId, Action, _Ip, User, To, Matcher, File, Misc} = LogTerm,
-	File1 = mydlp_api:reconstruct_cr(File), % To clean invalid cachrefs
-	?ACL_LOG(Proto, RuleId, Action, IpAddress, User, To, Matcher, File1, Misc);
+process_item({ IpAddress, {endpoint_log, LogTerm} }) -> 
+	{Channel, RuleId, Action, _Ip, User, To, ITypeId, Files, Misc} = LogTerm,
+	Files1 = [ mydlp_api:reconstruct_cr(F) || F <- Files ], % To clean invalid cachrefs
+	?ACL_LOG(Channel, RuleId, Action, IpAddress, User, To, ITypeId, Files1, Misc);
 process_item(_Item) -> ok. % TODO log unkown item.
 
 -endif.

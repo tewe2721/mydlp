@@ -867,104 +867,73 @@ pdf_to_text(Bin) when is_binary(Bin) ->
 
 -ifdef(__MYDLP_NETWORK).
 
-acl_msg(_Proto, _RuleId, _Action, _Ip, _User, _To, _Matcher, [], _Misc) -> ok;
-
-acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, [_|_] = FileList, Misc) ->
-	lists:foreach(fun(File) -> acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, File, Misc) end, FileList);
-
-acl_msg(_Proto, -1, log, _Ip, _User, _To, _Matcher, #file{name="post-data"}, _Misc) -> ok;
-acl_msg(_Proto, -1, log, _Ip, _User, _To, _Matcher, #file{name="urlencoded-data"}, _Misc) -> ok;
-acl_msg(_Proto, -1, log, _Ip, _User, _To, _Matcher, #file{name="uri-data"}, _Misc) -> ok;
-acl_msg(_Proto, -1, log, _Ip, _User, _To, _Matcher, #file{name="seap-data"}, _Misc) -> ok;
-acl_msg(_Proto, -1, log, _Ip, _User, _To, _Matcher, #file{name="resp-data"}, _Misc) -> ok;
-acl_msg(_Proto, -1, log, _Ip, _User, _To, _Matcher, #file{name="data"}, _Misc) -> ok;
-acl_msg(_Proto, -1, log, _Ip, _User, _To, _Matcher, #file{name=undefined, filename=undefined}, _Misc) -> ok;
-
-acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, #file{} = File, Misc) ->
-	FileS = file_to_str(File),
-
-	%acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
-
-	?ASYNC(fun() ->
-		case Action of
-			pass -> 	acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
-					mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
-			log -> 		acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
-					mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
-			block -> 	acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
-					mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc);
-			quarantine ->	acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
-					mydlp_mysql:push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, File, Misc);
-			archive -> 
-				case { Proto, ?BB_S(File#file.dataref) > ?CFG(archive_minimum_size) } of % will use new configuration refs
-					{ icap, false } -> ok;
-					_Else -> acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
-						AFileId = mydlp_mysql:new_afile(),
-						mydlp_archive:a(AFileId, File),
-						mydlp_mysql:archive_log(Proto, RuleId, Ip, User, To, AFileId) end;
-			_Else -> ok end
-        end, 120000), ok.
+acl_msg(_Channel, _RuleId, _Action, _Ip, _User, _To, _ITypeId, [], _Misc) -> ok;
+acl_msg(_Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="post-data"}, _Misc) -> ok;
+acl_msg(_Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="urlencoded-data"}, _Misc) -> ok;
+acl_msg(_Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="uri-data"}, _Misc) -> ok;
+acl_msg(_Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="seap-data"}, _Misc) -> ok;
+acl_msg(_Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="resp-data"}, _Misc) -> ok;
+acl_msg(_Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="data"}, _Misc) -> ok;
+acl_msg(_Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name=undefined, filename=undefined}, _Misc) -> ok;
+acl_msg(Channel, RuleId, Action, Ip, User, To, ITypeId, #file{} = File, Misc) ->
+	acl_msg(Channel, RuleId, Action, Ip, User, To, ITypeId, [File], Misc);
+acl_msg(Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc) ->
+	FileS = string:join([file_to_str(F) || F <- Files] , ", "),
+	acl_msg1(Channel, RuleId, Action, Ip, User, To, ITypeId, FileS, Misc),
+	mydlp_incident:l({Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc}),
+	ok.
 
 -endif.
 
 -ifdef(__MYDLP_ENDPOINT).
 
-acl_msg(_Proto, _RuleId, _Action, _Ip, _User, _To, _Matcher, [], _Misc) -> ok;
-
-acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, [_|_] = FileList, Misc) ->
-	lists:foreach(fun(File) -> acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, File, Misc) end, FileList);
-
-acl_msg(_Proto, -1, log, _Ip, _User, _To, _Matcher, #file{name="post-data"}, _Misc) -> ok;
-acl_msg(_Proto, -1, log, _Ip, _User, _To, _Matcher, #file{name="urlencoded-data"}, _Misc) -> ok;
-acl_msg(_Proto, -1, log, _Ip, _User, _To, _Matcher, #file{name="uri-data"}, _Misc) -> ok;
-acl_msg(_Proto, -1, log, _Ip, _User, _To, _Matcher, #file{name="seap-data"}, _Misc) -> ok;
-acl_msg(_Proto, -1, log, _Ip, _User, _To, _Matcher, #file{name="resp-data"}, _Misc) -> ok;
-acl_msg(_Proto, -1, log, _Ip, _User, _To, _Matcher, #file{name="data"}, _Misc) -> ok;
-acl_msg(_Proto, -1, log, _Ip, _User, _To, _Matcher, #file{name=undefined, filename=undefined}, _Misc) -> ok;
-
-acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, #file{} = File, Misc) ->
-	FileS = file_to_str(File),
-
-	%acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
-
-	?ASYNC(fun() ->
-		case Action of
-			pass -> 	acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
-					LogTerm = {Proto, RuleId, Action, Ip, User, To, Matcher, #file{name=FileS}, Misc},
-					mydlp_item_push:p({seap_log, LogTerm});
-			log -> 		acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
-					LogTerm = {Proto, RuleId, Action, Ip, User, To, Matcher, #file{name=FileS}, Misc},
-					mydlp_item_push:p({seap_log, LogTerm});
-			block -> 	acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
-					LogTerm = {Proto, RuleId, Action, Ip, User, To, Matcher, #file{name=FileS}, Misc},
-					mydlp_item_push:p({seap_log, LogTerm});
-			quarantine ->	acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
-					LogTerm = {Proto, RuleId, Action, Ip, User, To, Matcher, mydlp_api:remove_cr(File), Misc},
-					mydlp_item_push:p({seap_log, LogTerm});
-			archive -> 	acl_msg1(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc),
-					LogTerm = {Proto, RuleId, Action, Ip, User, To, Matcher, mydlp_api:remove_cr(File), Misc},
-					mydlp_item_push:p({seap_log, LogTerm});
-			_Else -> ok end
-        end, 60000), ok.
+acl_msg(_Channel, _RuleId, _Action, _Ip, _User, _To, _ITypeId, [], _Misc) -> ok;
+acl_msg(_Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="post-data"}, _Misc) -> ok;
+acl_msg(_Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="urlencoded-data"}, _Misc) -> ok;
+acl_msg(_Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="uri-data"}, _Misc) -> ok;
+acl_msg(_Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="seap-data"}, _Misc) -> ok;
+acl_msg(_Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="resp-data"}, _Misc) -> ok;
+acl_msg(_Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="data"}, _Misc) -> ok;
+acl_msg(_Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name=undefined, filename=undefined}, _Misc) -> ok;
+acl_msg(Channel, RuleId, Action, Ip, User, To, ITypeId, #file{} = File, Misc) ->
+	acl_msg(Channel, RuleId, Action, Ip, User, To, ITypeId, [File], Misc);
+acl_msg(Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc) ->
+	FileSs = [file_to_str(F) || F <- Files],
+	FileS = string:join(FileSs, ", "),
+	acl_msg1(Channel, RuleId, Action, Ip, User, To, ITypeId, FileS, Misc),
+	LogTerm = case Action of
+		pass -> 	{Channel, RuleId, Action, Ip, User, To, ITypeId, 
+						[#file{name=S}||S <- FileSs], Misc};
+		log -> 		{Channel, RuleId, Action, Ip, User, To, ITypeId, 
+						[#file{name=S}||S <- FileSs], Misc};
+		block -> 	{Channel, RuleId, Action, Ip, User, To, ITypeId, 
+						[#file{name=S}||S <- FileSs], Misc};
+		quarantine ->	{Channel, RuleId, Action, Ip, User, To, ITypeId, 
+						[mydlp_api:remove_cr(F)||F <- Files], Misc};
+		archive -> 	{Channel, RuleId, Action, Ip, User, To, ITypeId, 
+						[mydlp_api:remove_cr(F)||F <- Files], Misc}
+		end,
+	mydlp_item_push:p({endpoint_log, LogTerm}),
+	ok.
 
 -endif.
 
-acl_msg1(Proto, RuleId, Action, nil, nil, To, Matcher, FileS, Misc) ->
+acl_msg1(Channel, RuleId, Action, nil, nil, To, ITypeId, FileS, Misc) ->
 	mydlp_logger:notify(acl_msg,
-		"PROTOCOL: ~w , RULE: ~w , ACTION: ~w , TO: \"~s\" , MATCHER: ~w , FILE: \"~s\" , MISC: ~s ~n",
-		[Proto, RuleId, Action, To, Matcher, FileS, Misc]);
-acl_msg1(Proto, RuleId, Action, {Ip1,Ip2,Ip3,Ip4}, nil, To, Matcher, FileS, Misc) ->
+		"CHANNEL: ~w , RULE: ~w , ACTION: ~w , TO: \"~s\" , ITYPE: ~w , FILE: \"~s\" , MISC: ~s ~n",
+		[Channel, RuleId, Action, To, ITypeId, FileS, Misc]);
+acl_msg1(Channel, RuleId, Action, {Ip1,Ip2,Ip3,Ip4}, nil, To, ITypeId, FileS, Misc) ->
 	mydlp_logger:notify(acl_msg,
-		"PROTOCOL: ~w , RULE: ~w , ACTION: ~w , FROM: ~w.~w.~w.~w , TO: \"~s\" , MATCHER: ~w , FILE: \"~s\" , MISC: ~s ~n",
-		[Proto, RuleId, Action, Ip1,Ip2,Ip3,Ip4, To, Matcher, FileS, Misc]);
-acl_msg1(Proto, RuleId, Action, nil, User, To, Matcher, FileS, Misc) ->
+		"CHANNEL: ~w , RULE: ~w , ACTION: ~w , FROM: ~w.~w.~w.~w , TO: \"~s\" , ITYPE: ~w , FILE: \"~s\" , MISC: ~s ~n",
+		[Channel, RuleId, Action, Ip1,Ip2,Ip3,Ip4, To, ITypeId, FileS, Misc]);
+acl_msg1(Channel, RuleId, Action, nil, User, To, ITypeId, FileS, Misc) ->
 	mydlp_logger:notify(acl_msg,
-		"PROTOCOL: ~w , RULE: ~w , ACTION: ~w , FROM: ~s , TO: \"~s\" , MATCHER: ~w , FILE: \"~s\" , MISC: ~s ~n",
-		[Proto, RuleId, Action, User, To, Matcher, FileS, Misc]);
-acl_msg1(Proto, RuleId, Action, {Ip1,Ip2,Ip3,Ip4}, User, To, Matcher, FileS, Misc) ->
+		"CHANNEL: ~w , RULE: ~w , ACTION: ~w , FROM: ~s , TO: \"~s\" , ITYPE: ~w , FILE: \"~s\" , MISC: ~s ~n",
+		[Channel, RuleId, Action, User, To, ITypeId, FileS, Misc]);
+acl_msg1(Channel, RuleId, Action, {Ip1,Ip2,Ip3,Ip4}, User, To, ITypeId, FileS, Misc) ->
 	mydlp_logger:notify(acl_msg,
-		"PROTOCOL: ~w , RULE: ~w , ACTION: ~w , FROM: ~w.~w.~w.~w (~s) , TO: \"~s\" , MATCHER: ~w , FILE: \"~s\" , MISC: ~s ~n",
-		[Proto, RuleId, Action, Ip1,Ip2,Ip3,Ip4, User, To, Matcher, FileS, Misc]);
+		"CHANNEL: ~w , RULE: ~w , ACTION: ~w , FROM: ~w.~w.~w.~w (~s) , TO: \"~s\" , ITYPE: ~w , FILE: \"~s\" , MISC: ~s ~n",
+		[Channel, RuleId, Action, Ip1,Ip2,Ip3,Ip4, User, To, ITypeId, FileS, Misc]);
 acl_msg1(_,_,_,_,_,_,_,_,_) -> ok.
 
 

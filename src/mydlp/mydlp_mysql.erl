@@ -38,13 +38,11 @@
 -export([start_link/0,
 	compile_filters/0,
 	compile_customer/1,
-	push_log/9,
-	push_log/10,
-	archive_log/6,
+	push_log/8,
 %	is_multisite/0,
 	get_denied_page/0,
-	new_afile/0,
-	update_afile/6,
+	insert_log_file/5,
+	insert_log_file/2,
 	repopulate_mnesia/0,
 	stop/0]).
 
@@ -58,18 +56,29 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
--record(state, {host, port, user, password, database, pool_size, master_pid, pool_pids}).
+-record(state, {
+	host,
+	port,
+	user,
+	password,
+	database,
+	database_l,
+	pool_size,
+	master_pid,
+	pool_pids,
+	pool_pids_l
+}).
 
 %%%%%%%%%%%%% MyDLP Thrift RPC API
 
-push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc) ->
-	gen_server:cast(?MODULE, {push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc}}).
+push_log(Channel, RuleId, Action, Ip, User, To, ITypeId, Misc) ->
+	gen_server:call(?MODULE, {push_log, {Channel, RuleId, Action, Ip, User, To, ITypeId, Misc}}, 60000).
 
-push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, #file{} = File, Misc) ->
-	gen_server:cast(?MODULE, {push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, File, Misc}}).
+insert_log_file(LogId, Filename) -> 
+	gen_server:cast(?MODULE, {insert_log_file, LogId, Filename}).
 
-archive_log(Proto, RuleId, Ip, User, To, AFileId) ->
-	gen_server:cast(?MODULE, {archive_log, {Proto, RuleId, Ip, User, To, AFileId}}).
+insert_log_file(LogId, Filename, MimeType, Size, Path) -> 
+	gen_server:cast(?MODULE, {insert_log_file, LogId, Filename, MimeType, Size, Path}).
 
 repopulate_mnesia() ->
 	gen_server:cast(?MODULE, repopulate_mnesia).
@@ -83,11 +92,6 @@ compile_customer(FilterId) when is_integer(FilterId) ->
 %is_multisite() -> gen_server:call(?MODULE, is_multisite).
 
 get_denied_page() -> gen_server:call(?MODULE, get_denied_page).
-
-new_afile() -> gen_server:call(?MODULE, new_afile, 60000).
-
-update_afile(AFileId, Filename, MimeType, Size, ArchivePath, ContentText) -> 
-	gen_server:cast(?MODULE, {update_afile, AFileId, Filename, MimeType, Size, ArchivePath, ContentText}).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -125,13 +129,18 @@ handle_call(get_denied_page, _From, State) ->
 		_Else -> not_found end,
         {reply, Reply, State};
 
-handle_call(new_afile, _From, State) ->
-	% Probably will create problems in multisite use.
-	{atomic, AFEId} = transaction(fun() ->
-		psqt(new_archive_file_entry),
-		last_insert_id_t() end, 30000),
-	Reply = AFEId,	
-        {reply, Reply, State};
+handle_call({push_log, {Channel, RuleId, Action, Ip, User, To, ITypeId, Misc}}, From, State) ->
+	Worker = self(),
+	?ASYNC(fun() ->
+			{_FilterId, RuleId1, Ip1, User1} = pre_push_log(RuleId, Ip, User),
+			{atomic, ILId} = ltransaction(fun() ->
+					psqt(insert_incident, 
+						[Channel, RuleId1, Ip1, User1, To, ITypeId, Action, Misc]),
+					last_insert_id_t() end, 30000),
+			Reply = ILId,	
+                        Worker ! {async_reply, Reply, From}
+		end, 30000),
+	{noreply, State};
 
 handle_call(stop, _From,  State) ->
 	{stop, normalStop, State};
@@ -139,48 +148,25 @@ handle_call(stop, _From,  State) ->
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-% INSERT INTO log_archive (id, customer_id, rule_id, protocol, src_ip, src_user, destination, log_archive_file_id)
-handle_cast({archive_log, {Proto, RuleId, Ip, User, To, AFileId}}, State) ->
-	?ASYNC0(fun() ->
-		{FilterId, RuleId1, Ip1, User1} = pre_push_log(RuleId, Ip, User),
-		psq(insert_archive, [FilterId, RuleId1, Proto, Ip1, User1, To, AFileId], 30000)
-	end),
+handle_cast({insert_log_file, LogId, Filename}, State) ->
+	?ASYNC(fun() ->
+		lpsq(incert_incident_file, [Filename, LogId, null], 30000)
+	end, 30000),
 	{noreply, State};
 
-% INSERT INTO log_incedent (id, rule_id, protocol, src_ip, destination, action, matcher, filename, misc)
-handle_cast({push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc}}, State) ->
-	?ASYNC0(fun() ->
-		{FilterId, RuleId1, Ip1, User1} = pre_push_log(RuleId, Ip, User),
-		psq(insert_incident, 
-			[FilterId, RuleId1, Proto, Ip1, User1, To, Action, Matcher, FileS, Misc])
-	end),
-	{noreply, State};
-
-handle_cast({push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, File, Misc}}, State) ->
-	?ASYNC0(fun() ->
-		{ok, Path} = mydlp_api:quarantine(File),
-		Size = mydlp_api:binary_size(File#file.data),
-		MimeType = (File#file.mime_type),
-		{FilterId, RuleId1, Ip1, User1} = pre_push_log(RuleId, Ip, User),
-		transaction( fun() ->
-			psqt(insert_incident, [FilterId, RuleId1, Proto, Ip1, User1, To, Action, Matcher, FileS, Misc]),
-			psqt(insert_incident_file, [Path, MimeType, Size]) end)
-	end),
-	{noreply, State};
-
-handle_cast({update_afile, AFileId, Filename, MimeType, Size, ArchivePath, ContentText}, State) ->
+handle_cast({insert_log_file, LogId, Filename, MimeType, Size, Path}, State) ->
 	% Probably will create problems in multisite use.
 	?ASYNC(fun() ->
-		{atomic, ADataId} = transaction(fun() ->
-			mysql:fetch(<<"LOCK TABLE log_archive_data WRITE">>),
-			Query =  psqt(archive_data_by_path, [ArchivePath]),
-			AId = case Query of
-				{ok, [] } ->	psqt(insert_archive_data, [MimeType, Size, ArchivePath, ContentText]),
+		{atomic, DataId} = ltransaction(fun() ->
+			mysql:fetch(pl, <<"LOCK TABLE log_archive_data WRITE">>),
+			Query =  psqt(incident_data_by_path, [Path]),
+			DId = case Query of
+				{ok, [] } ->	psqt(insert_incident_data, [MimeType, Size, Path]),
 						last_insert_id_t();
 				{ok, [[Id]|_]} -> Id end,
-			mysql:fetch(<<"UNLOCK TABLES">>), AId
+			mysql:fetch(pl, <<"UNLOCK TABLES">>), DId
 			end, 60000),
-		psq(update_archive_file, [Filename, ADataId, AFileId], 30000)
+		lpsq(insert_incident_file, [LogId, Filename, DataId], 30000)
 	end, 100000),
 	{noreply, State};
 
@@ -206,12 +192,23 @@ handle_info({'DOWN', _, _, MPid , _}, #state{master_pid=MPid} = State) ->
 	{stop, normalStop, State};
 
 handle_info({'DOWN', _, _, Pid , _}, #state{host=Host,
-		user=User, password=Password, database=DB, 
-		pool_pids=PoolPids} = State) ->
-	PoolPids1 = lists:delete(Pid, PoolPids),
-	case mysql:connect(p, Host, undefined, User, Password, DB, true) of
-		{ok,NewPid} -> {noreply, State#state{pool_pids=[NewPid|PoolPids1]}};
-		_Else -> {stop, normalStop, State#state{pool_pids=PoolPids1}} end;
+		user=User, password=Password, database=DB, database_l=LDB,
+		pool_pids=PoolPids, pool_pids_l=PoolPidsL} = State) ->
+	PPTuple  = case lists:any(fun(P) -> P == Pid end, PoolPids) of
+		true -> PoolPids1 = lists:delete(Pid, PoolPids),
+			case mysql:connect(pp, Host, undefined, User, Password, DB, true) of
+				{ok, NewPid} -> {[NewPid|PoolPids1], PoolPidsL};
+				_ -> error end;
+		false -> PoolPidsL1 = lists:delete(Pid, PoolPidsL),
+			case mysql:connect(pl, Host, undefined, User, Password, LDB, true) of
+				{ok, NewPid} -> {PoolPids, [NewPid|PoolPidsL1]};
+				_ -> error end
+	end,
+
+	case PPTuple of
+		error -> {stop, normalStop, State};
+		{PP, PPL} -> {noreply, State#state{pool_pids=PP, pool_pids_l=PPL}}
+	end;
 
 handle_info(_Info, State) ->
 	{noreply, State}.
@@ -233,14 +230,22 @@ init([]) ->
 	User = ?CFG(mysql_user),
 	Password = ?CFG(mysql_password),
 	DB = ?CFG(mysql_database),
+	LDB = ?CFG(mysql_log_database),
 	PoolSize = ?CFG(mysql_pool_size),
 	
-	{ok, MPid} = mysql:start_link(p, Host, Port, User, Password, DB, fun(_,_,_,_) -> ok end),
+	{ok, MPid} = mysql:start_link(pp, Host, Port, User, Password, DB, fun(_,_,_,_) -> ok end),
 	erlang:monitor(process, MPid), 
 	
-	PoolReturns = [ mysql:connect(p, Host, undefined, User, Password, DB, true) || _I <- lists:seq(1, PoolSize)],
+	PoolReturns = [ mysql:connect(pp, Host, undefined, User, Password, DB, true) || _I <- lists:seq(1, 2)],
 	PPids = [ P || {ok, P} <- PoolReturns ],
 	[ erlang:monitor(process, P) || P <- PPids ],
+
+	%{ok, MPid2} = mysql:start_link(pl, Host, Port, User, Password, LDB, fun(_,_,_,_) -> ok end),
+	%erlang:monitor(process, MPid2), 
+	
+	PoolReturns2 = [ mysql:connect(pl, Host, undefined, User, Password, LDB, true) || _I <- lists:seq(1, PoolSize)],
+	PPids2 = [ P || {ok, P} <- PoolReturns2 ],
+	[ erlang:monitor(process, P) || P <- PPids2 ],
 
 	[ mysql:prepare(Key, Query) || {Key, Query} <- [
 		{last_insert_id, <<"SELECT last_insert_id()">>},
@@ -257,21 +262,21 @@ init([]) ->
 		{mimes_by_data_format_id, <<"SELECT m.mimeType FROM MIMEType AS m, DataFormat_MIMEType dm WHERE dm.DataFormat_id=? and dm.mimeTypes_id=m.id">>},
 		%{usb_device_by_cid, <<"SELECT device_id, action FROM ep_usb_device WHERE customer_id=?">>},
 		%{customer_by_id, <<"SELECT id,static_ip FROM sh_customer WHERE id=?">>},
-		{denied_page, <<"SELECT c.value FROM Config AS c WHERE c.configKey=\"denied_page_html\"">>}
-
-%		{insert_incident, <<"INSERT INTO log_incedent (id, customer_id, rule_id, protocol, src_ip, src_user, destination, action, matcher, filename, misc) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)">>},
-%		{insert_incident_file, <<"INSERT INTO log_incedent_file (id, log_incedent_id, path, mime_type, size) VALUES (NULL, last_insert_id(), ?, ?, ?)">>},
+		{insert_incident, <<"INSERT INTO IncidentLog (id, channel, ruleId, sourceIp, sourceUser, destination, informationTypeId, action, matcherMessage) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?)">>},
+		{insert_incident_file, <<"INSERT INTO IncidentLogFile (id, incidentLog_id, filename, content_id) VALUES (NULL, ?, ?, ?)">>},
 %		{insert_archive, <<"INSERT INTO log_archive (id, customer_id, rule_id, protocol, src_ip, src_user, destination, log_archive_file_id) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)">>},
 %		{new_archive_file_entry, <<"INSERT INTO log_archive_file (id) VALUES (NULL)">>},
 %		{update_archive_file, <<"UPDATE log_archive_file SET filename=?, log_archive_data_id=? WHERE id = ?">>},
-%		{archive_data_by_path, <<"SELECT id FROM log_archive_data WHERE path = ?">>},
-%		{insert_archive_data, <<"INSERT INTO log_archive_data (id, mime_type, size, path, content_text) VALUES (NULL, ?, ?, ?, ?)">>},
+		{incident_data_by_path, <<"SELECT id FROM IncidentLogFileContent WHERE localPath = ?">>},
+		{insert_incident_data, <<"INSERT INTO IncidentLogFileContent (id, mimeType, size, localPath) VALUES (NULL, ?, ?, ?)">>},
+		{denied_page, <<"SELECT c.value FROM Config AS c WHERE c.configKey=\"denied_page_html\"">>}
+
 	]],
 
 	{ok, #state{host=Host, port=Port, 
 			user=User, password=Password, 
-			database=DB, pool_size=PoolSize, 
-			master_pid=MPid, pool_pids=PPids}}.
+			database=DB, database_l=LDB, pool_size=PoolSize, 
+			master_pid=MPid, pool_pids=PPids, pool_pids_l=PPids}}.
 
 terminate(_Reason, _State) ->
 	ok.
@@ -286,18 +291,33 @@ psq(PreparedKey) -> psq(PreparedKey, []).
 psq(PreparedKey, Params) -> psq(PreparedKey, Params, 5000).
 
 psq(PreparedKey, Params, Timeout) ->
-	case mysql:execute(p, PreparedKey, Params, Timeout) of
+	case mysql:execute(pp, PreparedKey, Params, Timeout) of
 		{data,{mysql_result,_,Result,_,_}} -> {ok, Result};
 		{updated,{mysql_result, _,_,RowCount,_}} -> {updated, RowCount};
 		Else -> throw({error, Else})
 	end.
 
+%lpsq(PreparedKey) -> lpsq(PreparedKey, []).
+
+% lpsq(PreparedKey, Params) -> lpsq(PreparedKey, Params, 5000).
+
+lpsq(PreparedKey, Params, Timeout) ->
+	case mysql:execute(pl, PreparedKey, Params, Timeout) of
+		{data,{mysql_result,_,Result,_,_}} -> {ok, Result};
+		{updated,{mysql_result, _,_,RowCount,_}} -> {updated, RowCount};
+		Else -> throw({error, Else})
+	end.
+
+%transaction(Fun) -> transaction(Fun, 5000).
+
+%transaction(Fun, Timeout) -> mysql:transaction(pl, Fun, Timeout).
+
+%ltransaction(Fun) -> ltransaction(Fun, 5000).
+
+ltransaction(Fun, Timeout) -> mysql:transaction(pl, Fun, Timeout).
+
 last_insert_id_t() ->
 	{ok, [[LIId]]} = psqt(last_insert_id), LIId.
-
-transaction(Fun) -> transaction(Fun, 5000).
-
-transaction(Fun, Timeout) -> mysql:transaction(p, Fun, Timeout).
 
 psqt(PreparedKey) -> psqt(PreparedKey, []).
 
@@ -580,10 +600,10 @@ populate_mimes([], _DataFormatId) -> ok.
 %	populate_usb_devices(Rows, FilterId);
 %populate_usb_devices([], _FilterId) -> ok.
 
-get_rule_cid(RuleId) ->
-	case psq(cid_of_rule_by_id, [RuleId]) of
-		{ok, [[FilterId]]} -> FilterId;
-		_Else -> 0 end.
+%get_rule_cid(RuleId) ->
+%	case psq(cid_of_rule_by_id, [RuleId]) of
+%		{ok, [[FilterId]]} -> FilterId;
+%		_Else -> 0 end.
 
 rule_action_to_atom(<<"PASS">>) -> pass;
 rule_action_to_atom(<<"LOG">>) -> log;
@@ -605,11 +625,11 @@ rule_dtype_to_channel(<<"PrinterRule">>) -> printer;
 rule_dtype_to_channel(Else) -> throw({error, unsupported_rule_type, Else}).
 
 pre_push_log(RuleId, Ip, User) -> 
-	{FilterId, RuleId1} = case RuleId of
-		{dr, CId} -> {CId, 0};
-		-1 = RuleId -> {mydlp_mnesia:get_dcid(), RuleId};	% this shows default action had been enforeced 
+%	{FilterId, RuleId1} = case RuleId of
+%		{dr, CId} -> {CId, 0};
+%		-1 = RuleId -> {mydlp_mnesia:get_dcid(), RuleId};	% this shows default action had been enforeced 
 							% this should be refined for multisite use
-		RId when is_integer(RId) -> {get_rule_cid(RId), RId} end,
+%		RId when is_integer(RId) -> {get_rule_cid(RId), RId} end,
 	User1 = case User of
 		nil -> null;
 		Else -> Else
@@ -618,7 +638,7 @@ pre_push_log(RuleId, Ip, User) ->
 		nil -> null;
 		Else2 -> Else2
 	end,
-	{FilterId, RuleId1, Ip1, User1}.
+	{0, RuleId, Ip1, User1}.
 
 -endif.
 

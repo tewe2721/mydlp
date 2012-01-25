@@ -189,7 +189,7 @@ process_aclret(AclRet, #smtpd_fsm{files=Files} = State) ->
 					post_query(State, AclR, Files),
 					'CONNECT_REMOTE'(connect, State);
 		{archive, AclR} -> 	archive_req(State, AclR, Files),
-					% mydlp_archive will clean files.
+					% mydlp_incident will clean files.
 					'CONNECT_REMOTE'(connect, State);
 		{block, AclR} -> 	log_req(State, block, AclR),
 					post_query(State, AclR, Files),
@@ -202,7 +202,7 @@ process_aclret(AclRet, #smtpd_fsm{files=Files} = State) ->
 post_query(State, AclR, Files) ->
 	case ?CFG(mail_archive) of
 		true -> archive_req(State, AclR, Files);
-			% mydlp_archive will clean files.
+			% mydlp_incident will clean files.
 		false -> mydlp_api:clean_files(Files) end.
 
 archive_req(State, {{rule, RId}, {file, _}, {itype, IType}, {misc, _}}, Files) ->

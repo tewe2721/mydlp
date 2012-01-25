@@ -463,7 +463,7 @@ acl_ret(QRet, DFFiles, State) ->
 					mydlp_api:clean_files(DFFiles),
 					'REPLY_OK'(State); 
 		{archive, AclR} -> archive_req(State, AclR, DFFiles),
-					% mydlp_archive will clean files.
+					% mydlp_incident will clean files.
 					'REPLY_OK'(State);
 		{block, AclR} -> log_req(State, block, AclR),
 					mydlp_api:clean_files(DFFiles),

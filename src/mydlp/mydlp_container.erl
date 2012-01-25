@@ -294,7 +294,7 @@ acl_ret(QRet, Obj, DFFiles) ->
 					mydlp_api:clean_files(DFFiles),
 					pass; 
 		{archive, AclR} -> 	archive_req(Obj, AclR, DFFiles),
-					% mydlp_archive will clean files.
+					% mydlp_incident will clean files.
 					pass;
 		{block, AclR} -> 	log_req(Obj, block, AclR),
 					mydlp_api:clean_files(DFFiles),

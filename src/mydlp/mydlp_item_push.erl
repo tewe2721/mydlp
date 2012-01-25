@@ -190,10 +190,10 @@ http_req1(ReqRet) ->
                 Else -> ?ERROR_LOG("ITEMPUSH: An error occured during HTTP req: Obj="?S"~n", [Else]),
 				{error, {http_req_not_ok, Else}} end.
 
-predict_serialized_size({seap_log, {_Proto, _RuleId, _Action, _Ip, _User, _To, _Matcher, #file{data=undefined}, _Misc}}) -> 128;
-predict_serialized_size({seap_log, {_Proto, _RuleId, _Action, _Ip, _User, _To, _Matcher, #file{data=Data}, _Misc}}) ->
+predict_serialized_size({endpoint_log, {_Proto, _RuleId, _Action, _Ip, _User, _To, _Matcher, #file{data=undefined}, _Misc}}) -> 128;
+predict_serialized_size({endpoint_log, {_Proto, _RuleId, _Action, _Ip, _User, _To, _Matcher, #file{data=Data}, _Misc}}) ->
 	size(Data) + 128;
-predict_serialized_size({seap_log, _LogTerm}) -> 128;
+predict_serialized_size({endpoint_log, _LogTerm}) -> 128;
 predict_serialized_size(Else) -> 
 	?ERROR_LOG("PREDICTSIZE: Unknown item. Cannot predict. Return maximum_push_size+1 as size: Item="?S"~n", [Else]),
 	?CFG(maximum_push_size) + 1.
