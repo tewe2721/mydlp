@@ -70,6 +70,13 @@ remove_root_webapp() {
 	/bin/rm -rf /var/lib/jetty/webapps/root/
 }
 
+configure_jetty() {
+	/etc/init.d/jetty stop
+	/bin/cp -f /usr/share/mydlp/ui/jetty.defaults /etc/defaults/jetty
+	/etc/init.d/jetty start
+	/etc/init.d/apache2 force-reload
+}
+
 install_webapp() {
 	/etc/init.d/jetty stop
 	/bin/cp -f /usr/share/mydlp/ui/mydlp-ui-webapp.war /var/lib/jetty/webapps/root.war
@@ -83,6 +90,7 @@ case "$1" in
 		generate_init_epoch
 		generate_keys
 		configure_apache
+		configure_jetty
 		chown_quarantine
 	fi
 	remove_root_webapp
