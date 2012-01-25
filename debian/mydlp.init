@@ -31,6 +31,7 @@ SQUIDBIN=/usr/sbin/squid3
 SQUIDBINNAME=squid3
 
 ICAPPORT=1344
+JETTYPORT=8009
 
 . /lib/lsb/init-functions
 
@@ -69,6 +70,13 @@ wait_for_icap() {
 	for i in $(seq 10); do
 	    sleep 1
 	    if is_port_open $ICAPPORT; then break; fi
+	done
+}
+
+wait_for_jetty() {
+	for i in $(seq 10); do
+	    sleep 1
+	    if is_port_open $JETTYPORT; then break; fi
 	done
 }
 
@@ -155,8 +163,9 @@ reload_squid() {
 
 start_jetty() {
 	/etc/init.d/jetty start
+	wait_for_jetty
 	echo -n "Reloading Apache..."
-	/etc/init.d/apache2 force-reload >/dev/null 2>&1
+	/etc/init.d/apache2 force-reload 2>&1 > /dev/null
 }
 
 stop_jetty() {
@@ -164,7 +173,7 @@ stop_jetty() {
 }
 
 status_jetty() {
-	/etc/init.d/jetty status
+	/etc/init.d/jetty status 2>&1 > /dev/null
 }
 
 case "$1" in
