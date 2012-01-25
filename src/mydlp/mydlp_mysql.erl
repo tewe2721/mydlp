@@ -132,10 +132,11 @@ handle_call(get_denied_page, _From, State) ->
 handle_call({push_log, {Channel, RuleId, Action, Ip, User, To, ITypeId, Misc}}, From, State) ->
 	Worker = self(),
 	?ASYNC(fun() ->
-			{_FilterId, RuleId1, Ip1, User1} = pre_push_log(RuleId, Ip, User),
+			{_FilterId, RuleId1, Ip1, User1, ActionS, ChannelS} = 
+				pre_push_log(RuleId, Ip, User, Action, Channel),
 			{atomic, ILId} = ltransaction(fun() ->
 					psqt(insert_incident, 
-						[Channel, RuleId1, Ip1, User1, To, ITypeId, Action, Misc]),
+						[ChannelS, RuleId1, Ip1, User1, To, ITypeId, ActionS, Misc]),
 					last_insert_id_t() end, 30000),
 			Reply = ILId,	
                         Worker ! {async_reply, Reply, From}
@@ -624,7 +625,7 @@ rule_dtype_to_channel(<<"EndpointRule">>) -> endpoint;
 rule_dtype_to_channel(<<"PrinterRule">>) -> printer;
 rule_dtype_to_channel(Else) -> throw({error, unsupported_rule_type, Else}).
 
-pre_push_log(RuleId, Ip, User) -> 
+pre_push_log(RuleId, Ip, User, Action, Channel) -> 
 %	{FilterId, RuleId1} = case RuleId of
 %		{dr, CId} -> {CId, 0};
 %		-1 = RuleId -> {mydlp_mnesia:get_dcid(), RuleId};	% this shows default action had been enforeced 
@@ -638,7 +639,20 @@ pre_push_log(RuleId, Ip, User) ->
 		nil -> null;
 		Else2 -> Else2
 	end,
-	{0, RuleId, Ip1, User1}.
+	ActionS = case Action of
+		pass -> <<"P">>;
+		block -> <<"B">>;
+		log -> <<"L">>;
+		quarantine -> <<"Q">>;
+		archive -> <<"A">> 
+	end,
+	ChannelS = case Channel of
+		web -> <<"W">>;
+		mail -> <<"M">>;
+		endpoint -> <<"E">>;
+		printer -> <<"P">> 
+	end,
+	{0, RuleId, Ip1, User1, ActionS, ChannelS}.
 
 -endif.
 

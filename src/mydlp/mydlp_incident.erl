@@ -65,12 +65,12 @@ handle_call(stop, _From, State) ->
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-handle_cast({a, Item}, #state{logger_queue=Q, logger_inprog=false} = State) ->
+handle_cast({l, Item}, #state{logger_queue=Q, logger_inprog=false} = State) ->
 	Q1 = queue:in(Item, Q),
 	consume(),
 	{noreply, State#state{logger_queue=Q1, logger_inprog=true}};
 
-handle_cast({a, Item}, #state{logger_queue=Q, logger_inprog=true} = State) ->
+handle_cast({l, Item}, #state{logger_queue=Q, logger_inprog=true} = State) ->
 	Q1 = queue:in(Item, Q),
 	{noreply,State#state{logger_queue=Q1}};
 
@@ -90,7 +90,7 @@ handle_cast(consume, #state{logger_queue=Q} = State) ->
 			{noreply, State#state{logger_inprog=false}}
 	end;
 
-handle_cast(_Msg, State) ->
+handle_cast(Msg, State) ->
 	{noreply, State}.
 
 handle_info({async_reply, Reply, From}, State) ->
