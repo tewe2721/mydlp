@@ -90,7 +90,7 @@ handle_cast(consume, #state{logger_queue=Q} = State) ->
 			{noreply, State#state{logger_inprog=false}}
 	end;
 
-handle_cast(Msg, State) ->
+handle_cast(_Msg, State) ->
 	{noreply, State}.
 
 handle_info({async_reply, Reply, From}, State) ->
