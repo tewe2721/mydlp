@@ -71,7 +71,7 @@ remove_root_webapp() {
 
 configure_jetty() {
 	/etc/init.d/jetty stop
-	/bin/cp -f /usr/share/mydlp/ui/jetty.defaults /etc/defaults/jetty
+	/bin/cp -f /usr/share/mydlp/ui/jetty.defaults /etc/default/jetty
 	/bin/cp -f /usr/share/mydlp/ui/jetty.conf /etc/jetty/jetty.conf
 	/bin/cp -f /usr/share/mydlp/ui/jetty-ajp.xml /etc/jetty/jetty-ajp.xml
 }
