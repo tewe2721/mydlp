@@ -41,15 +41,20 @@ generate_keys() {
 
 	[ -e $SSLDIR/private.pem ] || $OPENSSL genrsa > $SSLDIR/private.pem
 
-	[ -e $SSLDIR/public.pem ] || (echo -e "TR\nAnkara\nTechnopolis\nMedra Tech.\nMyDLP\n*\nrohirrim@example.com\n"| $OPENSSL req -new -x509 -key $SSLDIR/private.pem -out $SSLDIR/public.pem)
+	[ -e $SSLDIR/public.pem ] || (echo -e "TR\nAnkara\nTechnopolis\nMedra Tech.\nMyDLP\n*\nsupport@mydlp.com\n"| $OPENSSL req -new -x509 -key $SSLDIR/private.pem -out $SSLDIR/public.pem)
 	
 	return 0
 }
 
 configure_apache() {
 	/usr/sbin/a2enmod ssl
+	/usr/sbin/a2enmod proxy
+	/usr/sbin/a2enmod proxy_http
+	/usr/sbin/a2enmod rewrite
 	/usr/sbin/a2dissite default-ssl
-	/usr/sbin/a2ensite mydlp-site
+	/usr/sbin/a2dissite default
+	/usr/sbin/a2ensite mydlp
+	/etc/init.d/apache2 force-reload
 }
 
 generate_init_epoch() {
@@ -60,6 +65,18 @@ chown_quarantine() {
 	$CHOWN -R 33.33 $QUARANTINE_DIR
 }
 
+remove_root_webapp() {
+	/bin/rm -f /var/lib/jetty/webapps/root.war
+	/bin/rm -rf /var/lib/jetty/webapps/root/
+}
+
+install_webapp() {
+	/etc/init.d/jetty stop
+	/bin/cp -f /usr/share/mydlp/ui/mydlp-ui-webapp.war /var/lib/jetty/webapps/root.war
+	/etc/init.d/jetty start
+	/etc/init.d/apache2 force-reload
+}
+
 case "$1" in
     configure)
 	if [ -z "$2" ]; then
@@ -68,8 +85,9 @@ case "$1" in
 		configure_apache
 		chown_quarantine
 	fi
+	remove_root_webapp
+	install_webapp
 	;;
-
     abort-upgrade|abort-deconfigure|abort-remove)
 	;;
 

@@ -21,6 +21,7 @@ HOMEDIR=/etc/mydlp
 PIDDIR=/var/run/mydlp
 PIDFILE=$PIDDIR/mydlp.pid
 PIDFILE2=$PIDDIR/backend-py.pid
+PIDFILE3=/var/run/jetty.pid
 
 SERV=/usr/sbin/service
 MYSQLC=/usr/bin/mysql
@@ -118,6 +119,7 @@ status_mydlp() {
 cleanpids() {
 	status_mydlp || rm -f $PIDFILE
 	status_backend_py || rm -f $PIDFILE2
+	status_jetty || rm -f $PIDFILE3
 }
 
 start_backend_py() {
@@ -151,18 +153,34 @@ reload_squid() {
 	fi
 }
 
+start_jetty() {
+	/etc/init.d/jetty start
+	echo -n "Reloading Apache..."
+	/etc/init.d/apache2 force-reload >/dev/null 2>&1
+}
+
+stop_jetty() {
+	/etc/init.d/jetty stop
+}
+
+status_jetty() {
+	/etc/init.d/jetty status
+}
+
 case "$1" in
   start)
 	check_piddir
 	cleanpids
 	start_backend_py
 	start_mydlp
+	start_jetty
 	cleanpids
 	reload_squid
 	;;
   stop)
 	check_piddir
 	cleanpids
+	stop_jetty
 	stop_mydlp
 	stop_backend_py
 	cleanpids
@@ -174,11 +192,13 @@ case "$1" in
   restart)
 	check_piddir
 	cleanpids
+	stop_jetty
 	stop_mydlp
 	stop_backend_py
 	cleanpids
 	start_backend_py
 	start_mydlp
+	start_jetty
 	cleanpids
 	reload_squid
 	;;
