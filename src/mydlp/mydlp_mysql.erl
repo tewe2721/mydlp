@@ -151,7 +151,7 @@ handle_call(_Msg, _From, State) ->
 
 handle_cast({insert_log_file, LogId, Filename}, State) ->
 	?ASYNC(fun() ->
-		lpsq(incert_incident_file, [Filename, LogId, null], 30000)
+		lpsq(insert_incident_file, [LogId, Filename, null], 30000)
 	end, 30000),
 	{noreply, State};
 
