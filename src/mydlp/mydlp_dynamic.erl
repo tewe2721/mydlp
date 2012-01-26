@@ -27,6 +27,14 @@
 	prestart_load/0
 ]).
 
+-ifdef(__PLATFORM_WINDOWS).
+
+-export([
+	populate_win32reg/0
+]).
+	
+-endif.
+
 -include("mydlp.hrl").
 
 -ifdef(__PLATFORM_LINUX).
@@ -47,10 +55,13 @@
 
 prestart_load() ->
 	load_mydlp_config(),
-	load_mydlp_denied_page0().
+	load_mydlp_denied_page0(),
+	ok.
 
 load() ->
-	load_mydlp_denied_page().
+	load_mydlp_denied_page(),
+	load_mydlp_config_full(),
+	ok.
 
 denied_page_src() ->
 	DPBin = case mydlp_mysql:get_denied_page() of
@@ -89,9 +100,13 @@ load_mydlp_denied_page0() -> load_src(mydlp_denied_page_src("Denied!!!")).
 
 -ifdef(__MYDLP_ENDPOINT).
 
-prestart_load() -> load_mydlp_config().
+prestart_load() -> 
+	load_mydlp_config(),
+	ok.
 
-load() -> ok.
+load() ->
+	load_mydlp_config_full(),
+	ok.
 
 -endif.
 
@@ -129,7 +144,7 @@ load_src(Src) ->
 
 -ifdef(__MYDLP_NETWORK).
 
--define(CONFDEF_FUNCTIONAL, [
+-define(CONFDEF_FILE_OTHER, [
 	{ssl_cert, string, "/etc/mydlp/ssl/public.pem"},
 	{ssl_key, string, "/etc/mydlp/ssl/private.pem"},
 	{mysql_host, string, "localhost"},
@@ -142,11 +157,33 @@ load_src(Src) ->
 	{quarantine_dir, string, "/var/lib/mydlp/quarantine/"},
 	{quarantine_uid, integer, "33"},
 	{quarantine_gid, integer, "33"},
-	{auto_distribution, boolean, "false"},
-	{auto_distribution_priority, integer, "100"},
-	{auto_distribution_nodes, term, "['localhost']"},
 	{nlp_tr, boolean, "false"},
 	{nlp_tr_kokler, string, "/usr/share/mydlp/resources/mydlp_nlp_tr_kokler.txt"},
+	% TODO : should resolve mnesia -> auto dist conf circular dependency
+	{auto_distribution, boolean, "false"},
+	{auto_distribution_priority, integer, "100"},
+	{auto_distribution_nodes, term, "['localhost']"}
+]).
+
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
+-define(CONFDEF_FILE_OTHER, []).
+
+-endif.
+
+-define(CONFDEF_FILE_COMMON, [
+	{fsm_timeout, integer, "120000"},
+	{spawn_timeout, integer, "60000"},
+	{supervisor_max_restart_count, integer, "5"},
+	{supervisor_max_restart_time, integer, "20"},
+	{supervisor_kill_timeout, integer, "20"}
+]).
+
+-ifdef(__MYDLP_NETWORK).
+
+-define(CONFDEF_FUNCTIONAL, [
 	{smtp_helo_name, string, "mydlp.com"},
 	{smtp_next_hop_host, string, "localhost"},
 	{smtp_next_hop_port, integer, "10027"},
@@ -158,8 +195,7 @@ load_src(Src) ->
 	{icap_max_connections, integer, "0"},
 	{icap_options_ttl, integer, "0"},
 	{icap_log_pass, boolean, "false"},
-	{icap_log_pass_lower_limit, integer, "10240"},
-	{query_cache_maximum_size, integer, "2000000"}
+	{icap_log_pass_lower_limit, integer, "10240"}
 ]).
 
 -endif.
@@ -170,7 +206,10 @@ load_src(Src) ->
 	{management_server_address, string, "127.0.0.1"}, % TODO: validation IP address
 	{maximum_push_size, integer, "1048576"},
 	{sync_interval, integer, "300000"},
-	{query_cache_maximum_size, integer, "500000"}
+	{log_level, integer, "0"},
+	{log_limit, integer, "10485760"},
+	{usb_serial_access_control, boolean, "false"},
+	{print_monitor, boolean, "false"}
 ]).
 
 -endif.
@@ -182,15 +221,29 @@ load_src(Src) ->
 	{archive_inbound, boolean, "false"},
 	{maximum_memory_object, integer, "204800"},
 	{maximum_chunk_size, integer, "1048576"},
-	{supervisor_max_restart_count, integer, "5"},
-	{supervisor_max_restart_time, integer, "20"},
-	{supervisor_kill_timeout, integer, "20"},
-	{fsm_timeout, integer, "120000"},
-	{spawn_timeout, integer, "60000"},
+	{query_cache_maximum_size, integer, "1000000"},
 	{query_cache_cleanup_interval, integer, "900000"}
 ]).
 
--define(CONFDEF, lists:append([?CONFDEF_PLATFORM, ?CONFDEF_FUNCTIONAL, ?CONFDEF_COMMON])).
+-define(CONFDEF_FILE, lists:append([?CONFDEF_PLATFORM, ?CONFDEF_FILE_OTHER, ?CONFDEF_FILE_COMMON])).
+
+-define(CONFDEF_MNESIA, lists:append([?CONFDEF_FUNCTIONAL, ?CONFDEF_COMMON])).
+
+-define(CONFFILE, lists:append([K||{K,_,_} <- ?CONFDEF_PLATFORM], ?CONFFILE_OTHER)).
+
+-ifdef(__PLATFORM_WINDOWS).
+
+-define(CONFREG,[
+	archive_inbound,
+	maximum_object_size,
+	usb_serial_access_control,
+	print_monitor,
+	log_level,
+	log_limit
+]).
+
+-endif.
+
 
 -define(CONFIG_HEAD, "
 -module(mydlp_config).
@@ -201,6 +254,8 @@ load_src(Src) ->
 ").
 
 load_mydlp_config() -> load_src(mydlp_config_src()).
+
+load_mydlp_config_full() -> load_src(mydlp_config_src_full()).
 
 get_mydlp_conf_path() ->
 	case os:getenv("MYDLP_CONF") of
@@ -213,7 +268,15 @@ mydlp_config_src() ->
 	ConfSrc = mydlp_config_parse(Device),
 	?CONFIG_HEAD ++ ConfSrc.
 
-mydlp_config_parse(Device) -> mydlp_config_parse(Device, ?CONFDEF, "").
+mydlp_config_src_full() ->
+	ConfPath = get_mydlp_conf_path(),
+	{ok, Device} = file:open(ConfPath, [read]),
+	ConfSrc = mydlp_config_parse(Device),
+	file:close(Device),
+	ConfSrc2 = mydlp_config_mnesia(),
+	?CONFIG_HEAD ++ ConfSrc ++ ConfSrc2.
+
+mydlp_config_parse(Device) -> mydlp_config_parse(Device, ?CONFDEF_FILE, "").
 
 mydlp_config_parse(Device, ConfDef, ConfSrc) ->
 	case io:get_line(Device, "") of
@@ -323,7 +386,35 @@ confdef_to_src([{Key, Type, ValStr}| RestDef], Acc) ->
 	confdef_to_src(RestDef, Acc ++ SLine);
 confdef_to_src([], Acc) -> Acc.
 
+mydlp_config_mnesia() -> mydlp_config_mnesia(?CONFDEF_MNESIA, "").
+
+mydlp_config_mnesia([{Key,Type,DefaultVal}|Rest], SrcAcc) ->
+	KeyB = erlang:atom_to_binary(Key, latin1),
+	KeyStr = erlang:atom_to_list(Key),
+	ValStr = case mydlp_mnesia:get_config_value(KeyB) of
+		none -> DefaultVal;
+		ValB -> erlang:binary_to_list(ValB) end,
+	ValSrcStr = val_to_type_src(Key, Type, ValStr),
+	SLine = KeyStr ++ "() -> " ++ ValSrcStr ++ ".\r\n",
+	mydlp_config_mnesia(Rest, SrcAcc ++ SLine);
+mydlp_config_mnesia([], SrcAcc) -> SrcAcc.
 
 
+-ifdef(__PLATFORM_WINDOWS).
 
+populate_win32reg() -> 
+	{ok, RegHandle} = win32reg:open([read,write]),
+	win32reg:change_key_create(RegHandle, "\\hklm\\software\\MyDLP"),
+	populate_win32reg(RegHandle, ?CONFREG).
+populate_win32reg(RegHandle, [ConfKey|Rest]) ->
+	ConfKeyS = atom_to_list(ConfKey),
+	RegVal = case ?CFG(ConfKey) of
+			true -> 1;
+			false -> 0;
+			Else -> Else end,
+	win32reg:set_value(RegHandle, ConfKeyS, RegVal),
+	populate_win32reg(RegHandle, Rest);
+populate_win32reg(RegHandle, []) -> win32reg:close(RegHandle), ok.
+
+-endif.
 

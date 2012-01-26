@@ -52,7 +52,7 @@
 %%%------------------------------------------------------------------------
 
 start_link() ->
-    gen_fsm:start_link(?MODULE, [], []).
+	gen_fsm:start_link(?MODULE, [], []).
 
 %%%------------------------------------------------------------------------
 %%% Callback functions from gen_server
@@ -114,6 +114,8 @@ init([]) ->
 'SEAP_REQ'({data, "DESTROY" ++ Rest}, State) -> 
 	{ ObjId } = get_req_args(Rest),
 	'DESTROY_RESP'(State, ObjId);
+'SEAP_REQ'({data, "CONFUPDATE" ++ _Rest}, State) -> 
+	'CONFUPDATE_RESP'(State);
 'SEAP_REQ'({data, "HELP" ++ _Rest}, State) -> 
 	'HELP_RESP'(State);
 'SEAP_REQ'({data, _Else}, State) -> 
@@ -165,6 +167,13 @@ init([]) ->
 'DESTROY_RESP'(State, ObjId) ->
 	ok = mydlp_container:destroy(ObjId),
 	send_ok(State),
+	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
+
+'CONFUPDATE_RESP'(State) ->
+	Reply = case mydlp_container:confupdate() of
+		true -> "yes";
+		false -> "no" end,
+	send_ok(State, Reply),
 	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
 
 'HELP_RESP'(State) ->

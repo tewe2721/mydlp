@@ -47,6 +47,7 @@
 	get_drid/0,
 	wait_for_tables/0,
 	get_regexes/1,
+	get_config_value/1,
 	is_fhash_of_gid/2,
 	is_shash_of_gid/2,
 	is_mime_of_dfid/2,
@@ -308,6 +309,8 @@ dump_client_tables() -> dump_tables(?CLIENT_TABLES).
 
 get_regexes(GroupId) ->	aqc({get_regexes, GroupId}, cache).
 
+get_config_value(KeyB) -> aqc({get_config_value, KeyB}, nocache).
+
 is_fhash_of_gid(Hash, GroupIds) -> 
 	aqc({is_fhash_of_gid, Hash, GroupIds}, nocache).
 
@@ -353,6 +356,11 @@ handle_result({is_dr_fh_of_fid, _, _}, {atomic, Result}) ->
 	case Result of
 		[] -> false;
 		Else when is_list(Else) -> true end;
+
+handle_result({get_config_value, _}, {atomic, Result}) -> 
+	case Result of
+		[] -> none;
+		[ValB] -> ValB end;
 
 %% TODO: endpoint specific code
 handle_result({get_rule_table, _Channel}, {atomic, Result}) -> 
@@ -591,6 +599,13 @@ handle_query_common({get_regexes, GroupId}) ->
 	Q = ?QLCQ([ R#regex.compiled ||
 		R <- mnesia:table(regex),
 		R#regex.group_id == GroupId
+		]),
+	?QLCE(Q);
+
+handle_query_common({get_config_value, KeyB}) ->
+	Q = ?QLCQ([ C#config.value ||
+		C <- mnesia:table(config),
+		C#config.key == KeyB
 		]),
 	?QLCE(Q);
 

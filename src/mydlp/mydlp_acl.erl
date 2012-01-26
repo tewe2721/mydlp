@@ -67,8 +67,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -record(state, {
-	is_multisite=false,
-	error_action=pass
+	is_multisite=false
 	}).
 
 %%%%%%%%%%%%% MyDLP ACL API
@@ -251,10 +250,10 @@ handle_call(stop, _From, State) ->
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-handle_info({async_acl_q, Res, From}, #state{error_action=Action} = State) ->
+handle_info({async_acl_q, Res, From}, State) ->
 	Reply = case Res of
 		{ok, R} -> R;
-		{error, _} -> Action end, % TODO conf
+		{error, _} -> ?CFG(error_action) end, % TODO conf
 
 	gen_server:reply(From, Reply),
 	{noreply, State};
@@ -278,7 +277,7 @@ stop() ->
 init([]) ->
 %	IsMS = mydlp_mysql:is_multisite(),
 %	{ok, #state{is_multisite=IsMS, error_action=?CFG(error_action)}}.
-	{ok, #state{is_multisite=false, error_action=?CFG(error_action)}}.
+	{ok, #state{is_multisite=false}}.
 
 -endif.
 

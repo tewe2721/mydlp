@@ -51,7 +51,7 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
--record(state, {smtp_helo_name, smtp_dest_host, smtp_dest_port}).
+-record(state, {}).
 
 %%%%%%%%%%%%% MyDLP Thrift RPC API
 
@@ -70,15 +70,21 @@ handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
 % INSERT INTO log_incedent (id, rule_id, protocol, src_ip, destination, action, matcher, filename, misc)
-handle_cast({mail, #message{mail_from=From, rcpt_to=Rcpt, message=MessageS}}, 
-		#state{smtp_helo_name=Helo, smtp_dest_host=DHost, smtp_dest_port=DPort} = State) ->
-	?ASYNC(fun() -> smtpc:sendmail(DHost, DPort, Helo, From, Rcpt, MessageS) end, 600000),
+handle_cast({mail, #message{mail_from=From, rcpt_to=Rcpt, message=MessageS}}, State) ->
+	?ASYNC(fun() -> smtpc:sendmail(
+				?CFG(smtp_next_hop_host), 
+				?CFG(smtp_next_hop_port), 
+				?CFG(smtp_helo_name), 
+				From, Rcpt, MessageS) end, 600000),
 	{noreply, State};
 
-handle_cast({mail, Ref, #message{mail_from=From, rcpt_to=Rcpt, message=MessageS}}, 
-		#state{smtp_helo_name=Helo, smtp_dest_host=DHost, smtp_dest_port=DPort} = State) ->
+handle_cast({mail, Ref, #message{mail_from=From, rcpt_to=Rcpt, message=MessageS}}, State) ->
 	?ASYNC(fun() -> 
-		smtpc:sendmail(DHost, DPort, Helo, From, Rcpt, MessageS),
+		smtpc:sendmail(
+			?CFG(smtp_next_hop_host), 
+			?CFG(smtp_next_hop_port), 
+			?CFG(smtp_helo_name), 
+			From, Rcpt, MessageS),
 		mydlp_spool:delete(Ref),
 		mydlp_spool:release(Ref),
 		mydlp_spool:consume_next("smtp"),
@@ -86,9 +92,12 @@ handle_cast({mail, Ref, #message{mail_from=From, rcpt_to=Rcpt, message=MessageS}
 	end, 600000),
 	{noreply, State};
 
-handle_cast({mail, From, Rcpt, MessageS}, 
-		#state{smtp_helo_name=Helo, smtp_dest_host=DHost, smtp_dest_port=DPort} = State) ->
-	?ASYNC(fun() -> smtpc:sendmail(DHost, DPort, Helo, From, Rcpt, MessageS) end, 600000),
+handle_cast({mail, From, Rcpt, MessageS}, State) ->
+	?ASYNC(fun() -> smtpc:sendmail(
+				?CFG(smtp_next_hop_host), 
+				?CFG(smtp_next_hop_port), 
+				?CFG(smtp_helo_name), 
+				From, Rcpt, MessageS) end, 600000),
 	{noreply, State};
 
 handle_cast(_Msg, State) ->
@@ -113,11 +122,7 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
-	HeloName = ?CFG(smtp_helo_name),
-	Host = ?CFG(smtp_next_hop_host),
-	Port = ?CFG(smtp_next_hop_port),
-
-	{ok, #state{smtp_helo_name=HeloName, smtp_dest_host=Host, smtp_dest_port=Port}}.
+	{ok, #state{}}.
 
 terminate(_Reason, _State) ->
 	ok.
