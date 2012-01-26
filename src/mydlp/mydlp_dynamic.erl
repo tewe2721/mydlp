@@ -170,7 +170,7 @@ load_src(Src) ->
 -ifdef(__MYDLP_ENDPOINT).
 
 -define(CONFDEF_FILE_OTHER, [
-	{management_server_address, string, "127.0.0.1"}, % TODO: validation IP address
+	{management_server_address, string, "127.0.0.1"} % TODO: validation IP address
 ]).
 
 -endif.
