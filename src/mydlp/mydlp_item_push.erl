@@ -122,7 +122,7 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
-	consume_item(?CFG(sync_interval)),
+	consume_item(60000),
 	{ok, #state{item_queue=queue:new(), max_queue_size=?CFG(maximum_push_size)}}.
 
 terminate(_Reason, _State) ->
