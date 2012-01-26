@@ -250,8 +250,8 @@ init([]) ->
 
 	[ mysql:prepare(Key, Query) || {Key, Query} <- [
 		{last_insert_id, <<"SELECT last_insert_id()">>},
+		{configs, <<"SELECT configKey,value FROM Config">>},
 		{rules, <<"SELECT id,DTYPE,action FROM Rule WHERE enabled=1 order by priority desc">>},
-		%{cid_of_rule_by_id, <<"SELECT f.customer_id FROM sh_rule AS r, sh_filter AS f WHERE r.filter_id=f.id AND r.id=?">>},
 		{network_by_rule_id, <<"SELECT n.ipBase,n.ipMask FROM Network AS n, RuleItem AS ri WHERE ri.rule_id=? AND n.id=ri.item_id">>},
 		{itype_by_rule_id, <<"SELECT t.id,d.threshold FROM InformationType AS t, InformationDescription AS d, RuleItem AS ri WHERE ri.rule_id=? AND t.id=ri.item_id AND d.id=t.informationDescription_id">>},
 		{data_formats_by_itype_id, <<"SELECT df.dataFormats_id FROM InformationType_DataFormat AS df WHERE df.InformationType_id=?">>},
@@ -339,7 +339,11 @@ populate_site(FilterId) ->
 	%TODO: refine this
 	%{ok, FQ} = psq(filters_by_cid, [FilterId]),
 	populate_filters([[FilterId, <<"pass">> ]], FilterId),
-	
+
+	% This will create problems in multi-site
+	{ok, CQ} = psq(configs),
+	populate_configs(CQ, FilterId),
+
 	%TODO: should add for multi-site
 	%{ok, SQ} = psq(customer_by_id, [FilterId]),
 	%populate_site_desc(SQ),
@@ -348,6 +352,13 @@ populate_site(FilterId) ->
 	%{ok, UDQ} = psq(usb_device_by_cid, [FilterId]),
 	%populate_usb_devices(UDQ, FilterId),
 	ok.
+
+populate_configs([[Key, Value]|Rows], FilterId) ->
+	Id = mydlp_mnesia:get_unique_id(config),
+	C = #config{id=Id, filter_id=FilterId, key=Key, value=Value},
+	mydlp_mnesia:write(C),
+	populate_configs(Rows, FilterId);
+populate_configs([], _FilterId) -> ok.
 
 %populate_filters(Rows) -> populate_filters(Rows, mydlp_mnesia:get_dfid()).
 

@@ -113,6 +113,7 @@
 %%%%%%%%%%%%%%%% Table definitions
 
 -define(CLIENT_TABLES, [
+	config,
 	mime_type,
 	file_hash,
 	usb_device,
@@ -168,6 +169,7 @@
 -endif.
 
 -define(NONDATA_COMMON_TABLES, [
+	config,
 	{mime_type, ordered_set, 
 		fun() -> mnesia:add_table_index(mime_type, mime) end},
 	{regex, ordered_set, 
@@ -181,6 +183,7 @@
 get_record_fields_common(Record) -> 
         case Record of
 		unique_ids -> record_info(fields, unique_ids);
+		config -> record_info(fields, config);
 		usb_device -> record_info(fields, usb_device);
 		file_hash -> record_info(fields, file_hash);
 		sentence_hash -> record_info(fields, sentence_hash);
@@ -440,7 +443,14 @@ handle_query({get_fid, SIpAddr}) ->
 	?QLCE(Q);
 
 handle_query({remove_site, FI}) ->
-	Q4 = ?QLCQ([S#site_desc.ipaddr ||	
+
+	Q1 = ?QLCQ([C#config.id ||	
+		C <- mnesia:table(config),
+		C#config.filter_id == FI
+		]),
+	CIs = ?QLCE(Q1),
+
+	Q4 = ?QLCQ([S#site_desc.filter_id ||	
 		S <- mnesia:table(site_desc),
 		S#site_desc.filter_id == FI
 		]),
@@ -457,6 +467,7 @@ handle_query({remove_site, FI}) ->
 		[SDI] -> mnesia:delete({site_desc, SDI}) end,
 
 	remove_filters([FI]),
+	lists:foreach(fun(Id) -> mnesia:delete({config, Id}) end, CIs),
 	lists:foreach(fun(Id) -> mnesia:delete({usb_device, Id}) end, UDIs);
 
 handle_query({remove_file_entry, FI}) ->
