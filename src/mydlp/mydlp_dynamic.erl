@@ -169,7 +169,9 @@ load_src(Src) ->
 
 -ifdef(__MYDLP_ENDPOINT).
 
--define(CONFDEF_FILE_OTHER, []).
+-define(CONFDEF_FILE_OTHER, [
+	{management_server_address, string, "127.0.0.1"}, % TODO: validation IP address
+]).
 
 -endif.
 
@@ -203,7 +205,6 @@ load_src(Src) ->
 -ifdef(__MYDLP_ENDPOINT).
 
 -define(CONFDEF_FUNCTIONAL, [
-	{management_server_address, string, "127.0.0.1"}, % TODO: validation IP address
 	{maximum_push_size, integer, "1048576"},
 	{sync_interval, integer, "300000"},
 	{log_level, integer, "0"},
