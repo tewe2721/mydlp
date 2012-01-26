@@ -176,7 +176,7 @@ handle_cast(repopulate_mnesia, State) ->
 	?ASYNC0(fun() ->
 		mydlp_mnesia:wait_for_tables(),
 		case mydlp_mysql:is_multisite() of
-			false -> mydlp_mysql:compile_customer(mydlp_mnesia:get_dcid());
+			false -> mydlp_mysql:compile_customer(mydlp_mnesia:get_dfid());
 			true -> ok % should be implemented for multi site usage
 		end
 	end),
@@ -349,7 +349,7 @@ populate_site(FilterId) ->
 	%populate_usb_devices(UDQ, FilterId),
 	ok.
 
-%populate_filters(Rows) -> populate_filters(Rows, mydlp_mnesia:get_dcid()).
+%populate_filters(Rows) -> populate_filters(Rows, mydlp_mnesia:get_dfid()).
 
 populate_filters([[Id, DActionS]|Rows], Id) ->
 	DAction = rule_action_to_atom(DActionS),
@@ -628,7 +628,7 @@ rule_dtype_to_channel(Else) -> throw({error, unsupported_rule_type, Else}).
 pre_push_log(RuleId, Ip, User, Action, Channel) -> 
 %	{FilterId, RuleId1} = case RuleId of
 %		{dr, CId} -> {CId, 0};
-%		-1 = RuleId -> {mydlp_mnesia:get_dcid(), RuleId};	% this shows default action had been enforeced 
+%		-1 = RuleId -> {mydlp_mnesia:get_dfid(), RuleId};	% this shows default action had been enforeced 
 							% this should be refined for multisite use
 %		RId when is_integer(RId) -> {get_rule_cid(RId), RId} end,
 	User1 = case User of

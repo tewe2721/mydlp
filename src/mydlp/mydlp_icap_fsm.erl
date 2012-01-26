@@ -481,10 +481,9 @@ archive_req(State, {{rule, RId}, {file, _}, {itype, IType}, {misc, _}}, DFFiles)
 pass_req(#state{log_pass=false}, _Files) -> ok;
 pass_req(#state{log_pass=LogPassLL, icap_mod_mode=reqmod} = State, Files) -> 
 	UTLFiles = lists:filter(fun(#file{dataref=Ref}) -> ?BB_S(Ref) > LogPassLL end, Files),
-	RId = {dr, mydlp_mnesia:get_dcid()}, % this will create problem for multisite users.
 	case UTLFiles of
 		[] -> ok;
-		_Else -> log_req(State, pass, {{rule, RId}, {file, UTLFiles}, {itype, -1}, {misc,""}}) end;
+		_Else -> log_req(State, pass, {-1, {file, UTLFiles}, {itype, -1}, {misc,""}}) end;
 pass_req(_State, _Files) -> ok.
 
 'REPLY_OK'(State) -> reply(ok, State).

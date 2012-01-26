@@ -43,7 +43,7 @@
 	compile_regex/0,
 	get_cgid/0,
 	get_pgid/0,
-	get_dcid/0,
+	get_dfid/0,
 	get_drid/0,
 	wait_for_tables/0,
 	get_regexes/1,
@@ -75,7 +75,7 @@
 	get_rules_for_fid/3,
 	get_rules_for_fid/4,
 	get_rules_by_user/2,
-	get_cid/1,
+	get_fid/1,
 	remove_site/1,
 	remove_file_entry/1,
 	remove_group/1,
@@ -239,7 +239,7 @@ get_cgid() -> -1.
 
 get_pgid() -> -2.
 
-get_dcid() -> 1.
+get_dfid() -> 1.
 
 get_drid() -> 0.
 
@@ -267,7 +267,7 @@ get_rules_for_fid(Channel, FilterId, DestList, Who) -> aqc({get_rules_for_fid, C
 
 get_rules_by_user(Channel, Who) -> aqc({get_rules_by_user, Channel, Who}, cache).
 
-get_cid(SIpAddr) -> aqc({get_cid, SIpAddr}, cache).
+get_fid(SIpAddr) -> aqc({get_fid, SIpAddr}, cache).
 
 remove_site(FilterId) -> aqc({remove_site, FilterId}, flush).
 
@@ -341,9 +341,9 @@ handle_result({is_fhash_of_gid, _Hash, HGIs}, {atomic, GIs}) ->
 	lists:any(fun(I) -> lists:member(I, HGIs) end,GIs);
 
 % TODO: instead of case statements, refining function definitions will make queries faster.
-handle_result({get_cid, _SIpAddr}, {atomic, Result}) -> 
+handle_result({get_fid, _SIpAddr}, {atomic, Result}) -> 
 	case Result of
-		[] -> nocustomer;
+		[] -> nofilter;
 		[FilterId] -> FilterId end;
 
 handle_result({is_dr_fh_of_fid, _, _}, {atomic, Result}) -> 
@@ -432,7 +432,7 @@ handle_query({get_rules_by_user, Channel, Who}) ->
 	Rules = ?QLCE(Q),
 	resolve_all(Rules);
 
-handle_query({get_cid, SIpAddr}) ->
+handle_query({get_fid, SIpAddr}) ->
 	Q = ?QLCQ([S#site_desc.filter_id ||
 		S <- mnesia:table(site_desc),
 		S#site_desc.ipaddr == SIpAddr
@@ -534,7 +534,7 @@ handle_query({is_valid_usb_device_id, DeviceId}) ->
 	Q = ?QLCQ([ U#usb_device.id ||
 		U <- mnesia:table(usb_device),
 		U#usb_device.device_id == DeviceId,
-		U#usb_device.customer_id == mydlp_mnesia:get_dcid(),
+		U#usb_device.filter_id == mydlp_mnesia:get_dfid(),
 		U#usb_device.action == pass
 		]),
 	?QLCE(Q);
@@ -927,7 +927,7 @@ call_timer() -> timer:send_after(5000, cleanup_now).
 
 ip_band({A1,B1,C1,D1}, {A2,B2,C2,D2}) -> {A1 band A2, B1 band B2, C1 band C2, D1 band D2}.
 
-resolve_all(Rules) -> resolve_all(Rules, get_dcid()).
+resolve_all(Rules) -> resolve_all(Rules, get_dfid()).
 
 resolve_all(Rules, FilterId) ->
 	Q = ?QLCQ([{F#filter.id, F#filter.default_action} || 
