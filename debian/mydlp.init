@@ -81,6 +81,11 @@ wait_for_jetty() {
 }
 
 start_mysql() {
+	start_mysql
+	check_mysql_db
+}
+
+start_mysqld() {
 	is_mysql_alive || $SERV mysql start >/dev/null 2>&1 
 	wait_for_mysqld
 }
@@ -102,9 +107,6 @@ check_mysql_db() {
 }
 
 start_mydlp() {
-	start_mysql
-	check_mysql_db
-
 	log_daemon_msg "Starting MyDLP" "mydlp"
         if HOME=$HOMEDIR start-stop-daemon --start --quiet --oknodo --chdir $HOMEDIR --pidfile $PIDFILE --exec $ERLANG -- $ERLANG_OPTS -config mydlp-sasl -boot mydlp; then
             log_end_msg 0
@@ -184,6 +186,7 @@ case "$1" in
   start)
 	check_piddir
 	cleanpids
+	start_mysql
 	start_jetty
 	start_backend_py
 	start_mydlp
@@ -210,6 +213,7 @@ case "$1" in
 	stop_jetty
 	cleanpids
 	sleep 1
+	start_mysql
 	start_jetty
 	start_backend_py
 	start_mydlp
