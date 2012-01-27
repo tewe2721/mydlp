@@ -50,8 +50,7 @@
 
 -record(state, {
 	item_queue,
-	queue_size = 0,
-	max_queue_size = 0
+	queue_size = 0
 }).
 
 %%%%%%%%%%%%%  API
@@ -66,11 +65,11 @@ handle_call(stop, _From, State) ->
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-handle_cast({p, Item}, #state{item_queue=Q, queue_size=QS, max_queue_size=MQS} = State) ->
+handle_cast({p, Item}, #state{item_queue=Q, queue_size=QS} = State) ->
 	Q1 = queue:in(Item, Q),
 	ItemSize = predict_serialized_size(Item),
 	NextQS = QS+ItemSize,
-	case NextQS > MQS of
+	case NextQS > ?CFG(maximum_push_size) of
 		true -> consume_item();
 		false -> ok end,
 	{noreply,State#state{item_queue=Q1, queue_size=NextQS}};
@@ -122,8 +121,8 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
-	consume_item(?CFG(sync_interval)),
-	{ok, #state{item_queue=queue:new(), max_queue_size=?CFG(maximum_push_size)}}.
+	consume_item(60000),
+	{ok, #state{item_queue=queue:new()}}.
 
 terminate(_Reason, _State) ->
 	ok.

@@ -1904,7 +1904,11 @@ use_client_policy(CDBBin) ->
 		mydlp_mnesia:truncate_all(),
 		[ ( catch mydlp_mnesia:write(I) ) || I <- ItemDump],
 		[ ( catch mydlp_mnesia:write(#rule_table{channel=C, table = RT}) )
-				|| {C, RT} <- RuleTables ]
+				|| {C, RT} <- RuleTables ],
+
+		mydlp_dynamic:load(),
+		mydlp_dynamic:populate_win32reg(),
+		mydlp_container:schedule_confupdate()
 
 	catch Class:Error ->
 		?ERROR_LOG("USE_CLIENT_POLICY: Error occured: Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~nCDBBin: ["?S"].~n",

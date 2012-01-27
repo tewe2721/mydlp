@@ -43,10 +43,11 @@
 	compile_regex/0,
 	get_cgid/0,
 	get_pgid/0,
-	get_dcid/0,
+	get_dfid/0,
 	get_drid/0,
 	wait_for_tables/0,
 	get_regexes/1,
+	get_config_value/1,
 	is_fhash_of_gid/2,
 	is_shash_of_gid/2,
 	is_mime_of_dfid/2,
@@ -75,7 +76,7 @@
 	get_rules_for_fid/3,
 	get_rules_for_fid/4,
 	get_rules_by_user/2,
-	get_cid/1,
+	get_fid/1,
 	remove_site/1,
 	remove_file_entry/1,
 	remove_group/1,
@@ -113,6 +114,7 @@
 %%%%%%%%%%%%%%%% Table definitions
 
 -define(CLIENT_TABLES, [
+	config,
 	mime_type,
 	file_hash,
 	usb_device,
@@ -168,6 +170,7 @@
 -endif.
 
 -define(NONDATA_COMMON_TABLES, [
+	config,
 	{mime_type, ordered_set, 
 		fun() -> mnesia:add_table_index(mime_type, mime) end},
 	{regex, ordered_set, 
@@ -181,6 +184,7 @@
 get_record_fields_common(Record) -> 
         case Record of
 		unique_ids -> record_info(fields, unique_ids);
+		config -> record_info(fields, config);
 		usb_device -> record_info(fields, usb_device);
 		file_hash -> record_info(fields, file_hash);
 		sentence_hash -> record_info(fields, sentence_hash);
@@ -239,7 +243,7 @@ get_cgid() -> -1.
 
 get_pgid() -> -2.
 
-get_dcid() -> 1.
+get_dfid() -> 1.
 
 get_drid() -> 0.
 
@@ -267,7 +271,7 @@ get_rules_for_fid(Channel, FilterId, DestList, Who) -> aqc({get_rules_for_fid, C
 
 get_rules_by_user(Channel, Who) -> aqc({get_rules_by_user, Channel, Who}, cache).
 
-get_cid(SIpAddr) -> aqc({get_cid, SIpAddr}, cache).
+get_fid(SIpAddr) -> aqc({get_fid, SIpAddr}, cache).
 
 remove_site(FilterId) -> aqc({remove_site, FilterId}, flush).
 
@@ -305,6 +309,8 @@ dump_client_tables() -> dump_tables(?CLIENT_TABLES).
 
 get_regexes(GroupId) ->	aqc({get_regexes, GroupId}, cache).
 
+get_config_value(KeyB) -> aqc({get_config_value, KeyB}, nocache).
+
 is_fhash_of_gid(Hash, GroupIds) -> 
 	aqc({is_fhash_of_gid, Hash, GroupIds}, nocache).
 
@@ -341,15 +347,20 @@ handle_result({is_fhash_of_gid, _Hash, HGIs}, {atomic, GIs}) ->
 	lists:any(fun(I) -> lists:member(I, HGIs) end,GIs);
 
 % TODO: instead of case statements, refining function definitions will make queries faster.
-handle_result({get_cid, _SIpAddr}, {atomic, Result}) -> 
+handle_result({get_fid, _SIpAddr}, {atomic, Result}) -> 
 	case Result of
-		[] -> nocustomer;
+		[] -> nofilter;
 		[FilterId] -> FilterId end;
 
 handle_result({is_dr_fh_of_fid, _, _}, {atomic, Result}) -> 
 	case Result of
 		[] -> false;
 		Else when is_list(Else) -> true end;
+
+handle_result({get_config_value, _}, {atomic, Result}) -> 
+	case Result of
+		[] -> none;
+		[ValB] -> ValB end;
 
 %% TODO: endpoint specific code
 handle_result({get_rule_table, _Channel}, {atomic, Result}) -> 
@@ -432,7 +443,7 @@ handle_query({get_rules_by_user, Channel, Who}) ->
 	Rules = ?QLCE(Q),
 	resolve_all(Rules);
 
-handle_query({get_cid, SIpAddr}) ->
+handle_query({get_fid, SIpAddr}) ->
 	Q = ?QLCQ([S#site_desc.filter_id ||
 		S <- mnesia:table(site_desc),
 		S#site_desc.ipaddr == SIpAddr
@@ -440,7 +451,14 @@ handle_query({get_cid, SIpAddr}) ->
 	?QLCE(Q);
 
 handle_query({remove_site, FI}) ->
-	Q4 = ?QLCQ([S#site_desc.ipaddr ||	
+
+	Q1 = ?QLCQ([C#config.id ||	
+		C <- mnesia:table(config),
+		C#config.filter_id == FI
+		]),
+	CIs = ?QLCE(Q1),
+
+	Q4 = ?QLCQ([S#site_desc.filter_id ||	
 		S <- mnesia:table(site_desc),
 		S#site_desc.filter_id == FI
 		]),
@@ -457,6 +475,7 @@ handle_query({remove_site, FI}) ->
 		[SDI] -> mnesia:delete({site_desc, SDI}) end,
 
 	remove_filters([FI]),
+	lists:foreach(fun(Id) -> mnesia:delete({config, Id}) end, CIs),
 	lists:foreach(fun(Id) -> mnesia:delete({usb_device, Id}) end, UDIs);
 
 handle_query({remove_file_entry, FI}) ->
@@ -534,7 +553,7 @@ handle_query({is_valid_usb_device_id, DeviceId}) ->
 	Q = ?QLCQ([ U#usb_device.id ||
 		U <- mnesia:table(usb_device),
 		U#usb_device.device_id == DeviceId,
-		U#usb_device.customer_id == mydlp_mnesia:get_dcid(),
+		U#usb_device.filter_id == mydlp_mnesia:get_dfid(),
 		U#usb_device.action == pass
 		]),
 	?QLCE(Q);
@@ -580,6 +599,13 @@ handle_query_common({get_regexes, GroupId}) ->
 	Q = ?QLCQ([ R#regex.compiled ||
 		R <- mnesia:table(regex),
 		R#regex.group_id == GroupId
+		]),
+	?QLCE(Q);
+
+handle_query_common({get_config_value, KeyB}) ->
+	Q = ?QLCQ([ C#config.value ||
+		C <- mnesia:table(config),
+		C#config.key == KeyB
 		]),
 	?QLCE(Q);
 
@@ -927,7 +953,7 @@ call_timer() -> timer:send_after(5000, cleanup_now).
 
 ip_band({A1,B1,C1,D1}, {A2,B2,C2,D2}) -> {A1 band A2, B1 band B2, C1 band C2, D1 band D2}.
 
-resolve_all(Rules) -> resolve_all(Rules, get_dcid()).
+resolve_all(Rules) -> resolve_all(Rules, get_dfid()).
 
 resolve_all(Rules, FilterId) ->
 	Q = ?QLCQ([{F#filter.id, F#filter.default_action} || 

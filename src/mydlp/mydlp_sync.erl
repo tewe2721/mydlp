@@ -89,7 +89,7 @@ stop() ->
 
 init([]) ->
 	inets:start(),
-	call_timer(5000),
+	call_timer(15000),
 	{ok, #state{}}.
 
 terminate(_Reason, _State) ->

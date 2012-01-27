@@ -39,7 +39,7 @@
 	compile_filters/0,
 	compile_customer/1,
 	push_log/8,
-%	is_multisite/0,
+	is_multisite/0,
 	get_denied_page/0,
 	insert_log_file/5,
 	insert_log_file/2,
@@ -90,6 +90,7 @@ compile_customer(FilterId) when is_integer(FilterId) ->
 	gen_server:call(?MODULE, {compile_customer, FilterId} , 60000).
 
 %is_multisite() -> gen_server:call(?MODULE, is_multisite).
+is_multisite() -> false.
 
 get_denied_page() -> gen_server:call(?MODULE, get_denied_page).
 
@@ -176,7 +177,7 @@ handle_cast(repopulate_mnesia, State) ->
 	?ASYNC0(fun() ->
 		mydlp_mnesia:wait_for_tables(),
 		case mydlp_mysql:is_multisite() of
-			false -> mydlp_mysql:compile_customer(mydlp_mnesia:get_dcid());
+			false -> mydlp_mysql:compile_customer(mydlp_mnesia:get_dfid());
 			true -> ok % should be implemented for multi site usage
 		end
 	end),
@@ -250,8 +251,8 @@ init([]) ->
 
 	[ mysql:prepare(Key, Query) || {Key, Query} <- [
 		{last_insert_id, <<"SELECT last_insert_id()">>},
+		{configs, <<"SELECT configKey,value FROM Config">>},
 		{rules, <<"SELECT id,DTYPE,action FROM Rule WHERE enabled=1 order by priority desc">>},
-		%{cid_of_rule_by_id, <<"SELECT f.customer_id FROM sh_rule AS r, sh_filter AS f WHERE r.filter_id=f.id AND r.id=?">>},
 		{network_by_rule_id, <<"SELECT n.ipBase,n.ipMask FROM Network AS n, RuleItem AS ri WHERE ri.rule_id=? AND n.id=ri.item_id">>},
 		{itype_by_rule_id, <<"SELECT t.id,d.threshold FROM InformationType AS t, InformationDescription AS d, RuleItem AS ri WHERE ri.rule_id=? AND t.id=ri.item_id AND d.id=t.informationDescription_id">>},
 		{data_formats_by_itype_id, <<"SELECT df.dataFormats_id FROM InformationType_DataFormat AS df WHERE df.InformationType_id=?">>},
@@ -339,7 +340,11 @@ populate_site(FilterId) ->
 	%TODO: refine this
 	%{ok, FQ} = psq(filters_by_cid, [FilterId]),
 	populate_filters([[FilterId, <<"pass">> ]], FilterId),
-	
+
+	% This will create problems in multi-site
+	{ok, CQ} = psq(configs),
+	populate_configs(CQ, FilterId),
+
 	%TODO: should add for multi-site
 	%{ok, SQ} = psq(customer_by_id, [FilterId]),
 	%populate_site_desc(SQ),
@@ -349,7 +354,14 @@ populate_site(FilterId) ->
 	%populate_usb_devices(UDQ, FilterId),
 	ok.
 
-%populate_filters(Rows) -> populate_filters(Rows, mydlp_mnesia:get_dcid()).
+populate_configs([[Key, Value]|Rows], FilterId) ->
+	Id = mydlp_mnesia:get_unique_id(config),
+	C = #config{id=Id, filter_id=FilterId, key=Key, value=Value},
+	mydlp_mnesia:write(C),
+	populate_configs(Rows, FilterId);
+populate_configs([], _FilterId) -> ok.
+
+%populate_filters(Rows) -> populate_filters(Rows, mydlp_mnesia:get_dfid()).
 
 populate_filters([[Id, DActionS]|Rows], Id) ->
 	DAction = rule_action_to_atom(DActionS),
@@ -628,7 +640,7 @@ rule_dtype_to_channel(Else) -> throw({error, unsupported_rule_type, Else}).
 pre_push_log(RuleId, Ip, User, Action, Channel) -> 
 %	{FilterId, RuleId1} = case RuleId of
 %		{dr, CId} -> {CId, 0};
-%		-1 = RuleId -> {mydlp_mnesia:get_dcid(), RuleId};	% this shows default action had been enforeced 
+%		-1 = RuleId -> {mydlp_mnesia:get_dfid(), RuleId};	% this shows default action had been enforeced 
 							% this should be refined for multisite use
 %		RId when is_integer(RId) -> {get_rule_cid(RId), RId} end,
 	User1 = case User of

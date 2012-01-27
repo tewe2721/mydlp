@@ -67,8 +67,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -record(state, {
-	is_multisite=false,
-	error_action=pass
+	is_multisite=false
 	}).
 
 %%%%%%%%%%%%% MyDLP ACL API
@@ -175,20 +174,20 @@ acl_exec3({TextExtraction} = ACLOpts, AllRules, Source, Files, ExNewFiles, Clean
 
 %% it needs refactoring for trusted domains
 handle_acl({q, Channel, SAddr, DestList, Addr}, Files, #state{is_multisite=true}) ->
-	case mydlp_mnesia:get_cid(SAddr) of
-		nocustomer -> block;
+	case mydlp_mnesia:get_fid(SAddr) of
+		nofilter -> block;
 		CustomerId -> 
 			Rules = mydlp_mnesia:get_rules_for_fid(Channel, CustomerId, DestList, Addr),
 			acl_exec(Rules, [{cid, CustomerId}, {addr, Addr}], Files) end;
 
 handle_acl({q, Channel, _Site, DestList, Addr}, Files, #state{is_multisite=false}) ->
 	%Rules = mydlp_mnesia:get_rules(Addr),
-	CustomerId = mydlp_mnesia:get_dcid(),
+	CustomerId = mydlp_mnesia:get_dfid(),
 	Rules = mydlp_mnesia:get_rules_for_fid(Channel, CustomerId, DestList, Addr),
 	acl_exec(Rules, [{cid, CustomerId}, {addr, Addr}], Files);
 
 handle_acl({get_remote_rule_tables, Addr}, _Files, _State) ->
-	CustomerId = mydlp_mnesia:get_dcid(),
+	CustomerId = mydlp_mnesia:get_dfid(),
 	% TODO: change needed for multi-site use
 	mydlp_mnesia:get_remote_rule_tables(CustomerId, Addr); 
 
@@ -196,15 +195,15 @@ handle_acl({get_remote_rule_tables, Addr}, _Files, _State) ->
 %% it needs refactoring for both multisite and trusted domains
 handle_acl({qu, Channel, _Site, User}, Files, _State) ->
 	Rules = mydlp_mnesia:get_rules_by_user(Channel, User),
-	acl_exec(Rules, [{cid, mydlp_mnesia:get_dcid()}, {user, User}], Files);
+	acl_exec(Rules, [{cid, mydlp_mnesia:get_dfid()}, {user, User}], Files);
 
 handle_acl({qa, Channel, _Site, DestList}, Files, _State) ->
 	Rules = mydlp_mnesia:get_all_rules(Channel, DestList),
-	acl_exec(Rules, [{cid, mydlp_mnesia:get_dcid()}], Files);
+	acl_exec(Rules, [{cid, mydlp_mnesia:get_dfid()}], Files);
 
 handle_acl({qm, Channel, _Site}, Files, _State) ->
 	Rules = mydlp_mnesia:get_all_rules(Channel),
-	acl_exec(Rules, [{cid, mydlp_mnesia:get_dcid()}], Files);
+	acl_exec(Rules, [{cid, mydlp_mnesia:get_dfid()}], Files);
 
 handle_acl({qe, Channel, Site}, Files, State) -> handle_acl({qm, Channel, Site}, Files, State);
 
@@ -224,7 +223,7 @@ handle_acl({qe, _Channel, _Site}, [#file{mime_type= <<"mydlp-internal/usb-device
 
 handle_acl({qe, Channel, _Site}, Files, _State) ->
 	Rules = mydlp_mnesia:get_rule_table(Channel),
-	acl_exec2(Rules, [{cid, mydlp_mnesia:get_dcid()}], Files);
+	acl_exec2(Rules, [{cid, mydlp_mnesia:get_dfid()}], Files);
 
 handle_acl(Q, _Files, _State) -> throw({error, {undefined_query, Q}}).
 
@@ -251,10 +250,10 @@ handle_call(stop, _From, State) ->
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-handle_info({async_acl_q, Res, From}, #state{error_action=Action} = State) ->
+handle_info({async_acl_q, Res, From}, State) ->
 	Reply = case Res of
 		{ok, R} -> R;
-		{error, _} -> Action end, % TODO conf
+		{error, _} -> ?CFG(error_action) end, % TODO conf
 
 	gen_server:reply(From, Reply),
 	{noreply, State};
@@ -276,9 +275,8 @@ stop() ->
 -ifdef(__MYDLP_NETWORK).
 
 init([]) ->
-%	IsMS = mydlp_mysql:is_multisite(),
-%	{ok, #state{is_multisite=IsMS, error_action=?CFG(error_action)}}.
-	{ok, #state{is_multisite=false, error_action=?CFG(error_action)}}.
+	IsMS = mydlp_mysql:is_multisite(),
+	{ok, #state{is_multisite=IsMS}}.
 
 -endif.
 

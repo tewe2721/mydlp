@@ -1,4 +1,4 @@
-%%
+%%%
 %%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@medra.com.tr>
 %%%
 %%%--------------------------------------------------------------------------
@@ -80,6 +80,7 @@
 
 -endif.
 
+
 -ifdef(__MYDLP_ENDPOINT).
 
 -record(rule_table, {
@@ -88,6 +89,13 @@
 }).
 
 -endif.
+
+-record(config, {
+	id,
+	filter_id,
+	key,
+	value
+}).
 
 -record(usb_device, {
 	id,

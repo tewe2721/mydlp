@@ -34,6 +34,8 @@
 
 %% API
 -export([start_link/0,
+	schedule_confupdate/0,
+	confupdate/0,
 	new/0,
 	setprop/3,
 	getprop/2,
@@ -66,11 +68,15 @@
 	}).
 
 -record(state, {
-	object_tree,
-	archive_inbound=false
+	confupdate=false,
+	object_tree
 	}).
 
 %%%% API
+
+schedule_confupdate() -> gen_server:cast(?MODULE, schedule_confupdate).
+
+confupdate() -> gen_server:call(?MODULE, confupdate).
 
 new() -> gen_server:call(?MODULE, new).
 
@@ -99,6 +105,9 @@ destroy(ObjId) -> gen_server:cast(?MODULE, {destroy, ObjId}).
 
 %%%%%%%%%%%%%% gen_server handles
 
+handle_call(confupdate, _From, #state{confupdate=ConfUpdate} = State) ->
+	{reply, ConfUpdate, State#state{confupdate=false}};
+
 handle_call(new, _From, #state{object_tree=OT} = State) ->
 	{_MegaSecs, Secs, MicroSecs} = erlang:now(),
 	% we do not include MegaSecs, because timeout cleanup will schedule within a period less than 1000000 seconds.
@@ -125,7 +134,7 @@ handle_call({aclq, ObjId, Timeout}, From, #state{object_tree=OT} = State) ->
 						File = object_to_file(Obj),
 						DFFiles = [File],
 						Channel = get_channel(Obj),
-						QRet = case is_inbound(Obj) of
+						QRet = case ( ?CFG(archive_inbound) and is_inbound(Obj) ) of
 							true -> mydlp_acl:qi(Channel, DFFiles);
 							false -> mydlp_acl:qe(Channel, DFFiles) end,
 						AclRet = acl_ret(QRet, Obj, DFFiles),
@@ -161,6 +170,9 @@ handle_call(stop, _From, State) ->
 
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
+
+handle_cast(schedule_confupdate, State) ->
+	{noreply, State#state{confupdate=true}};
 
 handle_cast({setprop, ObjId, Key, Value}, #state{object_tree=OT} = State) ->
 	case gb_trees:lookup(ObjId, OT) of
@@ -265,8 +277,7 @@ stop() ->
 
 init([]) ->
 	call_timer(),
-	{ok, #state{	object_tree=gb_trees:empty(),
-			archive_inbound=?CFG(archive_inbound)
+	{ok, #state{	object_tree=gb_trees:empty()
 			}}.
 
 terminate(_Reason, _State) ->

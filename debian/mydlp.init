@@ -162,14 +162,16 @@ reload_squid() {
 }
 
 start_jetty() {
-	/etc/init.d/jetty start
+	echo " * Starting Jetty..."
+	/etc/init.d/jetty start > /dev/null
 	wait_for_jetty
-	echo -n "Reloading Apache..."
+	echo " * Reloading Apache..."
 	/etc/init.d/apache2 force-reload 2>&1 > /dev/null
 }
 
 stop_jetty() {
-	/etc/init.d/jetty stop
+	echo " * Stopping Jetty..."
+	/etc/init.d/jetty stop > /dev/null
 }
 
 status_jetty() {
@@ -180,18 +182,18 @@ case "$1" in
   start)
 	check_piddir
 	cleanpids
+	start_jetty
 	start_backend_py
 	start_mydlp
-	start_jetty
 	cleanpids
 	reload_squid
 	;;
   stop)
 	check_piddir
 	cleanpids
-	stop_jetty
 	stop_mydlp
 	stop_backend_py
+	stop_jetty
 	cleanpids
 	;;
 
@@ -201,13 +203,14 @@ case "$1" in
   restart)
 	check_piddir
 	cleanpids
-	stop_jetty
 	stop_mydlp
 	stop_backend_py
+	stop_jetty
 	cleanpids
+	sleep 1
+	start_jetty
 	start_backend_py
 	start_mydlp
-	start_jetty
 	cleanpids
 	reload_squid
 	;;
