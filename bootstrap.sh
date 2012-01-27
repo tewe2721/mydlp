@@ -11,8 +11,8 @@ CURRENTVERSION=$(git tag|tail -1)
 NEXTVERSION=""
 
 function incrementVersion {
-        PRE=$(echo $CURRENTVERSION|sed -e 's/\.[0-9]+$//')
-        LAST=$(echo $CURRENTVERSION|sed -e 's/^v[0-9]+\.[0-9]+\.//')
+        PRE=$(echo $CURRENTVERSION|sed -e 's/\.[0-9]\+$//')
+        LAST=$(echo $CURRENTVERSION|sed -e 's/^v[0-9]\+\.[0-9]\+\.//')
         NEXTVERSION="$PRE"".""$(( $LAST + 1 ))"
 }
 
