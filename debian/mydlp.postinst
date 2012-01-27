@@ -70,14 +70,14 @@ remove_root_webapp() {
 }
 
 configure_jetty() {
-	/etc/init.d/jetty stop
+	/etc/init.d/jetty stop > /dev/null
 	/bin/cp -f /usr/share/mydlp/ui/jetty.defaults /etc/default/jetty
 	/bin/cp -f /usr/share/mydlp/ui/jetty.conf /etc/jetty/jetty.conf
 	/bin/cp -f /usr/share/mydlp/ui/jetty-ajp.xml /etc/jetty/jetty-ajp.xml
 }
 
 install_webapp() {
-	/etc/init.d/jetty stop
+	/etc/init.d/jetty stop > /dev/null
 	/bin/cp -f /usr/share/mydlp/ui/mydlp-ui-webapp.war /var/lib/jetty/webapps/root.war
 }
 
