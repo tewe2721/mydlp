@@ -89,9 +89,11 @@ check_mysql_db() {
 	# Import MySQL schema
 	if (echo|$MYSQLC); then
 		if [ -z "$(echo 'show databases'|$MYSQLC|grep -e '^mydlp$')" ]; then
+			echo " * Creating MySQL database (mydlp)..."
 			$MYSQLADM create mydlp
 		fi
 		if [ -z "$(echo 'show databases'|$MYSQLC|grep -e '^mydlp_log$')" ]; then
+			echo " * Creating MySQL database (mydlp_log)..."
 			$MYSQLADM create mydlp_log
 		fi
 	else
