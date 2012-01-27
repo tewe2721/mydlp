@@ -34,7 +34,6 @@
 -export([start_link/0,
 	pre_init/1,
 	get_mime/1,
-	is_valid_iban/1,
 	html_to_text/1,
 	check_binary_integrity/1,
 	check_archive_integrity/1,
@@ -97,9 +96,6 @@ get_mime_zip(Data) ->
 	false -> case	lists:keymember("xl/workbook.xml", 2, FL) of true -> ?MIME_OOXML_EXCEL;
 	false -> case	lists:keymember("ppt/presentation.xml", 2, FL) of true -> ?MIME_OOXML_POWERPOINT;
 	false -> <<"application/zip">> end end end.
-
-is_valid_iban(IbanStr) ->
-	call_pool({thrift, py, isValidIban, [IbanStr]}).
 
 html_to_text(Html) ->
 	call_pool({thrift, py, htmlToText, [Html]}).

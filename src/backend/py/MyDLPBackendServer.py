@@ -31,7 +31,6 @@ from thrift.transport import TTransport
 from thrift.protocol import TBinaryProtocol
 from thrift.server import TServer
 
-import iban
 import daemon
 import lxml.html
 
@@ -72,13 +71,6 @@ class MydlpHandler:
 			ge = GeneralException()
 			ge.why = "Python backend internal error..."
 			raise ge
-
-	def isValidIban(self, iban_str):
-		try:
-			myIBAN = iban.IBAN(iban_str)
-			return myIBAN.is_valid()
-		except:
-			return False
 
 	def htmlToText(self, html):
 		try:

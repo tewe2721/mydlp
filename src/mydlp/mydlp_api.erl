@@ -414,7 +414,30 @@ is_valid_cc(_,_) -> false.
 %%----------------------------------------------------------------------
 is_valid_iban(IbanStr) ->
 	Clean = remove_chars(IbanStr, " -"),
-	mydlp_tc:is_valid_iban(Clean).
+	is_valid_iban1(Clean).
+
+is_valid_iban1([CC1, CC2, CD1, CD2|Rest]) ->
+	M = calculate_modulus_97(Rest ++ [CC1, CC2] ++ "00" ),
+	M == list_to_integer([CD1,CD2]).
+	
+calculate_modulus_97(Str) ->
+	R = calculate_modulus_97(lists:reverse(Str), 1, 0) rem 97,
+	98 - R.
+
+calculate_modulus_97([C|Rest], M, Acc) ->
+	{M1, A} = case to_iban_value(C) of
+		I when I > 9 -> {M*100, M*I};
+		I -> {M*10, M*I} end,
+	
+	calculate_modulus_97(Rest, M1, Acc + A);
+calculate_modulus_97([], _M, Acc) -> Acc.
+	
+
+to_iban_value(C) when C >= $0 , C =< $9 -> C - $0;
+to_iban_value(C) when C >= $a , C =< $z -> C - $a + 10;
+to_iban_value(C) when C >= $A , C =< $Z -> C - $A + 10;
+to_iban_value(_C) -> throw({error, unexcepected_character}).
+
 
 %%--------------------------------------------------------------------
 %% @doc Checks whether string is a valid TR ID number

@@ -22,8 +22,7 @@ python_PYTHON = \
 	sitecustomize.py \
 	MyDLPBackendServer.py \
 	BCFileIntegrity.py \
-	daemon.py \
-	iban.py
+	daemon.py
 
 lib_LTLIBRARIES = libbfi.la
 libbfi_la_SOURCES = bfi.c
