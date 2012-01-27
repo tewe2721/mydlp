@@ -189,7 +189,7 @@ http_req1(ReqRet) ->
                 Else -> ?ERROR_LOG("ITEMPUSH: An error occured during HTTP req: Obj="?S"~n", [Else]),
 				{error, {http_req_not_ok, Else}} end.
 
-predict_serialized_size({endpoint_log, {_Channel, _RuleId, _Action, _Ip, _User, _To, _ITypeId, Files, _Misc}}) ->
+predict_serialized_size({endpoint_log, {_Time, _Channel, _RuleId, _Action, _Ip, _User, _To, _ITypeId, Files, _Misc}}) ->
 	128 + lists:sum([predict_file_size(F)||F <- Files]);
 predict_serialized_size({endpoint_log, _LogTerm}) -> 128;
 predict_serialized_size(Else) -> 

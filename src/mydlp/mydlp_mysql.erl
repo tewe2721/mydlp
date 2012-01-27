@@ -38,7 +38,7 @@
 -export([start_link/0,
 	compile_filters/0,
 	compile_customer/1,
-	push_log/8,
+	push_log/9,
 	is_multisite/0,
 	get_denied_page/0,
 	insert_log_file/5,
@@ -71,8 +71,8 @@
 
 %%%%%%%%%%%%% MyDLP Thrift RPC API
 
-push_log(Channel, RuleId, Action, Ip, User, To, ITypeId, Misc) ->
-	gen_server:call(?MODULE, {push_log, {Channel, RuleId, Action, Ip, User, To, ITypeId, Misc}}, 60000).
+push_log(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc) ->
+	gen_server:call(?MODULE, {push_log, {Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc}}, 60000).
 
 insert_log_file(LogId, Filename) -> 
 	gen_server:cast(?MODULE, {insert_log_file, LogId, Filename}).
@@ -130,14 +130,14 @@ handle_call(get_denied_page, _From, State) ->
 		_Else -> not_found end,
         {reply, Reply, State};
 
-handle_call({push_log, {Channel, RuleId, Action, Ip, User, To, ITypeId, Misc}}, From, State) ->
+handle_call({push_log, {Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc}}, From, State) ->
 	Worker = self(),
 	?ASYNC(fun() ->
 			{_FilterId, RuleId1, Ip1, User1, ActionS, ChannelS} = 
 				pre_push_log(RuleId, Ip, User, Action, Channel),
 			{atomic, ILId} = ltransaction(fun() ->
 					psqt(insert_incident, 
-						[ChannelS, RuleId1, Ip1, User1, To, ITypeId, ActionS, Misc]),
+						[Time, ChannelS, RuleId1, Ip1, User1, To, ITypeId, ActionS, Misc]),
 					last_insert_id_t() end, 30000),
 			Reply = ILId,	
                         Worker ! {async_reply, Reply, From}
@@ -264,7 +264,7 @@ init([]) ->
 		{mimes_by_data_format_id, <<"SELECT m.mimeType FROM MIMEType AS m, DataFormat_MIMEType dm WHERE dm.DataFormat_id=? and dm.mimeTypes_id=m.id">>},
 		%{usb_device_by_cid, <<"SELECT device_id, action FROM ep_usb_device WHERE customer_id=?">>},
 		%{customer_by_id, <<"SELECT id,static_ip FROM sh_customer WHERE id=?">>},
-		{insert_incident, <<"INSERT INTO IncidentLog (id, channel, ruleId, sourceIp, sourceUser, destination, informationTypeId, action, matcherMessage) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?)">>},
+		{insert_incident, <<"INSERT INTO IncidentLog (id, date, channel, ruleId, sourceIp, sourceUser, destination, informationTypeId, action, matcherMessage) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)">>},
 		{insert_incident_file, <<"INSERT INTO IncidentLogFile (id, incidentLog_id, filename, content_id) VALUES (NULL, ?, ?, ?)">>},
 %		{insert_archive, <<"INSERT INTO log_archive (id, customer_id, rule_id, protocol, src_ip, src_user, destination, log_archive_file_id) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)">>},
 %		{new_archive_file_entry, <<"INSERT INTO log_archive_file (id) VALUES (NULL)">>},

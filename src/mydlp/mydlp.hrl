@@ -37,8 +37,8 @@
 
 -define(ASYNC(Fun, Timeout), mydlp_api:mspawn(?FLE(Fun), Timeout)).
 
--define(ACL_LOG(Proto, RuleId, Action, Ip, User, To, Matcher, File, Misc), 
-	mydlp_api:acl_msg(Proto, RuleId, Action, Ip, User, To, Matcher, File, Misc)).
+-define(ACL_LOG(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, File, Misc), 
+	mydlp_api:acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, File, Misc)).
 
 -define(ERROR_LOG(Format, Args),
 	mydlp_logger:notify(error, "~P:~P " ++ Format, lists:append([ [I,32] || I <- ([?MODULE_STRING, ?LINE] ++ Args)]))

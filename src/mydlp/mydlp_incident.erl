@@ -124,21 +124,21 @@ code_change(_OldVsn, State, _Extra) ->
 
 %%%%%%%%%%%%%%%%% internal
 
-process_log_tuple({web = Channel, RuleId, archive = Action, Ip, User, To, ITypeId, Files, Misc}) ->
+process_log_tuple({Time, web = Channel, RuleId, archive = Action, Ip, User, To, ITypeId, Files, Misc}) ->
 	Files1 = lists:filter(fun(F) -> 
 		?BB_S(F#file.dataref) > ?CFG(archive_minimum_size)
 		end, Files),
-	process_log_tuple1({Channel, RuleId, Action, Ip, User, To, ITypeId, Files1, Misc});
-process_log_tuple({Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc}) ->
-	process_log_tuple1({Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc}).
+	process_log_tuple1({Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files1, Misc});
+process_log_tuple({Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc}) ->
+	process_log_tuple1({Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc}).
 
-process_log_tuple1({_Channel, _RuleId, _Action, _Ip, _User, _To, _ITypeId, [], _Misc}) -> ok;
-process_log_tuple1({Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc}) ->
+process_log_tuple1({_Time, _Channel, _RuleId, _Action, _Ip, _User, _To, _ITypeId, [], _Misc}) -> ok;
+process_log_tuple1({Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc}) ->
 	IsLogData = case Action of
 		quarantine -> true;
 		archive -> true;
 		_Else -> false end,
-	LogId = mydlp_mysql:push_log(Channel, RuleId, Action, Ip, User, To, ITypeId, Misc),
+	LogId = mydlp_mysql:push_log(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc),
 	process_log_files(LogId, IsLogData, Files),
 	ok.
 

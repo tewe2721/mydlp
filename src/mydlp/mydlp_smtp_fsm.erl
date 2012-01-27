@@ -350,7 +350,8 @@ log_req(#smtpd_fsm{message_record=MessageR}, Action,
                 {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
 	Src = get_from(MessageR),
 	Dest = get_dest_addresses(MessageR),
-        ?ACL_LOG(mail, RuleId, Action, nil, Src, Dest, IType, File, Misc).
+	Time = erlang:localtime(),
+        ?ACL_LOG(Time, mail, RuleId, Action, nil, Src, Dest, IType, File, Misc).
 
 get_dest_domains(#message{rcpt_to=RcptTo, to=ToH, cc=CCH, bcc=BCCH})->
 	RcptToA = lists:map(fun(S) -> mime_util:dec_addr(S) end, RcptTo),

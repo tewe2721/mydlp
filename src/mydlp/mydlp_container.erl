@@ -323,7 +323,8 @@ archive_req(Obj, {{rule, RId}, {file, _}, {itype, IType}, {misc, _}}, DFFiles) -
 log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
 	User = get_user(Obj),
 	Channel = get_channel(Obj),
-        ?ACL_LOG(Channel, RuleId, Action, nil, User, nil, IType, File, Misc).
+	Time = erlang:localtime(),
+        ?ACL_LOG(Time, Channel, RuleId, Action, nil, User, nil, IType, File, Misc).
 
 is_inbound(#object{prop_dict=PD}) ->
 	case dict:find("direction", PD) of
