@@ -68,7 +68,7 @@
 	}).
 
 -record(state, {
-	confupdate=false,
+	confupdate=true,
 	object_tree
 	}).
 
