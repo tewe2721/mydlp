@@ -38,14 +38,11 @@
 -export([start_link/0,
 	compile_filters/0,
 	compile_customer/1,
-	push_log/9,
-	push_log/10,
-	archive_log/6,
-	push_smb_discover/1,
-	is_multisite/0,
+	push_log/8,
+%	is_multisite/0,
 	get_denied_page/0,
-	new_afile/0,
-	update_afile/6,
+	insert_log_file/5,
+	insert_log_file/2,
 	repopulate_mnesia/0,
 	stop/0]).
 
@@ -59,21 +56,29 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
--record(state, {host, port, user, password, database, pool_size, master_pid, pool_pids}).
+-record(state, {
+	host,
+	port,
+	user,
+	password,
+	database,
+	database_l,
+	pool_size,
+	master_pid,
+	pool_pids,
+	pool_pids_l
+}).
 
 %%%%%%%%%%%%% MyDLP Thrift RPC API
 
-push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc) ->
-	gen_server:cast(?MODULE, {push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc}}).
+push_log(Channel, RuleId, Action, Ip, User, To, ITypeId, Misc) ->
+	gen_server:call(?MODULE, {push_log, {Channel, RuleId, Action, Ip, User, To, ITypeId, Misc}}, 60000).
 
-push_log(Proto, RuleId, Action, Ip, User, To, Matcher, FileS, #file{} = File, Misc) ->
-	gen_server:cast(?MODULE, {push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, File, Misc}}).
+insert_log_file(LogId, Filename) -> 
+	gen_server:cast(?MODULE, {insert_log_file, LogId, Filename}).
 
-archive_log(Proto, RuleId, Ip, User, To, AFileId) ->
-	gen_server:cast(?MODULE, {archive_log, {Proto, RuleId, Ip, User, To, AFileId}}).
-
-push_smb_discover(XMLResult) ->
-	gen_server:cast(?MODULE, {push_smb_discover, XMLResult}).
+insert_log_file(LogId, Filename, MimeType, Size, Path) -> 
+	gen_server:cast(?MODULE, {insert_log_file, LogId, Filename, MimeType, Size, Path}).
 
 repopulate_mnesia() ->
 	gen_server:cast(?MODULE, repopulate_mnesia).
@@ -81,25 +86,20 @@ repopulate_mnesia() ->
 compile_filters() -> 
 	gen_server:call(?MODULE, compile_filters, 60000).
 
-compile_customer(CustomerId) when is_integer(CustomerId) ->
-	gen_server:call(?MODULE, {compile_customer, CustomerId} , 60000).
+compile_customer(FilterId) when is_integer(FilterId) ->
+	gen_server:call(?MODULE, {compile_customer, FilterId} , 60000).
 
-is_multisite() -> gen_server:call(?MODULE, is_multisite).
+%is_multisite() -> gen_server:call(?MODULE, is_multisite).
 
 get_denied_page() -> gen_server:call(?MODULE, get_denied_page).
 
-new_afile() -> gen_server:call(?MODULE, new_afile, 60000).
-
-update_afile(AFileId, Filename, MimeType, Size, ArchivePath, ContentText) -> 
-	gen_server:cast(?MODULE, {update_afile, AFileId, Filename, MimeType, Size, ArchivePath, ContentText}).
-
 %%%%%%%%%%%%%% gen_server handles
 
-handle_call({compile_customer, CustomerId}, From, State) ->
+handle_call({compile_customer, FilterId}, From, State) ->
 	Worker = self(),
 	?ASYNC(fun() ->
-			mydlp_mnesia:remove_site(CustomerId),
-			Reply = populate_site(CustomerId),
+			mydlp_mnesia:remove_site(FilterId),
+			Reply = populate_site(FilterId),
                         Worker ! {async_reply, Reply, From}
 		end, 60000),
         {noreply, State};
@@ -113,29 +113,35 @@ handle_call(compile_filters, From, State) ->
 		end, 60000),
         {noreply, State};
 
-handle_call(is_multisite, _From, State) ->
-	{ok, ATQ} = psq(app_type),
-	Reply = case ATQ of
-		[] -> false;
-		[[0]] -> false;
-		[[1]] -> true end,
-        {reply, Reply, State};
+%handle_call(is_multisite, _From, State) ->
+%	{ok, ATQ} = psq(app_type),
+%	Reply = case ATQ of
+%		[] -> false;
+%		[[0]] -> false;
+%		[[1]] -> true end,
+%        {reply, Reply, State};
 
 handle_call(get_denied_page, _From, State) ->
 	% Probably will create problems in multisite use.
-	{ok, DPQ} = psq(denied_page_by_cid, [mydlp_mnesia:get_dcid()]),
+	{ok, DPQ} = psq(denied_page),
 	Reply = case DPQ of
 		[[DeniedPage]] when is_binary(DeniedPage) -> DeniedPage;
 		_Else -> not_found end,
         {reply, Reply, State};
 
-handle_call(new_afile, _From, State) ->
-	% Probably will create problems in multisite use.
-	{atomic, AFEId} = transaction(fun() ->
-		psqt(new_archive_file_entry),
-		last_insert_id_t() end, 30000),
-	Reply = AFEId,	
-        {reply, Reply, State};
+handle_call({push_log, {Channel, RuleId, Action, Ip, User, To, ITypeId, Misc}}, From, State) ->
+	Worker = self(),
+	?ASYNC(fun() ->
+			{_FilterId, RuleId1, Ip1, User1, ActionS, ChannelS} = 
+				pre_push_log(RuleId, Ip, User, Action, Channel),
+			{atomic, ILId} = ltransaction(fun() ->
+					psqt(insert_incident, 
+						[ChannelS, RuleId1, Ip1, User1, To, ITypeId, ActionS, Misc]),
+					last_insert_id_t() end, 30000),
+			Reply = ILId,	
+                        Worker ! {async_reply, Reply, From}
+		end, 30000),
+	{noreply, State};
 
 handle_call(stop, _From,  State) ->
 	{stop, normalStop, State};
@@ -143,56 +149,25 @@ handle_call(stop, _From,  State) ->
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-% INSERT INTO log_archive (id, customer_id, rule_id, protocol, src_ip, src_user, destination, log_archive_file_id)
-handle_cast({archive_log, {Proto, RuleId, Ip, User, To, AFileId}}, State) ->
-	?ASYNC0(fun() ->
-		{CustomerId, RuleId1, Ip1, User1} = pre_push_log(RuleId, Ip, User),
-		psq(insert_archive, [CustomerId, RuleId1, Proto, Ip1, User1, To, AFileId], 30000)
-	end),
+handle_cast({insert_log_file, LogId, Filename}, State) ->
+	?ASYNC(fun() ->
+		lpsq(insert_incident_file, [LogId, Filename, null], 30000)
+	end, 30000),
 	{noreply, State};
 
-% INSERT INTO log_incedent (id, rule_id, protocol, src_ip, destination, action, matcher, filename, misc)
-handle_cast({push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, Misc}}, State) ->
-	?ASYNC0(fun() ->
-		{CustomerId, RuleId1, Ip1, User1} = pre_push_log(RuleId, Ip, User),
-		psq(insert_incident, 
-			[CustomerId, RuleId1, Proto, Ip1, User1, To, Action, Matcher, FileS, Misc])
-	end),
-	{noreply, State};
-
-handle_cast({push_log, {Proto, RuleId, Action, Ip, User, To, Matcher, FileS, File, Misc}}, State) ->
-	?ASYNC0(fun() ->
-		{ok, Path} = mydlp_api:quarantine(File),
-		Size = mydlp_api:binary_size(File#file.data),
-		MimeType = (File#file.mime_type),
-		{CustomerId, RuleId1, Ip1, User1} = pre_push_log(RuleId, Ip, User),
-		transaction( fun() ->
-			psqt(insert_incident, [CustomerId, RuleId1, Proto, Ip1, User1, To, Action, Matcher, FileS, Misc]),
-			psqt(insert_incident_file, [Path, MimeType, Size]) end)
-	end),
-	{noreply, State};
-
-handle_cast({push_smb_discover, XMLResult}, State) ->
-	?ASYNC0(fun() ->
-		transaction( fun() ->
-			psqt(delete_all_smb_discover),
-			psqt(insert_smb_discover, [mydlp_mnesia:get_dcid(), XMLResult]) end )
-	end),
-	{noreply, State};
-
-handle_cast({update_afile, AFileId, Filename, MimeType, Size, ArchivePath, ContentText}, State) ->
+handle_cast({insert_log_file, LogId, Filename, MimeType, Size, Path}, State) ->
 	% Probably will create problems in multisite use.
 	?ASYNC(fun() ->
-		{atomic, ADataId} = transaction(fun() ->
-			mysql:fetch(<<"LOCK TABLE log_archive_data WRITE">>),
-			Query =  psqt(archive_data_by_path, [ArchivePath]),
-			AId = case Query of
-				{ok, [] } ->	psqt(insert_archive_data, [MimeType, Size, ArchivePath, ContentText]),
+		{atomic, DataId} = ltransaction(fun() ->
+			mysql:fetch(pl, <<"LOCK TABLE log_archive_data WRITE">>),
+			Query =  psqt(incident_data_by_path, [Path]),
+			DId = case Query of
+				{ok, [] } ->	psqt(insert_incident_data, [MimeType, Size, Path]),
 						last_insert_id_t();
 				{ok, [[Id]|_]} -> Id end,
-			mysql:fetch(<<"UNLOCK TABLES">>), AId
+			mysql:fetch(pl, <<"UNLOCK TABLES">>), DId
 			end, 60000),
-		psq(update_archive_file, [Filename, ADataId, AFileId], 30000)
+		lpsq(insert_incident_file, [LogId, Filename, DataId], 30000)
 	end, 100000),
 	{noreply, State};
 
@@ -218,12 +193,23 @@ handle_info({'DOWN', _, _, MPid , _}, #state{master_pid=MPid} = State) ->
 	{stop, normalStop, State};
 
 handle_info({'DOWN', _, _, Pid , _}, #state{host=Host,
-		user=User, password=Password, database=DB, 
-		pool_pids=PoolPids} = State) ->
-	PoolPids1 = lists:delete(Pid, PoolPids),
-	case mysql:connect(p, Host, undefined, User, Password, DB, true) of
-		{ok,NewPid} -> {noreply, State#state{pool_pids=[NewPid|PoolPids1]}};
-		_Else -> {stop, normalStop, State#state{pool_pids=PoolPids1}} end;
+		user=User, password=Password, database=DB, database_l=LDB,
+		pool_pids=PoolPids, pool_pids_l=PoolPidsL} = State) ->
+	PPTuple  = case lists:any(fun(P) -> P == Pid end, PoolPids) of
+		true -> PoolPids1 = lists:delete(Pid, PoolPids),
+			case mysql:connect(pp, Host, undefined, User, Password, DB, true) of
+				{ok, NewPid} -> {[NewPid|PoolPids1], PoolPidsL};
+				_ -> error end;
+		false -> PoolPidsL1 = lists:delete(Pid, PoolPidsL),
+			case mysql:connect(pl, Host, undefined, User, Password, LDB, true) of
+				{ok, NewPid} -> {PoolPids, [NewPid|PoolPidsL1]};
+				_ -> error end
+	end,
+
+	case PPTuple of
+		error -> {stop, normalStop, State};
+		{PP, PPL} -> {noreply, State#state{pool_pids=PP, pool_pids_l=PPL}}
+	end;
 
 handle_info(_Info, State) ->
 	{noreply, State}.
@@ -245,54 +231,53 @@ init([]) ->
 	User = ?CFG(mysql_user),
 	Password = ?CFG(mysql_password),
 	DB = ?CFG(mysql_database),
+	LDB = ?CFG(mysql_log_database),
 	PoolSize = ?CFG(mysql_pool_size),
 	
-	{ok, MPid} = mysql:start_link(p, Host, Port, User, Password, DB, fun(_,_,_,_) -> ok end),
+	{ok, MPid} = mysql:start_link(pp, Host, Port, User, Password, DB, fun(_,_,_,_) -> ok end),
 	erlang:monitor(process, MPid), 
 	
-	PoolReturns = [ mysql:connect(p, Host, undefined, User, Password, DB, true) || _I <- lists:seq(1, PoolSize)],
+	PoolReturns = [ mysql:connect(pp, Host, undefined, User, Password, DB, true) || _I <- lists:seq(1, 2)],
 	PPids = [ P || {ok, P} <- PoolReturns ],
 	[ erlang:monitor(process, P) || P <- PPids ],
 
+	%{ok, MPid2} = mysql:start_link(pl, Host, Port, User, Password, LDB, fun(_,_,_,_) -> ok end),
+	%erlang:monitor(process, MPid2), 
+	
+	PoolReturns2 = [ mysql:connect(pl, Host, undefined, User, Password, LDB, true) || _I <- lists:seq(1, PoolSize)],
+	PPids2 = [ P || {ok, P} <- PoolReturns2 ],
+	[ erlang:monitor(process, P) || P <- PPids2 ],
+
 	[ mysql:prepare(Key, Query) || {Key, Query} <- [
 		{last_insert_id, <<"SELECT last_insert_id()">>},
-		{filters, <<"SELECT id,name,default_action FROM sh_filter WHERE is_active=TRUE">>},
-		{filters_by_cid, <<"SELECT id,name,default_action FROM sh_filter WHERE is_active=TRUE and customer_id=?">>},
-		{rules_by_fid, <<"SELECT id,action FROM sh_rule WHERE is_nw_active=TRUE and filter_id=?">>},
-		{tdomains_by_rid, <<"SELECT domain_name FROM nw_rule_white_domain WHERE rule_id=?">>},
-		{cid_of_rule_by_id, <<"SELECT f.customer_id FROM sh_rule AS r, sh_filter AS f WHERE r.filter_id=f.id AND r.id=?">>},
-		{ipr_by_rule_id, <<"SELECT a.customer_id,a.base_ip,a.subnet FROM sh_ipr AS i, sh_ipaddress AS a WHERE i.parent_rule_id=? AND i.sh_ipaddress_id=a.id">>},
-		{user_by_rule_id, <<"SELECT eu.id, eu.username FROM sh_ad_entry_user AS eu, sh_ad_cross AS c, sh_ad_entry AS e, sh_ad_group AS g, sh_ad_rule_cross AS rc WHERE rc.parent_rule_id=? AND rc.group_id=g.id AND rc.group_id=c.group_id AND c.entry_id=e.id AND c.entry_id=eu.entry_id">>},
+		{rules, <<"SELECT id,DTYPE,action FROM Rule WHERE enabled=1 order by priority desc">>},
+		%{cid_of_rule_by_id, <<"SELECT f.customer_id FROM sh_rule AS r, sh_filter AS f WHERE r.filter_id=f.id AND r.id=?">>},
+		{network_by_rule_id, <<"SELECT n.ipBase,n.ipMask FROM Network AS n, RuleItem AS ri WHERE ri.rule_id=? AND n.id=ri.item_id">>},
+		{itype_by_rule_id, <<"SELECT t.id,d.threshold FROM InformationType AS t, InformationDescription AS d, RuleItem AS ri WHERE ri.rule_id=? AND t.id=ri.item_id AND d.id=t.informationDescription_id">>},
+		{data_formats_by_itype_id, <<"SELECT df.dataFormats_id FROM InformationType_DataFormat AS df WHERE df.InformationType_id=?">>},
+		{ifeature_by_itype_id, <<"SELECT f.weight,f.matcher_id FROM InformationFeature AS f, InformationDescription_InformationFeature df, InformationType t WHERE t.id=? AND t.informationDescription_id=df.InformationDescription_id AND df.features_id=f.id">>},
+		{match_by_id, <<"SELECT m.id,m.functionName FROM Matcher AS m WHERE m.id=?">>},
+		{regex_by_matcher_id, <<"SELECT re.regex FROM MatcherParam AS mp, RegularExpression AS re WHERE mp.matcher_id=? AND mp.id=re.id">>},
+		%{user_by_rule_id, <<"SELECT eu.id, eu.username FROM sh_ad_entry_user AS eu, sh_ad_cross AS c, sh_ad_entry AS e, sh_ad_group AS g, sh_ad_rule_cross AS rc WHERE rc.parent_rule_id=? AND rc.group_id=g.id AND rc.group_id=c.group_id AND c.entry_id=e.id AND c.entry_id=eu.entry_id">>},
 		%{user_by_rule_id, <<"SELECT eu.id, eu.username FROM sh_ad_entry_user AS eu, sh_ad_cross AS c, sh_ad_rule_cross AS rc WHERE rc.parent_rule_id=? AND rc.group_id=c.group_id AND c.entry_id=eu.entry_id">>},
-		{match_by_rule_id, <<"SELECT DISTINCT m.id,m.func FROM sh_match AS m, sh_func_params AS p WHERE m.parent_rule_id=? AND p.match_id=m.id AND p.param <> \"0\" ">>},
-		{params_by_match_id, <<"SELECT DISTINCT p.param FROM sh_match AS m, sh_func_params AS p WHERE m.id=? AND p.match_id=m.id AND p.param <> \"0\" ">>},
-		{file_params_by_match_id, <<"SELECT DISTINCT m.enable_shash, m.sentence_hash_count, m.sentence_hash_percentage, m.enable_bayes, m.bayes_average, m.enable_whitefile FROM sh_match AS m, sh_func_params AS p WHERE m.id=? AND p.match_id=m.id AND p.param <> \"0\" ">>},
-		{mimes, <<"SELECT m.id, c.group_id, m.mime, m.extension FROM nw_mime_type_cross AS c, nw_mime_type m WHERE c.mime_id=m.id">>},
-		{mimes_by_cid, <<"SELECT m.id, c.group_id, m.mime, m.extension FROM nw_mime_type_cross AS c, nw_mime_type m WHERE c.mime_id=m.id and m.customer_id=?">>},
-		{regexes, <<"SELECT r.id, c.group_id, r.regex FROM sh_regex_cross AS c, sh_regex r WHERE c.regex_id=r.id">>},
-		{regexes_by_cid, <<"SELECT r.id, c.group_id, r.regex FROM sh_regex_cross AS c, sh_regex r WHERE c.regex_id=r.id and r.customer_id=?">>},
-		{usb_device_by_cid, <<"SELECT device_id, action FROM ep_usb_device WHERE customer_id=?">>},
-		{customer_by_id, <<"SELECT id,static_ip FROM sh_customer WHERE id=?">>},
-		{app_type, <<"SELECT type FROM app_type">>},
-		{denied_page_by_cid, <<"SELECT html_text FROM sh_warning_page WHERE customer_id=?">>},
-		{defaultrule_by_cid, <<"SELECT action, cc_count, ssn_count, iban_count, canada_sin_count, france_insee_count, uk_nino_count, tr_tck_count FROM sh_defaultrule_predefined WHERE enabled <> 0 and customer_id=?">>},
-		{dr_fhash_by_cid, <<"SELECT hash FROM sh_defaultrule_filehash WHERE customer_id=?">>},
-		{dr_wfhash_by_cid, <<"SELECT hash FROM sh_defaultrule_white_filehash WHERE customer_id=?">>},
-		{insert_incident, <<"INSERT INTO log_incedent (id, customer_id, rule_id, protocol, src_ip, src_user, destination, action, matcher, filename, misc) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)">>},
-		{insert_incident_file, <<"INSERT INTO log_incedent_file (id, log_incedent_id, path, mime_type, size) VALUES (NULL, last_insert_id(), ?, ?, ?)">>},
-		{insert_archive, <<"INSERT INTO log_archive (id, customer_id, rule_id, protocol, src_ip, src_user, destination, log_archive_file_id) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)">>},
-		{new_archive_file_entry, <<"INSERT INTO log_archive_file (id) VALUES (NULL)">>},
-		{update_archive_file, <<"UPDATE log_archive_file SET filename=?, log_archive_data_id=? WHERE id = ?">>},
-		{archive_data_by_path, <<"SELECT id FROM log_archive_data WHERE path = ?">>},
-		{insert_archive_data, <<"INSERT INTO log_archive_data (id, mime_type, size, path, content_text) VALUES (NULL, ?, ?, ?, ?)">>},
-		{delete_all_smb_discover, <<"DELETE FROM log_shared_folder">>},
-		{insert_smb_discover, <<"INSERT INTO log_shared_folder (id, customer_id, result) VALUES (NULL, ?, ?)">>}
+		{mimes_by_data_format_id, <<"SELECT m.mimeType FROM MIMEType AS m, DataFormat_MIMEType dm WHERE dm.DataFormat_id=? and dm.mimeTypes_id=m.id">>},
+		%{usb_device_by_cid, <<"SELECT device_id, action FROM ep_usb_device WHERE customer_id=?">>},
+		%{customer_by_id, <<"SELECT id,static_ip FROM sh_customer WHERE id=?">>},
+		{insert_incident, <<"INSERT INTO IncidentLog (id, channel, ruleId, sourceIp, sourceUser, destination, informationTypeId, action, matcherMessage) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?)">>},
+		{insert_incident_file, <<"INSERT INTO IncidentLogFile (id, incidentLog_id, filename, content_id) VALUES (NULL, ?, ?, ?)">>},
+%		{insert_archive, <<"INSERT INTO log_archive (id, customer_id, rule_id, protocol, src_ip, src_user, destination, log_archive_file_id) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)">>},
+%		{new_archive_file_entry, <<"INSERT INTO log_archive_file (id) VALUES (NULL)">>},
+%		{update_archive_file, <<"UPDATE log_archive_file SET filename=?, log_archive_data_id=? WHERE id = ?">>},
+		{incident_data_by_path, <<"SELECT id FROM IncidentLogFileContent WHERE localPath = ?">>},
+		{insert_incident_data, <<"INSERT INTO IncidentLogFileContent (id, mimeType, size, localPath) VALUES (NULL, ?, ?, ?)">>},
+		{denied_page, <<"SELECT c.value FROM Config AS c WHERE c.configKey=\"denied_page_html\"">>}
+
 	]],
 
 	{ok, #state{host=Host, port=Port, 
 			user=User, password=Password, 
-			database=DB, pool_size=PoolSize, 
-			master_pid=MPid, pool_pids=PPids}}.
+			database=DB, database_l=LDB, pool_size=PoolSize, 
+			master_pid=MPid, pool_pids=PPids, pool_pids_l=PPids}}.
 
 terminate(_Reason, _State) ->
 	ok.
@@ -307,18 +292,33 @@ psq(PreparedKey) -> psq(PreparedKey, []).
 psq(PreparedKey, Params) -> psq(PreparedKey, Params, 5000).
 
 psq(PreparedKey, Params, Timeout) ->
-	case mysql:execute(p, PreparedKey, Params, Timeout) of
+	case mysql:execute(pp, PreparedKey, Params, Timeout) of
 		{data,{mysql_result,_,Result,_,_}} -> {ok, Result};
 		{updated,{mysql_result, _,_,RowCount,_}} -> {updated, RowCount};
 		Else -> throw({error, Else})
 	end.
 
+%lpsq(PreparedKey) -> lpsq(PreparedKey, []).
+
+% lpsq(PreparedKey, Params) -> lpsq(PreparedKey, Params, 5000).
+
+lpsq(PreparedKey, Params, Timeout) ->
+	case mysql:execute(pl, PreparedKey, Params, Timeout) of
+		{data,{mysql_result,_,Result,_,_}} -> {ok, Result};
+		{updated,{mysql_result, _,_,RowCount,_}} -> {updated, RowCount};
+		Else -> throw({error, Else})
+	end.
+
+%transaction(Fun) -> transaction(Fun, 5000).
+
+%transaction(Fun, Timeout) -> mysql:transaction(pl, Fun, Timeout).
+
+%ltransaction(Fun) -> ltransaction(Fun, 5000).
+
+ltransaction(Fun, Timeout) -> mysql:transaction(pl, Fun, Timeout).
+
 last_insert_id_t() ->
 	{ok, [[LIId]]} = psqt(last_insert_id), LIId.
-
-transaction(Fun) -> transaction(Fun, 5000).
-
-transaction(Fun, Timeout) -> mysql:transaction(p, Fun, Timeout).
 
 psqt(PreparedKey) -> psqt(PreparedKey, []).
 
@@ -332,124 +332,74 @@ psqt(PreparedKey, Params) ->
 %%%%%%%%%%%% internal
 
 populate() -> 
-	{ok, FQ} = psq(filters),
-	populate_filters(FQ),
-	{ok, MQ} = psq(mimes),
-	populate_mimes(MQ),
-	{ok, RQ} = psq(regexes),
-	populate_regexes(RQ),
+	populate_site(mydlp_mnesia:dcid()),
 	ok.
 
-populate_site(CustomerId) ->
-	{ok, FQ} = psq(filters_by_cid, [CustomerId]),
-	populate_filters(FQ, CustomerId),
-	{ok, MQ} = psq(mimes_by_cid, [CustomerId]),
-	populate_mimes(MQ, CustomerId),
-	{ok, RQ} = psq(regexes_by_cid, [CustomerId]),
-	populate_regexes(RQ, CustomerId),
-	{ok, SQ} = psq(customer_by_id, [CustomerId]),
-	populate_site_desc(SQ),
-	{ok, DQ} = psq(defaultrule_by_cid, [CustomerId]),
-	populate_default_rule(DQ, CustomerId),
-	{ok, FHQ} = psq(dr_fhash_by_cid, [CustomerId]),
-	populate_file_hashes(FHQ, bl, CustomerId),
-	{ok, WFHQ} = psq(dr_wfhash_by_cid, [CustomerId]),
-	populate_file_hashes(WFHQ, wl, CustomerId),
-	{ok, UDQ} = psq(usb_device_by_cid, [CustomerId]),
-	populate_usb_devices(UDQ, CustomerId),
+populate_site(FilterId) ->
+	%TODO: refine this
+	%{ok, FQ} = psq(filters_by_cid, [FilterId]),
+	populate_filters([[FilterId, <<"pass">> ]], FilterId),
+	
+	%TODO: should add for multi-site
+	%{ok, SQ} = psq(customer_by_id, [FilterId]),
+	%populate_site_desc(SQ),
+
+	% TODO: refine and implement this
+	%{ok, UDQ} = psq(usb_device_by_cid, [FilterId]),
+	%populate_usb_devices(UDQ, FilterId),
 	ok.
 
-populate_filters(Rows) -> populate_filters(Rows, mydlp_mnesia:get_dcid()).
+%populate_filters(Rows) -> populate_filters(Rows, mydlp_mnesia:get_dcid()).
 
-populate_filters([[Id, Name, DActionS]|Rows], CustomerId) ->
-	DAction = rule_action_to_tuple(DActionS),
-	{ok, RQ} = psq(rules_by_fid, [Id]),
+populate_filters([[Id, DActionS]|Rows], Id) ->
+	DAction = rule_action_to_atom(DActionS),
+	{ok, RQ} = psq(rules),
 	populate_rules(RQ, Id),
-	F = #filter{id=Id, customer_id=CustomerId, name=Name, default_action=DAction},
+	F = #filter{id=Id, default_action=DAction},
 	mydlp_mnesia:write(F),
-	populate_filters(Rows, CustomerId);
-populate_filters([], _CustomerId) -> ok.
+	populate_filters(Rows, Id);
+populate_filters([], _FilterId) -> ok.
 
-% Id, Action, [Matchers]	
-% {Func, FuncParams}
-populate_default_rule([], _CustomerId) -> ok;
-populate_default_rule([[ActionS, CCCount, SSNCount, IBANCount, SINCount, INSEECount, NINOCount, TRIDCount]], CustomerId) ->
-	DefaultRuleId = {dr, CustomerId},
-	Action = rule_action_to_tuple(ActionS),
-
-	WFMatch = [{whitefile_dr, []}],
-	CCMatch = case CCCount of
-		0 -> [];
-		Count -> [{cc_match, [{count, Count}]}] end,
-	SSNMatch = case SSNCount of
-		0 -> [];
-		Count2 -> [{ssn_match, [{count, Count2}]}] end,
-	IBANMatch = case IBANCount of
-		0 -> [];
-		Count3 -> [{iban_match, [{count, Count3}]}] end,
-	SINMatch = case SINCount of
-		0 -> [];
-		Count4 -> [{canada_sin_match, [{count, Count4}]}] end,
-	INSEEMatch = case INSEECount of
-		0 -> [];
-		Count5 -> [{france_insee_match, [{count, Count5}]}] end,
-	NINOMatch = case NINOCount of
-		0 -> [];
-		Count6 -> [{uk_nino_match, [{count, Count6}]}] end,
-	TRIDMatch = case TRIDCount of
-		0 -> [];
-		Count7 -> [{trid_match, [{count, Count7}]}] end,
-	MD5Match = [{md5_dr_match, []}],
-
-	Matchers = lists:append([WFMatch,
-				CCMatch, 
-				SSNMatch, 
-				IBANMatch, 
-				SINMatch,
-				INSEEMatch,
-				NINOMatch,
-				TRIDMatch,
-				MD5Match]),
-
-	ResolvedRule = {DefaultRuleId, Action, Matchers},
-	DR = #default_rule{customer_id=CustomerId, resolved_rule=ResolvedRule},
-	mydlp_mnesia:write(DR).
-
-populate_rules([[Id, ActionS ] |Rows], FilterId) ->
-	Action = rule_action_to_tuple(ActionS),
-	populate_rule(Id, Action, FilterId),
+populate_rules([[Id, DTYPE, ActionS] |Rows], FilterId) ->
+	Action = rule_action_to_atom(ActionS),
+	Channel = rule_dtype_to_channel(DTYPE),
+	populate_rule(Id, Channel, Action, FilterId),
 	populate_rules(Rows, FilterId);
 populate_rules([], _FilterId) -> ok.
 
-populate_rule(Id, Action, FilterId) ->
-	Parent = {rule, Id},
-	{ok, IQ} = psq(ipr_by_rule_id, [Id]),
-	populate_iprs(IQ, Parent),
-	{ok, UQ} = psq(user_by_rule_id, [Id]),
-	populate_users(UQ, Parent),
-	{ok, MQ} = psq(match_by_rule_id, [Id]),
-	populate_matches(MQ, Parent),
+populate_rule(OrigId, Channel, Action, FilterId) ->
+	{ok, IQ} = psq(network_by_rule_id, [OrigId]),
+	RuleId = mydlp_mnesia:get_unique_id(rule),
+	populate_iprs(IQ, RuleId),
+	%{ok, UQ} = psq(user_by_rule_id, [Id]),
+	%populate_users(UQ, Parent),
+
+	{ok, ITQ} = psq(itype_by_rule_id, [OrigId]),
+	populate_itypes(ITQ, RuleId),
+
+	%{ok, MQ} = psq(match_by_rule_id, [Id]),
+	%populate_matches(MQ, Parent),
 	%{ok, MGQ} = psq(mgroup_by_rule_id, [Id]),
 	%populate_matchGroups(MGQ, Parent),
-	{ok, TDQ} = psq(tdomains_by_rid, [Id]),
-	TDs = lists:flatten(TDQ),
-	R = #rule{id=Id, action=Action, filter_id=FilterId, trusted_domains=TDs},
+	%{ok, TDQ} = psq(tdomains_by_rid, [Id]),
+	%TDs = lists:flatten(TDQ),
+	R = #rule{id=RuleId, orig_id=OrigId, channel=Channel, action=Action, filter_id=FilterId},
 	mydlp_mnesia:write(R).
 
-populate_iprs([[CustomerId, Base, Subnet]| Rows], Parent) ->
+populate_iprs([[Base, Subnet]| Rows], RuleId) ->
 	B1 = int_to_ip(Base),
 	S1 = int_to_ip(Subnet),
 	Id = mydlp_mnesia:get_unique_id(ipr),
-	I = #ipr{id=Id, customer_id=CustomerId, parent=Parent, ipbase=B1, ipmask=S1},
+	I = #ipr{id=Id, rule_id=RuleId, ipbase=B1, ipmask=S1},
 	mydlp_mnesia:write(I),
-	populate_iprs(Rows, Parent);
-populate_iprs([], _Parent) -> ok.
+	populate_iprs(Rows, RuleId);
+populate_iprs([], _RuleId) -> ok.
 
-populate_users([[Id, Username]| Rows], Parent) ->
-	U = #m_user{id=Id, parent=Parent, username=Username},
-	mydlp_mnesia:write(U),
-	populate_users(Rows, Parent);
-populate_users([], _Parent) -> ok.
+%populate_users([[Id, Username]| Rows], Parent) ->
+%	U = #m_user{id=Id, parent=Parent, username=Username},
+%	mydlp_mnesia:write(U),
+%	populate_users(Rows, Parent);
+%populate_users([], _Parent) -> ok.
 
 int_to_ip(nil) -> nil;
 int_to_ip(N4) ->
@@ -467,133 +417,138 @@ ip_to_int(nil) -> nil;
 ip_to_int({I1,I2,I3,I4}) ->
 	(I1*256*256*256)+(I2*256*256)+(I3*256)+I4.
 
-populate_matches(Rows, Parent) -> populate_matches(Rows, Parent, []).
+pr_data_formats(ITypeOrigId) ->
+	{ok, DFQ} = psq(data_formats_by_itype_id, [ITypeOrigId]),
+	DataFormats = lists:usort(lists:flatten(DFQ)),
+	populate_data_formats(DataFormats),
+	case DataFormats of
+		[DFId] ->
+			{ok, MQ} = psq(mimes_by_data_format_id, [DFId]),
+			case MQ of
+				[[<<"mydlp-internal/all">>]] -> all;
+				_Else2 -> DataFormats end;
+		_Else -> DataFormats end.
 
-populate_matches([[Id, Func]| Rows], Parent, Matches) ->
-	Match = populate_match(Id, Func, Parent),
-	populate_matches(Rows, Parent, [Match|Matches]);
-populate_matches([], _Parent, Matches) -> 
-	Matches1 = expand_matches(lists:reverse(Matches)),
-	Matches2 = whitefile(Matches1),
-	write_matches(Matches2),
+populate_itypes([[OrigId, Threshold]| Rows], RuleId) ->
+	DataFormats = pr_data_formats(OrigId),
+	ITypeId = mydlp_mnesia:get_unique_id(itype),
+	T = #itype{id=ITypeId, orig_id=OrigId, rule_id=RuleId, data_formats=DataFormats, threshold=Threshold},
+	{ok, IFQ} = psq(ifeature_by_itype_id, [OrigId]),
+	populate_ifeatures(IFQ, ITypeId),
+	mydlp_mnesia:write(T),
+	populate_itypes(Rows, RuleId);
+populate_itypes([], _RuleId) -> ok.
+
+populate_ifeatures([[Weight, MatcherId]| Rows], ITypeId) ->
+	IFeatureId = mydlp_mnesia:get_unique_id(ifeature),
+	F = #ifeature{id=IFeatureId, itype_id=ITypeId, weight=Weight},
+	{ok, MQ} = psq(match_by_id, [MatcherId]),
+	populate_matches(MQ, IFeatureId),
+	mydlp_mnesia:write(F),
+	populate_ifeatures(Rows, ITypeId);
+populate_ifeatures([], _RuleId) -> ok.
+
+populate_matches(Rows, IFeatureId) -> populate_matches(Rows, IFeatureId, []).
+
+populate_matches([[Id, Func]| Rows], IFeatureId, Matches) ->
+	Match = populate_match(Id, Func, IFeatureId),
+	populate_matches(Rows, IFeatureId, [Match|Matches]);
+populate_matches([], _IFeatureId, Matches) -> 
+	% TODO: whitefiles
+	%Matches1 = expand_matches(lists:reverse(Matches)),
+	%Matches2 = whitefile(Matches1),
+	write_matches(Matches),
 	ok.
 
-expand_matches(Matches) -> expand_matches(Matches, []).
+%whitefile(Matches) -> whitefile(Matches, []).
 
-expand_matches([#match{func={group, Group}, func_params=FuncParams, 
-		parent=Parent, orig_id=OrigId}|Matches], Returns) -> 
-	GReturn = mydlp_matchers:Group(FuncParams),
-	GMatchers = [new_match(OrigId, Parent, F, FP) || {F,FP} <- GReturn],
-	expand_matches(Matches, lists:append(lists:reverse(GMatchers), Returns));
-expand_matches([Match|Matches], Returns) -> expand_matches(Matches, [Match|Returns]);
-expand_matches([], Returns) -> lists:reverse(Returns).
-	
-whitefile(Matches) -> whitefile(Matches, []).
-
-whitefile([#match{func=whitefile} = Match|Matches], Returns) -> 
-	L1 = lists:append([lists:reverse(Matches), Returns, [Match]]),
-	lists:reverse(L1);
-whitefile([Match|Matches], Returns) -> whitefile(Matches, [Match|Returns]);
-whitefile([], Returns) -> lists:reverse(Returns).
+%whitefile([#match{func=whitefile} = Match|Matches], Returns) -> 
+%	L1 = lists:append([lists:reverse(Matches), Returns, [Match]]),
+%	lists:reverse(L1);
+%whitefile([Match|Matches], Returns) -> whitefile(Matches, [Match|Returns]);
+%whitefile([], Returns) -> lists:reverse(Returns).
 
 new_match(Id, Parent, Func) -> new_match(Id, Parent, Func, []).
 
-new_match(Id, Parent, Func, FuncParams) ->
-	#match{orig_id=Id, parent=Parent, func=Func, func_params=FuncParams}.
+new_match(OrigId, IFeatureId, Func, FuncParams) ->
+	#match{orig_id=OrigId, ifeature_id=IFeatureId, func=Func, func_params=FuncParams}.
 
 write_matches(Matches) ->
 	Matches1 = [ M#match{id=mydlp_mnesia:get_unique_id(match)} || M <- Matches ],
 	mydlp_mnesia:write(Matches1).
 
-populate_match(Id, <<"e_archive">>, Parent) ->
+populate_match(Id, <<"e_archive">>, IFeatureId) ->
 	Func = e_archive_match,
-	new_match(Id, Parent, Func);
+	new_match(Id, IFeatureId, Func);
 
-populate_match(Id, <<"e_file">>, Parent) ->
+populate_match(Id, <<"e_file">>, IFeatureId) ->
 	Func = e_file_match,
-	new_match(Id, Parent, Func);
+	new_match(Id, IFeatureId, Func);
 
-populate_match(Id, <<"i_archive">>, Parent) ->
+populate_match(Id, <<"i_archive">>, IFeatureId) ->
 	Func = i_archive_match,
-	new_match(Id, Parent, Func);
+	new_match(Id, IFeatureId, Func);
 
-populate_match(Id, <<"i_binary">>, Parent) ->
+populate_match(Id, <<"i_binary">>, IFeatureId) ->
 	Func = i_binary_match,
-	new_match(Id, Parent, Func);
+	new_match(Id, IFeatureId, Func);
 
-populate_match(Id, <<"p_text">>, Parent) ->
-	Func = p_text_match,
-	[ScoreS] = get_func_params(Id),
-	FuncParams = [{score, mydlp_api:binary_to_integer(ScoreS)}],
-	new_match(Id, Parent, Func, FuncParams);
-
-populate_match(Id, <<"trid">>, Parent) ->
+populate_match(Id, <<"trid">>, IFeatureId) ->
 	Func = trid_match,
-	[CountS] = get_func_params(Id),
-	FuncParams = [{count, mydlp_api:binary_to_integer(CountS)}],
-	new_match(Id, Parent, Func, FuncParams);
+	new_match(Id, IFeatureId, Func);
 
-populate_match(Id, <<"ssn">>, Parent) ->
+populate_match(Id, <<"ssn">>, IFeatureId) ->
 	Func = ssn_match,
-	[CountS] = get_func_params(Id),
-	FuncParams = [{count, mydlp_api:binary_to_integer(CountS)}],
-	new_match(Id, Parent, Func, FuncParams);
+	new_match(Id, IFeatureId, Func);
 
-populate_match(Id, <<"iban">>, Parent) ->
+populate_match(Id, <<"iban">>, IFeatureId) ->
 	Func = iban_match,
-	[CountS] = get_func_params(Id),
-	FuncParams = [{count, mydlp_api:binary_to_integer(CountS)}],
-	new_match(Id, Parent, Func, FuncParams);
+	new_match(Id, IFeatureId, Func);
 
-populate_match(Id, <<"cc">>, Parent) ->
+populate_match(Id, <<"cc">>, IFeatureId) ->
 	Func = cc_match,
-	[CountS] = get_func_params(Id),
-	FuncParams = [{count, mydlp_api:binary_to_integer(CountS)}],
-	new_match(Id, Parent, Func, FuncParams);
+	new_match(Id, IFeatureId, Func);
 
-populate_match(Id, <<"canada_sin">>, Parent) ->
+populate_match(Id, <<"canada_sin">>, IFeatureId) ->
 	Func = canada_sin_match,
-	[CountS] = get_func_params(Id),
-	FuncParams = [{count, mydlp_api:binary_to_integer(CountS)}],
-	new_match(Id, Parent, Func, FuncParams);
+	new_match(Id, IFeatureId, Func);
 
-populate_match(Id, <<"france_insee">>, Parent) ->
+populate_match(Id, <<"france_insee">>, IFeatureId) ->
 	Func = france_insee_match,
-	[CountS] = get_func_params(Id),
-	FuncParams = [{count, mydlp_api:binary_to_integer(CountS)}],
-	new_match(Id, Parent, Func, FuncParams);
+	new_match(Id, IFeatureId, Func);
 
-populate_match(Id, <<"uk_nino">>, Parent) ->
+populate_match(Id, <<"uk_nino">>, IFeatureId) ->
 	Func = uk_nino_match,
-	[CountS] = get_func_params(Id),
-	FuncParams = [{count, mydlp_api:binary_to_integer(CountS)}],
-	new_match(Id, Parent, Func, FuncParams);
+	new_match(Id, IFeatureId, Func);
 
-populate_match(Id, <<"scode">>, Parent) ->
+populate_match(Id, <<"scode">>, IFeatureId) ->
 	Func = scode_match,
-	[ScoreS] = get_func_params(Id),
-	FuncParams = [{score, mydlp_api:binary_to_integer(ScoreS)}],
-	new_match(Id, Parent, Func, FuncParams);
+	new_match(Id, IFeatureId, Func);
 
-populate_match(Id, <<"scode_ada">>, Parent) ->
+populate_match(Id, <<"scode_ada">>, IFeatureId) ->
 	Func = scode_ada_match,
-	[ScoreS] = get_func_params(Id),
-	FuncParams = [{score, mydlp_api:binary_to_integer(ScoreS)}],
-	new_match(Id, Parent, Func, FuncParams);
+	new_match(Id, IFeatureId, Func);
 
-populate_match(Id, <<"mime">>, Parent) ->
-	Func = mime_match,
-	GroupsS = get_func_params(Id),
-	FuncParams = [ mydlp_api:binary_to_integer(G) || G <- GroupsS ],
-	new_match(Id, Parent, Func, FuncParams);
+populate_match(Id, <<"keyword">>, IFeatureId) ->
+	Func = regex_match,
+	{ok, REQ} = psq(regex_by_matcher_id, [Id]),
+	[[RegexS]] = REQ,
+	RegexId = mydlp_mnesia:get_unique_id(regex),
+	RegexGroupId = mydlp_mnesia:get_unique_id(regex_group_id),
+	R = #regex{id=RegexId, group_id=RegexGroupId, plain=RegexS},
+	mydlp_mnesia:write(R),
+	FuncParams=[RegexGroupId],
+	new_match(Id, IFeatureId, Func, FuncParams);
 
-populate_match(Id, <<"regex">>, Parent) ->
+% TODO: refine this, currently unused
+populate_match(Id, <<"regex">>, IFeatureId) ->
 	Func = regex_match,
 	GroupsS = get_func_params(Id),
 	FuncParams = [ mydlp_api:binary_to_integer(G) || G <- GroupsS ],
-	new_match(Id, Parent, Func, FuncParams);
+	new_match(Id, IFeatureId, Func, FuncParams);
 
-populate_match(Id, <<"file">>, Parent) ->
+% TODO: refine this, currently unused
+populate_match(Id, <<"file">>, IFeatureId) ->
 	Func = {group,file},
 	GroupsS = get_func_params(Id),
 	GroupsI = [ mydlp_api:binary_to_integer(G) || G <- GroupsS ],
@@ -607,7 +562,7 @@ populate_match(Id, <<"file">>, Parent) ->
 	FuncParams = [{shash,SentenceHash}, {shash_count,SHCount}, {shash_percentage, SHPerc},
 			{bayes, Bayes}, {bayes_threshold, BThres},
 			{whitefile, WhiteFile}, {group_ids, GroupsI}],
-	new_match(Id, Parent, Func, FuncParams);
+	new_match(Id, IFeatureId, Func, FuncParams);
 
 populate_match(Id, Matcher, _) -> throw({error, {unsupported_match, Id, Matcher} }).
 
@@ -615,71 +570,67 @@ get_func_params(MatchId) ->
 	{ok, PQ} = psq(params_by_match_id, [MatchId]),
 	lists:append(PQ).
 
-populate_mimes(Rows) -> populate_mimes(Rows, mydlp_mnesia:get_dcid()).
 
-populate_mimes([[Id, GroupId, Mime, Ext]|Rows], CustomerId) ->
-	M = #mime_type{id=Id, customer_id=CustomerId, group_id=GroupId, mime=Mime, extension=Ext},
+populate_data_formats([DFId|DFs]) ->
+	{ok, MQ} = psq(mimes_by_data_format_id, [DFId]),
+	populate_mimes(MQ, DFId),
+	populate_data_formats(DFs);
+populate_data_formats([]) -> ok.
+
+populate_mimes([[Mime]|Rows], DataFormatId) ->
+	Id=mydlp_mnesia:get_unique_id(mime_type),
+	M = #mime_type{id=Id, mime=Mime, data_format_id=DataFormatId},
 	mydlp_mnesia:write(M),
-	populate_mimes(Rows, CustomerId);
-populate_mimes([], _CustomerId) -> ok.
+	populate_mimes(Rows, DataFormatId);
+populate_mimes([], _DataFormatId) -> ok.
 
+%populate_site_desc([[Id, StaticIpI]|Rows]) ->
+%	IpAddr = int_to_ip(StaticIpI),
+%	S = #site_desc{filter_id=Id, ipaddr=IpAddr},
+%	mydlp_mnesia:write(S),
+%	populate_site_desc(Rows);
+%populate_site_desc([]) -> ok.
 
-populate_regexes(Rows) -> populate_regexes(Rows, mydlp_mnesia:get_dcid()).
+%populate_usb_devices([[DeviceId, ActionB]|Rows], FilterId) ->
+%	Action = case ActionB of
+%		<<"pass">> -> pass;
+%		<<"block">> -> block end,
+%	U = #usb_device{id=mydlp_mnesia:get_unique_id(usb_device), 
+%			filter_id=FilterId, device_id=DeviceId, action=Action},
+%	mydlp_mnesia:write(U),
+%	populate_usb_devices(Rows, FilterId);
+%populate_usb_devices([], _FilterId) -> ok.
 
-populate_regexes(Rows, CustomerId) -> 
-	populate_regexes1(Rows, CustomerId),
-	mydlp_mnesia:compile_regex().
+%get_rule_cid(RuleId) ->
+%	case psq(cid_of_rule_by_id, [RuleId]) of
+%		{ok, [[FilterId]]} -> FilterId;
+%		_Else -> 0 end.
 
-populate_regexes1([[Id, GroupId, Regex]|Rows], CustomerId) ->
-	R = #regex{id=Id, customer_id=CustomerId, group_id=GroupId, plain=Regex},
-	mydlp_mnesia:write(R),
-	populate_regexes1(Rows, CustomerId);
-populate_regexes1([], _CustomerId) -> ok.
+rule_action_to_atom(<<"PASS">>) -> pass;
+rule_action_to_atom(<<"LOG">>) -> log;
+rule_action_to_atom(<<"BLOCK">>) -> block;
+rule_action_to_atom(<<"QUARANTINE">>) -> quarantine;
+rule_action_to_atom(<<"ARCHIVE">>) -> archive;
+rule_action_to_atom(<<"pass">>) -> pass;
+rule_action_to_atom(<<"log">>) -> log;
+rule_action_to_atom(<<"block">>) -> block;
+rule_action_to_atom(<<"quarantine">>) -> quarantine;
+rule_action_to_atom(<<"archive">>) -> archive;
+rule_action_to_atom(<<"">>) -> pass;
+rule_action_to_atom(Else) -> throw({error, unsupported_action_type, Else}).
 
-populate_site_desc([[Id, StaticIpI]|Rows]) ->
-	IpAddr = int_to_ip(StaticIpI),
-	S = #site_desc{customer_id=Id, ipaddr=IpAddr},
-	mydlp_mnesia:write(S),
-	populate_site_desc(Rows);
-populate_site_desc([]) -> ok.
+rule_dtype_to_channel(<<"WebRule">>) -> web;
+rule_dtype_to_channel(<<"MailRule">>) -> mail;
+rule_dtype_to_channel(<<"EndpointRule">>) -> endpoint;
+rule_dtype_to_channel(<<"PrinterRule">>) -> printer;
+rule_dtype_to_channel(Else) -> throw({error, unsupported_rule_type, Else}).
 
-populate_file_hashes([[Hash]|Rows], Tag, CustomerId) ->
-	F = #file_hash{id=mydlp_mnesia:get_unique_id(file_hash),
-			file_id={Tag, CustomerId},
-			md5=mydlp_api:hex2bytelist(Hash) },
-	mydlp_mnesia:write(F),
-	populate_file_hashes(Rows, Tag, CustomerId);
-populate_file_hashes([], _Tag, _CustomerId) -> ok.
-
-populate_usb_devices([[DeviceId, ActionB]|Rows], CustomerId) ->
-	Action = case ActionB of
-		<<"pass">> -> pass;
-		<<"block">> -> block end,
-	U = #usb_device{id=mydlp_mnesia:get_unique_id(usb_device), 
-			customer_id=CustomerId, device_id=DeviceId, action=Action},
-	mydlp_mnesia:write(U),
-	populate_usb_devices(Rows, CustomerId);
-populate_usb_devices([], _CustomerId) -> ok.
-
-get_rule_cid(RuleId) ->
-	case psq(cid_of_rule_by_id, [RuleId]) of
-		{ok, [[CustomerId]]} -> CustomerId;
-		_Else -> 0 end.
-
-rule_action_to_tuple(<<"pass">>) -> pass;
-rule_action_to_tuple(<<"log">>) -> log;
-rule_action_to_tuple(<<"block">>) -> block;
-rule_action_to_tuple(<<"quarantine">>) -> quarantine;
-rule_action_to_tuple(<<"archive">>) -> archive;
-rule_action_to_tuple(<<"">>) -> pass;
-rule_action_to_tuple(Else) -> throw({error, unsupported_action_type, Else}).
-
-pre_push_log(RuleId, Ip, User) -> 
-	{CustomerId, RuleId1} = case RuleId of
-		{dr, CId} -> {CId, 0};
-		-1 = RuleId -> {mydlp_mnesia:get_dcid(), RuleId};	% this shows default action had been enforeced 
+pre_push_log(RuleId, Ip, User, Action, Channel) -> 
+%	{FilterId, RuleId1} = case RuleId of
+%		{dr, CId} -> {CId, 0};
+%		-1 = RuleId -> {mydlp_mnesia:get_dcid(), RuleId};	% this shows default action had been enforeced 
 							% this should be refined for multisite use
-		RId when is_integer(RId) -> {get_rule_cid(RId), RId} end,
+%		RId when is_integer(RId) -> {get_rule_cid(RId), RId} end,
 	User1 = case User of
 		nil -> null;
 		Else -> Else
@@ -688,7 +639,20 @@ pre_push_log(RuleId, Ip, User) ->
 		nil -> null;
 		Else2 -> Else2
 	end,
-	{CustomerId, RuleId1, Ip1, User1}.
+	ActionS = case Action of
+		pass -> <<"P">>;
+		block -> <<"B">>;
+		log -> <<"L">>;
+		quarantine -> <<"Q">>;
+		archive -> <<"A">> 
+	end,
+	ChannelS = case Channel of
+		web -> <<"W">>;
+		mail -> <<"M">>;
+		endpoint -> <<"E">>;
+		printer -> <<"P">> 
+	end,
+	{0, RuleId, Ip1, User1, ActionS, ChannelS}.
 
 -endif.
 

@@ -32,8 +32,7 @@ resources_DATA = \
 	mydlp_nlp_tr_kokler.txt
 
 sbin_SCRIPTS = \
-	mydlp-reset-db \
-	mydlp-smb-discover
+	mydlp-reset-db
 
 dist_erl_DATA = \
 	dynamic_compile.erl \
@@ -43,13 +42,13 @@ dist_erl_DATA = \
 	mydlp_acl.erl \
 	mydlp_api.erl \
 	mydlp_app.erl \
-	mydlp_archive.erl \
 	mydlp_bayeserl_store.erl \
 	mydlp_container.erl \
 	mydlp_distributor.erl \
 	mydlp_dynamic.erl \
 	mydlp_fsm.erl \
 	mydlp_icap_fsm.erl \
+	mydlp_incident.erl \
 	mydlp_item_receive.erl \
 	mydlp_loglevel.erl \
 	mydlp_logger_h.erl \
@@ -61,7 +60,6 @@ dist_erl_DATA = \
 	mydlp_quarantine.erl \
 	mydlp_regex.erl \
 	mydlp_seap_fsm.erl \
-	mydlp_smb_discover.erl \
 	mydlp_smtp_fsm.erl \
 	mydlp_smtpc.erl \
 	mydlp_spool.erl \

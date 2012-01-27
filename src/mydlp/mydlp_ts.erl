@@ -91,16 +91,16 @@ compileCustomer(Customerid) -> mydlp_mysql:compile_customer(Customerid).
 
 newAFileEntry() -> mydlp_mysql:new_afile().
 
-updateAFile(Afileid, Adata) -> mydlp_archive:a(Afileid, Adata).
+updateAFile(Afileid, Adata) -> mydlp_incident:a(Afileid, Adata).
 
-updateAFileFN(Afileid, Adata, Filename) -> mydlp_archive:a(Afileid, Adata, Filename).
+updateAFileFN(Afileid, Adata, Filename) -> mydlp_incident:a(Afileid, Adata, Filename).
 
 updateAFileFP(Afileid, <<Afilepath/binary>>, Filename) ->
 	updateAFileFP(Afileid, binary_to_list(Afilepath), Filename);
 updateAFileFP(Afileid, [_|_] = Afilepath, Filename) -> 
 	case filelib:is_regular(Afilepath) of
 		true ->	{ok, Adata} = file:read_file(Afilepath),
-			mydlp_archive:a(Afileid, Adata, Filename);
+			mydlp_incident:a(Afileid, Adata, Filename);
 		false -> ?ERROR_LOG("UPDATEAFILE Is not a regular file: "?S"\n", [Afilepath]) end, ok.
 
 getRuletable(Ipaddress, Revisionid) ->

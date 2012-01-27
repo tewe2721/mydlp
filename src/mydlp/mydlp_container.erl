@@ -124,9 +124,10 @@ handle_call({aclq, ObjId, Timeout}, From, #state{object_tree=OT} = State) ->
 					Return = try 
 						File = object_to_file(Obj),
 						DFFiles = [File],
+						Channel = get_channel(Obj),
 						QRet = case is_inbound(Obj) of
-							true -> mydlp_acl:qi(DFFiles);
-							false -> mydlp_acl:qe(DFFiles) end,
+							true -> mydlp_acl:qi(Channel, DFFiles);
+							false -> mydlp_acl:qe(Channel, DFFiles) end,
 						AclRet = acl_ret(QRet, Obj, DFFiles),
 						{ok, AclRet}
 					catch	throw:{error, eacces} -> {ok, pass};
@@ -293,7 +294,7 @@ acl_ret(QRet, Obj, DFFiles) ->
 					mydlp_api:clean_files(DFFiles),
 					pass; 
 		{archive, AclR} -> 	archive_req(Obj, AclR, DFFiles),
-					% mydlp_archive will clean files.
+					% mydlp_incident will clean files.
 					pass;
 		{block, AclR} -> 	log_req(Obj, block, AclR),
 					mydlp_api:clean_files(DFFiles),
@@ -303,14 +304,15 @@ acl_ret(QRet, Obj, DFFiles) ->
 					block
 	end.
 
-archive_req(Obj, {{rule, RId}, {file, _}, {matcher, _}, {misc, _}}, DFFiles) ->
+archive_req(Obj, {{rule, RId}, {file, _}, {itype, IType}, {misc, _}}, DFFiles) ->
         case DFFiles of
                 [] -> ok;
-                _Else -> log_req(Obj, archive, {{rule, RId}, {file, DFFiles}, {matcher, none}, {misc,""}}) end.
+                _Else -> log_req(Obj, archive, {{rule, RId}, {file, DFFiles}, {itype, IType}, {misc,""}}) end.
 
-log_req(Obj, Action, {{rule, RuleId}, {file, File}, {matcher, Matcher}, {misc, Misc}}) ->
+log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
 	User = get_user(Obj),
-        ?ACL_LOG(seap, RuleId, Action, nil, User, nil, Matcher, File, Misc).
+	Channel = get_channel(Obj),
+        ?ACL_LOG(Channel, RuleId, Action, nil, User, nil, IType, File, Misc).
 
 is_inbound(#object{prop_dict=PD}) ->
 	case dict:find("direction", PD) of
@@ -318,6 +320,11 @@ is_inbound(#object{prop_dict=PD}) ->
 		{ok, "out"} -> false;
 		{ok, _Else} -> false;
 		error -> false end.
+
+get_channel(#object{prop_dict=PD}) ->
+	case dict:find("printerName", PD) of
+		{ok, _} -> printer;
+		error -> endpoint end.
 
 get_type(#object{prop_dict=PD}) ->
 	case dict:find("type", PD) of

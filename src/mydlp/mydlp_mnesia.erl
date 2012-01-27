@@ -49,7 +49,7 @@
 	get_regexes/1,
 	is_fhash_of_gid/2,
 	is_shash_of_gid/2,
-	is_mime_of_gid/2,
+	is_mime_of_dfid/2,
 	is_dr_fh_of_fid/2,
 	get_record_fields/1,
 	dump_tables/1,
@@ -68,14 +68,14 @@
 -export([
 	new_authority/1,
 	get_mnesia_nodes/0,
-	get_rules/1,
-	get_all_rules/0,
+	get_rules/2,
 	get_all_rules/1,
-	get_rules_for_cid/2,
-	get_rules_for_cid/3,
-	get_rules_by_user/1,
+	get_all_rules/2,
+	get_remote_rule_tables/2,
+	get_rules_for_fid/3,
+	get_rules_for_fid/4,
+	get_rules_by_user/2,
 	get_cid/1,
-	get_default_rule/1,
 	remove_site/1,
 	remove_file_entry/1,
 	remove_group/1,
@@ -91,7 +91,7 @@
 
 % API endpoint 
 -export([
-	get_rule_table/0,
+	get_rule_table/1,
 	is_valid_usb_device_id/1
 	]).
 
@@ -145,16 +145,15 @@
 -ifdef(__MYDLP_NETWORK).
 
 -define(NONDATA_FUNCTIONAL_TABLES, [
-	{filter, ordered_set, 
-		fun() -> mnesia:add_table_index(filter, cid) end},
-	rule, 
+	filter,
+	rule,
 	ipr, 
 	{m_user, ordered_set, 
 		fun() -> mnesia:add_table_index(m_user, username) end},
+	itype,
+	ifeature,
 	match, 
-	match_group, 
-	site_desc,
-	default_rule
+	site_desc
 ]).
 
 -endif.
@@ -202,10 +201,10 @@ get_record_fields_functional(Record) ->
 		rule -> record_info(fields, rule);
 		ipr -> record_info(fields, ipr);
 		m_user -> record_info(fields, m_user);
+		itype -> record_info(fields, itype);
+		ifeature -> record_info(fields, ifeature);
 		match -> record_info(fields, match);
-		match_group -> record_info(fields, match_group);
 		site_desc -> record_info(fields, site_desc);
-		default_rule -> record_info(fields, default_rule);
 		_Else -> not_found
 	end.
 
@@ -254,23 +253,23 @@ wait_for_tables() ->
 
 -ifdef(__MYDLP_NETWORK).
 
-get_rules(Who) -> aqc({get_rules, Who}, cache).
+get_rules(Channel, Who) -> aqc({get_rules, Channel, Who}, cache).
 
-get_all_rules() -> aqc(get_all_rules, cache).
+get_all_rules(Channel) -> aqc({get_all_rules, Channel}, cache).
 
-get_all_rules(DestList) -> aqc({get_all_rules, DestList}, cache).
+get_all_rules(Channel, DestList) -> aqc({get_all_rules, Channel, DestList}, cache).
 
-get_rules_for_cid(CustomerId, Who) -> get_rules_for_cid(CustomerId, [], Who).
+get_remote_rule_tables(FilterId, Who) -> aqc({get_remote_rule_tables, FilterId, Who}, cache).
 
-get_rules_for_cid(CustomerId, DestList, Who) -> aqc({get_rules_for_cid, CustomerId, DestList, Who}, cache).
+get_rules_for_fid(Channel, FilterId, Who) -> get_rules_for_fid(Channel, FilterId, [], Who).
 
-get_rules_by_user(Who) -> aqc({get_rules_by_user, Who}, cache).
+get_rules_for_fid(Channel, FilterId, DestList, Who) -> aqc({get_rules_for_fid, Channel, FilterId, DestList, Who}, cache).
+
+get_rules_by_user(Channel, Who) -> aqc({get_rules_by_user, Channel, Who}, cache).
 
 get_cid(SIpAddr) -> aqc({get_cid, SIpAddr}, cache).
 
-get_default_rule(CustomerId) -> aqc({get_default_rule, CustomerId}, cache).
-
-remove_site(CustomerId) -> aqc({remove_site, CustomerId}, flush).
+remove_site(FilterId) -> aqc({remove_site, FilterId}, flush).
 
 remove_file_entry(FileId) -> aqc({remove_file_entry, FileId}, flush).
 
@@ -293,7 +292,7 @@ new_authority(Node) -> gen_server:call(?MODULE, {new_authority, Node}, 30000).
 
 -ifdef(__MYDLP_ENDPOINT).
 
-get_rule_table() -> aqc(get_rule_table, cache).
+get_rule_table(Channel) -> aqc({get_rule_table, Channel}, cache).
 
 is_valid_usb_device_id(DeviceId) -> aqc({is_valid_usb_device_id, DeviceId}, cache).
 
@@ -312,8 +311,8 @@ is_fhash_of_gid(Hash, GroupIds) ->
 is_shash_of_gid(Hash, GroupIds) -> 
 	aqc({is_shash_of_gid, Hash, GroupIds}, nocache).
 
-is_mime_of_gid(Mime, GroupIds) -> 
-	aqc({is_mime_of_gid, Mime, GroupIds}, cache).
+is_mime_of_dfid(Mime, DataFormatIds) -> 
+	aqc({is_mime_of_dfid, Mime, DataFormatIds}, cache).
 
 is_dr_fh_of_fid(Hash, FileId) -> aqc({is_dr_fh_of_fid, Hash, FileId}, nocache).
 
@@ -332,8 +331,8 @@ flush_cache() -> cache_clean0().
 
 %%%%%%%%%%%%%% gen_server handles
 
-handle_result({is_mime_of_gid, _Mime, MGIs}, {atomic, GIs}) -> 
-	lists:any(fun(I) -> lists:member(I, MGIs) end,GIs);
+handle_result({is_mime_of_dfid, _Mime, DFIs}, {atomic, MDFIs}) -> 
+	lists:any(fun(I) -> lists:member(I, DFIs) end, MDFIs);
 
 handle_result({is_shash_of_gid, _Hash, HGIs}, {atomic, GIs}) -> 
 	lists:any(fun(I) -> lists:member(I, HGIs) end,GIs);
@@ -345,7 +344,7 @@ handle_result({is_fhash_of_gid, _Hash, HGIs}, {atomic, GIs}) ->
 handle_result({get_cid, _SIpAddr}, {atomic, Result}) -> 
 	case Result of
 		[] -> nocustomer;
-		[CustomerId] -> CustomerId end;
+		[FilterId] -> FilterId end;
 
 handle_result({is_dr_fh_of_fid, _, _}, {atomic, Result}) -> 
 	case Result of
@@ -353,7 +352,7 @@ handle_result({is_dr_fh_of_fid, _, _}, {atomic, Result}) ->
 		Else when is_list(Else) -> true end;
 
 %% TODO: endpoint specific code
-handle_result(get_rule_table, {atomic, Result}) -> 
+handle_result({get_rule_table, _Channel}, {atomic, Result}) -> 
 	case Result of
 		[] -> [];
 		[Table] -> Table end;
@@ -367,103 +366,89 @@ handle_result(_Query, {atomic, Objects}) -> Objects.
 
 -ifdef(__MYDLP_NETWORK).
 
-handle_query({get_rules_for_cid, CustomerId, DestList, Who}) ->
-	Q = ?QLCQ([I#ipr.parent || I <- mnesia:table(ipr),
-			I#ipr.customer_id == CustomerId,
+handle_query({get_remote_rule_tables, FilterId, Who}) ->
+	WebRuleTable = get_rules_for_fid(web, FilterId, Who),
+	MailRuleTable = get_rules_for_fid(mail, FilterId, Who),
+	EndpointRuleTable = get_rules_for_fid(endpoint, FilterId, Who),
+	PrinterRuleTable = get_rules_for_fid(printer, FilterId, Who),
+	[
+		{web, WebRuleTable},
+		{mail, MailRuleTable},
+		{endpoint, EndpointRuleTable},
+		{printer, PrinterRuleTable}
+	];
+
+handle_query({get_rules_for_fid, Channel, FilterId, _DestList, Who}) ->
+	Q = ?QLCQ([{R#rule.id, R#rule.orig_id, R#rule.action} || 
+			R <- mnesia:table(rule),
+			I <- mnesia:table(ipr),
+			R#rule.filter_id == FilterId,
+			R#rule.channel == Channel,
+			I#ipr.rule_id == R#rule.id,
 			ip_band(I#ipr.ipbase, I#ipr.ipmask) == ip_band(Who, I#ipr.ipmask)
 			]),
-	Parents = ?QLCE(Q),
-	Parents1 = lists:usort(Parents),
-	resolve_all(Parents1, DestList);
+	Rules = ?QLCE(Q),
+	resolve_all(Rules, FilterId);
 
-handle_query({get_rules, Who}) ->
-	Q = ?QLCQ([I#ipr.parent || I <- mnesia:table(ipr),
+handle_query({get_rules, Channel, Who}) ->
+	Q = ?QLCQ([{R#rule.id, R#rule.orig_id, R#rule.action} || 
+			R <- mnesia:table(rule),
+			I <- mnesia:table(ipr),
+			R#rule.channel == Channel,
+			I#ipr.rule_id == R#rule.id,
 			ip_band(I#ipr.ipbase, I#ipr.ipmask) == ip_band(Who, I#ipr.ipmask)
 			]),
-	Parents = ?QLCE(Q),
-	Parents1 = lists:usort(Parents),
-	resolve_all(Parents1);
+	Rules = ?QLCE(Q),
+	resolve_all(Rules);
 
-handle_query(get_all_rules) ->
-	Q = ?QLCQ([{rule, R#rule.id} || R <- mnesia:table(rule)]),
-	Parents = ?QLCE(Q),
-	Parents1 = lists:usort(Parents),
-	resolve_all(Parents1);
+handle_query({get_all_rules, Channel}) ->
+	Q = ?QLCQ([{R#rule.id, R#rule.orig_id, R#rule.action} || 
+			F <- mnesia:table(filter),
+			R <- mnesia:table(rule),
+			R#rule.filter_id == F#filter.id,
+			R#rule.channel == Channel
+			]),
+	Rules = ?QLCE(Q),
+	resolve_all(Rules);
 
-handle_query({get_all_rules, DestList}) ->
-	Q = ?QLCQ([{rule, R#rule.id} || R <- mnesia:table(rule)]),
-	Parents = ?QLCE(Q),
-	Parents1 = lists:usort(Parents),
-	resolve_all(Parents1, DestList);
+handle_query({get_all_rules, Channel, _DestList}) ->
+	Q = ?QLCQ([{R#rule.id, R#rule.orig_id, R#rule.action} || 
+			F <- mnesia:table(filter),
+			R <- mnesia:table(rule),
+			R#rule.filter_id == F#filter.id,
+			R#rule.channel == Channel
+			]),
+	Rules = ?QLCE(Q),
+	resolve_all(Rules);
 
-handle_query({get_rules_by_user, Who}) ->
-	Q = ?QLCQ([U#m_user.parent || U <- mnesia:table(m_user),
+handle_query({get_rules_by_user, Channel, Who}) ->
+	Q = ?QLCQ([{R#rule.id, R#rule.orig_id, R#rule.action} || 
+			R <- mnesia:table(rule),
+			U <- mnesia:table(m_user),
+			U#m_user.rule_id == R#rule.id,
+			R#rule.channel == Channel,
 			U#m_user.username == Who
 			]),
-	Parents = ?QLCE(Q),
-	Parents1 = lists:usort(Parents),
-	resolve_all(Parents1);
+	Rules = ?QLCE(Q),
+	resolve_all(Rules);
 
 handle_query({get_cid, SIpAddr}) ->
-	Q = ?QLCQ([S#site_desc.customer_id ||
+	Q = ?QLCQ([S#site_desc.filter_id ||
 		S <- mnesia:table(site_desc),
 		S#site_desc.ipaddr == SIpAddr
 		]),
 	?QLCE(Q);
 
-handle_query({get_default_rule, CustomerId}) ->
-	Q = ?QLCQ([ D#default_rule.resolved_rule ||
-		D <- mnesia:table(default_rule),
-		D#default_rule.customer_id == CustomerId
-		]),
-	?QLCE(Q);
-
-handle_query({remove_site, CI}) ->
-	Q = ?QLCQ([F#filter.id ||
-		F <- mnesia:table(filter),
-		F#filter.customer_id == CI
-		]),
-	FIs = ?QLCE(Q),
-
-	Q1 = ?QLCQ([I#ipr.id ||
-		I <- mnesia:table(ipr),
-		I#ipr.customer_id == CI
-		]),
-	IIs = ?QLCE(Q1),
-
-	Q2 = ?QLCQ([R#regex.id ||
-		R <- mnesia:table(regex),
-		R#regex.customer_id == CI
-		]),
-	RIs = ?QLCE(Q2),
-
-	Q3 = ?QLCQ([M#mime_type.id ||	
-		M <- mnesia:table(mime_type),
-		M#mime_type.customer_id == CI
-		]),
-	MIs = ?QLCE(Q3),
-
+handle_query({remove_site, FI}) ->
 	Q4 = ?QLCQ([S#site_desc.ipaddr ||	
 		S <- mnesia:table(site_desc),
-		S#site_desc.customer_id == CI
+		S#site_desc.filter_id == FI
 		]),
 	RQ4 = ?QLCE(Q4),
 
-	Q5 = ?QLCQ([F#file_hash.id ||	
-		F <- mnesia:table(file_hash),
-		F#file_hash.file_id == {wl, CI}
-		]),
-	WFIs = ?QLCE(Q5),
-
-	Q6 = ?QLCQ([F#file_hash.id ||	
-		F <- mnesia:table(file_hash),
-		F#file_hash.file_id == {bl, CI}
-		]),
-	BFIs = ?QLCE(Q6),
-	
 	Q7 = ?QLCQ([U#usb_device.id ||	
 		U <- mnesia:table(usb_device),
-		U#usb_device.customer_id == CI
+		U#usb_device.filter_id == FI
 		]),
 	UDIs = ?QLCE(Q7),
 
@@ -471,14 +456,8 @@ handle_query({remove_site, CI}) ->
 		[] -> ok;
 		[SDI] -> mnesia:delete({site_desc, SDI}) end,
 
-	mnesia:delete({default_rule, CI}),
-	remove_filters(FIs),
-	lists:foreach(fun(Id) -> mnesia:delete({ipr, Id}) end, IIs),
-	lists:foreach(fun(Id) -> mnesia:delete({file_hash, Id}) end, WFIs),
-	lists:foreach(fun(Id) -> mnesia:delete({file_hash, Id}) end, BFIs),
-	lists:foreach(fun(Id) -> mnesia:delete({usb_device, Id}) end, UDIs),
-	lists:foreach(fun(Id) -> mnesia:delete({regex, Id}) end, RIs),
-	lists:foreach(fun(Id) -> mnesia:delete({mime_type, Id}) end, MIs);
+	remove_filters([FI]),
+	lists:foreach(fun(Id) -> mnesia:delete({usb_device, Id}) end, UDIs);
 
 handle_query({remove_file_entry, FI}) ->
 	Q = ?QLCQ([H#file_hash.id ||
@@ -543,10 +522,10 @@ handle_query(Query) -> handle_query_common(Query).
 -ifdef(__MYDLP_ENDPOINT).
 
 % TODO: should be refined for multi-site usage
-handle_query(get_rule_table) ->
+handle_query({get_rule_table, Channel}) ->
 	Q = ?QLCQ([ R#rule_table.table ||
 		R <- mnesia:table(rule_table),
-		R#rule_table.id == mydlp_mnesia:get_dcid()
+		R#rule_table.channel == Channel
 		]),
 	?QLCE(Q);
 
@@ -582,8 +561,8 @@ handle_query_common({is_shash_of_gid, Hash, _HGIs}) ->
 		]),
 	?QLCE(Q);
 
-handle_query_common({is_mime_of_gid, Mime, _MGIs}) ->
-	Q = ?QLCQ([M#mime_type.group_id ||
+handle_query_common({is_mime_of_dfid, Mime, _DFIs}) ->
+	Q = ?QLCQ([M#mime_type.data_format_id ||
 		M <- mnesia:table(mime_type),
 		M#mime_type.mime == Mime
 		]),
@@ -598,7 +577,7 @@ handle_query_common({is_dr_fh_of_fid, Hash, FileId}) ->
 	?QLCE(Q);
 
 handle_query_common({get_regexes, GroupId}) ->
-	Q = ?QLCQ([ { R#regex.id, R#regex.compiled } ||
+	Q = ?QLCQ([ R#regex.compiled ||
 		R <- mnesia:table(regex),
 		R#regex.group_id == GroupId
 		]),
@@ -948,63 +927,70 @@ call_timer() -> timer:send_after(5000, cleanup_now).
 
 ip_band({A1,B1,C1,D1}, {A2,B2,C2,D2}) -> {A1 band A2, B1 band B2, C1 band C2, D1 band D2}.
 
-resolve_all(ParentList) -> resolve_all(ParentList, []).
+resolve_all(Rules) -> resolve_all(Rules, get_dcid()).
 
-resolve_all(ParentList, DestList) ->
+resolve_all(Rules, FilterId) ->
 	Q = ?QLCQ([{F#filter.id, F#filter.default_action} || 
-			F <- mnesia:table(filter)
+			F <- mnesia:table(filter),
+			F#filter.id == FilterId
 			]),
 	case ?QLCE(Q) of
 		[FilterKey] -> 	
-			Rules = resolve_rules(ParentList, DestList),
-			[{FilterKey, Rules}];
-		_Else -> [{{0, pass}, []}] end.
+			Rules1 = lists:usort(Rules),
+			RRules = resolve_rules(Rules1),
+			TextExtraction = predict_need4te(RRules),
+			{{TextExtraction}, FilterKey, RRules};
+		_Else -> {{false}, {0, pass}, []} end.
 
-resolve_rules(PS, DestList) -> resolve_rules(PS, DestList, []).
-resolve_rules([P|PS], DestList, Rules) -> 
-	case resolve_rule(P, DestList) of
-		none -> resolve_rules(PS, DestList, Rules);
-		Rule -> resolve_rules(PS, DestList, [Rule| Rules]) end;
-resolve_rules([], _DestList, Rules) -> lists:reverse(Rules).
+predict_need4te([{_RId, _RAction, ITypes}|Rules]) ->
+	case predict_need4te_1(ITypes) of
+		true -> true;
+		false -> predict_need4te(Rules) end;
+predict_need4te([]) -> false.
 
-resolve_rule({mgroup, Id}, DestList) ->
-	Q = ?QLCQ([MG#match_group.parent || 
-			MG <- mnesia:table(match_group),
-			MG#match_group.id == Id
-			]),
-	case ?QLCE(Q) of
-		[Parent] -> resolve_rule(Parent, DestList);
-		_Else -> none end;
-resolve_rule({rule, Id}, DestList) ->
-	Q = ?QLCQ([{R#rule.id, R#rule.action, 
-			not lists:any(fun(E) -> lists:member(E, R#rule.trusted_domains) end, DestList)
-			} || 
-			F <- mnesia:table(filter), 
-			R <- mnesia:table(rule), 
-			F#filter.id == R#rule.filter_id,
-			R#rule.id == Id
-			]),
-	
-	case ?QLCE(Q) of
-		[{RId, RAction, true = _IsNotWhiteDomain}] -> {RId, RAction, find_funcs({rule, RId})};
-		[{RId, RAction, false = _IsNotWhiteDomain}] -> {RId, RAction, []};
-		_Else -> none end.
-	
-find_funcss(Parents) -> find_funcss(Parents, []).
-find_funcss([Parent|Parents], Funcs) ->
-	find_funcss(Parents, [find_funcs(Parent)|Funcs]);
-find_funcss([], Funcs) -> lists:reverse(Funcs).
+predict_need4te_1([{_ITId, _Threshold, _DataFormats, IFeatures}|ITypes]) ->
+	case predict_need4te_2(IFeatures) of
+		true -> true;
+		false -> predict_need4te_1(ITypes) end;
+predict_need4te_1([]) -> false.
 
-find_funcs(ParentId) ->
+predict_need4te_2([{_Weight, {Func, _FuncParams}}|IFeatures]) ->
+	case get_matcher_req(Func) of
+                raw -> predict_need4te_2(IFeatures);
+                analyzed -> true;
+                text -> true end;
+predict_need4te_2([]) -> false.
+
+get_matcher_req(Func) -> apply(mydlp_matchers, Func, []).
+
+resolve_rules(PS) -> resolve_rules(PS, []).
+resolve_rules([{RId, ROrigId,RAction}|PS], Rules) -> 
+	resolve_rules(PS, [{ROrigId, RAction, find_itypes(RId)}| Rules]);
+resolve_rules([], Rules) -> lists:reverse(Rules).
+
+find_itypes(RuleId) ->
+	QM = ?QLCQ([{T#itype.orig_id, T#itype.threshold, 
+			T#itype.data_formats, find_ifeatures(T#itype.id)} ||
+			T <- mnesia:table(itype),
+			T#itype.rule_id == RuleId
+		]),
+	?QLCE(QM).
+
+find_ifeatures(ITypeId) ->
+	QM = ?QLCQ([{F#ifeature.weight, find_func(F#ifeature.id)} ||
+			F <- mnesia:table(ifeature),
+			F#ifeature.itype_id == ITypeId
+		]),
+	?QLCE(QM).
+
+find_func(IFeatureId) ->
 	QM = ?QLCQ([{M#match.func, M#match.func_params} ||
 			M <- mnesia:table(match),
-			M#match.parent == ParentId
+			M#match.ifeature_id == IFeatureId
 		]),
-	QMG = ?QLCQ([{mgroup, MG#match_group.id} ||
-			MG <- mnesia:table(match_group),
-			MG#match_group.parent == ParentId
-		]),
-	lists:flatten([?QLCE(QM), find_funcss(?QLCE(QMG))]).
+	case ?QLCE(QM) of
+		[FuncTuple] -> FuncTuple;
+		_Else -> throw({ierror, cannot_be_more_than_one_matcher}) end.
 
 -endif.
 
@@ -1089,36 +1075,62 @@ remove_filter(FI) ->
 remove_rules(RIs) -> lists:foreach(fun(Id) -> remove_rule(Id) end, RIs), ok.
 
 remove_rule(RI) ->
+	Q1 = ?QLCQ([T#itype.data_formats ||	
+		T <- mnesia:table(itype),
+		T#itype.rule_id == RI
+		]),
+	DFIs = lists:flatten(?QLCE(Q1)),
+
+	Q2 = ?QLCQ([T#itype.id ||	
+		T <- mnesia:table(itype),
+		T#itype.rule_id == RI
+		]),
+	ITIs = ?QLCE(Q2),
+
+	remove_data_formats(DFIs),
+	remove_itypes(ITIs),
+	mnesia:delete({rule, RI}).
+
+remove_data_formats(DFIs) -> lists:foreach(fun(Id) -> remove_data_format(Id) end, DFIs), ok.
+
+remove_data_format(DFI) -> 
+	Q1 = ?QLCQ([MT#mime_type.id ||	
+		MT <- mnesia:table(mime_type),
+		MT#mime_type.data_format_id == DFI
+		]),
+	MTIs = ?QLCE(Q1),
+
+	remove_mime_types(MTIs).
+
+remove_mime_types(MTIs) -> lists:foreach(fun(Id) -> remove_mime_type(Id) end, MTIs), ok.
+
+remove_mime_type(MTI) -> mnesia:delete({mime_type, MTI}).
+
+remove_itypes(ITIs) -> lists:foreach(fun(Id) -> remove_itype(Id) end, ITIs), ok.
+
+remove_itype(ITI) ->
+	Q = ?QLCQ([F#ifeature.id ||	
+		F <- mnesia:table(ifeature),
+		F#ifeature.itype_id == ITI
+		]),
+	IFIs = ?QLCE(Q),
+	remove_ifeatures(IFIs),
+	mnesia:delete({itype, ITI}).
+
+remove_ifeatures(IFIs) -> lists:foreach(fun(Id) -> remove_ifeature(Id) end, IFIs), ok.
+
+remove_ifeature(IFI) ->
 	Q = ?QLCQ([M#match.id ||	
 		M <- mnesia:table(match),
-		M#match.parent == {rule, RI}
+		M#match.ifeature_id == IFI
 		]),
 	MIs = ?QLCE(Q),
 	remove_matches(MIs),
-
-	Q2 = ?QLCQ([MG#match_group.id ||	
-		MG <- mnesia:table(match_group),
-		MG#match_group.parent == {rule, RI}
-		]),
-	MGIs = ?QLCE(Q2),
-	remove_match_groups(MGIs),
-
-	mnesia:delete({rule, RI}).
+	mnesia:delete({ifeature, IFI}).
 
 remove_matches(MIs) -> lists:foreach(fun(Id) -> remove_match(Id) end, MIs), ok.
 
 remove_match(MI) -> mnesia:delete({match, MI}).
-
-remove_match_groups(MGIs) -> lists:foreach(fun(Id) -> remove_match_group(Id) end, MGIs), ok.
-
-remove_match_group(MGI) ->
-	Q = ?QLCQ([M#match.id ||	
-		M <- mnesia:table(match),
-		M#match.parent == {mgroup, MGI}
-		]),
-	MIs = ?QLCE(Q),
-	remove_matches(MIs),
-	mnesia:delete({match_group, MGI}).
 
 -endif.
 

@@ -27,7 +27,7 @@
 
 -ifdef(__MYDLP_NETWORK).
 
--module(mydlp_archive).
+-module(mydlp_incident).
 -author("kerem@mydlp.com").
 -behaviour(gen_server).
 
@@ -35,8 +35,7 @@
 
 %% API
 -export([start_link/0,
-	a/2,
-	a/3,
+	l/1,
 	stop/0]).
 
 %% gen_server callbacks
@@ -50,21 +49,13 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -record(state, {
-	file_queue,
-	file_inprog = false
+	logger_queue,
+	logger_inprog = false
 }).
 
 %%%%%%%%%%%%%  API
 
-a(FileId, Term) ->
-	File = mydlp_api:term2file(Term),
-	gen_server:cast(?MODULE, {a, {FileId, File} }).
-
-a(FileId, Term, <<FileName/binary>>) -> a(FileId, Term, binary_to_list(FileName));
-a(FileId, Term, [] ) -> a(FileId, Term);
-a(FileId, Term, [_|_] = FileName) ->
-	File = mydlp_api:term2file(Term),
-	a(FileId, File#file{filename=FileName}).
+l(LogTuple) -> gen_server:cast(?MODULE, {l, LogTuple}).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -74,29 +65,29 @@ handle_call(stop, _From, State) ->
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-handle_cast({a, Item}, #state{file_queue=Q, file_inprog=false} = State) ->
+handle_cast({l, Item}, #state{logger_queue=Q, logger_inprog=false} = State) ->
 	Q1 = queue:in(Item, Q),
-	consume_file(),
-	{noreply, State#state{file_queue=Q1, file_inprog=true}};
+	consume(),
+	{noreply, State#state{logger_queue=Q1, logger_inprog=true}};
 
-handle_cast({a, Item}, #state{file_queue=Q, file_inprog=true} = State) ->
+handle_cast({l, Item}, #state{logger_queue=Q, logger_inprog=true} = State) ->
 	Q1 = queue:in(Item, Q),
-	{noreply,State#state{file_queue=Q1}};
+	{noreply,State#state{logger_queue=Q1}};
 
-handle_cast(consume_file, #state{file_queue=Q} = State) ->
+handle_cast(consume, #state{logger_queue=Q} = State) ->
 	case queue:out(Q) of
 		{{value, Item}, Q1} ->
-			try	archive_file(Item),
-				consume_file(),
-				{noreply, State#state{file_queue=Q1}}
+			try	process_log_tuple(Item),
+				consume(),
+				{noreply, State#state{logger_queue=Q1}}
 			catch Class:Error ->
-				?ERROR_LOG("Archive Item Consume: Error occured: "
+				?ERROR_LOG("Logger Queue Consume: Error occured: "
 						"Class: ["?S"]. Error: ["?S"].~n"
 						"Stack trace: "?S"~n.Item: "?S"~nState: "?S"~n ",	
 						[Class, Error, erlang:get_stacktrace(), Item, State]),
-					{noreply, State#state{file_queue=Q1}} end;
+					{noreply, State#state{logger_queue=Q1}} end;
 		{empty, _} ->
-			{noreply, State#state{file_inprog=false}}
+			{noreply, State#state{logger_inprog=false}}
 	end;
 
 handle_cast(_Msg, State) ->
@@ -111,7 +102,7 @@ handle_info(_Info, State) ->
 
 %%%%%%%%%%%%%%%% Implicit functions
 
-consume_file() -> gen_server:cast(?MODULE, consume_file).
+consume() -> gen_server:cast(?MODULE, consume).
 
 start_link() ->
 	case gen_server:start_link({local, ?MODULE}, ?MODULE, [], []) of
@@ -123,7 +114,7 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
-	{ok, #state{file_queue=queue:new()}}.
+	{ok, #state{logger_queue=queue:new()}}.
 
 terminate(_Reason, _State) ->
 	ok.
@@ -133,28 +124,44 @@ code_change(_OldVsn, State, _Extra) ->
 
 %%%%%%%%%%%%%%%%% internal
 
-archive_file({ AFileId, #file{} = File }) ->
-	% add to file hash 
-	File1 = mydlp_api:load_files(File),
-	% get text
-	ContentText = mydlp_api:concat_texts(File1),
+process_log_tuple({web = Channel, RuleId, archive = Action, Ip, User, To, ITypeId, Files, Misc}) ->
+	Files1 = lists:filter(fun(F) -> 
+		?BB_S(F#file.dataref) > ?CFG(archive_minimum_size)
+		end, Files),
+	process_log_tuple1({Channel, RuleId, Action, Ip, User, To, ITypeId, Files1, Misc});
+process_log_tuple({Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc}) ->
+	process_log_tuple1({Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc}).
 
-	% get meta
+process_log_tuple1({_Channel, _RuleId, _Action, _Ip, _User, _To, _ITypeId, [], _Misc}) -> ok;
+process_log_tuple1({Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc}) ->
+	IsLogData = case Action of
+		quarantine -> true;
+		archive -> true;
+		_Else -> false end,
+	LogId = mydlp_mysql:push_log(Channel, RuleId, Action, Ip, User, To, ITypeId, Misc),
+	process_log_files(LogId, IsLogData, Files),
+	ok.
+
+process_log_files(LogId, false = IsLogData, [File|Files]) ->
+	Filename = mydlp_api:file_to_str(File),
+	mydlp_api:clean_files(File),
+	mydlp_mysql:insert_log_file(LogId, Filename),
+	process_log_files(LogId, IsLogData, Files);
+process_log_files(LogId, true = IsLogData, [File|Files]) ->
+	File1 = mydlp_api:load_files(File),
+
 	Size = mydlp_api:binary_size(File1#file.data),
 	MimeType = case File1#file.mime_type of
 		undefined -> mydlp_tc:get_mime(File1#file.data);
 		Else -> Else end,
 	Filename = mydlp_api:file_to_str(File1),
-
-	% persist to filesystem
-	{ok, ArchivePath} = mydlp_api:quarantine(File1),
+	{ok, Path} = mydlp_api:quarantine(File1),
 
 	mydlp_api:clean_files(File1),
 
-	% update afile
-	mydlp_mysql:update_afile(AFileId, Filename, MimeType, Size, ArchivePath, ContentText),
-
-	ok.
+	mydlp_mysql:insert_log_file(LogId, Filename, MimeType, Size, Path),
+	process_log_files(LogId, IsLogData, Files);
+process_log_files(_LogId, _IsLogData, []) -> ok.
 
 -endif.
 

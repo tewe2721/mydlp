@@ -158,7 +158,7 @@ push_chunk(ItemId, ChunkData, ChunkNum, ChunkNumTotal) ->
 	ItemIdS = integer_to_list(ItemId),
 	ChunkNumS = integer_to_list(ChunkNum),
 	ChunkNumTotalS = integer_to_list(ChunkNumTotal),
-	Url = "https://" ++ ?CFG(management_server_address) ++ "/mydlp-web-manager/receive.php?o=push&" ++
+	Url = "https://" ++ ?CFG(management_server_address) ++ "/receive?o=push&" ++
 			"i=" ++ ItemIdS ++ "&c=" ++ ChunkNumS ++ "&t=" ++ ChunkNumTotalS,
 	case http_req(Url, ChunkData) of
 		{ok, "error"} -> throw(http_returned_error);
@@ -190,13 +190,15 @@ http_req1(ReqRet) ->
                 Else -> ?ERROR_LOG("ITEMPUSH: An error occured during HTTP req: Obj="?S"~n", [Else]),
 				{error, {http_req_not_ok, Else}} end.
 
-predict_serialized_size({seap_log, {_Proto, _RuleId, _Action, _Ip, _User, _To, _Matcher, #file{data=undefined}, _Misc}}) -> 128;
-predict_serialized_size({seap_log, {_Proto, _RuleId, _Action, _Ip, _User, _To, _Matcher, #file{data=Data}, _Misc}}) ->
-	size(Data) + 128;
-predict_serialized_size({seap_log, _LogTerm}) -> 128;
+predict_serialized_size({endpoint_log, {_Channel, _RuleId, _Action, _Ip, _User, _To, _ITypeId, Files, _Misc}}) ->
+	128 + lists:sum([predict_file_size(F)||F <- Files]);
+predict_serialized_size({endpoint_log, _LogTerm}) -> 128;
 predict_serialized_size(Else) -> 
 	?ERROR_LOG("PREDICTSIZE: Unknown item. Cannot predict. Return maximum_push_size+1 as size: Item="?S"~n", [Else]),
 	?CFG(maximum_push_size) + 1.
+
+predict_file_size(#file{data=undefined}) -> 0;
+predict_file_size(#file{data=Data}) -> size(Data).
 
 
 -endif.

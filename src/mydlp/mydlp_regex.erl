@@ -38,7 +38,7 @@
 	longest_bin/2,
 	is_match_bin/2,
 	score_suite/2,
-	match/2,
+	match_count/2,
 %	clean/1,
 %	clean/0,
 	stop/0]).
@@ -69,13 +69,7 @@ split_bin(BInKey, Data) -> async_re_call({sbin, BInKey}, Data).
 
 score_suite(BInKey, Data) -> async_re_call({score_suite, BInKey}, Data).
 
-match([GI|GIs], Data) -> 
-	case match1(GI, Data) of
-		{match, {id,Id}} -> {match, {id, Id}, {group_id, GI}};
-		nomatch -> match(GIs, Data) end;
-match([], _Data) -> nomatch.
-
-match1(GroupId, Data) -> async_re_call({match, GroupId}, Data).
+match_count(GIs, Data) -> async_re_call({match_count, GIs}, Data).
 
 %clean() -> gen_server:cast(?MODULE, {clean}).
 %clean(GroupId) -> gen_server:cast(?MODULE, {clean, GroupId}).
@@ -102,9 +96,8 @@ handle_call(stop, _From, State) ->
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-handle_re({match, GroupId}, Data, _State) ->
-	Regexes = mydlp_mnesia:get_regexes(GroupId),
-	run_all(Regexes, Data);
+handle_re({match_count, GIs}, Data, _State) ->
+	count_all(GIs, Data);
 
 handle_re({mbin, BInKey}, Data, #state{builtin_tree=BT}) ->
 	RE = gb_trees:get(BInKey, BT),
@@ -273,11 +266,18 @@ code_change(_OldVsn, State, _Extra) ->
 preregex(Data, #state{u304=U304}) ->
 	re:replace(Data, U304, <<"i">>, [global, {return, binary}]).
 
-run_all([{Id, R}|RS], Data) ->
-	case re:run(Data, R) of
-		{match, _Captured} -> {match, {id, Id}};
-		nomatch -> run_all(RS, Data) end;
-run_all([], _Data) -> nomatch.
+count_all(GIs, Data) ->
+	Regexes = lists:flatten(
+		[[ mydlp_mnesia:get_regexes(GI) || GI <- GIs ]] ),
+	RRMap = mydlp_api:pmap(fun(R) -> count_expr(R, Data) end, Regexes),
+	lists:sum(RRMap).
+
+-define(CNT_RE_OPTS, [global, {capture, all, index}]).
+
+count_expr(RE, Data) ->
+	case re:run(Data, RE, ?CNT_RE_OPTS) of
+		nomatch -> 0;
+		{match, Captured} -> length(Captured) end.
 
 insert_all([{Key, Val}|Rest], Tree) -> insert_all(Rest, gb_trees:enter(Key, Val, Tree));
 insert_all([], Tree) -> Tree.
@@ -289,12 +289,10 @@ rec(Regex, ReOpts) ->
 		ReOpts -> re:compile(Regex, ReOpts) end,
 	Ret.
 
--define(SS_RE_OPTS, [global, {capture, all, index}]).
-
 %score_regex_suite(Regexes, Data) -> score_regex_suite(Regexes, Data, 0).
 
 %score_regex_suite([{RE,Weight}|Regexes], Data, Score) ->
-%	Count = case re:run(Data, RE, ?SS_RE_OPTS) of
+%	Count = case re:run(Data, RE, ?CNT_RE_OPTS) of
 %		nomatch -> 0;
 %		{match, Captured} -> length(Captured) end,
 %	score_regex_suite(Regexes, Data, Score + (Weight * Count) );
@@ -307,7 +305,7 @@ score_regex_suite(Regexes, Data) ->
 	lists:sum(Scores).
 
 score_regex_suite1({RE,Weight}, Data) ->
-	Count = case re:run(Data, RE, ?SS_RE_OPTS) of
+	Count = case re:run(Data, RE, ?CNT_RE_OPTS) of
 		nomatch -> 0;
 		{match, Captured} -> length(Captured) end,
 	(Weight * Count).

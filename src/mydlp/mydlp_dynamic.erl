@@ -137,6 +137,7 @@ load_src(Src) ->
 	{mysql_user, string, "root"},
 	{mysql_password, string, ""},
 	{mysql_database, string, "mydlp"},
+	{mysql_log_database, string, "mydlp_log"},
 	{mysql_pool_size, integer, "2"},
 	{quarantine_dir, string, "/var/lib/mydlp/quarantine/"},
 	{quarantine_uid, integer, "33"},
@@ -158,9 +159,6 @@ load_src(Src) ->
 	{icap_options_ttl, integer, "0"},
 	{icap_log_pass, boolean, "false"},
 	{icap_log_pass_lower_limit, integer, "10240"},
-	{smb_discover, boolean, "false"},
-	{smb_discover_script_path, string, "/usr/sbin/mydlp-smb-discover"},
-	{smb_discover_interval, integer, "3600"},
 	{query_cache_maximum_size, integer, "2000000"}
 ]).
 

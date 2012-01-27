@@ -21,6 +21,7 @@ HOMEDIR=/etc/mydlp
 PIDDIR=/var/run/mydlp
 PIDFILE=$PIDDIR/mydlp.pid
 PIDFILE2=$PIDDIR/backend-py.pid
+PIDFILE3=/var/run/jetty.pid
 
 SERV=/usr/sbin/service
 MYSQLC=/usr/bin/mysql
@@ -30,6 +31,7 @@ SQUIDBIN=/usr/sbin/squid3
 SQUIDBINNAME=squid3
 
 ICAPPORT=1344
+JETTYPORT=8009
 
 . /lib/lsb/init-functions
 
@@ -71,6 +73,13 @@ wait_for_icap() {
 	done
 }
 
+wait_for_jetty() {
+	for i in $(seq 10); do
+	    sleep 1
+	    if is_port_open $JETTYPORT; then break; fi
+	done
+}
+
 start_mysql() {
 	is_mysql_alive || $SERV mysql start >/dev/null 2>&1 
 	wait_for_mysqld
@@ -80,18 +89,10 @@ check_mysql_db() {
 	# Import MySQL schema
 	if (echo|$MYSQLC); then
 		if [ -z "$(echo 'show databases'|$MYSQLC|grep -e '^mydlp$')" ]; then
-			( $MYSQLADM create mydlp && \
-			$MYSQLC mydlp < /usr/share/mydlp/schema/mydlp.sql && \
-			echo "Initialized database 'mydlp' successfully..." && \
-			echo "Please go to https://127.0.0.1/ and complete installation...") || \
-			      ( echo "================================================="; \
-				echo "|   A problem occured while importing schema.   |"; \
-				echo "|   Please create a database and import         |"; \
-				echo "|   /usr/share/mydlp/schema/mydlp.sql manually. |"; \
-				echo "================================================="; \
-				echo; )
-		#else
-			#echo "Database 'mydlp' already exists..."
+			$MYSQLADM create mydlp
+		fi
+		if [ -z "$(echo 'show databases'|$MYSQLC|grep -e '^mydlp_log$')" ]; then
+			$MYSQLADM create mydlp_log
 		fi
 	else
 		echo "Cannot find mysql-client!!!"
@@ -126,6 +127,7 @@ status_mydlp() {
 cleanpids() {
 	status_mydlp || rm -f $PIDFILE
 	status_backend_py || rm -f $PIDFILE2
+	status_jetty || rm -f $PIDFILE3
 }
 
 start_backend_py() {
@@ -159,18 +161,35 @@ reload_squid() {
 	fi
 }
 
+start_jetty() {
+	/etc/init.d/jetty start
+	wait_for_jetty
+	echo -n "Reloading Apache..."
+	/etc/init.d/apache2 force-reload 2>&1 > /dev/null
+}
+
+stop_jetty() {
+	/etc/init.d/jetty stop
+}
+
+status_jetty() {
+	/etc/init.d/jetty status 2>&1 > /dev/null
+}
+
 case "$1" in
   start)
 	check_piddir
 	cleanpids
 	start_backend_py
 	start_mydlp
+	start_jetty
 	cleanpids
 	reload_squid
 	;;
   stop)
 	check_piddir
 	cleanpids
+	stop_jetty
 	stop_mydlp
 	stop_backend_py
 	cleanpids
@@ -182,11 +201,13 @@ case "$1" in
   restart)
 	check_piddir
 	cleanpids
+	stop_jetty
 	stop_mydlp
 	stop_backend_py
 	cleanpids
 	start_backend_py
 	start_mydlp
+	start_jetty
 	cleanpids
 	reload_squid
 	;;

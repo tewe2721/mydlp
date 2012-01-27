@@ -32,15 +32,9 @@
 %% API
 -export([
 	file/1,
-	mime_match/0,
-	mime_match/1,
-	mime_match/3,
 	md5_match/0,
 	md5_match/1,
 	md5_match/3,
-	md5_dr_match/0,
-	md5_dr_match/1,
-	md5_dr_match/3,
 	regex_match/0,
 	regex_match/1,
 	regex_match/3,
@@ -96,150 +90,83 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
-mime_match() -> raw.
-
-mime_match(MGIs) -> MGIs.
-
-mime_match(MGIs, _Addr, File) ->
-	MT = case File#file.mime_type of 
-		undefined -> mydlp_tc:get_mime(File#file.data);
-		Else -> Else
-	end,
-
-	case mydlp_mnesia:is_mime_of_gid(MT, MGIs) of
-		true -> {pos, {file, File}};
-		false -> neg end.
-
 regex_match() -> text.
 
 regex_match(RGIs) -> RGIs.
 
 regex_match(RGIs, _Addr, File) ->
-	case mydlp_regex:match(RGIs, File#file.text) of
-		{match, {id, RId}, {group_id, GId}} -> 
-			{pos, {file, File},
-				{misc, "regex_id=" ++ integer_to_list(RId) ++
-				" group_id=" ++ integer_to_list(GId)}};
-		nomatch -> neg end.
+	mydlp_regex:match_count(RGIs, File#file.text).
 
 cc_match() -> text.
 
-cc_match(Conf) when is_list(Conf) -> 
-	Count = case lists:keyfind(count, 1, Conf) of
-		{count, C} -> C;
-		false -> 1
-	end, Count.
+cc_match(_Conf) -> none.
 
-cc_match(Count, _Addr, File) ->
+cc_match(_Conf, _Addr, File) ->
 	Res = mydlp_regex:match_bin(
 	 	credit_card, 
 		File#file.text),
-	
-	case mydlp_api:more_than_count(fun(I) -> mydlp_api:is_valid_cc(I) end, Count, Res) of
-		true -> {pos, {file, File}};
-		false -> neg end.
+	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_cc(I) end, Res).
 
 iban_match() -> text.
 
-iban_match(Conf) when is_list(Conf) -> 
-	Count = case lists:keyfind(count, 1, Conf) of
-		{count, C} -> C;
-		false -> 1
-	end, Count.
+iban_match(_Conf) -> none.
 
-iban_match(Count, _Addr, File) ->
+iban_match(_Conf, _Addr, File) ->
 	Res = mydlp_regex:match_bin(
 	 	iban, 
 		File#file.text),
-	
-	case mydlp_api:more_than_count(fun(I) -> mydlp_api:is_valid_iban(I) end, Count, Res) of
-		true -> {pos, {file, File}};
-		false -> neg end.
+	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_iban(I) end, Res).
 
 trid_match() -> text.
 
-trid_match(Conf) when is_list(Conf) ->
-	Count = case lists:keyfind(count, 1, Conf) of
-		{count, C} -> C;
-		false -> 1
-	end, Count.
+trid_match(_Conf) -> none.
 
-trid_match(Count, _Addr, File) ->
+trid_match(_Conf, _Addr, File) ->
 	Res = mydlp_regex:match_bin(
 	 	trid, 
 		File#file.text),
 	
-	case mydlp_api:more_than_count(fun(I) -> mydlp_api:is_valid_trid(I) end, Count, Res) of
-		true -> {pos, {file, File}};
-		false -> neg end.
+	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_trid(I) end, Res).
 
 ssn_match() -> text.
 
-ssn_match(Conf) when is_list(Conf) ->
-	Count = case lists:keyfind(count, 1, Conf) of
-		{count, C} -> C;
-		false -> 5
-	end, Count.
+ssn_match(_Conf) -> none.
 
-ssn_match(Count, _Addr, File) ->
+ssn_match(_Conf, _Addr, File) ->
 	Res = mydlp_regex:match_bin(
 	 	ssn, 
 		File#file.text),
-	
-	case mydlp_api:more_than_count(fun(I) -> mydlp_api:is_valid_ssn(I) end, Count, Res) of
-		true -> {pos, {file, File}};
-		false -> neg end.
+	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_ssn(I) end, Res).
 
 canada_sin_match() -> text.
 
-canada_sin_match(Conf) when is_list(Conf) ->
-	Count = case lists:keyfind(count, 1, Conf) of
-		{count, C} -> C;
-		false -> 5
-	end, Count.
+canada_sin_match(_Conf) -> none.
 
-canada_sin_match(Count, _Addr, File) ->
+canada_sin_match(_Conf, _Addr, File) ->
 	Res = mydlp_regex:match_bin(
 	 	sin, 
 		File#file.text),
-	
-	case mydlp_api:more_than_count(fun(I) -> mydlp_api:is_valid_sin(I) end, Count, Res) of
-		true -> {pos, {file, File}};
-		false -> neg end.
+	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_sin(I) end, Res).
 
 france_insee_match() -> text.
 
-france_insee_match(Conf) when is_list(Conf) ->
-	Count = case lists:keyfind(count, 1, Conf) of
-		{count, C} -> C;
-		false -> 5
-	end, Count.
+france_insee_match(_Conf) -> none.
 
-france_insee_match(Count, _Addr, File) ->
+france_insee_match(_Conf, _Addr, File) ->
 	Res = mydlp_regex:match_bin(
 	 	insee, 
 		File#file.text),
-	
-	case mydlp_api:more_than_count(fun(I) -> mydlp_api:is_valid_insee(I) end, Count, Res) of
-		true -> {pos, {file, File}};
-		false -> neg end.
+	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_insee(I) end, Res).
 
 uk_nino_match() -> text.
 
-uk_nino_match(Conf) when is_list(Conf) ->
-	Count = case lists:keyfind(count, 1, Conf) of
-		{count, C} -> C;
-		false -> 5
-	end, Count.
+uk_nino_match(_Conf) -> none.
 
-uk_nino_match(Count, _Addr, File) ->
+uk_nino_match(_Conf, _Addr, File) ->
 	Res = mydlp_regex:match_bin(
 	 	nino, 
 		File#file.text),
-	
-	case mydlp_api:more_than_count(fun(I) -> mydlp_api:is_valid_nino(I) end, Count, Res) of
-		true -> {pos, {file, File}};
-		false -> neg end.
+	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_nino(I) end, Res).
 
 -define(CFILE_MINSIZE, 128).
 
@@ -247,13 +174,13 @@ e_archive_match() -> analyzed.
 
 e_archive_match(_Conf) -> none.
 
-e_archive_match(_Opts, _Addr, #file{mime_type=MimeType, data=Data, is_encrypted=true} = File) -> 
+e_archive_match(_Opts, _Addr, #file{mime_type=MimeType, data=Data, is_encrypted=true}) -> 
 	case size(Data) > ?CFILE_MINSIZE of
 		true -> case mydlp_api:is_compression_mime(MimeType) of
-			true -> {pos, {file, File}};
-			false -> neg end;
-		false -> neg end;
-e_archive_match(_Opts, _Addr, _File) -> neg.
+			true -> 1;
+			false -> 0 end;
+		false -> 0 end;
+e_archive_match(_Opts, _Addr, _File) -> 0.
 
 -define(EFILE_MINSIZE, 256).
 
@@ -261,51 +188,47 @@ e_file_match() -> analyzed.
 
 e_file_match(_Conf) -> none.
 
-e_file_match(_Opts, _Addr, #file{data=Data, mime_type=MimeType, is_encrypted=true} = File) -> 
+e_file_match(_Opts, _Addr, #file{data=Data, mime_type=MimeType, is_encrypted=true}) -> 
 	case size(Data) > ?EFILE_MINSIZE of
 		% compressed files which are marked as encrypted, should not be handled here. (fun e_archive_match)
 		true -> case mydlp_api:is_compression_mime(MimeType) of 
-			true -> neg;
-			false -> {pos, {file, File}} end;
-		false -> neg end;
-e_file_match(_Opts, _Addr, _File) -> neg.
+			true -> 0;
+			false -> 1 end;
+		false -> 0 end;
+e_file_match(_Opts, _Addr, _File) -> 0.
 
 i_binary_match() -> raw.
 
 i_binary_match(_Conf) -> none.
 
-i_binary_match(_Opts, _Addr, #file{mime_type=MimeType, data=Data} = File) ->
+i_binary_match(_Opts, _Addr, #file{mime_type=MimeType, data=Data}) ->
 	case mydlp_api:is_cobject_mime(MimeType) of
 		true -> case mydlp_tc:check_binary_integrity(Data) of
-			false -> {pos, {file, File}};
-			true -> neg end;
-		false -> neg end.
+			false -> 1;
+			true -> 0 end;
+		false -> 0 end.
 
 i_archive_match() -> raw.
 
 i_archive_match(_Conf) -> none.
 
-i_archive_match(_Opts, _Addr, #file{mime_type=MimeType, data=Data} = File) ->
+i_archive_match(_Opts, _Addr, #file{mime_type=MimeType, data=Data}) ->
 	case mydlp_api:is_compression_mime(MimeType) of
 		true -> case mydlp_tc:check_archive_integrity(Data) of
-			false -> {pos, {file, File}};
-			true -> neg end;
-		false -> neg end.
+			false -> 1;
+			true -> 0 end;
+		false -> 0 end.
 
 p_text_match() -> analyzed.
 
-p_text_match(Conf) ->
-	Score = case lists:keyfind(score, 1, Conf) of
-		{score, S} -> S;
-		false -> 512
-	end, Score.
+p_text_match(_Conf) -> none.
 
-p_text_match(Limit, _Addr, #file{mime_type=MimeType} = File) ->
+p_text_match(_Conf, _Addr, #file{mime_type=MimeType} = File) ->
 	case mydlp_api:is_compression_mime(MimeType) of
-		true -> neg;
-		false -> p_text_match1(Limit, File) end.
+		true -> 0;
+		false -> p_text_match1(File) end.
 
-p_text_match1(Limit, #file{data=Data} = File) ->
+p_text_match1(#file{data=Data}) ->
 	%% sequential operation seems more efficient than parallel, if needed uncomment below.
 	%[S1, S2] = mydlp_api:pmap(fun(I) -> 
 	%		mydlp_regex:longest_bin(I, Data) end,
@@ -314,13 +237,9 @@ p_text_match1(Limit, #file{data=Data} = File) ->
 
 	S1 = ( mydlp_regex:longest_bin(hexencoded, Data) ) / 2,
 	S2 = mydlp_regex:longest_bin(base64encoded, Data),
-	Score = lists:max([S1,S2]),
+	lists:max([S1,S2]).
 
-	case Score >= Limit of
-		true -> {pos, {file, File}, 
-			{misc, "score=" ++ integer_to_list(Score)}};
-		false -> neg end.
-
+% TODO: refine this
 md5_match() -> raw.
 
 md5_match(HGIs) -> HGIs.
@@ -331,22 +250,7 @@ md5_match(HGIs, _Addr, File) ->
 		true -> {pos, {file, File}};
 		false -> neg end.
 
-md5_dr_match() -> raw.
-
-md5_dr_match(_Conf) -> 
-%	CustomerId = case lists:keyfind(cid, 1, Source) of
-%		{cid, C} -> C;
-%		false -> mydlp_mnesia:get_dcid()
-%	end,
-%	CustomerKey = {bl, CustomerId},
-	_CustomerKey = {bl, mydlp_mnesia:get_dcid()}.   % should be refined for multisite usage
-
-md5_dr_match(CustomerKey, _Addr, File) ->
-	Hash = erlang:md5(File#file.data),
-	case mydlp_mnesia:is_dr_fh_of_fid(Hash, CustomerKey) of
-		true -> {pos, {file, File}};
-		false -> neg end.
-
+% TODO: refine this
 shash_match() -> text.
 
 shash_match(Conf) when is_list(Conf) -> 
@@ -381,6 +285,7 @@ shash_match({HGIs, Perc, Count}, _Addr, File) ->
 			end
 	end.
 
+% TODO: refine this
 bayes_match() -> text.
 
 bayes_match(Conf) when is_list(Conf) ->
@@ -396,6 +301,7 @@ bayes_match(Threshold, _Addr, File) ->
 			{misc, "score=" ++ float_to_list(float(BayesScore))}};
 		false -> neg end.
 
+% TODO: refine this
 file(Conf) ->
 	WF = case lists:keyfind(whitefile, 1, Conf) of
                 {whitefile, true} -> {whitefile, []};
@@ -433,37 +339,15 @@ file(Conf) ->
 
 scode_match() -> text.
 
-scode_match(Conf) when is_list(Conf) -> 
-	Score = case lists:keyfind(score, 1, Conf) of
-		{score, S} -> S;
-		false -> 100
-	end, Score.
+scode_match(_Conf) -> none.
 
-scode_match(Limit, _Addr, File) ->
-	Score = mydlp_regex:score_suite(
-	 	scode, 
-		File#file.text),
-
-	case Score >= Limit of
-		true -> {pos, {file, File}, 
-			{misc, "score=" ++ integer_to_list(Score)}};
-		false -> neg end.
+scode_match(_Conf, _Addr, File) ->
+	mydlp_regex:score_suite(scode, File#file.text).
 
 scode_ada_match() -> text.
 
-scode_ada_match(Conf) when is_list(Conf) -> 
-	Score = case lists:keyfind(score, 1, Conf) of
-		{score, S} -> S;
-		false -> 100
-	end, Score.
+scode_ada_match(_Conf) -> none.
 
-scode_ada_match(Limit, _Addr, File) ->
-	Score = mydlp_regex:score_suite(
-	 	scode_ada, 
-		File#file.text),
-
-	case Score >= Limit of
-		true -> {pos, {file, File}, 
-			{misc, "score=" ++ integer_to_list(Score)}};
-		false -> neg end.
+scode_ada_match(_Conf, _Addr, File) ->
+	mydlp_regex:score_suite(scode_ada, File#file.text).
 

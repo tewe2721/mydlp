@@ -56,23 +56,6 @@ pkgpython_PYTHON = \
 	gen-py/mydlp/Mydlp-remote \
 	gen-py/mydlp/ttypes.py
 
-mydlpphpdir = $(datadir)/php/packages/mydlp_ui
-
-mydlpphp_DATA = \
-	gen-php/mydlp_ui/Mydlp_ui.php \
-	gen-php/mydlp_ui/mydlp_ui_types.php
-
-mydlp_ui_cpp = mydlp_ui_constants.cpp \
-		Mydlp_ui.cpp \
-		Mydlp_ui_server.skeleton.cpp \
-		mydlp_ui_types.cpp
-
-mydlp_ui_h = mydlp_ui_types.h \
-		mydlp_ui_constants.h \
-		Mydlp_ui.h
-
-noinst_DATA = $(moddlp_cpp) $(moddlp_h)
-
 erldir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/src
 hrldir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/include
 beamdir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/ebin
@@ -89,11 +72,12 @@ $(mydlp_erl) $(mydlp_hrl) $(pkgpython_PYTHON): mydlp.thrift
 	@$(THRIFT) --gen erl --gen py $<
 
 $(mydlp_ui_erl) $(mydlp_ui_hrl) $(mydlpphplib_DATA) $(mydlp_ui_cpp) $(mydlp_ui_h): mydlp_ui.thrift
-	@$(THRIFT) --gen erl --gen php --gen cpp $<
+	@$(THRIFT) --gen erl --gen java $<
+	cp -af gen-java/com/mydlp/ui/thrift/Mydlp_ui.java ../ui/mydlp-ui-thrift/src/main/java/com/mydlp/ui/thrift/Mydlp_ui.java
 
 .erl.beam:
 	@echo "Compiling $<..."
 	@$(ERLC) $(ERLCFLAGS) $<
 
 clean-local:
-	rm -rf gen-erl gen-py gen-php gen-cpp
+	rm -rf gen-erl gen-py gen-java

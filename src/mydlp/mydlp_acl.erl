@@ -25,7 +25,6 @@
 %%% @end
 %%%-------------------------------------------------------------------
 
-
 -module(mydlp_acl).
 -author("kerem@mydlp.com").
 -behaviour(gen_server).
@@ -39,11 +38,11 @@
 -ifdef(__MYDLP_NETWORK).
 
 -export([
-	get_rule_table/1,
-	q/4,
-	qu/3,
-	qa/2,
-	qm/1
+	get_remote_rule_tables/1,
+	q/5,
+	qu/4,
+	qa/3,
+	qm/2
 	]).
 
 -endif.
@@ -53,8 +52,8 @@
 -endif.
 
 -export([
-	qi/1,
-	qe/1
+	qi/2,
+	qe/2
 	]).
 
 %% gen_server callbacks
@@ -76,15 +75,15 @@
 
 -ifdef(__MYDLP_NETWORK).
 
-get_rule_table(Addr) -> acl_call({rule_table, Addr}).
+get_remote_rule_tables(Addr) -> acl_call({get_remote_rule_tables, Addr}).
 
-q(Site, Addr, DestList, Files) -> acl_call({q, Site, DestList, Addr}, Files).
+q(Channel, Site, Addr, DestList, Files) -> acl_call({q, Channel, Site, DestList, Addr}, Files).
 
-qu(User, _Dest, Files) -> acl_call({qu, site, User}, Files).
+qu(Channel, User, _Dest, Files) -> acl_call({qu, Channel, site, User}, Files).
 
-qa(DestList, Files) -> acl_call({qa, site, DestList}, Files).
+qa(Channel, DestList, Files) -> acl_call({qa, Channel, site, DestList}, Files).
 
-qm(Files) -> acl_call({qm, site}, Files).
+qm(Channel, Files) -> acl_call({qm, Channel, site}, Files).
 
 -endif.
 
@@ -93,9 +92,9 @@ qm(Files) -> acl_call({qm, site}, Files).
 -endif.
 
 % For handling inbound request.
-qi(Files) -> acl_call(qi, Files).
+qi(Channel, Files) -> acl_call({qi, Channel}, Files).
 
-qe(Files) -> acl_call({qe, site}, Files).
+qe(Channel, Files) -> acl_call({qe, Channel, site}, Files).
 
 -ifdef(__MYDLP_NETWORK).
 
@@ -106,7 +105,7 @@ acl_call(Query) -> acl_call(Query, none).
 acl_call(Query, Files) -> acl_call(Query, Files, 1500000).
 
 acl_call(Query, none, Timeout) -> acl_call1(Query, none, Timeout);
-acl_call(Query, [#file{mime_type= <<"mydlp-internal/", _/binary>>}] = Files, Timeout) -> acl_call1(Query, Files, Timeout);
+acl_call(Query, [#file{mime_type= <<"mydlp-internal/usb-device", _/binary>>}] = Files, Timeout) -> acl_call1(Query, Files, Timeout);
 acl_call(Query, Files, Timeout) -> 
 	FileSizes = lists:map(fun(F) -> ?BB_S(F#file.dataref) end, Files),
 	TotalSize = lists:sum(FileSizes),
@@ -115,7 +114,7 @@ acl_call(Query, Files, Timeout) ->
 		false -> acl_call1(Query, Files, Timeout) end.
 
 % no need to call acl server for inbound requests.
-acl_call1(qi, _Files, _Timeout) -> 
+acl_call1({qi, _Channel}, _Files, _Timeout) -> 
 	case ?CFG(archive_inbound) of
 		true -> archive;
 		false -> pass end;
@@ -127,92 +126,87 @@ acl_call1(Query, Files, Timeout) -> gen_server:call(?MODULE, {acl, Query, Files,
 
 acl_exec(_RuleTables, _Source, []) -> pass;
 acl_exec(RuleTables, Source, Files) ->
-	[{cid, CustomerId}|_] = Source,
-	DRules = mydlp_mnesia:get_default_rule(CustomerId),
-	acl_exec2(head_dr(RuleTables, DRules), Source, Files).
+	acl_exec2(RuleTables, Source, Files).
 
 -endif.
 
-acl_exec2([], _Source, _Files) -> pass;
 % acl_exec2([{{_Id, DefaultAction}, Rules}| Rest], Source, Files)  % Cannot be more than one filter
-acl_exec2([{{_Id, DefaultAction}, Rules}], Source, Files) ->
-	case { DefaultAction, acl_exec3(Rules, Source, Files) } of
+acl_exec2({ACLOpts, {_Id, DefaultAction}, Rules}, Source, Files) ->
+	case { DefaultAction, acl_exec3(ACLOpts, Rules, Source, Files) } of
 		% {return, return}-> acl_exec2(Rest, Source, Files);  % Cannot be more than one filter
 		{DefaultAction, return} -> DefaultAction;
 		{_DefaultAction, Action} -> Action end.
 
-acl_exec3([], _Source, _Files) -> return;
-acl_exec3(_AllRules, _Source, []) -> return;
-acl_exec3(AllRules, Source, Files) ->
-	acl_exec3(AllRules, Source, Files, [], false).
+acl_exec3(_ACLOpts, [], _Source, _Files) -> return;
+acl_exec3(_ACLOpts, _AllRules, _Source, []) -> return;
+acl_exec3(ACLOpts, AllRules, Source, Files) ->
+	acl_exec3(ACLOpts, AllRules, Source, Files, [], false).
 
-acl_exec3(_AllRules, _Source, [], [], _CleanFiles) -> return;
+acl_exec3(_ACLOpts, _AllRules, _Source, [], [], _CleanFiles) -> return;
 
-acl_exec3(AllRules, Source, [], ExNewFiles, false) ->
-	acl_exec3(AllRules, Source, [], ExNewFiles, true);
+acl_exec3(ACLOpts, AllRules, Source, [], ExNewFiles, false) ->
+	acl_exec3(ACLOpts, AllRules, Source, [], ExNewFiles, true);
 
-acl_exec3(AllRules, Source, [], ExNewFiles, CleanFiles) ->
-	acl_exec3(AllRules, Source, ExNewFiles, [], CleanFiles);
+acl_exec3(ACLOpts, AllRules, Source, [], ExNewFiles, CleanFiles) ->
+	acl_exec3(ACLOpts, AllRules, Source, ExNewFiles, [], CleanFiles);
 	
-acl_exec3(AllRules, Source, Files, ExNewFiles, CleanFiles) ->
-	[{cid, CustomerId}|_] = Source,
-	
+acl_exec3({TextExtraction} = ACLOpts, AllRules, Source, Files, ExNewFiles, CleanFiles) ->
 	{InChunk, RestOfFiles} = mydlp_api:get_chunk(Files),
 	Files1 = mydlp_api:load_files(InChunk),
 	
-	Files2 = drop_whitefile_dr(Files1, CustomerId), % these should be cleaned too
-	Files3 = case has_wf(AllRules) of
-		true -> drop_whitefile(Files2);
-		false -> Files2 end,
+	Files3 = drop_whitefile(Files1),
 
 	{PFiles, NewFiles} = mydlp_api:analyze(Files3),
 	PFiles1 = case CleanFiles of
 		true -> mydlp_api:clean_files(PFiles); % Cleaning newly created files.
 		false -> PFiles end,
 
-	Param = {Source, drop_nodata(PFiles1)},
-	case apply_rules(AllRules, Param) of
-		return -> acl_exec3(AllRules, Source, RestOfFiles,
+	PFiles2 = drop_nodata(PFiles1),
+	FFiles = case TextExtraction of
+		true -> pl_text(PFiles2);
+		false -> PFiles2 end,
+
+	case apply_rules(AllRules, Source, FFiles) of
+		return -> acl_exec3(ACLOpts, AllRules, Source, RestOfFiles,
 				lists:append(ExNewFiles, NewFiles), CleanFiles);
 		Else -> Else end.
 
 -ifdef(__MYDLP_NETWORK).
 
 %% it needs refactoring for trusted domains
-handle_acl({q, SAddr, DestList, Addr}, Files, #state{is_multisite=true}) ->
+handle_acl({q, Channel, SAddr, DestList, Addr}, Files, #state{is_multisite=true}) ->
 	case mydlp_mnesia:get_cid(SAddr) of
 		nocustomer -> block;
 		CustomerId -> 
-			Rules = mydlp_mnesia:get_rules_for_cid(CustomerId, DestList, Addr),
+			Rules = mydlp_mnesia:get_rules_for_fid(Channel, CustomerId, DestList, Addr),
 			acl_exec(Rules, [{cid, CustomerId}, {addr, Addr}], Files) end;
 
-handle_acl({q, _Site, DestList, Addr}, Files, #state{is_multisite=false}) ->
+handle_acl({q, Channel, _Site, DestList, Addr}, Files, #state{is_multisite=false}) ->
 	%Rules = mydlp_mnesia:get_rules(Addr),
 	CustomerId = mydlp_mnesia:get_dcid(),
-	Rules = mydlp_mnesia:get_rules_for_cid(CustomerId, DestList, Addr),
+	Rules = mydlp_mnesia:get_rules_for_fid(Channel, CustomerId, DestList, Addr),
 	acl_exec(Rules, [{cid, CustomerId}, {addr, Addr}], Files);
 
-handle_acl({rule_table, Addr}, _Files, _State) ->
+handle_acl({get_remote_rule_tables, Addr}, _Files, _State) ->
 	CustomerId = mydlp_mnesia:get_dcid(),
-	Rules = mydlp_mnesia:get_rules_for_cid(CustomerId, Addr), % TODO: change needed for multi-site use
-	DRules = mydlp_mnesia:get_default_rule(CustomerId),
-	head_dr(Rules, DRules);
+	% TODO: change needed for multi-site use
+	mydlp_mnesia:get_remote_rule_tables(CustomerId, Addr); 
 
 %% now this is used for only SMTP, and in SMTP domain part of, mail adresses itself a siteid for customer.
 %% it needs refactoring for both multisite and trusted domains
-handle_acl({qu, _Site, User}, Files, _State) ->
-	Rules = mydlp_mnesia:get_rules_by_user(User),
+handle_acl({qu, Channel, _Site, User}, Files, _State) ->
+	Rules = mydlp_mnesia:get_rules_by_user(Channel, User),
 	acl_exec(Rules, [{cid, mydlp_mnesia:get_dcid()}, {user, User}], Files);
 
-handle_acl({qa, _Site, DestList}, Files, _State) ->
-	Rules = mydlp_mnesia:get_all_rules(DestList),
+handle_acl({qa, Channel, _Site, DestList}, Files, _State) ->
+	Rules = mydlp_mnesia:get_all_rules(Channel, DestList),
 	acl_exec(Rules, [{cid, mydlp_mnesia:get_dcid()}], Files);
 
-handle_acl({qm, _Site}, Files, _State) ->
-	Rules = mydlp_mnesia:get_all_rules(),
+handle_acl({qm, Channel, _Site}, Files, _State) ->
+	Rules = mydlp_mnesia:get_all_rules(Channel),
 	acl_exec(Rules, [{cid, mydlp_mnesia:get_dcid()}], Files);
 
-handle_acl({qe, Site}, Files, State) -> handle_acl({qm, Site}, Files, State);
+handle_acl({qe, Channel, Site}, Files, State) -> handle_acl({qm, Channel, Site}, Files, State);
 
 handle_acl(Q, _Files, _State) -> throw({error, {undefined_query, Q}}).
 
@@ -220,16 +214,16 @@ handle_acl(Q, _Files, _State) -> throw({error, {undefined_query, Q}}).
 
 -ifdef(__MYDLP_ENDPOINT).
 
-handle_acl({qe, _Site}, [#file{mime_type= <<"mydlp-internal/usb-device;id=unknown">>}] = Files, _State) ->
+handle_acl({qe, _Channel, _Site}, [#file{mime_type= <<"mydlp-internal/usb-device;id=unknown">>}] = Files, _State) ->
 	{?CFG(error_action), mydlp_api:empty_aclr(Files, usb_device_id_unknown)};
 
-handle_acl({qe, _Site}, [#file{mime_type= <<"mydlp-internal/usb-device;id=", DeviceId/binary>>}] = Files, _State) ->
+handle_acl({qe, _Channel, _Site}, [#file{mime_type= <<"mydlp-internal/usb-device;id=", DeviceId/binary>>}] = Files, _State) ->
 	case mydlp_mnesia:is_valid_usb_device_id(DeviceId) of % TODO: need refinements for multi-user usage.
 		true -> pass;
 		false -> {block, mydlp_api:empty_aclr(Files, usb_device_rejected)} end;
 
-handle_acl({qe, _Site}, Files, _State) ->
-	Rules = mydlp_mnesia:get_rule_table(),
+handle_acl({qe, Channel, _Site}, Files, _State) ->
+	Rules = mydlp_mnesia:get_rule_table(Channel),
 	acl_exec2(Rules, [{cid, mydlp_mnesia:get_dcid()}], Files);
 
 handle_acl(Q, _Files, _State) -> throw({error, {undefined_query, Q}}).
@@ -282,8 +276,9 @@ stop() ->
 -ifdef(__MYDLP_NETWORK).
 
 init([]) ->
-	IsMS = mydlp_mysql:is_multisite(),
-	{ok, #state{is_multisite=IsMS, error_action=?CFG(error_action)}}.
+%	IsMS = mydlp_mysql:is_multisite(),
+%	{ok, #state{is_multisite=IsMS, error_action=?CFG(error_action)}}.
+	{ok, #state{is_multisite=false, error_action=?CFG(error_action)}}.
 
 -endif.
 
@@ -304,88 +299,75 @@ code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 
 %%%%%%%%%%%%%%% helper func
-apply_rules([{Id, Action, Matchers}|Rules], Params) ->
-	case execute_matchers(Matchers, Params) of
-		{neg, NewParams} -> apply_rules(Rules, NewParams);
-			% If neg is return, params may be modified because of whitefile matchers.
-			% So, we should updated params.
-		{pos, {file, File}, {matcher, Func}, {misc, Misc}} -> 
-			{Action, {{rule, Id}, {file, File}, {matcher, Func}, {misc, Misc}}};
-		{error, {file, File}, {matcher, Func}, {misc, Misc}} -> 
-			{?CFG(error_action), {{rule, Id}, {file, File}, {matcher, Func}, {misc, Misc}}}
-	end;
-apply_rules([], _Params) -> return.
+apply_rules([], _Addr, _Files) -> return;
+apply_rules(_Rules, _Addr, []) -> return;
+apply_rules([{Id, Action, ITypes}|Rules], Addr, Files) ->
+	case execute_itypes(ITypes, Addr, Files) of
+		neg -> apply_rules(Rules, Addr, Files);
+		{pos, {file, File}, {itype, ITypeOrigId}, {misc, Misc}} -> 
+			{Action, {{rule, Id}, {file, File}, {itype, ITypeOrigId}, {misc, Misc}}};
+		{error, {file, File}, {itype, ITypeOrigId}, {misc, Misc}} -> 
+			{?CFG(error_action), {{rule, Id}, {file, File}, {itype, ITypeOrigId}, {misc, Misc}}}
+	end.
 
-execute_matchers(Matchers, Params) -> execute_matchers(Matchers, Params, false).
+execute_itypes([], _Addr, _Files) -> neg;
+execute_itypes(_ITypes, _Addr, []) -> neg;
+execute_itypes(ITypes, Addr, Files) ->
+	PAnyRet = mydlp_api:pany(fun(F) -> execute_itypes_pf(ITypes, Addr, F) end, Files, 180000),
+	case PAnyRet of
+		false -> neg;
+		{ok, _File, Ret} -> Ret end.
 
-execute_matchers(Matchers, Params, true) -> apply_f(Matchers, Params, true);
-execute_matchers([{Func,_}|_] = Matchers, {Addr, Files} = Params, false) ->
-	{PLT, Params1} = case get_matcher_req(Func) of
-		raw -> {false, Params};
-		analyzed -> {true, {Addr, pl_text(Files)}};
-		text -> {true, {Addr, pl_text(Files)}}
-	end,
-	apply_f(Matchers, Params1, PLT);
-execute_matchers([], Params, PLT) -> apply_f([], Params, PLT).
 
-apply_f([], Params, _PLT) -> {neg, Params};
-apply_f([{whitefile, _FuncParams}|Matchers], {Addr, Files}, PLT) ->
-%	% Droping whitefiles to prevent execution of matchers with them
-%	execute_matchers(Matchers, {Addr, drop_whitefile(Files)}, PLT);
-	execute_matchers(Matchers, {Addr, Files}, PLT);
-apply_f([{whitefile_dr, _FuncParams}|Matchers], {Source, Files}, PLT) ->
-%	[{cid, CustomerId}|_] = Source,
-%	% Droping whitefiles to prevent execution of matchers with them
-	execute_matchers(Matchers, {Source, Files}, PLT);
-apply_f(Matchers, Params, true) ->    % if pl_text is already called, we can go parallel
-					% total file size check could be added 
-	PAnyRet = mydlp_api:pany(fun({Func, FuncParams}) ->
-					apply_m(Func, [FuncParams, Params]) end,
-			Matchers, 150000),
-	{FuncRet, Ret} = case PAnyRet of
-		false -> {arbitrary_func, neg};
-		{ok, {Func, _FuncParams}, R} -> {Func, R} end,
+execute_itypes_pf(ITypes, Addr, File) -> 
+        File1 = case File#file.mime_type of 
+                undefined -> 	MT = mydlp_tc:get_mime(File#file.data),
+				File#file{mime_type=MT};
+                _Else ->	File end,
 
-	apply_f_ret([], FuncRet, Params, true, Ret);
-apply_f([{Func, FuncParams}|Matchers], Params, PLT) ->   % pl_text is not called already, matchers will be called sequential.
-	Ret = apply_m(Func, [FuncParams, Params]),
-	apply_f_ret(Matchers, Func, Params, PLT, Ret).
+	PAnyRet = mydlp_api:pany(fun(T) -> execute_itype_pf(T, Addr, File1) end, ITypes, 150000),
+	case PAnyRet of
+		false -> neg;
+		{ok, _IType, Ret} -> Ret end.
 
-apply_f_ret(Matchers, _Func, Params, PLT, neg) ->	execute_matchers(Matchers, Params, PLT);
-apply_f_ret(_Matchers, Func, _Params, _PLT, 
-		{pos, {file, F}}) -> 			{pos, {file, F}, {matcher, Func}, {misc, ""}};
-apply_f_ret(_Matchers, Func, _Params, _PLT, 
-		{pos, {file, F}, {misc, Misc}}) -> 	{pos, {file, F}, {matcher, Func}, {misc, Misc}};
-apply_f_ret(_Matchers, Func, _Params, _PLT, pos) -> 	{pos, {file, #file{name="unknown"}}, {matcher, Func}, {misc, ""}};
-apply_f_ret(_Matchers, _Func, _Params, _PLT, 
-		{error, {file, F}, 
-			{matcher, Matcher}}) ->		{error, {file, F}, {matcher, Matcher}, {misc, ""}};
-apply_f_ret(_Matchers, _Func, _Params, _PLT, 
-		{error, {file, F}, {matcher, Matcher}, 
-			{misc, Misc}}) ->		{error, {file, F}, {matcher, Matcher}, {misc, Misc}}.
+execute_itype_pf({ITypeOrigId, Threshold, all, IFeatures}, Addr, File) ->
+	execute_itype_pf1(ITypeOrigId, Threshold, IFeatures, Addr, File);
+execute_itype_pf({ITypeOrigId, Threshold, DataFormats, IFeatures}, Addr, 
+		#file{mime_type=MT} = File) ->
+        case mydlp_mnesia:is_mime_of_dfid(MT, DataFormats) of
+                false -> neg;
+		true -> execute_itype_pf1(ITypeOrigId, Threshold, IFeatures, Addr, File) end.
 
-apply_m(Func, [FuncParams, {Addr, Files}]) ->
-	Files1 = case get_matcher_req(Func) of
-		raw -> Files;
-		analyzed -> Files;
-		text -> drop_notext(Files) end,
-	FuncOpts = get_func_opts(Func, FuncParams),
-	apply_mp(Func, FuncOpts, Addr, Files1).
+execute_itype_pf1(ITypeOrigId, Threshold, IFeatures, Addr, File) ->
+	case execute_ifeatures(IFeatures, Addr, File) of
+		I when is_integer(I), I >= Threshold -> 
+				{pos, {file, File}, {itype, ITypeOrigId}, 
+				{misc, "score=" ++ integer_to_list(I)}};
+		I when is_integer(I) -> neg;
+		{error, {file, File}, {misc, Misc}} ->
+				{error, {file, File}, {itype, ITypeOrigId}, {misc, Misc}};
+		E -> E end.
 
-apply_mp(Func, FuncOpts, Addr, Files) ->
-	try	PanyRet = mydlp_api:pany(fun(F) -> 
-				try apply(mydlp_matchers, Func, [FuncOpts, Addr, F])
-				catch _:{timeout, _} -> {error, {file, F}, 
-						{matcher, timeout_exceeded}} end
-			end, Files, 120000),
-		case PanyRet of
-			false -> neg;
-			{ok, _File, Result} -> Result end
-	catch _:{timeout, F, T} -> {error, {file, F}, {matcher, timeout_exceeded}, 
-					{misc, "timeout=" ++ integer_to_list(T)}} end.
+execute_ifeatures([], _Addr, _File) -> 0;
+execute_ifeatures(IFeatures, Addr, File) -> 
+	try	PMapRet = mydlp_api:pmap(fun({Weight, {Func, FuncParams}}) ->
+						apply_m(Weight, Func, [FuncParams, Addr, File]) end,
+					IFeatures, 120000),
+		%%%% TODO: Check for PMapRet whether contains error
+		lists:sum(PMapRet)
+	catch _:{timeout, _F, T} -> {error, {file, File}, {misc, "timeout=" ++ integer_to_list(T)}} end.
 
-get_matcher_req(whitefile) -> raw;
-get_matcher_req(whitefile_dr) -> raw;
+apply_m(Weight, Func, [FuncParams, Addr, File]) ->
+	EarlyNeg = case get_matcher_req(Func) of
+		raw -> false;
+		analyzed -> false;
+		text -> not mydlp_api:has_text(File) end,
+	case EarlyNeg of
+		true -> 0;
+		false -> FuncOpts = get_func_opts(Func, FuncParams),
+			Count = apply(mydlp_matchers, Func, [FuncOpts, Addr, File]),
+			Count * Weight end.
+
 get_matcher_req(Func) -> apply(mydlp_matchers, Func, []).
 
 get_func_opts(Func, FuncParams) -> apply(mydlp_matchers, Func, [FuncParams]).
@@ -410,33 +392,10 @@ is_whitefile(File) ->
 
 drop_whitefile(Files) -> lists:filter(fun(F) -> not is_whitefile(F) end, Files).
 
-is_whitefile_dr(File, CustomerId) ->
-	Hash = erlang:md5(File#file.data),
-	mydlp_mnesia:is_dr_fh_of_fid(Hash, {wl, CustomerId}).
-
-drop_whitefile_dr(Files, CustomerId) -> lists:filter(fun(F) -> not is_whitefile_dr(F, CustomerId) end, Files).
-
-drop_notext(Files) -> lists:filter(fun(I) -> mydlp_api:has_text(I) end, Files).
-
 has_data(#file{dataref={cacheref, _Ref}}) -> true;
 has_data(#file{dataref={memory, Bin}}) -> size(Bin) > 0;
 has_data(#file{data=Data}) when is_binary(Data)-> size(Data) > 0;
 has_data(Else) -> throw({error, unexpected_obj, Else}).
 
 drop_nodata(Files) -> lists:filter(fun(F) -> has_data(F) end, Files).
-
-has_wf(Rules) ->
-	lists:any(fun({_Id, _Action, Matchers}) ->
-		case lists:keyfind(whitefile, 1, Matchers) of
-			false -> false;
-			_Else -> true end end, 
-	Rules).
-
--ifdef(__MYDLP_NETWORK).
-
-head_dr([], []) -> [];
-head_dr([{FilterKey, Rules}], DRules) -> [{FilterKey, lists:append(DRules,Rules)}];
-head_dr([], DRules) -> [{{0, pass}, DRules}].
-
--endif.
 
