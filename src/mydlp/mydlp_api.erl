@@ -1741,7 +1741,7 @@ empty_aclr(Files) -> empty_aclr(Files, -1).
 %% @end
 %%-------------------------------------------------------------------------
 
-empty_aclr(Files, Matcher) -> {{rule, -1}, {file, Files}, {itype, ITypeId}, {misc,""}}.
+empty_aclr(Files, ITypeId) -> {{rule, -1}, {file, Files}, {itype, ITypeId}, {misc,""}}.
 
 
 %%-------------------------------------------------------------------------
