@@ -275,9 +275,8 @@ stop() ->
 -ifdef(__MYDLP_NETWORK).
 
 init([]) ->
-%	IsMS = mydlp_mysql:is_multisite(),
-%	{ok, #state{is_multisite=IsMS, error_action=?CFG(error_action)}}.
-	{ok, #state{is_multisite=false}}.
+	IsMS = mydlp_mysql:is_multisite(),
+	{ok, #state{is_multisite=IsMS}}.
 
 -endif.
 

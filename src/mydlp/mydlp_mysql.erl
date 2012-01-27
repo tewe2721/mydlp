@@ -39,7 +39,7 @@
 	compile_filters/0,
 	compile_customer/1,
 	push_log/8,
-%	is_multisite/0,
+	is_multisite/0,
 	get_denied_page/0,
 	insert_log_file/5,
 	insert_log_file/2,
@@ -90,6 +90,7 @@ compile_customer(FilterId) when is_integer(FilterId) ->
 	gen_server:call(?MODULE, {compile_customer, FilterId} , 60000).
 
 %is_multisite() -> gen_server:call(?MODULE, is_multisite).
+is_multisite() -> false.
 
 get_denied_page() -> gen_server:call(?MODULE, get_denied_page).
 
