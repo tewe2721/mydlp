@@ -78,7 +78,7 @@ init([]) ->
 %% @private
 %%-------------------------------------------------------------------------
 'WAIT_FOR_SOCKET'({socket_ready, Socket, _CommType}, State) when is_port(Socket) ->
-	inet:setopts(Socket, [{active, once}, {packet, line}, list]),
+	inet:setopts(Socket, [{active, once}, {nodelay, true}, {packet, line}, list]),
 	{ok, {IP, _Port}} = inet:peername(Socket),
 	{next_state, 'SEAP_REQ', State#state{socket=Socket, addr=IP}, ?CFG(fsm_timeout)};
 'WAIT_FOR_SOCKET'(Other, State) ->
