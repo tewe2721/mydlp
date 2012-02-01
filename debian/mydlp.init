@@ -81,7 +81,7 @@ wait_for_jetty() {
 }
 
 start_mysql() {
-	start_mysql
+	start_mysqld
 	check_mysql_db
 }
 
