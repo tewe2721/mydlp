@@ -64,6 +64,10 @@ function solrUpdate() {
 	updateLastIndex $id
 }
 
+function solrReset() {
+	$CURL "$SOLRUPDATEURL?commit=true" -H "Content-Type: text/xml" --data-binary '<delete><query>*:*</query></delete>' >/dev/null
+}
+
 
 function solrCommit() {
 	$CURL "$SOLRUPDATEURL" -H "Content-Type: text/xml" --data-binary '<commit waitFlush="false"/>' >/dev/null
