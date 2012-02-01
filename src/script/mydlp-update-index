@@ -1,0 +1,87 @@
+#!/bin/bash
+PATH=/usr/local/maven/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games
+
+MYDLPCONF="/etc/mydlp/mydlp.conf"
+MYDLPLASTINDEXFILE="/var/lib/mydlp/last_indexed_item"
+CURLC=/usr/bin/curl
+CURLOPTS="-s"
+SOLRBASEURL="http://127.0.0.1:8010/solr"
+SOLRUPDATEURL="$SOLRBASEURL/update"
+SOLREXTRACTURL="$SOLRUPDATEURL/extract"
+SOLRIDKEY="literal.id"
+SOLREXTRACTOPTS="literal.category=archive"
+MYSQLC=/usr/bin/mysql
+MYSQLOPTS="-N"
+
+CURL="$CURLC $CURLOPTS"
+
+if [ -n "$1" ]; then
+	MYDLPCONF=$1
+fi
+
+LASTINDEX=0
+if [ -e "$MYDLPLASTINDEXFILE" ]; then
+	LASTINDEX=$(cat $MYDLPLASTINDEXFILE)
+else
+	echo 0 > $MYDLPLASTINDEXFILE ||exit 1
+fi
+
+MYSQLHOST=$(grep -e "^mysql_host" $MYDLPCONF|cut -f 2)
+MYSQLPORT=$(grep -e "^mysql_port" $MYDLPCONF|cut -f 2)
+MYSQLUSER=$(grep -e "^mysql_user" $MYDLPCONF|cut -f 2)
+MYSQLPW=$(grep -e "^mysql_password" $MYDLPCONF|cut -f 2)
+MYSQLDB=$(grep -e "^mysql_log_database" $MYDLPCONF|cut -f 2)
+
+MYSQLARGS="$MYSQLOPTS "
+
+if [ "$MYSQLHOST" != "localhost" ]; then
+	MYSQLARGS="$MYSQLARGS -h $MYSQLHOST"
+	if [ "$MYSQLPORT" != "3306" ]; then
+		MYSQLARGS="$MYSQLARGS -P $MYSQLPORT"
+	fi
+fi
+
+MYSQLARGS="$MYSQLARGS -u $MYSQLUSER"
+
+if [ "$MYSQLPW" != '""' ]; then
+	MYSQLARGS="$MYSQLARGS -p$MYSQLPW"
+fi
+
+MYSQLARGS="$MYSQLARGS $MYSQLDB"
+
+MYSQL="$MYSQLC $MYSQLARGS"
+
+function updateLastIndex() {
+	local id=$1
+	echo $id > $MYDLPLASTINDEXFILE
+	LASTINDEX=$id
+}
+
+function solrUpdate() {
+	local id=$1
+	local file=$2
+	$CURL "$SOLREXTRACTURL?$SOLRIDKEY=$id&$SOLREXTRACTOPTS" -F "myfile=@$file" >/dev/null || exit 1
+	updateLastIndex $id
+}
+
+
+function solrCommit() {
+	$CURL "$SOLRUPDATEURL" -H "Content-Type: text/xml" --data-binary '<commit waitFlush="false"/>' >/dev/null
+}
+
+function queryNewContent() {
+	echo "SELECT id,localPath from IncidentLogFileContent where id > $LASTINDEX"|$MYSQL
+}
+
+queryNewContent|while read line
+do
+	IID=$(echo $line|cut -f 1)
+	IFILE=$(echo $line|cut -f 2)
+	solrUpdate $IID $IFILE
+done
+
+solrCommit
+
+
+
+
