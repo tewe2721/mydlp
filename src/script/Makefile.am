@@ -1,4 +1,4 @@
 sbin_SCRIPTS = \
 	mydlp-reset-db \
-	mydlp-update-index \
+	mydlp-index \
 	mydlp-watchdog
