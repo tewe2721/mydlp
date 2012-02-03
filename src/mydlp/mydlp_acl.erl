@@ -115,7 +115,7 @@ acl_call(Query, Files, Timeout) ->
 % no need to call acl server for inbound requests.
 acl_call1({qi, _Channel}, _Files, _Timeout) -> 
 	case ?CFG(archive_inbound) of
-		true -> archive;
+		true -> {archive, mydlp_api:empty_aclr(none, archive_inbound)};
 		false -> pass end;
 acl_call1(Query, Files, Timeout) -> gen_server:call(?MODULE, {acl, Query, Files, Timeout}, Timeout).
 
@@ -353,7 +353,7 @@ execute_ifeatures(IFeatures, Addr, File) ->
 					IFeatures, 120000),
 		%%%% TODO: Check for PMapRet whether contains error
 		lists:sum(PMapRet)
-	catch _:{timeout, _F, T} -> {error, {file, File}, {misc, "timeout=" ++ integer_to_list(T)}} end.
+	catch _:{timeout, _F, _T} -> {error, {file, File}, {misc, timeout}} end.
 
 apply_m(Weight, Func, [FuncParams, Addr, File]) ->
 	EarlyNeg = case get_matcher_req(Func) of

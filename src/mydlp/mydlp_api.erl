@@ -1764,8 +1764,6 @@ empty_aclr(Files) -> empty_aclr(Files, "").
 %% @end
 %%-------------------------------------------------------------------------
 
-empty_aclr(Files, Misc) when is_atom(Misc) -> {Files, atom_to_list(Misc)};
-
 empty_aclr(Files, Misc) -> {{rule, -1}, {file, Files}, {itype, -1}, {misc, Misc}}.
 
 
