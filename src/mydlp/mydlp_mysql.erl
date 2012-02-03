@@ -133,11 +133,11 @@ handle_call(get_denied_page, _From, State) ->
 handle_call({push_log, {Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc}}, From, State) ->
 	Worker = self(),
 	?ASYNC(fun() ->
-			{_FilterId, RuleId1, Ip1, User1, ActionS, ChannelS} = 
-				pre_push_log(RuleId, Ip, User, Action, Channel),
+			{_FilterId, RuleId1, Ip1, User1, To1, ActionS, ChannelS} = 
+				pre_push_log(RuleId, Ip, User, To, Action, Channel),
 			{atomic, ILId} = ltransaction(fun() ->
 					psqt(insert_incident, 
-						[Time, ChannelS, RuleId1, Ip1, User1, To, ITypeId, ActionS, Misc]),
+						[Time, ChannelS, RuleId1, Ip1, User1, To1, ITypeId, ActionS, Misc]),
 					last_insert_id_t() end, 30000),
 			Reply = ILId,	
                         Worker ! {async_reply, Reply, From}
@@ -637,7 +637,7 @@ rule_dtype_to_channel(<<"EndpointRule">>) -> endpoint;
 rule_dtype_to_channel(<<"PrinterRule">>) -> printer;
 rule_dtype_to_channel(Else) -> throw({error, unsupported_rule_type, Else}).
 
-pre_push_log(RuleId, Ip, User, Action, Channel) -> 
+pre_push_log(RuleId, Ip, User, Destination, Action, Channel) -> 
 %	{FilterId, RuleId1} = case RuleId of
 %		{dr, CId} -> {CId, 0};
 %		-1 = RuleId -> {mydlp_mnesia:get_dfid(), RuleId};	% this shows default action had been enforeced 
@@ -650,6 +650,10 @@ pre_push_log(RuleId, Ip, User, Action, Channel) ->
 	Ip1 = case ip_to_int(Ip) of
 		nil -> null;
 		Else2 -> Else2
+	end,
+	Destination1 = case Destination of
+		nil -> null;
+		Else3 -> Else3
 	end,
 	ActionS = case Action of
 		pass -> <<"P">>;
@@ -664,7 +668,7 @@ pre_push_log(RuleId, Ip, User, Action, Channel) ->
 		endpoint -> <<"E">>;
 		printer -> <<"P">> 
 	end,
-	{0, RuleId, Ip1, User1, ActionS, ChannelS}.
+	{0, RuleId, Ip1, User1, Destination1, ActionS, ChannelS}.
 
 -endif.
 

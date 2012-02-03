@@ -1757,14 +1757,16 @@ term2file(Term) when is_list(Term) ->
 %% @end
 %%-------------------------------------------------------------------------
 
-empty_aclr(Files) -> empty_aclr(Files, -1).
+empty_aclr(Files) -> empty_aclr(Files, "").
 
 %%-------------------------------------------------------------------------
 %% @doc Creates an empty acl result tuple with given files and itype id
 %% @end
 %%-------------------------------------------------------------------------
 
-empty_aclr(Files, ITypeId) -> {{rule, -1}, {file, Files}, {itype, ITypeId}, {misc,""}}.
+empty_aclr(Files, Misc) when is_atom(Misc) -> {Files, atom_to_list(Misc)};
+
+empty_aclr(Files, Misc) -> {{rule, -1}, {file, Files}, {itype, -1}, {misc, Misc}}.
 
 
 %%-------------------------------------------------------------------------
