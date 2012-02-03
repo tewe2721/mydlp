@@ -189,88 +189,6 @@ to_lowerchar(C) ->
     C.
 
 %%--------------------------------------------------------------------
-%% @doc Extracts Texts from MS Office 97 - 2003 Files 
-%% @end
-%%----------------------------------------------------------------------
-
--ifdef(__PLATFORM_LINUX).
-
--define(DOC, {"/usr/bin/catdoc", ["-wx", "-dutf-8"]}).
--define(PPT, {"/usr/bin/catppt", []}).
--define(XLS, {"/usr/bin/xls2csv", ["-x"]}).
-
--endif.
-
--ifdef(__PLATFORM_WINDOWS).
-
--define(DOC, {?CFG(app_dir) ++ "/cygwin/bin/catdoc.exe", ["-wx", "-dutf-8"]}).
--define(PPT, {?CFG(app_dir) ++ "/cygwin/bin/catppt.exe", []}).
--define(XLS, {?CFG(app_dir) ++ "/cygwin/bin/xls2csv.exe", ["-x"]}).
-
--endif.
-
-office_to_text(#file{filename = Filename, data = Data}) ->
-	StrLen = case is_list(Filename) of
-		true -> string:len(Filename);
-		false -> 0 end,
-
-	case StrLen >= 4 of
-		true ->	Ext = string:sub_string(Filename, StrLen - 3, StrLen),
-			case Ext of
-% catppt always returns 0, should resolve this bug before uncommenting these.
-%				".doc" -> office_to_text(Data, [?DOC, ?XLS, ?PPT]);
-%				".xls" -> office_to_text(Data, [?XLS, ?DOC, ?PPT]);
-%				".ppt" -> office_to_text(Data, [?PPT, ?DOC, ?XLS]);
-				".doc" -> office_to_text(Data, [?DOC, ?XLS]);
-				".xls" -> office_to_text(Data, [?XLS, ?DOC]);
-				".ppt" -> office_to_text(Data, [?PPT, ?DOC, ?XLS]);
-				_ -> office_to_text(Data, [?DOC, ?XLS, ?PPT]) end;
-		false -> office_to_text(Data, [?DOC, ?XLS, ?PPT]) end.
-
-office_to_text(Data, [Prog|Progs]) ->
-	{Exec, Args} = Prog,
-	{ok, FN} = mktempfile(),
-	ok = file:write_file(FN, Data, [raw]),
-	Port = open_port({spawn_executable, Exec}, 
-			[{args, Args ++ [FN]},
-%			[{args, Args},
-			binary,
-			use_stdio,
-			exit_status,
-			stderr_to_stdout]),
-
-%%	port_command(Port, Data),
-%%	port_command(Port, <<-1>>),
-
-	Ret = case get_port_resp(Port, []) of
-		{ok, Text} -> {ok, Text};
-		{error, {retcode, _}} -> office_to_text(Data, Progs);
-		{error, timeout} -> {error, timeout}
-	end,
-	ok = file:delete(FN), Ret;
-office_to_text(_Data, []) -> {error, corrupted}.
-
-%%--------------------------------------------------------------------
-%% @doc Gets response from ports
-%% @end
-%%----------------------------------------------------------------------
-get_port_resp(Port, Ret) ->
-	receive
-		{ Port, {data, Data}} -> get_port_resp(Port, [Data|Ret]);
-		{ Port, {exit_status, 0}} -> {ok, list_to_binary(lists:reverse(Ret))};
-		{ Port, {exit_status, RetCode}} -> { error, {retcode, RetCode} }
-	after 180000 -> { error, timeout }
-	end.
-
-get_port_resp(Port) ->
-	receive
-		{ Port, {data, _Data}} -> get_port_resp(Port);
-		{ Port, {exit_status, 0}} -> ok;
-		{ Port, {exit_status, RetCode}} -> { error, {retcode, RetCode} }
-	after 180000 -> { error, timeout }
-	end.
-
-%%--------------------------------------------------------------------
 %% @doc Extracts Text from File records
 %% @end
 %%----------------------------------------------------------------------
@@ -278,72 +196,16 @@ get_text(#file{is_encrypted=true}) -> {error, encrypted};
 get_text(#file{compressed_copy=true}) -> {error, compression};
 get_text(#file{mime_type= <<"application/x-empty">>}) -> {ok, <<>>};
 get_text(#file{mime_type= <<"text/plain">>, data=Data}) -> {ok, Data};
-get_text(#file{mime_type= <<"application/xml">>, data=Data}) ->
-	try	Text = xml_to_txt(Data),
-		{ok, Text}
-	%catch C:E -> {error, {C,E}} end;
-	catch _C:_E -> {ok, Data} end;
-get_text(#file{mime_type= <<"application/pdf">>, data=Data}) ->
-	pdf_to_text(Data);
-get_text(#file{mime_type= <<"text/rtf">>, data=Data}) ->
-	office_to_text(Data, [?DOC]);
-get_text(#file{mime_type= <<"application/vnd.ms-excel">>, data=Data}) ->
-	office_to_text(Data, [?XLS, ?DOC, ?PPT]);
-get_text(#file{mime_type= <<"CDF V2 Document", _/binary>>} = File) ->  %%% TODO: should be refined
-	office_to_text(File);
-get_text(#file{mime_type= <<"application/msword">>} = File) ->
-	office_to_text(File);
-get_text(#file{mime_type= <<"application/vnd.ms-office">>} = File) ->
-	office_to_text(File);
-get_text(#file{mime_type= <<"text/html">>, data=Data}) ->
-	try	Text = mydlp_tc:html_to_text(Data),
-		{ok, Text}
-	catch _:E -> {error, E} end;
-get_text(#file{mime_type= <<"application/postscript">>, data=Data}) ->
-	ps_to_text(Data);
-get_text(#file{mime_type= <<"text/",_Rest/binary>>, data=Data}) -> {ok, Data};
 get_text(#file{mime_type=undefined}) -> {error, unknown_type};
-get_text(#file{mime_type=MimeType}) -> 
-	MiscMimeCate = mime_category(MimeType),
-	{error, MiscMimeCate}.
-
-%%--------------------------------------------------------------------
-%% @doc Extracts Text from XML string
-%% @end
-%%----------------------------------------------------------------------
-
--define(XMERL_OPTS, [
-	{validation,false}, 
-	{quiet,true},
-	{fetch_fun, fun(_URI, State) ->	{ok, {string, ""}, State} end}
-]).
-
-xml_to_txt(Data) when is_binary(Data) -> 
-	X = case size(Data) > (?CFG(maximum_memory_object)/4) of
-		true ->	{ok, XmlF} = mktempfile(),
-			ok = file:write_file(XmlF, Data, [raw]),
-			X1 = xmerl_scan:file(XmlF, ?XMERL_OPTS),
-			ok = file:delete(XmlF), X1;
-		false -> XmlS = binary_to_list(Data),
-			xmerl_scan:string(XmlS, ?XMERL_OPTS) end,
-
-	RetList = xml_to_txt1(X),
-	unicode:characters_to_binary(RetList).
-
-xml_to_txt1(List) when is_list(List) -> xml_to_txt1(List, []);
-%xml_to_txt1(#xmlElement{attributes=Attrs, content=Conts}) ->
-	%string:join([xml_to_txt1(Attrs), xml_to_txt1(Conts)], " ");
-xml_to_txt1(#xmlElement{content=Conts}) -> xml_to_txt1(Conts);
-%xml_to_txt1(#xmlAttribute{value=Val}) -> Val;
-xml_to_txt1(#xmlText{value=Val}) -> Val;
-xml_to_txt1({XmlElement, _}) -> xml_to_txt1(XmlElement).
-
-xml_to_txt1([Comp|Rest], Ret) -> 
-	case string:strip(xml_to_txt1(Comp)) of
-		[] -> xml_to_txt1(Rest, Ret);
-		Else -> xml_to_txt1(Rest, [Else|Ret])
-	end;
-xml_to_txt1([], Ret) -> string:join(lists:reverse(Ret), " ").
+get_text(#file{mime_type=MimeType, filename=Filename, data=Data}) -> 
+	case mime_category(MimeType) of
+		compression -> {error, compression};
+		audio-> {error, audio};
+		video-> {error, video};
+		image-> {error, image};
+		_ -> 	try {ok, mydlp_tc:get_text(Filename, MimeType, Data)}
+			catch Class:Error -> {error, {Class,Error}} end
+	end.
 
 %%--------------------------------------------------------------------
 %% @doc Removes specified chars from string
@@ -582,6 +444,26 @@ is_valid_nino1([_, _ |Rest]) ->
 				( $d >= LastChar );
 		_Else -> false end.
 
+%%--------------------------------------------------------------------
+%% @doc Gets response from ports
+%% @end
+%%----------------------------------------------------------------------
+get_port_resp(Port, Ret) ->
+	receive
+		{ Port, {data, Data}} -> get_port_resp(Port, [Data|Ret]);
+		{ Port, {exit_status, 0}} -> {ok, list_to_binary(lists:reverse(Ret))};
+		{ Port, {exit_status, RetCode}} -> { error, {retcode, RetCode} }
+	after 180000 -> { error, timeout }
+	end.
+
+get_port_resp(Port) ->
+	receive
+		{ Port, {data, _Data}} -> get_port_resp(Port);
+		{ Port, {exit_status, 0}} -> ok;
+		{ Port, {exit_status, RetCode}} -> { error, {retcode, RetCode} }
+	after 180000 -> { error, timeout }
+	end.
+
 %%% imported from tsuraan tempfile module http://www.erlang.org/cgi-bin/ezmlm-cgi/4/41649
 
 %%--------------------------------------------------------------------
@@ -818,72 +700,6 @@ rr_files([FN|FNs], WorkDir, Ret) ->
 rr_files([], _WorkDir, Ret) -> lists:flatten(lists:reverse(Ret)).
 
 %%--------------------------------------------------------------------
-%% @doc Extracts Text from PostScript files
-%% @end
-%%----------------------------------------------------------------------
--ifdef(__PLATFORM_LINUX).
-
--define(PSTOTEXTBIN, "/usr/bin/pstotext").
--define(PSTOTEXTARGS(Ps), [Ps]).
-
-ps_to_text(Bin) when is_binary(Bin) -> 
-	{ok, Ps} = mktempfile(),
-	ok = file:write_file(Ps, Bin, [raw]),
-	Port = open_port({spawn_executable, ?PSTOTEXTBIN}, 
-			[{args, ?PSTOTEXTARGS(Ps)},
-			use_stdio,
-			exit_status,
-			stderr_to_stdout]),
-
-	Ret = case get_port_resp(Port, []) of
-		{ok, Text} -> {ok, Text};
-		Else -> Else
-	end,
-	ok = file:delete(Ps), Ret.
-
--endif.
-
--ifdef(__PLATFORM_WINDOWS).
-
-ps_to_text(Bin) -> pdf_to_text(Bin).
-
--endif.
-
-%%--------------------------------------------------------------------
-%% @doc Extracts Text from PDF files
-%% @end
-%%----------------------------------------------------------------------
--ifdef(__PLATFORM_LINUX).
-
--define(PDFTOTEXTBIN, "/usr/bin/pdftotext").
-
--endif.
-
--ifdef(__PLATFORM_WINDOWS).
-
--define(PDFTOTEXTBIN, ?CFG(app_dir) ++ "/cygwin/bin/pdftotext.exe").
-
--endif.
-
--define(PDFTOTEXTARGS(Pdf, TextFN), ["-q","-eol","unix",Pdf,TextFN]).
-
-pdf_to_text(Bin) when is_binary(Bin) -> 
-	{ok, Pdf} = mktempfile(),
-	ok = file:write_file(Pdf, Bin, [raw]),
-	{ok, TextFN} = mktempfile(),
-	Port = open_port({spawn_executable, ?PDFTOTEXTBIN}, 
-			[{args, ?PDFTOTEXTARGS(Pdf, TextFN)},
-			use_stdio,
-			exit_status,
-			stderr_to_stdout]),
-
-	Ret = case get_port_resp(Port) of
-		ok -> {ok, Text} = file:read_file(TextFN), {ok, Text};
-		Else -> Else
-	end,
-	ok = file:delete(Pdf), ok = file:delete(TextFN), Ret.
-
-%%--------------------------------------------------------------------
 %% @doc Logs acl messages
 %% @end
 %%----------------------------------------------------------------------
@@ -1097,11 +913,7 @@ ctf_ok(Files, File, ExtFiles, Processed, New) ->
 ctf_err_enc(Files, File, Processed, New) -> 
 	comp_to_files(Files, [File#file{is_encrypted=true}|Processed], New).
 
-comp_to_files([#file{mime_type=MT, compressed_copy=false, is_encrypted=false} = File|Files], Processed, New) 
-	when	MT == <<"application/zip">>;
-		MT == ?MIME_OOXML_WORD;
-		MT == ?MIME_OOXML_EXCEL;
-		MT == ?MIME_OOXML_POWERPOINT -> 
+comp_to_files([#file{mime_type= <<"application/zip">>, compressed_copy=false, is_encrypted=false} = File|Files], Processed, New) ->
 	case zip:extract(File#file.data, [memory]) of
 		{ok, Ext} -> 
 			ExtFiles = ext_to_file(Ext),
@@ -1115,11 +927,6 @@ comp_to_files([#file{mime_type= <<"application/x-gzip">>, compressed_copy=false,
 			ctf_ok(Files, File, ExtFiles, Processed, New);
 		{error, _ShouldBeLogged} -> 
 			ctf_err_enc(Files, File, Processed, New) end;
-comp_to_files([#file{mime_type= <<"application/vnd.oasis.opendocument.text">>}|_] = Files, Processed, New) -> % Needs refinement for better ODF handling
-	try_unzip(Files, Processed, New);
-comp_to_files([#file{mime_type= <<"application/octet-stream">>}|_] = Files, Processed, New) -> % Needs refinement for better ODF handling
-	%try_unzip(Files, Returns);
-	try_un7z(Files, Processed, New);
 comp_to_files([#file{mime_type= <<"application/x-archive">>, compressed_copy=false, is_encrypted=false} = File|Files], Processed, New) ->
 	case unar(File#file.dataref, File#file.filename) of
 		{ok, Ext} -> 
@@ -1545,6 +1352,10 @@ mime_category(<<"image/x-rgb">>) -> image;
 mime_category(<<"image/x-xbitmap">>) -> image;
 mime_category(<<"image/x-xpixmap">>) -> image;
 mime_category(<<"image/x-xwindowdump">>) -> image;
+mime_category(<<"image/",_/binary>>) -> image;
+mime_category(<<"audio/",_/binary>>) -> audio;
+mime_category(<<"video/",_/binary>>) -> video;
+mime_category(<<"text/",_/binary>>) -> text;
 mime_category(_Else) -> unsupported_type.
 
 %%-------------------------------------------------------------------------

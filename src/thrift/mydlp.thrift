@@ -22,5 +22,5 @@ namespace java com.mydlp.backend.thrift
 
 service Mydlp {
 	string getMime(1 : binary Data)
-	binary getText(1 : binary Data)
+	binary getText(1 : string FileName, 2: string MimeType, 3 : binary Data)
 }

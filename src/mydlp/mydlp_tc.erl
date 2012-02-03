@@ -34,7 +34,7 @@
 -export([start_link/0,
 	pre_init/1,
 	get_mime/1,
-	get_text/1,
+	get_text/3,
 	stop/0]).
 
 %% gen_server callbacks
@@ -95,8 +95,8 @@ get_mime_zip(Data) ->
 	false -> case	lists:keymember("ppt/presentation.xml", 2, FL) of true -> ?MIME_OOXML_POWERPOINT;
 	false -> <<"application/zip">> end end end.
 
-get_text(Data) ->
-	call_pool({thrift, java, getText, [Data]}).
+get_text(Filename, MT, Data) ->
+	call_pool({thrift, java, getText, [Filename, MT, Data]}).
 
 %%%%%%%%%%%%%% gen_server handles
 

@@ -26,7 +26,7 @@ public class Mydlp {
 
     public String getMime(ByteBuffer Data) throws org.apache.thrift.TException;
 
-    public ByteBuffer getText(ByteBuffer Data) throws org.apache.thrift.TException;
+    public ByteBuffer getText(String FileName, String MimeType, ByteBuffer Data) throws org.apache.thrift.TException;
 
   }
 
@@ -34,7 +34,7 @@ public class Mydlp {
 
     public void getMime(ByteBuffer Data, org.apache.thrift.async.AsyncMethodCallback<AsyncClient.getMime_call> resultHandler) throws org.apache.thrift.TException;
 
-    public void getText(ByteBuffer Data, org.apache.thrift.async.AsyncMethodCallback<AsyncClient.getText_call> resultHandler) throws org.apache.thrift.TException;
+    public void getText(String FileName, String MimeType, ByteBuffer Data, org.apache.thrift.async.AsyncMethodCallback<AsyncClient.getText_call> resultHandler) throws org.apache.thrift.TException;
 
   }
 
@@ -81,15 +81,17 @@ public class Mydlp {
       throw new org.apache.thrift.TApplicationException(org.apache.thrift.TApplicationException.MISSING_RESULT, "getMime failed: unknown result");
     }
 
-    public ByteBuffer getText(ByteBuffer Data) throws org.apache.thrift.TException
+    public ByteBuffer getText(String FileName, String MimeType, ByteBuffer Data) throws org.apache.thrift.TException
     {
-      send_getText(Data);
+      send_getText(FileName, MimeType, Data);
       return recv_getText();
     }
 
-    public void send_getText(ByteBuffer Data) throws org.apache.thrift.TException
+    public void send_getText(String FileName, String MimeType, ByteBuffer Data) throws org.apache.thrift.TException
     {
       getText_args args = new getText_args();
+      args.setFileName(FileName);
+      args.setMimeType(MimeType);
       args.setData(Data);
       sendBase("getText", args);
     }
@@ -154,23 +156,29 @@ public class Mydlp {
       }
     }
 
-    public void getText(ByteBuffer Data, org.apache.thrift.async.AsyncMethodCallback<getText_call> resultHandler) throws org.apache.thrift.TException {
+    public void getText(String FileName, String MimeType, ByteBuffer Data, org.apache.thrift.async.AsyncMethodCallback<getText_call> resultHandler) throws org.apache.thrift.TException {
       checkReady();
-      getText_call method_call = new getText_call(Data, resultHandler, this, ___protocolFactory, ___transport);
+      getText_call method_call = new getText_call(FileName, MimeType, Data, resultHandler, this, ___protocolFactory, ___transport);
       this.___currentMethod = method_call;
       ___manager.call(method_call);
     }
 
     public static class getText_call extends org.apache.thrift.async.TAsyncMethodCall {
+      private String FileName;
+      private String MimeType;
       private ByteBuffer Data;
-      public getText_call(ByteBuffer Data, org.apache.thrift.async.AsyncMethodCallback<getText_call> resultHandler, org.apache.thrift.async.TAsyncClient client, org.apache.thrift.protocol.TProtocolFactory protocolFactory, org.apache.thrift.transport.TNonblockingTransport transport) throws org.apache.thrift.TException {
+      public getText_call(String FileName, String MimeType, ByteBuffer Data, org.apache.thrift.async.AsyncMethodCallback<getText_call> resultHandler, org.apache.thrift.async.TAsyncClient client, org.apache.thrift.protocol.TProtocolFactory protocolFactory, org.apache.thrift.transport.TNonblockingTransport transport) throws org.apache.thrift.TException {
         super(client, protocolFactory, transport, resultHandler, false);
+        this.FileName = FileName;
+        this.MimeType = MimeType;
         this.Data = Data;
       }
 
       public void write_args(org.apache.thrift.protocol.TProtocol prot) throws org.apache.thrift.TException {
         prot.writeMessageBegin(new org.apache.thrift.protocol.TMessage("getText", org.apache.thrift.protocol.TMessageType.CALL, 0));
         getText_args args = new getText_args();
+        args.setFileName(FileName);
+        args.setMimeType(MimeType);
         args.setData(Data);
         args.write(prot);
         prot.writeMessageEnd();
@@ -231,7 +239,7 @@ public class Mydlp {
 
       protected getText_result getResult(I iface, getText_args args) throws org.apache.thrift.TException {
         getText_result result = new getText_result();
-        result.success = iface.getText(args.Data);
+        result.success = iface.getText(args.FileName, args.MimeType, args.Data);
         return result;
       }
     }
@@ -845,13 +853,19 @@ public class Mydlp {
   public static class getText_args implements org.apache.thrift.TBase<getText_args, getText_args._Fields>, java.io.Serializable, Cloneable   {
     private static final org.apache.thrift.protocol.TStruct STRUCT_DESC = new org.apache.thrift.protocol.TStruct("getText_args");
 
-    private static final org.apache.thrift.protocol.TField DATA_FIELD_DESC = new org.apache.thrift.protocol.TField("Data", org.apache.thrift.protocol.TType.STRING, (short)1);
+    private static final org.apache.thrift.protocol.TField FILE_NAME_FIELD_DESC = new org.apache.thrift.protocol.TField("FileName", org.apache.thrift.protocol.TType.STRING, (short)1);
+    private static final org.apache.thrift.protocol.TField MIME_TYPE_FIELD_DESC = new org.apache.thrift.protocol.TField("MimeType", org.apache.thrift.protocol.TType.STRING, (short)2);
+    private static final org.apache.thrift.protocol.TField DATA_FIELD_DESC = new org.apache.thrift.protocol.TField("Data", org.apache.thrift.protocol.TType.STRING, (short)3);
 
+    public String FileName; // required
+    public String MimeType; // required
     public ByteBuffer Data; // required
 
     /** The set of fields this struct contains, along with convenience methods for finding and manipulating them. */
     public enum _Fields implements org.apache.thrift.TFieldIdEnum {
-      DATA((short)1, "Data");
+      FILE_NAME((short)1, "FileName"),
+      MIME_TYPE((short)2, "MimeType"),
+      DATA((short)3, "Data");
 
       private static final Map<String, _Fields> byName = new HashMap<String, _Fields>();
 
@@ -866,7 +880,11 @@ public class Mydlp {
        */
       public static _Fields findByThriftId(int fieldId) {
         switch(fieldId) {
-          case 1: // DATA
+          case 1: // FILE_NAME
+            return FILE_NAME;
+          case 2: // MIME_TYPE
+            return MIME_TYPE;
+          case 3: // DATA
             return DATA;
           default:
             return null;
@@ -912,6 +930,10 @@ public class Mydlp {
     public static final Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> metaDataMap;
     static {
       Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> tmpMap = new EnumMap<_Fields, org.apache.thrift.meta_data.FieldMetaData>(_Fields.class);
+      tmpMap.put(_Fields.FILE_NAME, new org.apache.thrift.meta_data.FieldMetaData("FileName", org.apache.thrift.TFieldRequirementType.DEFAULT, 
+          new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING)));
+      tmpMap.put(_Fields.MIME_TYPE, new org.apache.thrift.meta_data.FieldMetaData("MimeType", org.apache.thrift.TFieldRequirementType.DEFAULT, 
+          new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING)));
       tmpMap.put(_Fields.DATA, new org.apache.thrift.meta_data.FieldMetaData("Data", org.apache.thrift.TFieldRequirementType.DEFAULT, 
           new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING          , true)));
       metaDataMap = Collections.unmodifiableMap(tmpMap);
@@ -922,9 +944,13 @@ public class Mydlp {
     }
 
     public getText_args(
+      String FileName,
+      String MimeType,
       ByteBuffer Data)
     {
       this();
+      this.FileName = FileName;
+      this.MimeType = MimeType;
       this.Data = Data;
     }
 
@@ -932,6 +958,12 @@ public class Mydlp {
      * Performs a deep copy on <i>other</i>.
      */
     public getText_args(getText_args other) {
+      if (other.isSetFileName()) {
+        this.FileName = other.FileName;
+      }
+      if (other.isSetMimeType()) {
+        this.MimeType = other.MimeType;
+      }
       if (other.isSetData()) {
         this.Data = org.apache.thrift.TBaseHelper.copyBinary(other.Data);
 ;
@@ -944,7 +976,57 @@ public class Mydlp {
 
     @Override
     public void clear() {
+      this.FileName = null;
+      this.MimeType = null;
       this.Data = null;
+    }
+
+    public String getFileName() {
+      return this.FileName;
+    }
+
+    public getText_args setFileName(String FileName) {
+      this.FileName = FileName;
+      return this;
+    }
+
+    public void unsetFileName() {
+      this.FileName = null;
+    }
+
+    /** Returns true if field FileName is set (has been assigned a value) and false otherwise */
+    public boolean isSetFileName() {
+      return this.FileName != null;
+    }
+
+    public void setFileNameIsSet(boolean value) {
+      if (!value) {
+        this.FileName = null;
+      }
+    }
+
+    public String getMimeType() {
+      return this.MimeType;
+    }
+
+    public getText_args setMimeType(String MimeType) {
+      this.MimeType = MimeType;
+      return this;
+    }
+
+    public void unsetMimeType() {
+      this.MimeType = null;
+    }
+
+    /** Returns true if field MimeType is set (has been assigned a value) and false otherwise */
+    public boolean isSetMimeType() {
+      return this.MimeType != null;
+    }
+
+    public void setMimeTypeIsSet(boolean value) {
+      if (!value) {
+        this.MimeType = null;
+      }
     }
 
     public byte[] getData() {
@@ -983,6 +1065,22 @@ public class Mydlp {
 
     public void setFieldValue(_Fields field, Object value) {
       switch (field) {
+      case FILE_NAME:
+        if (value == null) {
+          unsetFileName();
+        } else {
+          setFileName((String)value);
+        }
+        break;
+
+      case MIME_TYPE:
+        if (value == null) {
+          unsetMimeType();
+        } else {
+          setMimeType((String)value);
+        }
+        break;
+
       case DATA:
         if (value == null) {
           unsetData();
@@ -996,6 +1094,12 @@ public class Mydlp {
 
     public Object getFieldValue(_Fields field) {
       switch (field) {
+      case FILE_NAME:
+        return getFileName();
+
+      case MIME_TYPE:
+        return getMimeType();
+
       case DATA:
         return getData();
 
@@ -1010,6 +1114,10 @@ public class Mydlp {
       }
 
       switch (field) {
+      case FILE_NAME:
+        return isSetFileName();
+      case MIME_TYPE:
+        return isSetMimeType();
       case DATA:
         return isSetData();
       }
@@ -1028,6 +1136,24 @@ public class Mydlp {
     public boolean equals(getText_args that) {
       if (that == null)
         return false;
+
+      boolean this_present_FileName = true && this.isSetFileName();
+      boolean that_present_FileName = true && that.isSetFileName();
+      if (this_present_FileName || that_present_FileName) {
+        if (!(this_present_FileName && that_present_FileName))
+          return false;
+        if (!this.FileName.equals(that.FileName))
+          return false;
+      }
+
+      boolean this_present_MimeType = true && this.isSetMimeType();
+      boolean that_present_MimeType = true && that.isSetMimeType();
+      if (this_present_MimeType || that_present_MimeType) {
+        if (!(this_present_MimeType && that_present_MimeType))
+          return false;
+        if (!this.MimeType.equals(that.MimeType))
+          return false;
+      }
 
       boolean this_present_Data = true && this.isSetData();
       boolean that_present_Data = true && that.isSetData();
@@ -1054,6 +1180,26 @@ public class Mydlp {
       int lastComparison = 0;
       getText_args typedOther = (getText_args)other;
 
+      lastComparison = Boolean.valueOf(isSetFileName()).compareTo(typedOther.isSetFileName());
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+      if (isSetFileName()) {
+        lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.FileName, typedOther.FileName);
+        if (lastComparison != 0) {
+          return lastComparison;
+        }
+      }
+      lastComparison = Boolean.valueOf(isSetMimeType()).compareTo(typedOther.isSetMimeType());
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+      if (isSetMimeType()) {
+        lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.MimeType, typedOther.MimeType);
+        if (lastComparison != 0) {
+          return lastComparison;
+        }
+      }
       lastComparison = Boolean.valueOf(isSetData()).compareTo(typedOther.isSetData());
       if (lastComparison != 0) {
         return lastComparison;
@@ -1081,7 +1227,21 @@ public class Mydlp {
           break;
         }
         switch (field.id) {
-          case 1: // DATA
+          case 1: // FILE_NAME
+            if (field.type == org.apache.thrift.protocol.TType.STRING) {
+              this.FileName = iprot.readString();
+            } else { 
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, field.type);
+            }
+            break;
+          case 2: // MIME_TYPE
+            if (field.type == org.apache.thrift.protocol.TType.STRING) {
+              this.MimeType = iprot.readString();
+            } else { 
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, field.type);
+            }
+            break;
+          case 3: // DATA
             if (field.type == org.apache.thrift.protocol.TType.STRING) {
               this.Data = iprot.readBinary();
             } else { 
@@ -1103,6 +1263,16 @@ public class Mydlp {
       validate();
 
       oprot.writeStructBegin(STRUCT_DESC);
+      if (this.FileName != null) {
+        oprot.writeFieldBegin(FILE_NAME_FIELD_DESC);
+        oprot.writeString(this.FileName);
+        oprot.writeFieldEnd();
+      }
+      if (this.MimeType != null) {
+        oprot.writeFieldBegin(MIME_TYPE_FIELD_DESC);
+        oprot.writeString(this.MimeType);
+        oprot.writeFieldEnd();
+      }
       if (this.Data != null) {
         oprot.writeFieldBegin(DATA_FIELD_DESC);
         oprot.writeBinary(this.Data);
@@ -1117,6 +1287,22 @@ public class Mydlp {
       StringBuilder sb = new StringBuilder("getText_args(");
       boolean first = true;
 
+      sb.append("FileName:");
+      if (this.FileName == null) {
+        sb.append("null");
+      } else {
+        sb.append(this.FileName);
+      }
+      first = false;
+      if (!first) sb.append(", ");
+      sb.append("MimeType:");
+      if (this.MimeType == null) {
+        sb.append("null");
+      } else {
+        sb.append(this.MimeType);
+      }
+      first = false;
+      if (!first) sb.append(", ");
       sb.append("Data:");
       if (this.Data == null) {
         sb.append("null");
