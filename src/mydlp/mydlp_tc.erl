@@ -34,9 +34,7 @@
 -export([start_link/0,
 	pre_init/1,
 	get_mime/1,
-	html_to_text/1,
-	check_binary_integrity/1,
-	check_archive_integrity/1,
+	get_text/1,
 	stop/0]).
 
 %% gen_server callbacks
@@ -49,7 +47,7 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
--record(state, {backend_py}).
+-record(state, {backend_java}).
 
 %%%%%%%%%%%%% MyDLP Thrift RPC API
 
@@ -82,12 +80,12 @@ get_mime(Data) when is_binary(Data) ->
 		false -> Data
 	end,
 	TRet = try
-		call_pool({thrift, py, getMagicMime, [Data1]})
+		call_pool({thrift, java, getMime, [Data1]})
 	catch _:_Exception ->
 		unknown_type end,
 
 	case TRet of
-		<<"application/zip">> -> get_mime_zip(Data);
+		<<"application/x-tika-ooxml">> -> get_mime_zip(Data);
 		Else -> Else end.
 
 get_mime_zip(Data) ->
@@ -97,37 +95,23 @@ get_mime_zip(Data) ->
 	false -> case	lists:keymember("ppt/presentation.xml", 2, FL) of true -> ?MIME_OOXML_POWERPOINT;
 	false -> <<"application/zip">> end end end.
 
-html_to_text(Html) ->
-	call_pool({thrift, py, htmlToText, [Html]}).
-
-check_binary_integrity(FileData) ->
-	{ok, FilePath} = mydlp_api:mktempfile(),
-	ok = file:write_file(FilePath, FileData, [raw]),
-	Ret = call_pool({thrift, py, checkBinaryIntegrity, [FilePath]}),
-	ok = file:delete(FilePath),
-	Ret.
-
-check_archive_integrity(FileData) ->
-	{ok, FilePath} = mydlp_api:mktempfile(),
-	ok = file:write_file(FilePath, FileData, [raw]),
-	Ret = call_pool({thrift, py, checkArchiveIntegrity, [FilePath]}),
-	ok = file:delete(FilePath),
-	Ret.
+get_text(Data) ->
+	call_pool({thrift, java, getText, [Data]}).
 
 %%%%%%%%%%%%%% gen_server handles
 
-handle_call({thrift, py, Func, Params}, _From, #state{backend_py=TS} = State) ->
+handle_call({thrift, java, Func, Params}, _From, #state{backend_java=TS} = State) ->
 	{TS1, Reply} = try
 		thrift_client:call(TS, Func, Params)
 	catch _:{TSE, _Exception} ->
 		?DEBUG("Error in thrift backend. \n", []),
 		{TSE, {error, exception_at_backend}} end,
 		
-	{reply, Reply, State#state{backend_py=TS1}};
+	{reply, Reply, State#state{backend_java=TS1}};
 
-handle_call(stop, _From, #state{backend_py=PY} = State) ->
-	thrift_client:close(PY),
-	{stop, normalStop, State#state{backend_py=undefined}};
+handle_call(stop, _From, #state{backend_java=Java} = State) ->
+	thrift_client:close(Java),
+	{stop, normalStop, State#state{backend_java=undefined}};
 
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
@@ -146,8 +130,8 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
-	{ok, PY} = thrift_client_util:new("localhost",9090, mydlp_thrift, []),
-	{ok, #state{backend_py=PY}}.
+	{ok, Java} = thrift_client_util:new("localhost",9090, mydlp_thrift, []),
+	{ok, #state{backend_java=Java}}.
 
 handle_cast(_Msg, State) ->
 	{noreply, State}.

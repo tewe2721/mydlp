@@ -62,12 +62,6 @@
 	e_archive_match/0,
 	e_archive_match/1,
 	e_archive_match/3,
-	i_binary_match/0,
-	i_binary_match/1,
-	i_binary_match/3,
-	i_archive_match/0,
-	i_archive_match/1,
-	i_archive_match/3,
 	p_text_match/0,
 	p_text_match/1,
 	p_text_match/3,
@@ -196,28 +190,6 @@ e_file_match(_Opts, _Addr, #file{data=Data, mime_type=MimeType, is_encrypted=tru
 			false -> 1 end;
 		false -> 0 end;
 e_file_match(_Opts, _Addr, _File) -> 0.
-
-i_binary_match() -> raw.
-
-i_binary_match(_Conf) -> none.
-
-i_binary_match(_Opts, _Addr, #file{mime_type=MimeType, data=Data}) ->
-	case mydlp_api:is_cobject_mime(MimeType) of
-		true -> case mydlp_tc:check_binary_integrity(Data) of
-			false -> 1;
-			true -> 0 end;
-		false -> 0 end.
-
-i_archive_match() -> raw.
-
-i_archive_match(_Conf) -> none.
-
-i_archive_match(_Opts, _Addr, #file{mime_type=MimeType, data=Data}) ->
-	case mydlp_api:is_compression_mime(MimeType) of
-		true -> case mydlp_tc:check_archive_integrity(Data) of
-			false -> 1;
-			true -> 0 end;
-		false -> 0 end.
 
 p_text_match() -> analyzed.
 
