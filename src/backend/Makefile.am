@@ -18,8 +18,13 @@
 ###    along with MyDLP.  If not, see <http://www.gnu.org/licenses/>.
 ###--------------------------------------------------------------------------
 
-target/mydlp-backend-1.0.jar: pom.xml
-	@$(MVN) install
+backenddir = $(datadir)/mydlp/backend
+
+backend_DATA = \
+	target/mydlp-backend-1.0-jar-with-dependencies.jar
+
+target/mydlp-backend-1.0-jar-with-dependencies.jar: pom.xml
+	@$(MVN) clean compile assembly:single
 
 clean-local:
 	@$(MVN) clean
