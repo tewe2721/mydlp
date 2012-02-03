@@ -26,6 +26,9 @@ backend_DATA = \
 target/mydlp-backend-1.0-jar-with-dependencies.jar: pom.xml
 	@$(MVN) clean compile assembly:single
 
+run:
+	java -jar target/mydlp-backend-1.0-jar-with-dependencies.jar
+
 clean-local:
 	@$(MVN) clean
 

@@ -14,13 +14,19 @@
 PATH=/usr/bin:/usr/sbin:/bin:/sbin
 
 ERLANG=/usr/bin/erl
-PYTHON=/usr/bin/python
+JSVCBIN=/usr/bin/jsvc
+JAVA_HOME=/usr/lib/jvm/java-6-sun
+CDJAR=/usr/share/java/commons-daemon.jar
+MBJAR=/usr/share/mydlp/backend/mydlp-backend-1.0-jar-with-dependencies.jar
+BERRLOG=/var/log/mydlp/backend-error.log
+BOUTLOG=/var/log/mydlp/backend.log
+BDAEMON=com.mydlp.backend.Bootstrap
 
 HOMEDIR=/etc/mydlp
 
 PIDDIR=/var/run/mydlp
 PIDFILE=$PIDDIR/mydlp.pid
-PIDFILE2=$PIDDIR/backend-py.pid
+PIDFILE2=$PIDDIR/backend.pid
 PIDFILE3=/var/run/jetty.pid
 
 SERV=/usr/sbin/service
@@ -32,6 +38,7 @@ SQUIDBINNAME=squid3
 
 ICAPPORT=1344
 JETTYPORT=8009
+BACKENDPORT=9090
 
 . /lib/lsb/init-functions
 
@@ -44,6 +51,8 @@ fi
 
 ERLANG_OPTS="$ERLANG_NODE_NAME -noshell -detached $ERLANG_EXTRA_OPTS"
 
+JSVC="$JSVC -home $JAVA_HOME -cp $CDJAR:$MBJAR -pidfile $PIDFILE2"
+JSVC_STARTOPTS="-outfile $BOUTLOG -errfile $BERRLOG $BDAEMON"
 
 check_piddir() {
 	[ -d $PIDDIR ] || \
@@ -77,6 +86,13 @@ wait_for_jetty() {
 	for i in $(seq 10); do
 	    sleep 1
 	    if is_port_open $JETTYPORT; then break; fi
+	done
+}
+
+wait_for_backend() {
+	for i in $(seq 10); do
+	    sleep 1
+	    if is_port_open $BACKENDPORT; then break; fi
 	done
 }
 
@@ -130,30 +146,31 @@ status_mydlp() {
 
 cleanpids() {
 	status_mydlp || rm -f $PIDFILE
-	status_backend_py || rm -f $PIDFILE2
+	status_backend || rm -f $PIDFILE2
 	status_jetty || rm -f $PIDFILE3
 }
 
-start_backend_py() {
-	log_daemon_msg "Starting MyDLP Python Backend" "mydlp"
-        if PYTHONPATH=/usr/lib/python2.6/site-packages/ start-stop-daemon --start --quiet --oknodo --pidfile $PIDFILE2 --exec $PYTHON -- /usr/lib/python2.6/dist-packages/MyDLPBackendServer.py; then
+start_backend() {
+	log_daemon_msg "Starting MyDLP Backend" "mydlp"
+        if "$JSVC $JSVC_STARTOPTS"; then
+            log_end_msg 0
+        else
+            log_end_msg 1
+        fi
+	wait_for_backend
+}
+
+stop_backend() {
+	log_daemon_msg "Stopping MyDLP Backend" "mydlp"
+        if "$JSVC -stop"; then
             log_end_msg 0
         else
             log_end_msg 1
         fi
 }
 
-stop_backend_py() {
-	log_daemon_msg "Stopping MyDLP Python Backend" "mydlp"
-        if start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE2; then
-            log_end_msg 0
-        else
-            log_end_msg 1
-        fi
-}
-
-status_backend_py() {
-        status_of_proc -p $PIDFILE2 mydlp "MyDLP Python Backend" 2>&1 > /dev/null 
+status_backend() {
+        "$JSVC -status" 2>&1 > /dev/null 
 }
 
 reload_squid() {
@@ -188,7 +205,7 @@ case "$1" in
 	cleanpids
 	start_mysql
 	start_jetty
-	start_backend_py
+	start_backend
 	start_mydlp
 	cleanpids
 	reload_squid
@@ -197,7 +214,7 @@ case "$1" in
 	check_piddir
 	cleanpids
 	stop_mydlp
-	stop_backend_py
+	stop_backend
 	stop_jetty
 	cleanpids
 	;;
@@ -209,13 +226,13 @@ case "$1" in
 	check_piddir
 	cleanpids
 	stop_mydlp
-	stop_backend_py
+	stop_backend
 	stop_jetty
 	cleanpids
 	sleep 1
 	start_mysql
 	start_jetty
-	start_backend_py
+	start_backend
 	start_mydlp
 	cleanpids
 	reload_squid
