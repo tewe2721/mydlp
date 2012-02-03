@@ -1,8 +1,0 @@
-*.pyc
-.deps/
-.libs/
-*.o
-*.lo
-*.la
-*.pid
-mydlp/
