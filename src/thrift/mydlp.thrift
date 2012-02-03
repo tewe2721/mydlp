@@ -18,13 +18,9 @@
  *     along with MyDLP.  If not, see <http://www.gnu.org/licenses/>.
  ***************************************************************************/
 
-exception GeneralException {
-	1: string why
-}
+namespace java com.mydlp.backend.thrift
 
 service Mydlp {
-	string getMagicMime(1 : binary Data) throws (1: GeneralException ge)
-	binary htmlToText(1 : binary Data) throws (1: GeneralException ge)
-	bool checkBinaryIntegrity(1 : string FilePath)
-	bool checkArchiveIntegrity(1 : string FilePath)
+	string getMime(1 : binary Data)
+	binary getText(1 : binary Data)
 }

@@ -49,13 +49,6 @@ dist_hrl_DATA = \
 beam_DATA = \
 	$(dist_erl_DATA:.erl=.beam)
 
-pkgpython_PYTHON = \
-	gen-py/mydlp/constants.py \
-	gen-py/mydlp/__init__.py \
-	gen-py/mydlp/Mydlp.py \
-	gen-py/mydlp/Mydlp-remote \
-	gen-py/mydlp/ttypes.py
-
 erldir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/src
 hrldir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/include
 beamdir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/ebin
@@ -69,7 +62,8 @@ $(beam_DATA): $(dist_erl_DATA)
 $(boot_DATA): $(beam_DATA)
 
 $(mydlp_erl) $(mydlp_hrl) $(pkgpython_PYTHON): mydlp.thrift
-	@$(THRIFT) --gen erl --gen py $<
+	@$(THRIFT) --gen erl --gen java $<
+	cp -af gen-java/com/mydlp/backend/thrift/Mydlp.java ../backend/src/main/java/com/mydlp/backend/thrift/Mydlp.java
 
 $(mydlp_ui_erl) $(mydlp_ui_hrl) $(mydlpphplib_DATA) $(mydlp_ui_cpp) $(mydlp_ui_h): mydlp_ui.thrift
 	@$(THRIFT) --gen erl --gen java $<
@@ -80,4 +74,4 @@ $(mydlp_ui_erl) $(mydlp_ui_hrl) $(mydlpphplib_DATA) $(mydlp_ui_cpp) $(mydlp_ui_h
 	@$(ERLC) $(ERLCFLAGS) $<
 
 clean-local:
-	rm -rf gen-erl gen-py gen-java
+	rm -rf gen-erl gen-java
