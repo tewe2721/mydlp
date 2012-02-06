@@ -26,10 +26,14 @@ public class MydlpImpl implements Mydlp.Iface {
 	protected static final String JAVA_COMMAND;
 	
 	static {
+		String osType = System.getProperty("os.arch");
+		System.out.println("Operating system type => " + osType);
+		String osName = System.getProperty("os.name");
+		System.out.println("Operating system type => " + osName);
 		String javaHome = System.getProperty("java.home");
         File f = new File(javaHome);
         f = new File(f, "bin");
-        f = new File(f, "java.exe");
+        f = new File(f, "java");
         JAVA_COMMAND = f.getAbsolutePath() + " -cp -Xmx128m";
 	}
 
