@@ -36,7 +36,7 @@ public class MydlpImpl implements Mydlp.Iface {
         File f = new File(javaHome);
         f = new File(f, "bin");
         f = new File(f, "java");
-        JAVA_COMMAND = f.getAbsolutePath() + " -cp -Xmx128m";
+        JAVA_COMMAND = f.getAbsolutePath();
 	}
 
 	protected Tika tika = new Tika();
@@ -83,7 +83,7 @@ public class MydlpImpl implements Mydlp.Iface {
 			ParseContext context	 = new ParseContext();
 			ForkParser forkParser = new ForkParser(parser.getClass().getClassLoader(), parser);
 			Metadata metadata = new Metadata();
-			//parser.setJavaCommand(JAVA_COMMAND);
+			forkParser.setJavaCommand(JAVA_COMMAND);
 			forkParser.parse(inputStream, contentHandler, metadata, context);
 			os.close();
 			return ByteBuffer.wrap(os.toByteArray());
