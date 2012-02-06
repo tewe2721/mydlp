@@ -36,7 +36,7 @@ public class MydlpImpl implements Mydlp.Iface {
         File f = new File(javaHome);
         f = new File(f, "bin");
         f = new File(f, "java");
-        JAVA_COMMAND = f.getAbsolutePath();
+        JAVA_COMMAND = f.getAbsolutePath() + " -cp -Xmx512m";
 	}
 
 	protected Tika tika = new Tika();
