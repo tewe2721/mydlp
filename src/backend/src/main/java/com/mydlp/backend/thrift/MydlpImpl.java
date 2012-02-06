@@ -82,7 +82,7 @@ public class MydlpImpl implements Mydlp.Iface {
 			ParseContext context	 = new ParseContext();
 			ForkParser forkParser = new ForkParser();
 			Metadata metadata = new Metadata();
-			forkParser.setJavaCommand(JAVA_COMMAND);
+			//forkParser.setJavaCommand(JAVA_COMMAND);
 			forkParser.parse(inputStream, contentHandler, metadata, context);
 			os.close();
 			return ByteBuffer.wrap(os.toByteArray());
