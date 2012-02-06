@@ -60,7 +60,7 @@ public class MydlpImpl implements Mydlp.Iface {
 			char [] buff = new char[32*1024];
 		    while( (data = reader.read(buff)) != -1)
 		    	sb.append(buff, 0, data);
-		    
+		    reader.close();
 			return Charset.forName(DEFAULT_CHARSET)
 					.encode(CharBuffer.wrap(sb));
 		} catch (IOException e) {

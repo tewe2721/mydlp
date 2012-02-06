@@ -25,7 +25,7 @@ public class BackendServer {
 			Factory protFactory = new TBinaryProtocol.Factory(true, true);
 			TServer server = new TThreadPoolServer(new Args(serverTransport)
 					.processor(processor).protocolFactory(protFactory));
-			System.out.println("Starting server on port 7911 ...");
+			System.out.println("Starting server on port 9090 ...");
 			server.serve();
 		} catch (TTransportException e) {
 			e.printStackTrace();
