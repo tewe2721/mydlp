@@ -1,6 +1,5 @@
 package com.mydlp.backend.thrift;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
@@ -10,14 +9,12 @@ import java.nio.charset.Charset;
 
 import org.apache.thrift.TException;
 import org.apache.tika.Tika;
-import org.apache.tika.exception.TikaException;
 import org.apache.tika.io.IOUtils;
-import org.xml.sax.SAXException;
 
 public class MydlpImpl implements Mydlp.Iface {
 
-	protected static final String DEFAULT_CHARSET = "UTF-8";
-	protected static final ByteBuffer EMPTY = Charset.forName(DEFAULT_CHARSET)
+	protected static final String DEFAULT_ENCODING = "UTF-8";
+	protected static final ByteBuffer EMPTY = Charset.forName(DEFAULT_ENCODING)
 			.encode(CharBuffer.wrap(""));
 	
 	protected Tika tika = new Tika();
@@ -58,11 +55,8 @@ public class MydlpImpl implements Mydlp.Iface {
 	public ByteBuffer getText(ByteBuffer Data) throws TException {
 		InputStream inputStream = getInputStream(Data);
 		try {
-			ByteArrayOutputStream os = new ByteArrayOutputStream();
 			Reader reader = tika.parse(inputStream);
-			IOUtils.copy(reader, os);
-			os.close();
-			return ByteBuffer.wrap(os.toByteArray());
+			return ByteBuffer.wrap(IOUtils.toByteArray(reader, DEFAULT_ENCODING));
 		} catch (IOException e) {
 			e.printStackTrace();
 			return EMPTY;
