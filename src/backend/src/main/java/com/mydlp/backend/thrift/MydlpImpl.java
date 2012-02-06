@@ -40,7 +40,6 @@ public class MydlpImpl implements Mydlp.Iface {
 	}
 
 	protected Tika tika = new Tika();
-	protected Parser parser = new AutoDetectParser();
 	
 	protected InputStream getInputStream(final ByteBuffer buf) {
 		return new InputStream() {
@@ -81,7 +80,7 @@ public class MydlpImpl implements Mydlp.Iface {
 			ByteArrayOutputStream os = new ByteArrayOutputStream();
 			BodyContentHandler contentHandler = new BodyContentHandler(os);
 			ParseContext context	 = new ParseContext();
-			ForkParser forkParser = new ForkParser(parser.getClass().getClassLoader(), parser);
+			ForkParser forkParser = new ForkParser();
 			Metadata metadata = new Metadata();
 			forkParser.setJavaCommand(JAVA_COMMAND);
 			forkParser.parse(inputStream, contentHandler, metadata, context);
