@@ -9,7 +9,6 @@ import org.apache.thrift.server.TThreadPoolServer;
 import org.apache.thrift.server.TThreadPoolServer.Args;
 import org.apache.thrift.transport.TServerSocket;
 import org.apache.thrift.transport.TTransportException;
-import org.apache.tika.Tika;
 
 import com.mydlp.backend.thrift.Mydlp;
 import com.mydlp.backend.thrift.MydlpImpl;
@@ -22,7 +21,7 @@ public class BackendServer {
 			TServerSocket serverTransport = new TServerSocket(
 					new InetSocketAddress("127.0.0.1", 9090));
 			@SuppressWarnings("rawtypes")
-			Mydlp.Processor processor = new Mydlp.Processor(new MydlpImpl(new Tika()));
+			Mydlp.Processor processor = new Mydlp.Processor(new MydlpImpl());
 			Factory protFactory = new TBinaryProtocol.Factory(true, true);
 			TServer server = new TThreadPoolServer(new Args(serverTransport)
 					.processor(processor).protocolFactory(protFactory));
