@@ -3,11 +3,17 @@ package com.mydlp.backend.thrift;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.Charset;
 
 import org.apache.thrift.TException;
 import org.apache.tika.Tika;
+import org.apache.tika.exception.TikaException;
 
 public class MydlpImpl implements Mydlp.Iface {
+	
+	protected static final String DEFAULT_CHARSET = "UTF-8";
+	protected static final ByteBuffer EMPTY = Charset.forName(DEFAULT_CHARSET).encode(CharBuffer.wrap(""));
 	
 	protected Tika tika;
 	
@@ -42,7 +48,16 @@ public class MydlpImpl implements Mydlp.Iface {
 
 	@Override
 	public ByteBuffer getText(ByteBuffer Data) throws TException {
-		return null;
+		try {
+			return Charset.forName(DEFAULT_CHARSET).encode(
+					CharBuffer.wrap(
+							tika.parseToString(getInputStream(Data))));
+		} catch (TikaException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		return EMPTY;
 	}
 
 }
