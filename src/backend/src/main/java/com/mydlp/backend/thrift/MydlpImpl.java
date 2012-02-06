@@ -9,6 +9,13 @@ import java.nio.charset.Charset;
 import org.apache.thrift.TException;
 import org.apache.tika.Tika;
 import org.apache.tika.exception.TikaException;
+import org.apache.tika.metadata.Metadata;
+import org.apache.tika.parser.AutoDetectParser;
+import org.apache.tika.parser.ParseContext;
+import org.apache.tika.parser.Parser;
+import org.apache.tika.sax.BodyContentHandler;
+import org.xml.sax.ContentHandler;
+import org.xml.sax.SAXException;
 
 public class MydlpImpl implements Mydlp.Iface {
 	
@@ -38,26 +45,50 @@ public class MydlpImpl implements Mydlp.Iface {
 
 	@Override
 	public String getMime(ByteBuffer Data) throws TException {
+		InputStream inputStream = getInputStream(Data);
 		try {
-			return tika.detect(getInputStream(Data));
+			return tika.detect(inputStream);
 		} catch (IOException e) {
 			e.printStackTrace();
+			return "mydlp-internal/not-found";
+		} finally {
+			try {
+				inputStream.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
 		}
-		return "mydlp-internal/not-found";
 	}
 
 	@Override
 	public ByteBuffer getText(ByteBuffer Data) throws TException {
+		InputStream inputStream = getInputStream(Data);
 		try {
+			ContentHandler textHandler = new BodyContentHandler();
+			Metadata metadata = new Metadata();
+			ParseContext parseContext = new ParseContext();
+			Parser parser = new AutoDetectParser();
+			parser.parse(inputStream, textHandler, metadata, parseContext);
 			return Charset.forName(DEFAULT_CHARSET).encode(
 					CharBuffer.wrap(
-							tika.parseToString(getInputStream(Data))));
+							textHandler.toString()));
 		} catch (TikaException e) {
 			e.printStackTrace();
+			return EMPTY;
 		} catch (IOException e) {
 			e.printStackTrace();
+			return EMPTY;
+		} catch (SAXException e) {
+			e.printStackTrace();
+			return EMPTY;
+		} finally {
+			try {
+				inputStream.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
 		}
-		return EMPTY;
+
 	}
 
 }
