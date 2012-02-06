@@ -13,7 +13,9 @@ import org.apache.tika.Tika;
 import org.apache.tika.exception.TikaException;
 import org.apache.tika.fork.ForkParser;
 import org.apache.tika.metadata.Metadata;
+import org.apache.tika.parser.AutoDetectParser;
 import org.apache.tika.parser.ParseContext;
+import org.apache.tika.parser.Parser;
 import org.apache.tika.sax.BodyContentHandler;
 import org.xml.sax.SAXException;
 
@@ -38,6 +40,7 @@ public class MydlpImpl implements Mydlp.Iface {
 	}
 
 	protected Tika tika = new Tika();
+	protected Parser parser = new AutoDetectParser();
 	
 	protected InputStream getInputStream(final ByteBuffer buf) {
 		return new InputStream() {
@@ -78,10 +81,11 @@ public class MydlpImpl implements Mydlp.Iface {
 			ByteArrayOutputStream os = new ByteArrayOutputStream();
 			BodyContentHandler contentHandler = new BodyContentHandler(os);
 			ParseContext context	 = new ParseContext();
-			ForkParser parser = new ForkParser();
+			ForkParser forkParser = new ForkParser(parser.getClass().getClassLoader(), parser);
 			Metadata metadata = new Metadata();
-			parser.setJavaCommand(JAVA_COMMAND);
-			parser.parse(inputStream, contentHandler, metadata, context);
+			//parser.setJavaCommand(JAVA_COMMAND);
+			forkParser.parse(inputStream, contentHandler, metadata, context);
+			os.close();
 			return ByteBuffer.wrap(os.toByteArray());
 		} catch (IOException e) {
 			e.printStackTrace();
