@@ -1,5 +1,6 @@
 package com.mydlp.backend.thrift;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
@@ -9,6 +10,12 @@ import java.nio.charset.Charset;
 
 import org.apache.thrift.TException;
 import org.apache.tika.Tika;
+import org.apache.tika.exception.TikaException;
+import org.apache.tika.fork.ForkParser;
+import org.apache.tika.metadata.Metadata;
+import org.apache.tika.parser.ParseContext;
+import org.apache.tika.sax.BodyContentHandler;
+import org.xml.sax.SAXException;
 
 public class MydlpImpl implements Mydlp.Iface {
 
@@ -54,16 +61,21 @@ public class MydlpImpl implements Mydlp.Iface {
 	public ByteBuffer getText(ByteBuffer Data) throws TException {
 		InputStream inputStream = getInputStream(Data);
 		try {
-			Reader reader = tika.parse(inputStream);
-			StringBuffer sb = new StringBuffer();
-			int data = 0;
-			char [] buff = new char[32*1024];
-		    while( (data = reader.read(buff)) != -1)
-		    	sb.append(buff, 0, data);
-		    reader.close();
-			return Charset.forName(DEFAULT_CHARSET)
-					.encode(CharBuffer.wrap(sb));
+			ByteArrayOutputStream os = new ByteArrayOutputStream();
+			BodyContentHandler contentHandler = new BodyContentHandler(os);
+			ParseContext context	 = new ParseContext();
+			ForkParser parser = new ForkParser();
+			Metadata metadata = new Metadata();
+			//parser.setJavaCommand("/usr/local/java6/bin/java -cp -Xmx64m");
+			parser.parse(inputStream, contentHandler, metadata, context);
+			return ByteBuffer.wrap(os.toByteArray());
 		} catch (IOException e) {
+			e.printStackTrace();
+			return EMPTY;
+		} catch (SAXException e) {
+			e.printStackTrace();
+			return EMPTY;
+		} catch (TikaException e) {
 			e.printStackTrace();
 			return EMPTY;
 		} finally {
