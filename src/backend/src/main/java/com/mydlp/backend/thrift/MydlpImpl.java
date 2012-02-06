@@ -79,8 +79,9 @@ public class MydlpImpl implements Mydlp.Iface {
 		try {
 			ByteArrayOutputStream os = new ByteArrayOutputStream();
 			BodyContentHandler contentHandler = new BodyContentHandler(os);
-			ParseContext context	 = new ParseContext();
-			ForkParser forkParser = new ForkParser();
+			ParseContext context = new ParseContext();
+			//ForkParser forkParser = new ForkParser();
+			Parser forkParser = tika.getParser();
 			Metadata metadata = new Metadata();
 			//forkParser.setJavaCommand(JAVA_COMMAND);
 			forkParser.parse(inputStream, contentHandler, metadata, context);
