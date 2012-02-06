@@ -16,7 +16,7 @@ public class MydlpImpl implements Mydlp.Iface {
 	protected static final ByteBuffer EMPTY = Charset.forName(DEFAULT_CHARSET)
 			.encode(CharBuffer.wrap(""));
 
-	protected Tika tika = new Tika();
+	//protected Tika tika = new Tika();
 	
 	protected InputStream getInputStream(final ByteBuffer buf) {
 		return new InputStream() {
@@ -37,6 +37,7 @@ public class MydlpImpl implements Mydlp.Iface {
 	public String getMime(ByteBuffer Data) throws TException {
 		InputStream inputStream = getInputStream(Data);
 		try {
+			Tika tika = new Tika();
 			return tika.detect(inputStream);
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -54,6 +55,7 @@ public class MydlpImpl implements Mydlp.Iface {
 	public ByteBuffer getText(ByteBuffer Data) throws TException {
 		InputStream inputStream = getInputStream(Data);
 		try {
+			Tika tika = new Tika();
 			Reader reader = tika.parse(inputStream);
 			StringBuffer sb = new StringBuffer();
 			int data = 0;
@@ -69,6 +71,7 @@ public class MydlpImpl implements Mydlp.Iface {
 		} finally {
 			try {
 				inputStream.close();
+				System.gc();
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
