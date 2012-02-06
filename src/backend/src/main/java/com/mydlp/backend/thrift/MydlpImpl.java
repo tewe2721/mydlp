@@ -1,9 +1,9 @@
 package com.mydlp.backend.thrift;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.Reader;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.Charset;
@@ -22,6 +22,16 @@ public class MydlpImpl implements Mydlp.Iface {
 	protected static final String DEFAULT_CHARSET = "UTF-8";
 	protected static final ByteBuffer EMPTY = Charset.forName(DEFAULT_CHARSET)
 			.encode(CharBuffer.wrap(""));
+	
+	protected static final String JAVA_COMMAND;
+	
+	static {
+		String javaHome = System.getProperty("java.home");
+        File f = new File(javaHome);
+        f = new File(f, "bin");
+        f = new File(f, "java.exe");
+        JAVA_COMMAND = f.getAbsolutePath() + " -cp -Xmx128m";
+	}
 
 	protected Tika tika = new Tika();
 	
@@ -66,7 +76,7 @@ public class MydlpImpl implements Mydlp.Iface {
 			ParseContext context	 = new ParseContext();
 			ForkParser parser = new ForkParser();
 			Metadata metadata = new Metadata();
-			//parser.setJavaCommand("/usr/local/java6/bin/java -cp -Xmx64m");
+			parser.setJavaCommand(JAVA_COMMAND);
 			parser.parse(inputStream, contentHandler, metadata, context);
 			return ByteBuffer.wrap(os.toByteArray());
 		} catch (IOException e) {
