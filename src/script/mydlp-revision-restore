@@ -1,0 +1,65 @@
+#!/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games
+
+MYDLPCONF="/etc/mydlp/mydlp.conf"
+MYDLPDUMPDIR="/var/lib/mydlp/revision"
+MYSQLC=/usr/bin/mysql
+MYSQLOPTS="-N"
+
+if [ -z "$1" ]; then
+	echo "$0 takes at least one argument."
+	exit 1
+fi
+
+if [ ! -e "$1" ]; then
+	echo "$0 should take a dump file as an argument"
+	exit 1
+fi
+
+DUMPFILENAME=$(readlink -f $1)
+
+if [ -n "$2" ]; then
+	MYDLPCONF=$2
+fi
+
+MYSQLHOST=$(grep -e "^mysql_host" $MYDLPCONF|cut -f 2)
+MYSQLPORT=$(grep -e "^mysql_port" $MYDLPCONF|cut -f 2)
+MYSQLUSER=$(grep -e "^mysql_user" $MYDLPCONF|cut -f 2)
+MYSQLPW=$(grep -e "^mysql_password" $MYDLPCONF|cut -f 2)
+MYSQLDB=$(grep -e "^mysql_database" $MYDLPCONF|cut -f 2)
+
+MYSQLARGS=""
+
+if [ "$MYSQLHOST" != "localhost" ]; then
+	MYSQLARGS="$MYSQLARGS -h $MYSQLHOST"
+	if [ "$MYSQLPORT" != "3306" ]; then
+		MYSQLARGS="$MYSQLARGS -P $MYSQLPORT"
+	fi
+fi
+
+MYSQLARGS="$MYSQLARGS -u $MYSQLUSER"
+
+if [ "$MYSQLPW" != '""' ]; then
+	MYSQLARGS="$MYSQLARGS -p$MYSQLPW"
+fi
+
+MYSQLARGS="$MYSQLARGS $MYSQLDB"
+MYSQL="$MYSQLC $MYSQLOPTS $MYSQLARGS"
+
+REVISION_TABLE="Revision"
+
+function restoreDump() {
+	zcat $DUMPFILENAME|$MYSQL
+}
+
+function findFirstRevisionId() {
+	echo "SELECT id FROM $REVISION_TABLE WHERE dumpPath = '$DUMPFILENAME' ORDER BY data ASC LIMIT 1"|$MYSQL
+}
+
+function addRestoreRevision() {
+	local RRID=$(findFirstRevisionId)
+	echo "INSERT INTO $REVISION_TABLE (id, date, isInstalled, dumpPath, restoreRevision_id) VALUES ('',now(), false, '$DUMPFILENAME', $RRID)"|$MYSQL
+}
+
+restoreDump && addRestoreRevision
+

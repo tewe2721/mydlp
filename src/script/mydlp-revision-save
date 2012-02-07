@@ -1,0 +1,78 @@
+#!/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games
+
+MYDLPCONF="/etc/mydlp/mydlp.conf"
+MYDLPDUMPDIR="/var/lib/mydlp/revision"
+MYSQLC=/usr/bin/mysql
+MYSQLDUMPC=/usr/bin/mysqldump
+MYSQLOPTS="-N"
+MYSQLDUMPOPTS="--no-create-db --no-create-info --skip-comments --skip-add-locks"
+
+if [ -n "$1" ]; then
+	MYDLPCONF=$1
+fi
+
+MYSQLHOST=$(grep -e "^mysql_host" $MYDLPCONF|cut -f 2)
+MYSQLPORT=$(grep -e "^mysql_port" $MYDLPCONF|cut -f 2)
+MYSQLUSER=$(grep -e "^mysql_user" $MYDLPCONF|cut -f 2)
+MYSQLPW=$(grep -e "^mysql_password" $MYDLPCONF|cut -f 2)
+MYSQLDB=$(grep -e "^mysql_database" $MYDLPCONF|cut -f 2)
+
+MYSQLARGS=""
+
+if [ "$MYSQLHOST" != "localhost" ]; then
+	MYSQLARGS="$MYSQLARGS -h $MYSQLHOST"
+	if [ "$MYSQLPORT" != "3306" ]; then
+		MYSQLARGS="$MYSQLARGS -P $MYSQLPORT"
+	fi
+fi
+
+MYSQLARGS="$MYSQLARGS -u $MYSQLUSER"
+
+if [ "$MYSQLPW" != '""' ]; then
+	MYSQLARGS="$MYSQLARGS -p$MYSQLPW"
+fi
+
+MYSQLARGS="$MYSQLARGS $MYSQLDB"
+MYSQL="$MYSQLC $MYSQLOPTS $MYSQLARGS"
+MYSQLDUMP="$MYSQLDUMPC $MYSQLDUMPOPTS $MYSQLARGS"
+
+REVISION_TABLE="Revision"
+
+function queryTables() {
+	echo "SHOW TABLES;"|$MYSQL
+}
+
+function getTableNames() {
+	queryTables|while read line
+	do
+		if [ "$line" != $REVISION_TABLE ]; then
+			echo $line
+		fi
+	done
+}
+
+function dumpCurrent() {
+	echo "FLUSH TABLES WITH READ LOCK;"
+	echo
+
+	local TABLES=$(getTableNames)
+	for t in $TABLES
+	do
+		echo "TRUNCATE $t;"
+	done
+
+	$MYSQLDUMP $TABLES
+	
+	echo "UNLOCK TABLES;"
+}
+
+DUMPFILENAME=$MYDLPDUMPDIR/mydlp-$(date +%s)-$$.gz
+
+function addNewRevision() {
+	echo "INSERT INTO $REVISION_TABLE (id, date, isInstalled, dumpPath) VALUES ('',now(), false, '$DUMPFILENAME')"|$MYSQL
+}
+
+( dumpCurrent |gzip -c > $DUMPFILENAME ) && addNewRevision
+
+
