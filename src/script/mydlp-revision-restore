@@ -53,7 +53,7 @@ function restoreDump() {
 }
 
 function findFirstRevisionId() {
-	echo "SELECT id FROM $REVISION_TABLE WHERE dumpPath = '$DUMPFILENAME' ORDER BY data ASC LIMIT 1"|$MYSQL
+	echo "SELECT id FROM $REVISION_TABLE WHERE dumpPath = '$DUMPFILENAME' ORDER BY date ASC LIMIT 1"|$MYSQL
 }
 
 function addRestoreRevision() {
