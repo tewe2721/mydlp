@@ -203,7 +203,8 @@ get_text(#file{mime_type=MimeType, filename=Filename, data=Data}) ->
 		audio-> {error, audio};
 		video-> {error, video};
 		image-> {error, image};
-		_ -> 	try {ok, mydlp_tc:get_text(Filename, MimeType, Data)}
+		_ -> 	try 	Text = mydlp_tc:get_text(Filename, MimeType, Data),
+				{ok, Text}
 			catch Class:Error -> {error, {Class,Error}} end
 	end.
 

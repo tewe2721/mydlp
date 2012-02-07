@@ -61,8 +61,9 @@ get_mime(Data) when is_list(Data) ->
 	end,
 	get_mime(list_to_binary(Data1));
 
+get_mime(<<>>) -> <<"application/x-empty">>;
 get_mime(<<"Rar!", _Rest/binary>>) -> <<"application/x-rar">>; % WinRAR
-get_mime(<<202,254,186,190, _Rest/binary>>) -> <<"application/java-vm">>; % CAFE BABE -> java class
+%get_mime(<<202,254,186,190, _Rest/binary>>) -> <<"application/java-vm">>; % CAFE BABE -> java class
 get_mime(<<	16#00,16#01,16#00,16#00,
 		16#53,16#74,15#61,15#6E,
 		16#64,16#61,16#72,16#64,
@@ -95,6 +96,7 @@ get_mime_zip(Data) ->
 	false -> case	lists:keymember("ppt/presentation.xml", 2, FL) of true -> ?MIME_OOXML_POWERPOINT;
 	false -> <<"application/zip">> end end end.
 
+get_text(undefined, MT, Data) -> get_text(<<>>, MT, Data);
 get_text(Filename, MT, Data) ->
 	call_pool({thrift, java, getText, [Filename, MT, Data]}).
 
