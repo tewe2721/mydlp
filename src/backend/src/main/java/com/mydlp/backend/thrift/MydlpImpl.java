@@ -10,6 +10,7 @@ import java.nio.charset.Charset;
 import org.apache.thrift.TException;
 import org.apache.tika.Tika;
 import org.apache.tika.io.IOUtils;
+import org.apache.tika.metadata.Metadata;
 
 public class MydlpImpl implements Mydlp.Iface {
 
@@ -52,10 +53,14 @@ public class MydlpImpl implements Mydlp.Iface {
 	}
 
 	@Override
-	public ByteBuffer getText(ByteBuffer Data) throws TException {
+	public ByteBuffer getText(String FileName, String MimeType, ByteBuffer Data)
+			throws TException {
 		InputStream inputStream = getInputStream(Data);
 		try {
-			Reader reader = tika.parse(inputStream);
+			Metadata metadata = new Metadata();
+			metadata.add(Metadata.RESOURCE_NAME_KEY, FileName);
+			metadata.add(Metadata.CONTENT_TYPE, MimeType);
+			Reader reader = tika.parse(inputStream, metadata);
 			return ByteBuffer.wrap(IOUtils.toByteArray(reader, DEFAULT_ENCODING));
 		} catch (IOException e) {
 			e.printStackTrace();
