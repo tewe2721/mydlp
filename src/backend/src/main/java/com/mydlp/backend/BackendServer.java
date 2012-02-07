@@ -14,11 +14,14 @@ import com.mydlp.backend.thrift.Mydlp;
 import com.mydlp.backend.thrift.MydlpImpl;
 
 public class BackendServer {
+	
+	protected TServerSocket serverTransport = null;
+	
 
 	@SuppressWarnings("unchecked")
 	public void listen() {
 		try {
-			TServerSocket serverTransport = new TServerSocket(
+			serverTransport = new TServerSocket(
 					new InetSocketAddress("127.0.0.1", 9090));
 			@SuppressWarnings("rawtypes")
 			Mydlp.Processor processor = new Mydlp.Processor(new MydlpImpl());
@@ -30,6 +33,11 @@ public class BackendServer {
 		} catch (TTransportException e) {
 			e.printStackTrace();
 		}
+	}
+	
+	public void stop() {
+		if (serverTransport != null)
+			serverTransport.close();
 	}
 
 }
