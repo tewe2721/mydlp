@@ -2,7 +2,6 @@ package com.mydlp.backend;
 
 import org.apache.commons.daemon.Daemon;
 import org.apache.commons.daemon.DaemonContext;
-import org.apache.commons.daemon.DaemonInitException;
 
 public class Bootstrap implements Daemon {
 	
@@ -13,7 +12,7 @@ public class Bootstrap implements Daemon {
 	}
 
 	@Override
-	public void init(DaemonContext arg0) throws DaemonInitException, Exception {
+	public void init(DaemonContext arg0) {
 		server = new BackendServer();
 	}
 
