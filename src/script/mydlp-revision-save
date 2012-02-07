@@ -62,12 +62,34 @@ function dumpCurrent() {
 	$MYSQLDUMP $TABLES
 }
 
-DUMPFILENAME=$MYDLPDUMPDIR/mydlp-$(date +%s)-$$.gz
+TMPFILE=$(mktemp)
 
-function addNewRevision() {
-	echo "INSERT INTO $REVISION_TABLE (id, date, isInstalled, dumpPath) VALUES ('',now(), false, '$DUMPFILENAME')"|$MYSQL
+DUMPFILENAME=""
+
+generateFilename() {
+	local HASH=$(md5sum $TMPFILE|cut -d' ' -f1)
+	DUMPFILENAME=$MYDLPDUMPDIR/$HASH.gz
 }
 
-( dumpCurrent |gzip -c > $DUMPFILENAME ) && addNewRevision
+writeToFile() {
+	if [ -e "$DUMPFILENAME" ]; then
+		true
+	else
+		cat $TMPFILE | gzip -c > $DUMPFILENAME
+	fi
+}
 
+function addNewRevision() {
+	local LAST_PATH=$(echo "SELECT dumpPath FROM $REVISION_TABLE ORDER BY id DESC LIMIT 1"|$MYSQL)
+	if [ -n "$LAST_PATH" -a "$LAST_PATH" == "$DUMPFILENAME" ]; then
+		true
+	else
+		echo "INSERT INTO $REVISION_TABLE (id, date, isInstalled, dumpPath) VALUES ('',now(), false, '$DUMPFILENAME')"|$MYSQL
+	fi
+}
+
+
+dumpCurrent > $TMPFILE && generateFilename && writeToFile && addNewRevision
+
+rm -f $TMPFILE
 
