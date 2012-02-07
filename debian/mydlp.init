@@ -51,7 +51,7 @@ fi
 
 ERLANG_OPTS="$ERLANG_NODE_NAME -noshell -detached $ERLANG_EXTRA_OPTS"
 
-JSVC="$JSVC -home $JAVA_HOME -cp $CDJAR:$MBJAR -pidfile $PIDFILE2"
+JSVC="$JSVCBIN -home $JAVA_HOME -cp $CDJAR:$MBJAR -pidfile $PIDFILE2"
 JSVC_STARTOPTS="-outfile $BOUTLOG -errfile $BERRLOG $BDAEMON"
 
 check_piddir() {
@@ -79,13 +79,6 @@ wait_for_icap() {
 	for i in $(seq 10); do
 	    sleep 1
 	    if is_port_open $ICAPPORT; then break; fi
-	done
-}
-
-wait_for_jetty() {
-	for i in $(seq 10); do
-	    sleep 1
-	    if is_port_open $JETTYPORT; then break; fi
 	done
 }
 
@@ -132,12 +125,16 @@ start_mydlp() {
 }
 
 stop_mydlp() {
-	log_daemon_msg "Stopping MyDLP" "mydlp"
-        if start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE; then
-            log_end_msg 0
-        else
-            log_end_msg 1
-        fi
+	if status_mydlp; then
+		log_daemon_msg "Stopping MyDLP" "mydlp"
+		if start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE; then
+		    log_end_msg 0
+		else
+		    log_end_msg 1
+		fi
+	else
+		echo " * MyDLP is not running..."
+	fi
 }
 
 status_mydlp() {
@@ -152,7 +149,7 @@ cleanpids() {
 
 start_backend() {
 	log_daemon_msg "Starting MyDLP Backend" "mydlp"
-        if "$JSVC $JSVC_STARTOPTS"; then
+        if $JSVC $JSVC_STARTOPTS; then
             log_end_msg 0
         else
             log_end_msg 1
@@ -161,16 +158,20 @@ start_backend() {
 }
 
 stop_backend() {
-	log_daemon_msg "Stopping MyDLP Backend" "mydlp"
-        if "$JSVC -stop"; then
-            log_end_msg 0
-        else
-            log_end_msg 1
-        fi
+	if status_backend; then
+		log_daemon_msg "Stopping MyDLP Backend" "mydlp"
+		if $JSVC -stop $BDAEMON; then
+		    log_end_msg 0
+		else
+		    log_end_msg 1
+		fi
+	else
+		echo " * MyDLP Backend is not running..."
+	fi
 }
 
 status_backend() {
-        "$JSVC -status" 2>&1 > /dev/null 
+        status_of_proc -p $PIDFILE2 mydlp MyDLP 2>&1 > /dev/null 
 }
 
 reload_squid() {
@@ -185,14 +186,15 @@ reload_squid() {
 start_jetty() {
 	echo " * Starting Jetty..."
 	/etc/init.d/jetty start > /dev/null
-	wait_for_jetty
-	echo " * Reloading Apache..."
-	/etc/init.d/apache2 force-reload 2>&1 > /dev/null
 }
 
 stop_jetty() {
-	echo " * Stopping Jetty..."
-	/etc/init.d/jetty stop > /dev/null
+	if status_jetty; then
+		echo " * Stopping Jetty..."
+		/etc/init.d/jetty stop > /dev/null
+	else
+		echo " * Jetty is not running..."
+	fi
 }
 
 status_jetty() {
