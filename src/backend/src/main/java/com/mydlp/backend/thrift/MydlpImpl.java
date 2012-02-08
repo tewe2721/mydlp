@@ -58,7 +58,8 @@ public class MydlpImpl implements Mydlp.Iface {
 		InputStream inputStream = getInputStream(Data);
 		try {
 			Metadata metadata = new Metadata();
-			metadata.add(Metadata.RESOURCE_NAME_KEY, FileName);
+			if (FileName != null && FileName.length() > 0)
+				metadata.add(Metadata.RESOURCE_NAME_KEY, FileName);
 			metadata.add(Metadata.CONTENT_TYPE, MimeType);
 			Reader reader = tika.parse(inputStream, metadata);
 			return ByteBuffer.wrap(IOUtils.toByteArray(reader, DEFAULT_ENCODING));
