@@ -55,13 +55,12 @@ beamdir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/ebin
 privdir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/priv
 htmldir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/doc
 bootdir = $(libdir)/erlang/bin
-#CLEANFILES = gen-erl/* gen-py/*
 ERLCFLAGS += -W -o gen-erl
 
 $(beam_DATA): $(dist_erl_DATA) 
 $(boot_DATA): $(beam_DATA)
 
-$(mydlp_erl) $(mydlp_hrl) $(pkgpython_PYTHON): mydlp.thrift
+$(mydlp_erl) $(mydlp_hrl): mydlp.thrift
 	@$(THRIFT) --gen erl --gen java $<
 	cp -af gen-java/com/mydlp/backend/thrift/Mydlp.java ../backend/src/main/java/com/mydlp/backend/thrift/Mydlp.java
 
