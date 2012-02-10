@@ -97,6 +97,9 @@ get_mime_zip(Data) ->
 	false -> <<"application/zip">> end end end.
 
 get_text(undefined, MT, Data) -> get_text(<<>>, MT, Data);
+get_text(Filename, MT, Data) when is_list(Filename) ->
+	FilenameB = unicode:characters_to_binary(Filename),
+	get_text(FilenameB, MT, Data);
 get_text(Filename, MT, Data) ->
 	call_pool({thrift, java, getText, [Filename, MT, Data]}).
 
