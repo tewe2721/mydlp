@@ -355,6 +355,7 @@ execute_ifeatures(IFeatures, Addr, File) ->
 		lists:sum(PMapRet)
 	catch _:{timeout, _F, _T} -> {error, {file, File}, {misc, timeout}} end.
 
+apply_m(Weight, all, [_FuncParams, _Addr, _File]) -> Weight; %% match directly.
 apply_m(Weight, Func, [FuncParams, Addr, File]) ->
 	EarlyNeg = case get_matcher_req(Func) of
 		raw -> false;

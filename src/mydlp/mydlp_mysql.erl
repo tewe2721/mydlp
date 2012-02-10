@@ -541,6 +541,10 @@ populate_match(Id, <<"scode_ada">>, IFeatureId) ->
 	Func = scode_ada_match,
 	new_match(Id, IFeatureId, Func);
 
+populate_match(Id, <<"all">>, IFeatureId) ->
+	Func = all,
+	new_match(Id, IFeatureId, Func);
+
 populate_match(Id, <<"keyword">>, IFeatureId) ->
 	Func = regex_match,
 	{ok, REQ} = psq(regex_by_matcher_id, [Id]),
