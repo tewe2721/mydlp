@@ -157,8 +157,6 @@ load_src(Src) ->
 	{quarantine_dir, string, "/var/lib/mydlp/quarantine/"},
 	{quarantine_uid, integer, "33"},
 	{quarantine_gid, integer, "33"},
-	{nlp_tr, boolean, "false"},
-	{nlp_tr_kokler, string, "/usr/share/mydlp/resources/mydlp_nlp_tr_kokler.txt"},
 	% TODO : should resolve mnesia -> auto dist conf circular dependency
 	{auto_distribution, boolean, "false"},
 	{auto_distribution_priority, integer, "100"},

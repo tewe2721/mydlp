@@ -813,20 +813,6 @@ has_text(#file{text=Text}) when is_list(Text) ->
 has_text(_) -> true.
 
 %%--------------------------------------------------------------------
-%% @doc Returns hashes of normalized senteces from Text
-%% @end
-%%----------------------------------------------------------------------
-get_nsh(Text) -> 
-	Res = mydlp_regex:split_bin(
-		sentence,
-		Text),
-	Res1 = lists:filter(fun(I) -> string:len(I) > 10 end, Res), %%% 10 as string length threshold, shorter strings will be neglacted.
-	lists:map(fun(I) -> 
-			WL = lists:map(fun(W) -> mydlp_nlp_tr:safe_norm(W) end, mydlp_regex:match_bin(word, I)),
-			erlang:phash2(WL) 
-		end, Res1).
-
-%%--------------------------------------------------------------------
 %% @doc Analyzes structure of files. Creates new files if necessary.
 %% @end
 %%----------------------------------------------------------------------

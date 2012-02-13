@@ -65,12 +65,6 @@
 	p_text_match/0,
 	p_text_match/1,
 	p_text_match/3,
-	shash_match/0,
-	shash_match/1,
-	shash_match/3,
-	bayes_match/0,
-	bayes_match/1,
-	bayes_match/3,
 	scode_match/0,
 	scode_match/1,
 	scode_match/3,
@@ -220,57 +214,6 @@ md5_match(HGIs, _Addr, File) ->
 	Hash = erlang:md5(File#file.data),
 	case mydlp_mnesia:is_fhash_of_gid(Hash, HGIs) of
 		true -> {pos, {file, File}};
-		false -> neg end.
-
-% TODO: refine this
-shash_match() -> text.
-
-shash_match(Conf) when is_list(Conf) -> 
-	Perc = case lists:keyfind(percentage, 1, Conf) of
-		{percentage, P} -> P;
-		false -> 0.5
-	end,
-	Count = case lists:keyfind(count, 1, Conf) of
-		{count, C} -> C;
-		false -> 50
-	end,
-	HGIs = case lists:keyfind(group_ids, 1, Conf) of
-		{group_ids, G} -> G;
-		false -> []
-	end,
-	{HGIs, Perc, Count}.
-
-shash_match({HGIs, Perc, Count}, _Addr, File) ->
-	Res2 = mydlp_api:get_nsh(File#file.text),
-	Res3 = lists:filter(fun(I) -> mydlp_mnesia:is_shash_of_gid(I, HGIs) end, Res2),
-	TotalLen = length(Res2), MatchLen = length(Res3),
-	case TotalLen of 
-		0 -> neg;
-		_Else ->
-			FilePerc = MatchLen/TotalLen,
-			case ((Perc /= undefined) and (Perc < (MatchLen/TotalLen))) or
-				((Count /= undefined) and ( Count < MatchLen)) of
-				true -> {pos, {file, File}, 
-					{misc, "count=" ++ integer_to_list(MatchLen) ++
-					" percentage=" ++ float_to_list(float(FilePerc))}};
-				false -> neg
-			end
-	end.
-
-% TODO: refine this
-bayes_match() -> text.
-
-bayes_match(Conf) when is_list(Conf) ->
-	Threshold = case lists:keyfind(threshold, 1, Conf) of
-		{threshold, T} -> T;
-		false -> 0.5
-	end, Threshold.
-
-bayes_match(Threshold, _Addr, File) ->
-	BayesScore = bayeserl:score(File#file.text),
-	case (BayesScore > Threshold) of
-		true -> {pos, {file, File}, 
-			{misc, "score=" ++ float_to_list(float(BayesScore))}};
 		false -> neg end.
 
 % TODO: refine this

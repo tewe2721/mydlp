@@ -40,18 +40,9 @@
 	handle_function/2
 	]).
 
--export([trainConfidential/2,
-	setConfidentialGroup/2,
-	trainPublic/2,
-	removeFile/1,
-	removeGroup/1,
-	removeFileFromGroup/2,
-	compileFilters/0,
+-export([
+	getFingerprints/2,
 	compileCustomer/1,
-        newAFileEntry/0,
-        updateAFile/2,
-        updateAFileFN/3,
-        updateAFileFP/3,
 	getRuletable/2,
 	receiveBegin/1,
 	receiveChunk/5
@@ -73,35 +64,7 @@ handle_function(Function, Args) when is_atom(Function), is_tuple(Args) ->
 
 %%%%% FUNCTIONS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-trainConfidential(Data, Fileid) -> mydlp_trainer:confidential(Data, Fileid).
-
-setConfidentialGroup(Fileid, Groupid) -> mydlp_mnesia:set_gid_by_fid(Fileid, Groupid).
-
-trainPublic(Data, Fileid) -> mydlp_trainer:public(Data, Fileid).
-
-removeFile(Fileid) -> mydlp_mnesia:remove_file_entry(Fileid).
-
-removeGroup(Groupid) ->	mydlp_mnesia:remove_group(Groupid).
-
-removeFileFromGroup(Fileid, Groupid) -> mydlp_mnesia:remove_file_from_group(Fileid, Groupid).
-
-compileFilters() -> mydlp_mysql:compile_filters().
-
 compileCustomer(Customerid) -> mydlp_mysql:compile_customer(Customerid).
-
-newAFileEntry() -> mydlp_mysql:new_afile().
-
-updateAFile(Afileid, Adata) -> mydlp_incident:a(Afileid, Adata).
-
-updateAFileFN(Afileid, Adata, Filename) -> mydlp_incident:a(Afileid, Adata, Filename).
-
-updateAFileFP(Afileid, <<Afilepath/binary>>, Filename) ->
-	updateAFileFP(Afileid, binary_to_list(Afilepath), Filename);
-updateAFileFP(Afileid, [_|_] = Afilepath, Filename) -> 
-	case filelib:is_regular(Afilepath) of
-		true ->	{ok, Adata} = file:read_file(Afilepath),
-			mydlp_incident:a(Afileid, Adata, Filename);
-		false -> ?ERROR_LOG("UPDATEAFILE Is not a regular file: "?S"\n", [Afilepath]) end, ok.
 
 getRuletable(Ipaddress, Revisionid) ->
 	RevisionIdI = mydlp_api:binary_to_integer(Revisionid),
@@ -131,6 +94,13 @@ receiveChunk(_Ipaddress, Itemid, Chunkdata, _Chunknum, _Chunknumtotal) ->
 	case mydlp_container:push(Itemid, Chunkdata) of
 		ok -> <<"ok">>;
 		_Else -> <<"error">> end.
+
+getFingerprints(Filename, Data) -> 
+	F = #file{filename=Filename, dataref=?BB_C(Data)},
+	Text = mydlp_api:concat_texts(F),
+	FList = mydlp_pdm:fingerprint(Text),
+	mydlp_api:clean_files(F),
+	FList.
 
 -endif.
 
