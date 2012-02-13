@@ -3,8 +3,8 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games
 
 ERLPIDFILE=/var/run/mydlp/mydlp.pid
 ERLPROCNAME=beam
-PYPIDFILE=/var/run/mydlp/backend-py.pid
-PYPROCNAME=python
+JAVAPIDFILE=/var/run/mydlp/backend.pid
+JAVAPROCNAME=jsvc
 SQUIDPIDFILE=/var/run/squid3.pid
 SQUIDPROCNAME=squid3
 
@@ -76,9 +76,9 @@ function isErlAlive {
                 ( echo "MyDLP Erlang Engine is dead !!!" && false )
 }
 
-function isPyAlive {
-        isAlive $PYPIDFILE $PYPROCNAME || \
-                ( echo "MyDLP Python Backend is dead !!!" && false )
+function isJavaAlive {
+        isAlive $JAVAPIDFILE $JAVAPROCNAME || \
+                ( echo "MyDLP Java Backend is dead !!!" && false )
 }
 
 function stopSquid() {
@@ -184,7 +184,7 @@ function restartSquid {
 }
 
 function isMyDLPAlive {
-        isPyAlive && isErlAlive && isIcapOpen && isSmtpCFOpen
+        isJavaAlive && isErlAlive && isIcapOpen && isSmtpCFOpen
 }
 
 function isSquidAlive {
