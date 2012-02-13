@@ -30,14 +30,14 @@
 -include("mydlp.hrl").
 
 %% API
--export([normalize/1]).
+-export([fingerprint/1]).
 
 -define(KGRAMSIZE, 32).
 -define(WINDOWSIZE, 64).
 
-normalize(Bin) -> fingerprint(Bin).
 
-fingerprint(<<Bin/binary>>) -> fingerprint(Bin, 0, <<>>, [], none, ?WINDOWSIZE, 0, 0, []).
+fingerprint(<<Bin/binary>>) -> fingerprint(Bin, 0, <<>>, [], none, ?WINDOWSIZE, 0, 0, []);
+fingerprint(L) when is_list(L) -> fingerprint(list_to_binary(L)).
 
 fingerprint(Bin, CharCount, KG, Window, _WM, _WMLife = 0, _WMCount, PrevousWMCount, Fingerprints) ->
 	NewWM = lists:min(Window),
