@@ -387,7 +387,8 @@ pl_text([], Rets) -> lists:reverse(Rets).
 
 is_whitefile(File) ->
 	Hash = erlang:md5(File#file.data),
-	mydlp_mnesia:is_fhash_of_gid(Hash, [mydlp_mnesia:get_pgid()]).
+	%mydlp_mnesia:is_fhash_of_gid(Hash, [mydlp_mnesia:get_pgid()])
+	false.
 
 drop_whitefile(Files) -> lists:filter(fun(F) -> not is_whitefile(F) end, Files).
 

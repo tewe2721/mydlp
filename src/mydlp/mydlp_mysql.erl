@@ -259,6 +259,9 @@ init([]) ->
 		{ifeature_by_itype_id, <<"SELECT f.weight,f.matcher_id FROM InformationFeature AS f, InformationDescription_InformationFeature df, InformationType t WHERE t.id=? AND t.informationDescription_id=df.InformationDescription_id AND df.features_id=f.id">>},
 		{match_by_id, <<"SELECT m.id,m.functionName FROM Matcher AS m WHERE m.id=?">>},
 		{regex_by_matcher_id, <<"SELECT re.regex FROM MatcherArgument AS ma, RegularExpression AS re WHERE ma.coupledMatcher_id=? AND ma.coupledArgument_id=re.id">>},
+		{dd_by_matcher_id, <<"SELECT dd.id FROM MatcherArgument AS ma, NonCascadingArgument AS nca, DocumentDatabase AS dd WHERE ma.coupledMatcher_id=? AND ma.coupledArgument_id=nca.id AND nca.argument_id=dd.id">>},
+		{filehash_by_dd_id, <<"SELECT ddfe.id, ddfe.md5Hash FROM DocumentDatabase_DocumentDatabaseFileEntry AS dd, DocumentDatabaseFileEntry AS ddfe WHERE dd.DocumentDatabase_id=? AND dd.fileEntries_id=ddfe.id">>},
+		{filefingerprint_by_dd_id, <<"SELECT ddfe.id, df.fingerprint FROM DocumentDatabase_DocumentDatabaseFileEntry AS dd, DocumentDatabaseFileEntry AS ddfe, DocumentDatabaseFileEntry_DocumentFingerprint AS ddf, DocumentFingerprint AS df WHERE dd.DocumentDatabase_id=? AND dd.fileEntries_id=ddfe.id AND ddf.DocumentDatabaseFileEntry_id=ddfe.id AND df.id=ddf.fingerprints_id">>},
 		%{user_by_rule_id, <<"SELECT eu.id, eu.username FROM sh_ad_entry_user AS eu, sh_ad_cross AS c, sh_ad_entry AS e, sh_ad_group AS g, sh_ad_rule_cross AS rc WHERE rc.parent_rule_id=? AND rc.group_id=g.id AND rc.group_id=c.group_id AND c.entry_id=e.id AND c.entry_id=eu.entry_id">>},
 		%{user_by_rule_id, <<"SELECT eu.id, eu.username FROM sh_ad_entry_user AS eu, sh_ad_cross AS c, sh_ad_rule_cross AS rc WHERE rc.parent_rule_id=? AND rc.group_id=c.group_id AND c.entry_id=eu.entry_id">>},
 		{mimes_by_data_format_id, <<"SELECT m.mimeType FROM MIMEType AS m, DataFormat_MIMEType dm WHERE dm.DataFormat_id=? and dm.mimeTypes_id=m.id">>},
@@ -497,14 +500,6 @@ populate_match(Id, <<"e_file">>, IFeatureId) ->
 	Func = e_file_match,
 	new_match(Id, IFeatureId, Func);
 
-populate_match(Id, <<"i_archive">>, IFeatureId) ->
-	Func = i_archive_match,
-	new_match(Id, IFeatureId, Func);
-
-populate_match(Id, <<"i_binary">>, IFeatureId) ->
-	Func = i_binary_match,
-	new_match(Id, IFeatureId, Func);
-
 populate_match(Id, <<"trid">>, IFeatureId) ->
 	Func = trid_match,
 	new_match(Id, IFeatureId, Func);
@@ -556,36 +551,25 @@ populate_match(Id, <<"keyword">>, IFeatureId) ->
 	FuncParams=[RegexGroupId],
 	new_match(Id, IFeatureId, Func, FuncParams);
 
-% TODO: refine this, currently unused
-populate_match(Id, <<"regex">>, IFeatureId) ->
-	Func = regex_match,
-	GroupsS = get_func_params(Id),
-	FuncParams = [ mydlp_api:binary_to_integer(G) || G <- GroupsS ],
+populate_match(Id, <<"document_hash">>, IFeatureId) ->
+	Func = md5_match,
+	{ok, DDQ} = psq(dd_by_matcher_id, [Id]),
+	[[DDId]] = DDQ,
+	{ok, FHQ} = psq(filehash_by_dd_id, [DDId]),
+	populate_filehashes(FHQ, DDId),
+	FuncParams=[DDId],
 	new_match(Id, IFeatureId, Func, FuncParams);
 
-% TODO: refine this, currently unused
-populate_match(Id, <<"file">>, IFeatureId) ->
-	Func = {group,file},
-	GroupsS = get_func_params(Id),
-	GroupsI = [ mydlp_api:binary_to_integer(G) || G <- GroupsS ],
-	{ok, [[SentenceHashI, SHCount, SHPercI, BayesI, BThresI, WhiteFileI]]} = psq(file_params_by_match_id, [Id]),
-	SentenceHash = case SentenceHashI of 0 -> false; _ -> true end,
-	SHPerc = SHPercI / 100,
-	Bayes = case BayesI of 0 -> false; _ -> true end,
-	BThres = BThresI / 100,
-	WhiteFile = case WhiteFileI of 0 -> false; _ -> true end,
-
-	FuncParams = [{shash,SentenceHash}, {shash_count,SHCount}, {shash_percentage, SHPerc},
-			{bayes, Bayes}, {bayes_threshold, BThres},
-			{whitefile, WhiteFile}, {group_ids, GroupsI}],
+populate_match(Id, <<"document_pdm">>, IFeatureId) ->
+	Func = pdm_match,
+	{ok, DDQ} = psq(dd_by_matcher_id, [Id]),
+	[[DDId]] = DDQ,
+	{ok, FFQ} = psq(filefingerprint_by_dd_id, [DDId]),
+	populate_filefingerprints(FFQ, DDId),
+	FuncParams=[DDId],
 	new_match(Id, IFeatureId, Func, FuncParams);
 
 populate_match(Id, Matcher, _) -> throw({error, {unsupported_match, Id, Matcher} }).
-
-get_func_params(MatchId) ->
-	{ok, PQ} = psq(params_by_match_id, [MatchId]),
-	lists:append(PQ).
-
 
 populate_data_formats([DFId|DFs]) ->
 	{ok, MQ} = psq(mimes_by_data_format_id, [DFId]),
@@ -599,6 +583,20 @@ populate_mimes([[Mime]|Rows], DataFormatId) ->
 	mydlp_mnesia:write(M),
 	populate_mimes(Rows, DataFormatId);
 populate_mimes([], _DataFormatId) -> ok.
+
+populate_filehashes([[FileId,HexHash]|Rows], DDId) ->
+	Id=mydlp_mnesia:get_unique_id(file_hash),
+	F = #file_hash{id=Id, file_id=FileId, group_id=DDId, hash=mydlp_api:hex2bytelist(HexHash)},
+	mydlp_mnesia:write(F),
+	populate_filehashes(Rows, DDId);
+populate_filehashes([], _DDId) -> ok.
+
+populate_filefingerprints([[FileId,Fingerprint]|Rows], DDId) ->
+	Id=mydlp_mnesia:get_unique_id(file_fingerprint),
+	F = #file_fingerprint{id=Id, file_id=FileId, group_id=DDId, fingerprint=Fingerprint},
+	mydlp_mnesia:write(F),
+	populate_filefingerprints(Rows, DDId);
+populate_filefingerprints([], _DDId) -> ok.
 
 %populate_site_desc([[Id, StaticIpI]|Rows]) ->
 %	IpAddr = int_to_ip(StaticIpI),

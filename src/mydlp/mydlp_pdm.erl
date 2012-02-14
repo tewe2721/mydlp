@@ -32,8 +32,8 @@
 %% API
 -export([fingerprint/1]).
 
--define(KGRAMSIZE, 32).
--define(WINDOWSIZE, 64).
+-define(KGRAMSIZE, 50).
+-define(WINDOWSIZE, 100).
 
 
 fingerprint(<<Bin/binary>>) -> fingerprint(Bin, 0, <<>>, [], none, ?WINDOWSIZE, 0, 0, []);

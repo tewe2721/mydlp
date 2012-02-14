@@ -31,10 +31,12 @@
 
 %% API
 -export([
-	file/1,
 	md5_match/0,
 	md5_match/1,
 	md5_match/3,
+	pdm_match/0,
+	pdm_match/1,
+	pdm_match/3,
 	regex_match/0,
 	regex_match/1,
 	regex_match/3,
@@ -208,49 +210,21 @@ p_text_match1(#file{data=Data}) ->
 % TODO: refine this
 md5_match() -> raw.
 
-md5_match(HGIs) -> HGIs.
+md5_match([HGI]) -> HGI.
 
-md5_match(HGIs, _Addr, File) ->
+md5_match(HGI, _Addr, File) ->
 	Hash = erlang:md5(File#file.data),
-	case mydlp_mnesia:is_fhash_of_gid(Hash, HGIs) of
-		true -> {pos, {file, File}};
-		false -> neg end.
+	case mydlp_mnesia:is_hash_of_gid(Hash, HGI) of
+		true -> 1;
+		false -> 0 end.
 
-% TODO: refine this
-file(Conf) ->
-	WF = case lists:keyfind(whitefile, 1, Conf) of
-                {whitefile, true} -> {whitefile, []};
-                _Else -> []
-        end,
-	Groups = case lists:keyfind(group_ids, 1, Conf) of
-                {group_ids, G} -> G;
-                _Else2 -> []
-        end,
-	FH = {md5_match, Groups},
-	SH = case lists:keyfind(shash, 1, Conf) of
-                {shash, true} ->
-			SFP = [{group_ids, Groups}],
-			SFP1 = SFP ++ case lists:keyfind(shash_count, 1, Conf) of
-					{shash_count, C} -> [{count, C}];
-					_Else3 -> []
-			end,
-			SFP2 = SFP1 ++ case lists:keyfind(shash_percentage, 1, Conf) of
-					{shash_percentage, P} -> [{percentage, P}];
-					_Else4 -> []
-			end,
-			{shash_match, lists:flatten(SFP2)};
-                _Else5 -> []
-        end,
-	BYS = case lists:keyfind(bayes, 1, Conf) of
-                {bayes, true} -> 
-			BFP = case lists:keyfind(bayes_threshold, 1, Conf) of
-					{bayes_threshold, T} -> [{threshold, T}];
-					_Else6 -> []
-			end,
-			{bayes_match, BFP};
-                _Else7 -> []
-        end,
-	lists:flatten([WF, FH, SH, BYS]).
+pdm_match() -> text.
+
+pdm_match([FGI]) -> FGI.
+
+pdm_match(FGI, _Addr, File) ->
+	FList = mydlp_pdm:fingerprint(File#file.text),
+	mydlp_mnesia:pdm_of_gid(FList, FGI).
 
 scode_match() -> text.
 

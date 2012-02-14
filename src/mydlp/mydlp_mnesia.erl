@@ -49,6 +49,8 @@
 	get_regexes/1,
 	get_config_value/1,
 	is_mime_of_dfid/2,
+	is_hash_of_gid/2,
+	pdm_of_gid/2,
 	get_record_fields/1,
 	dump_tables/1,
 	dump_client_tables/0,
@@ -280,6 +282,10 @@ get_config_value(KeyB) -> aqc({get_config_value, KeyB}, nocache).
 is_mime_of_dfid(Mime, DataFormatIds) -> 
 	aqc({is_mime_of_dfid, Mime, DataFormatIds}, cache).
 
+is_hash_of_gid(Hash, GroupId) -> aqc({is_hash_of_gid, Hash, GroupId}, nocache).
+
+pdm_of_gid(Fingerprints, GroupId) -> aqc({pdm_of_gid, Fingerprints, GroupId}, nocache).
+
 write(RecordList) when is_list(RecordList) -> aqc({write, RecordList}, flush);
 write(Record) when is_tuple(Record) -> write([Record]).
 
@@ -296,11 +302,8 @@ flush_cache() -> cache_clean0().
 handle_result({is_mime_of_dfid, _Mime, DFIs}, {atomic, MDFIs}) -> 
 	lists:any(fun(I) -> lists:member(I, DFIs) end, MDFIs);
 
-handle_result({is_shash_of_gid, _Hash, HGIs}, {atomic, GIs}) -> 
-	lists:any(fun(I) -> lists:member(I, HGIs) end,GIs);
-
-handle_result({is_fhash_of_gid, _Hash, HGIs}, {atomic, GIs}) -> 
-	lists:any(fun(I) -> lists:member(I, HGIs) end,GIs);
+handle_result({is_hash_of_gid, _Hash, _GroupId}, {atomic, FIs}) -> 
+	case FIs of [] -> false; [_|_] -> true end;
 
 % TODO: instead of case statements, refining function definitions will make queries faster.
 handle_result({get_fid, _SIpAddr}, {atomic, Result}) -> 
@@ -472,6 +475,17 @@ handle_query_common({is_mime_of_dfid, Mime, _DFIs}) ->
 		]),
 	?QLCE(Q);
 
+handle_query_common({is_hash_of_gid, Hash, GroupId}) ->
+	Q = ?QLCQ([F#file_hash.id ||
+		F <- mnesia:table(file_hash),
+		F#file_hash.group_id == GroupId,
+		F#file_hash.hash == Hash
+		]),
+	?QLCE(Q);
+
+handle_query_common({pdm_of_gid, Fingerprints, GroupId}) ->
+	pdm_hit_count(Fingerprints, GroupId);
+
 handle_query_common({get_regexes, GroupId}) ->
 	Q = ?QLCQ([ R#regex.compiled ||
 		R <- mnesia:table(regex),
@@ -527,7 +541,7 @@ handle_call({async_query, CacheOption, Query}, From, State) ->
 					[Class, Error, erlang:get_stacktrace(), CacheOption, Query, State]),
 					{ierror, {Class, Error}} end,
 		Worker ! {async_reply, Return, From}
-	end, 15000),
+	end, 60000),
 	{noreply, State};
 
 handle_call(truncate_all, From, State) ->
@@ -922,7 +936,7 @@ aqc(Query, cache) -> async_query_call(Query, cache);
 aqc(Query, nocache) -> async_query_call(Query, nocache).
 
 async_query_call(Query, CacheOption) -> 
-	case gen_server:call(?MODULE, {async_query, CacheOption, Query}, 5000) of
+	case gen_server:call(?MODULE, {async_query, CacheOption, Query}, 55000) of
 		{ierror, {Class, Error}} -> mydlp_api:exception(Class, Error);
 		Else -> Else end.
 
@@ -1001,17 +1015,68 @@ remove_itype(ITI) ->
 remove_ifeatures(IFIs) -> lists:foreach(fun(Id) -> remove_ifeature(Id) end, IFIs), ok.
 
 remove_ifeature(IFI) ->
-	Q = ?QLCQ([M#match.id ||	
+	Q1 = ?QLCQ([M#match.func_params ||	
+		M <- mnesia:table(match),
+		M#match.ifeature_id == IFI,
+		M#match.func == md5_match
+		]),
+	FHGIs = ?QLCE(Q1),
+	remove_filehashes(lists:usort(lists:flatten(FHGIs))),
+
+	Q2 = ?QLCQ([M#match.func_params ||	
+		M <- mnesia:table(match),
+		M#match.ifeature_id == IFI,
+		M#match.func == pdm_match
+		]),
+	FFGIs = ?QLCE(Q2),
+	remove_filefingerprints(lists:usort(lists:flatten(FFGIs))),
+
+	Q0 = ?QLCQ([M#match.id ||	
 		M <- mnesia:table(match),
 		M#match.ifeature_id == IFI
 		]),
-	MIs = ?QLCE(Q),
+	MIs = ?QLCE(Q0),
 	remove_matches(MIs),
 	mnesia:delete({ifeature, IFI}).
 
 remove_matches(MIs) -> lists:foreach(fun(Id) -> remove_match(Id) end, MIs), ok.
 
 remove_match(MI) -> mnesia:delete({match, MI}).
+
+remove_filehashes(FHGIs) -> lists:foreach(fun(GroupId) -> remove_filehashes1(GroupId) end, FHGIs), ok.
+
+remove_filehashes1(GroupId) ->
+	Q = ?QLCQ([F#file_hash.id ||	
+		F <- mnesia:table(file_hash),
+		F#file_hash.group_id == GroupId
+		]),
+	FIs = ?QLCE(Q),
+	lists:foreach(fun(Id) -> mnesia:delete({file_hash, Id}) end, FIs),
+	ok.
+
+remove_filefingerprints(FHGIs) -> lists:foreach(fun(GroupId) -> remove_filefingerprints1(GroupId) end, FHGIs), ok.
+
+remove_filefingerprints1(GroupId) ->
+	Q = ?QLCQ([F#file_fingerprint.id ||	
+		F <- mnesia:table(file_fingerprint),
+		F#file_fingerprint.group_id == GroupId
+		]),
+	FIs = ?QLCE(Q),
+	lists:foreach(fun(Id) -> mnesia:delete({file_fingerprint, Id}) end, FIs),
+	ok.
+
+pdm_hit_count(Fingerprints, GroupId) -> pdm_hit_count(Fingerprints, GroupId, 0).
+
+pdm_hit_count([Fingerprint|Rest], GroupId, Acc) ->
+	Q = ?QLCQ([F#file_fingerprint.id ||
+		F <- mnesia:table(file_fingerprint),
+		F#file_fingerprint.group_id == GroupId,
+		F#file_fingerprint.fingerprint == Fingerprint
+		]),
+	case ?QLCE(Q) of
+		[] -> pdm_hit_count(Rest, GroupId, Acc);
+		[_|_] -> pdm_hit_count(Rest, GroupId, Acc + 1) end;
+pdm_hit_count([], _GroupId, Acc) -> Acc.
 
 -endif.
 
