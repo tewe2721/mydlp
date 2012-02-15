@@ -282,9 +282,9 @@ get_config_value(KeyB) -> aqc({get_config_value, KeyB}, nocache).
 is_mime_of_dfid(Mime, DataFormatIds) -> 
 	aqc({is_mime_of_dfid, Mime, DataFormatIds}, cache).
 
-is_hash_of_gid(Hash, GroupId) -> aqc({is_hash_of_gid, Hash, GroupId}, nocache).
+is_hash_of_gid(Hash, GroupId) -> aqc({is_hash_of_gid, Hash, GroupId}, nocache, dirty).
 
-pdm_of_gid(Fingerprints, GroupId) -> aqc({pdm_of_gid, Fingerprints, GroupId}, nocache).
+pdm_of_gid(Fingerprints, GroupId) -> aqc({pdm_of_gid, Fingerprints, GroupId}, nocache, dirty).
 
 write(RecordList) when is_list(RecordList) -> aqc({write, RecordList}, flush);
 write(Record) when is_tuple(Record) -> write([Record]).
@@ -514,34 +514,34 @@ handle_query_common({delete, Item}) ->
 
 handle_query_common(Query) -> throw({error,{unhandled_query,Query}}).
 
-handle_async_query(flush, Query) ->
-	Return = evaluate_query(Query),
+handle_async_query(flush, Context, Query) ->
+	Return = evaluate_query(Context, Query),
 	cache_clean(),
 	Return;
 
-handle_async_query(cache, Query) ->
+handle_async_query(cache, Context, Query) ->
 	case cache_lookup(Query) of
 		{hit, {Query, R}} -> R;
-		miss ->	R = evaluate_query(Query),
+		miss ->	R = evaluate_query(Context, Query),
 			cache_insert(Query, R),
 			R end;
 
-handle_async_query(nocache, Query) ->
-	evaluate_query(Query).
+handle_async_query(nocache, Context, Query) ->
+	evaluate_query(Context, Query).
 
-handle_call({async_query, CacheOption, Query}, From, State) ->
+handle_call({async_query, CacheOption, Context, Query}, From, State) ->
 	Worker = self(),
 	mydlp_api:mspawn(fun() ->
-		Return= try	handle_async_query(CacheOption, Query)
+		Return= try	handle_async_query(CacheOption, Context, Query)
 			catch  	Class:Error ->
 				?ERROR_LOG("MNESIAQ: Error occured: Class: ["?S"]. Error: ["?S"].~n"
 						"Stack trace: "?S"~n"
-						"CacheOption: ["?S"]. Query: ["?S"]~n"
+						"CacheOption: ["?S"]. Context: ["?S"]. Query: ["?S"]~n"
 						"State: "?S"~n ",
-					[Class, Error, erlang:get_stacktrace(), CacheOption, Query, State]),
+					[Class, Error, erlang:get_stacktrace(), CacheOption, Context, Query, State]),
 					{ierror, {Class, Error}} end,
 		Worker ! {async_reply, Return, From}
-	end, 60000),
+	end, 15000),
 	{noreply, State};
 
 handle_call(truncate_all, From, State) ->
@@ -795,9 +795,21 @@ transaction(F) ->
 			{aborted, Reason}
 	end.
 
-evaluate_query(Query) ->
+dirty(F) ->
+	try {atomic, mnesia:activity(async_dirty, F)}
+	catch
+		_:Reason ->
+			{aborted, Reason}
+	end.
+
+evaluate_query(transaction, Query) ->
 	F = fun() -> handle_query(Query) end,
 	Result = transaction(F),
+	handle_result(Query, Result);
+
+evaluate_query(dirty, Query) ->
+	F = fun() -> handle_query(Query) end,
+	Result = dirty(F),
 	handle_result(Query, Result).
 
 cache_lookup(Query) ->
@@ -931,12 +943,12 @@ get_unique_id(TableName) -> mnesia:dirty_update_counter(unique_ids, TableName, 1
 
 % aqc(Query) -> aqc(Query, nocache).
 
-aqc(Query, flush) -> async_query_call(Query, flush);
-aqc(Query, cache) -> async_query_call(Query, cache);
-aqc(Query, nocache) -> async_query_call(Query, nocache).
+aqc(Query, CacheOption) -> aqc(Query, CacheOption, transaction).
 
-async_query_call(Query, CacheOption) -> 
-	case gen_server:call(?MODULE, {async_query, CacheOption, Query}, 55000) of
+aqc(Query, CacheOption, Context) -> async_query_call(Query, CacheOption, Context).
+
+async_query_call(Query, CacheOption, Context) -> 
+	case gen_server:call(?MODULE, {async_query, CacheOption, Context, Query}, 12000) of
 		{ierror, {Class, Error}} -> mydlp_api:exception(Class, Error);
 		Else -> Else end.
 
@@ -1068,12 +1080,7 @@ remove_filefingerprints1(GroupId) ->
 pdm_hit_count(Fingerprints, GroupId) -> pdm_hit_count(Fingerprints, GroupId, 0).
 
 pdm_hit_count([Fingerprint|Rest], GroupId, Acc) ->
-	Q = ?QLCQ([F#file_fingerprint.id ||
-		F <- mnesia:table(file_fingerprint),
-		F#file_fingerprint.group_id == GroupId,
-		F#file_fingerprint.fingerprint == Fingerprint
-		]),
-	case ?QLCE(Q) of
+	case mnesia:dirty_match_object(file_fingerprint, #file_fingerprint{id='_', file_id='_', group_id=GroupId, fingerprint=Fingerprint}) of
 		[] -> pdm_hit_count(Rest, GroupId, Acc);
 		[_|_] -> pdm_hit_count(Rest, GroupId, Acc + 1) end;
 pdm_hit_count([], _GroupId, Acc) -> Acc.
