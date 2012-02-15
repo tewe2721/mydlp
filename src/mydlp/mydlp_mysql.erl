@@ -36,7 +36,7 @@
 
 %% API
 -export([start_link/0,
-	compile_filters/0,
+	compile_customer/0,
 	compile_customer/1,
 	push_log/9,
 	is_multisite/0,
@@ -83,8 +83,7 @@ insert_log_file(LogId, Filename, MimeType, Size, Path) ->
 repopulate_mnesia() ->
 	gen_server:cast(?MODULE, repopulate_mnesia).
 
-compile_filters() -> 
-	gen_server:call(?MODULE, compile_filters, 60000).
+compile_customer() -> compile_customer(mydlp_mnesia:get_dfid()).
 
 compile_customer(FilterId) when is_integer(FilterId) ->
 	gen_server:call(?MODULE, {compile_customer, FilterId} , 60000).
@@ -100,17 +99,8 @@ handle_call({compile_customer, FilterId}, From, State) ->
 	Worker = self(),
 	?ASYNC(fun() ->
 			mydlp_mnesia:remove_site(FilterId),
-			Reply = populate_site(FilterId),
-                        Worker ! {async_reply, Reply, From}
-		end, 60000),
-        {noreply, State};
-
-handle_call(compile_filters, From, State) ->
-	Worker = self(),
-	?ASYNC(fun() ->
-			mydlp_mnesia:truncate_nondata(),
-			Reply = populate(),
-                        Worker ! {async_reply, Reply, From}
+			populate_site(FilterId),
+                        Worker ! {async_reply, ok, From}
 		end, 60000),
         {noreply, State};
 
@@ -335,11 +325,18 @@ psqt(PreparedKey, Params) ->
 
 %%%%%%%%%%%% internal
 
-populate() -> 
-	populate_site(mydlp_mnesia:dcid()),
+mydlp_mnesia_write(I) when is_list(I) ->
+	L = get(mydlp_mnesia_write),
+	put(mydlp_mnesia_write, lists:append(I,L)),
+	ok;
+
+mydlp_mnesia_write(I) when is_tuple(I) ->
+	L = get(mydlp_mnesia_write),
+	put(mydlp_mnesia_write, [I|L]),
 	ok.
 
 populate_site(FilterId) ->
+	put(mydlp_mnesia_write, []),
 	%TODO: refine this
 	%{ok, FQ} = psq(filters_by_cid, [FilterId]),
 	populate_filters([[FilterId, <<"pass">> ]], FilterId),
@@ -355,12 +352,14 @@ populate_site(FilterId) ->
 	% TODO: refine and implement this
 	%{ok, UDQ} = psq(usb_device_by_cid, [FilterId]),
 	%populate_usb_devices(UDQ, FilterId),
+	mydlp_mnesia:write(get(mydlp_mnesia_write)),
+	erase(mydlp_mnesia_write),
 	ok.
 
 populate_configs([[Key, Value]|Rows], FilterId) ->
 	Id = mydlp_mnesia:get_unique_id(config),
 	C = #config{id=Id, filter_id=FilterId, key=Key, value=Value},
-	mydlp_mnesia:write(C),
+	mydlp_mnesia_write(C),
 	populate_configs(Rows, FilterId);
 populate_configs([], _FilterId) -> ok.
 
@@ -371,7 +370,7 @@ populate_filters([[Id, DActionS]|Rows], Id) ->
 	{ok, RQ} = psq(rules),
 	populate_rules(RQ, Id),
 	F = #filter{id=Id, default_action=DAction},
-	mydlp_mnesia:write(F),
+	mydlp_mnesia_write(F),
 	populate_filters(Rows, Id);
 populate_filters([], _FilterId) -> ok.
 
@@ -399,20 +398,20 @@ populate_rule(OrigId, Channel, Action, FilterId) ->
 	%{ok, TDQ} = psq(tdomains_by_rid, [Id]),
 	%TDs = lists:flatten(TDQ),
 	R = #rule{id=RuleId, orig_id=OrigId, channel=Channel, action=Action, filter_id=FilterId},
-	mydlp_mnesia:write(R).
+	mydlp_mnesia_write(R).
 
 populate_iprs([[Base, Subnet]| Rows], RuleId) ->
 	B1 = int_to_ip(Base),
 	S1 = int_to_ip(Subnet),
 	Id = mydlp_mnesia:get_unique_id(ipr),
 	I = #ipr{id=Id, rule_id=RuleId, ipbase=B1, ipmask=S1},
-	mydlp_mnesia:write(I),
+	mydlp_mnesia_write(I),
 	populate_iprs(Rows, RuleId);
 populate_iprs([], _RuleId) -> ok.
 
 %populate_users([[Id, Username]| Rows], Parent) ->
 %	U = #m_user{id=Id, parent=Parent, username=Username},
-%	mydlp_mnesia:write(U),
+%	mydlp_mnesia_write(U),
 %	populate_users(Rows, Parent);
 %populate_users([], _Parent) -> ok.
 
@@ -450,7 +449,7 @@ populate_itypes([[OrigId, Threshold]| Rows], RuleId) ->
 	T = #itype{id=ITypeId, orig_id=OrigId, rule_id=RuleId, data_formats=DataFormats, threshold=Threshold},
 	{ok, IFQ} = psq(ifeature_by_itype_id, [OrigId]),
 	populate_ifeatures(IFQ, ITypeId),
-	mydlp_mnesia:write(T),
+	mydlp_mnesia_write(T),
 	populate_itypes(Rows, RuleId);
 populate_itypes([], _RuleId) -> ok.
 
@@ -459,7 +458,7 @@ populate_ifeatures([[Weight, MatcherId]| Rows], ITypeId) ->
 	F = #ifeature{id=IFeatureId, itype_id=ITypeId, weight=Weight},
 	{ok, MQ} = psq(match_by_id, [MatcherId]),
 	populate_matches(MQ, IFeatureId),
-	mydlp_mnesia:write(F),
+	mydlp_mnesia_write(F),
 	populate_ifeatures(Rows, ITypeId);
 populate_ifeatures([], _RuleId) -> ok.
 
@@ -490,7 +489,7 @@ new_match(OrigId, IFeatureId, Func, FuncParams) ->
 
 write_matches(Matches) ->
 	Matches1 = [ M#match{id=mydlp_mnesia:get_unique_id(match)} || M <- Matches ],
-	mydlp_mnesia:write(Matches1).
+	mydlp_mnesia_write(Matches1).
 
 populate_match(Id, <<"e_archive">>, IFeatureId) ->
 	Func = e_archive_match,
@@ -547,7 +546,7 @@ populate_match(Id, <<"keyword">>, IFeatureId) ->
 	RegexId = mydlp_mnesia:get_unique_id(regex),
 	RegexGroupId = mydlp_mnesia:get_unique_id(regex_group_id),
 	R = #regex{id=RegexId, group_id=RegexGroupId, plain=RegexS},
-	mydlp_mnesia:write(R),
+	mydlp_mnesia_write(R),
 	FuncParams=[RegexGroupId],
 	new_match(Id, IFeatureId, Func, FuncParams);
 
@@ -580,28 +579,28 @@ populate_data_formats([]) -> ok.
 populate_mimes([[Mime]|Rows], DataFormatId) ->
 	Id=mydlp_mnesia:get_unique_id(mime_type),
 	M = #mime_type{id=Id, mime=Mime, data_format_id=DataFormatId},
-	mydlp_mnesia:write(M),
+	mydlp_mnesia_write(M),
 	populate_mimes(Rows, DataFormatId);
 populate_mimes([], _DataFormatId) -> ok.
 
 populate_filehashes([[FileId,HexHash]|Rows], DDId) ->
 	Id=mydlp_mnesia:get_unique_id(file_hash),
 	F = #file_hash{id=Id, file_id=FileId, group_id=DDId, hash=mydlp_api:hex2bytelist(HexHash)},
-	mydlp_mnesia:write(F),
+	mydlp_mnesia_write(F),
 	populate_filehashes(Rows, DDId);
 populate_filehashes([], _DDId) -> ok.
 
 populate_filefingerprints([[FileId,Fingerprint]|Rows], DDId) ->
 	Id=mydlp_mnesia:get_unique_id(file_fingerprint),
 	F = #file_fingerprint{id=Id, file_id=FileId, group_id=DDId, fingerprint=Fingerprint},
-	mydlp_mnesia:write(F),
+	mydlp_mnesia_write(F),
 	populate_filefingerprints(Rows, DDId);
 populate_filefingerprints([], _DDId) -> ok.
 
 %populate_site_desc([[Id, StaticIpI]|Rows]) ->
 %	IpAddr = int_to_ip(StaticIpI),
 %	S = #site_desc{filter_id=Id, ipaddr=IpAddr},
-%	mydlp_mnesia:write(S),
+%	mydlp_mnesia_write(S),
 %	populate_site_desc(Rows);
 %populate_site_desc([]) -> ok.
 
@@ -611,7 +610,7 @@ populate_filefingerprints([], _DDId) -> ok.
 %		<<"block">> -> block end,
 %	U = #usb_device{id=mydlp_mnesia:get_unique_id(usb_device), 
 %			filter_id=FilterId, device_id=DeviceId, action=Action},
-%	mydlp_mnesia:write(U),
+%	mydlp_mnesia_write(U),
 %	populate_usb_devices(Rows, FilterId);
 %populate_usb_devices([], _FilterId) -> ok.
 

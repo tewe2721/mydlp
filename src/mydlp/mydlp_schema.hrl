@@ -112,6 +112,7 @@
 	error
 }).
 
+%% refine match_object statements after any change
 -record(file_hash, {
 	id,
 	file_id,
@@ -119,6 +120,7 @@
 	hash
 }).
 
+%% refine match_object statements after any change
 -record(file_fingerprint, {
 	id,
 	file_id,

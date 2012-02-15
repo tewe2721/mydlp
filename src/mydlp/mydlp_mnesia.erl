@@ -950,7 +950,7 @@ aqc(Query, CacheOption) -> aqc(Query, CacheOption, transaction).
 aqc(Query, CacheOption, Context) -> async_query_call(Query, CacheOption, Context).
 
 async_query_call(Query, CacheOption, Context) -> 
-	case gen_server:call(?MODULE, {async_query, CacheOption, Context, Query}, 12000) of
+	case gen_server:call(?MODULE, {async_query, CacheOption, Context, Query}, 14500) of
 		{ierror, {Class, Error}} -> mydlp_api:exception(Class, Error);
 		Else -> Else end.
 
@@ -1068,23 +1068,15 @@ remove_match(MI) -> mnesia:delete({match, MI}).
 remove_filehashes(FHGIs) -> lists:foreach(fun(GroupId) -> remove_filehashes1(GroupId) end, FHGIs), ok.
 
 remove_filehashes1(GroupId) ->
-	Q = ?QLCQ([F#file_hash.id ||	
-		F <- mnesia:table(file_hash),
-		F#file_hash.group_id == GroupId
-		]),
-	FIs = ?QLCE(Q),
-	lists:foreach(fun(Id) -> mnesia:delete({file_hash, Id}) end, FIs),
+	FileHashes = mnesia:match_object(#file_hash{id='_', file_id='_', group_id=GroupId, hash='_'}),
+	lists:foreach(fun(#file_hash{id=Id}) -> mnesia:delete({file_hash, Id}) end, FileHashes),
 	ok.
 
 remove_filefingerprints(FHGIs) -> lists:foreach(fun(GroupId) -> remove_filefingerprints1(GroupId) end, FHGIs), ok.
 
 remove_filefingerprints1(GroupId) ->
-	Q = ?QLCQ([F#file_fingerprint.id ||	
-		F <- mnesia:table(file_fingerprint),
-		F#file_fingerprint.group_id == GroupId
-		]),
-	FIs = ?QLCE(Q),
-	lists:foreach(fun(Id) -> mnesia:delete({file_fingerprint, Id}) end, FIs),
+	Fingerprints = mnesia:match_object(#file_fingerprint{id='_', file_id='_', group_id=GroupId, fingerprint='_'}),
+	lists:foreach(fun(#file_fingerprint{id=Id}) -> mnesia:delete({file_fingerprint, Id}) end, Fingerprints),
 	ok.
 
 -endif.

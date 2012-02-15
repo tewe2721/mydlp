@@ -1723,10 +1723,8 @@ use_client_policy(CDBBin) ->
 		{{rule_tables, RuleTables}, {items, ItemDump}} = CDBObj,
 		
 		mydlp_mnesia:truncate_all(),
-		[ ( catch mydlp_mnesia:write(I) ) || I <- ItemDump],
-		[ ( catch mydlp_mnesia:write(#rule_table{channel=C, table = RT}) )
-				|| {C, RT} <- RuleTables ],
-
+		( catch mydlp_mnesia:write(ItemDump) ),
+		( catch mydlp_mnesia:write([ #rule_table{channel=C, table = RT} || {C, RT} <- RuleTables ]) ),
 		mydlp_dynamic:load(),
 		mydlp_dynamic:populate_win32reg(),
 		mydlp_container:schedule_confupdate()
