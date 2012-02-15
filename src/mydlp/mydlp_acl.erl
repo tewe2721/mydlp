@@ -385,8 +385,8 @@ pl_text([#file{text=undefined} = File|Files], Rets) ->
 pl_text([File|Files], Rets) -> pl_text(Files, [File|Rets]);
 pl_text([], Rets) -> lists:reverse(Rets).
 
-is_whitefile(File) ->
-	Hash = erlang:md5(File#file.data),
+is_whitefile(_File) ->
+	%Hash = erlang:md5(File#file.data),
 	%mydlp_mnesia:is_fhash_of_gid(Hash, [mydlp_mnesia:get_pgid()])
 	false.
 

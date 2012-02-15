@@ -963,6 +963,14 @@ tab_names1([{Tab,_}|Tabs], Returns) -> tab_names1(Tabs, [Tab|Returns]);
 tab_names1([Tab|Tabs], Returns) when is_atom(Tab) ->  tab_names1(Tabs, [Tab|Returns]);
 tab_names1([], Returns) -> lists:reverse(Returns).
 
+pdm_hit_count(Fingerprints, GroupId) -> pdm_hit_count(Fingerprints, GroupId, 0).
+
+pdm_hit_count([Fingerprint|Rest], GroupId, Acc) ->
+	case mnesia:dirty_match_object(file_fingerprint, #file_fingerprint{id='_', file_id='_', group_id=GroupId, fingerprint=Fingerprint}) of
+		[] -> pdm_hit_count(Rest, GroupId, Acc);
+		[_|_] -> pdm_hit_count(Rest, GroupId, Acc + 1) end;
+pdm_hit_count([], _GroupId, Acc) -> Acc.
+
 -ifdef(__MYDLP_NETWORK).
 
 %% File Group functions
@@ -1076,14 +1084,6 @@ remove_filefingerprints1(GroupId) ->
 	FIs = ?QLCE(Q),
 	lists:foreach(fun(Id) -> mnesia:delete({file_fingerprint, Id}) end, FIs),
 	ok.
-
-pdm_hit_count(Fingerprints, GroupId) -> pdm_hit_count(Fingerprints, GroupId, 0).
-
-pdm_hit_count([Fingerprint|Rest], GroupId, Acc) ->
-	case mnesia:dirty_match_object(file_fingerprint, #file_fingerprint{id='_', file_id='_', group_id=GroupId, fingerprint=Fingerprint}) of
-		[] -> pdm_hit_count(Rest, GroupId, Acc);
-		[_|_] -> pdm_hit_count(Rest, GroupId, Acc + 1) end;
-pdm_hit_count([], _GroupId, Acc) -> Acc.
 
 -endif.
 
