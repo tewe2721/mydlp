@@ -874,6 +874,8 @@ predict_need4te_1([{_ITId, _Threshold, _DataFormats, IFeatures}|ITypes]) ->
 		false -> predict_need4te_1(ITypes) end;
 predict_need4te_1([]) -> false.
 
+predict_need4te_2([{_Weight, {all, _FuncParams}}|IFeatures]) ->
+	predict_need4te_2(IFeatures);
 predict_need4te_2([{_Weight, {Func, _FuncParams}}|IFeatures]) ->
 	case get_matcher_req(Func) of
                 raw -> predict_need4te_2(IFeatures);
