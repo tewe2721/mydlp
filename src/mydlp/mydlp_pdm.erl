@@ -75,11 +75,21 @@ fingerprint(<<>>, _CharCount, _KG, Window, _WM, _WMLife, _WMCount, _PrevousWMCou
 fingerprint(<<>>, _CharCount, _KG, _Window, _WM, _WMLife, _WMCount, _PrevousWMCount, Fingerprints) -> Fingerprints; %% Caution: fingerprints are in reverse order.
 
 fingerprint(Bin, CharCount, KG, Window, WM, WMLife, WMCount, PrevousWMCount, Fingerprints) ->
-	<<C/utf8, Rest/binary>> = Bin,
-	{CharCount1, KG1} = case normal_bin(C) of
-		<<>> -> {CharCount, KG};
-		Else -> {CharCount + 1, <<KG/binary, Else/binary>>} end,
-	fingerprint(Rest, CharCount1, KG1, Window, WM, WMLife, WMCount, PrevousWMCount, Fingerprints).
+	case get_uchar(Bin) of
+		none -> fingerprint(<<>>, CharCount, KG, Window, WM, WMLife, WMCount, PrevousWMCount, Fingerprints);
+		{C,Rest} ->
+			{CharCount1, KG1} = case normal_bin(C) of
+				<<>> -> {CharCount, KG};
+				Else -> {CharCount + 1, <<KG/binary, Else/binary>>} end,
+			fingerprint(Rest, CharCount1, KG1, Window, WM, WMLife, WMCount, PrevousWMCount, Fingerprints) end.
+
+get_uchar(<<>>) -> none;
+get_uchar(Bin) ->
+	try 	<<C/utf8, Rest/binary>> = Bin,
+		{C, Rest}
+	catch _:_ -> 
+		<<_:1/binary, Rest2/binary>> = Bin,
+		get_uchar(Rest2) end.
 
 hash(Item) -> erlang:phash2(Item).
 
