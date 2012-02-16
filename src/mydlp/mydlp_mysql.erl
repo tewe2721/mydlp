@@ -545,6 +545,18 @@ populate_match(Id, <<"keyword">>, IFeatureId) ->
 	[[RegexS]] = REQ,
 	RegexId = mydlp_mnesia:get_unique_id(regex),
 	RegexGroupId = mydlp_mnesia:get_unique_id(regex_group_id),
+	Regex1 = list_to_binary(mydlp_api:escape_regex(binary_to_list(RegexS))),
+	R = #regex{id=RegexId, group_id=RegexGroupId, plain=Regex1},
+	mydlp_mnesia_write(R),
+	FuncParams=[RegexGroupId],
+	new_match(Id, IFeatureId, Func, FuncParams);
+
+populate_match(Id, <<"regex">>, IFeatureId) ->
+	Func = regex_match,
+	{ok, REQ} = psq(regex_by_matcher_id, [Id]),
+	[[RegexS]] = REQ,
+	RegexId = mydlp_mnesia:get_unique_id(regex),
+	RegexGroupId = mydlp_mnesia:get_unique_id(regex_group_id),
 	R = #regex{id=RegexId, group_id=RegexGroupId, plain=RegexS},
 	mydlp_mnesia_write(R),
 	FuncParams=[RegexGroupId],
