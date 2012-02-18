@@ -15,7 +15,8 @@ PATH=/usr/bin:/usr/sbin:/bin:/sbin
 
 ERLANG=/usr/bin/erl
 JSVCBIN=/usr/bin/jsvc
-JAVA_HOME=/usr/lib/jvm/java-6-sun
+#JAVA_HOME=/usr/lib/jvm/java-6-sun
+JAVA_HOME=/usr/lib/jvm/java-6-openjdk
 CDJAR=/usr/share/java/commons-daemon.jar
 MBJAR=/usr/share/mydlp/backend/mydlp-backend-1.0-jar-with-dependencies.jar
 BERRLOG=/var/log/mydlp/backend-error.log
