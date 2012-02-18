@@ -123,16 +123,16 @@ acl_call1(Query, Files, Timeout) -> gen_server:call(?MODULE, {acl, Query, Files,
 
 -ifdef(__MYDLP_NETWORK).
 
+acl_exec(none, _Source, []) -> pass;
 acl_exec(_RuleTables, _Source, []) -> pass;
 acl_exec(RuleTables, Source, Files) ->
 	acl_exec2(RuleTables, Source, Files).
 
 -endif.
 
-% acl_exec2([{{_Id, DefaultAction}, Rules}| Rest], Source, Files)  % Cannot be more than one filter
+acl_exec2(none, _Source, _Files) -> pass;
 acl_exec2({ACLOpts, {_Id, DefaultAction}, Rules}, Source, Files) ->
 	case { DefaultAction, acl_exec3(ACLOpts, Rules, Source, Files) } of
-		% {return, return}-> acl_exec2(Rest, Source, Files);  % Cannot be more than one filter
 		{DefaultAction, return} -> DefaultAction;
 		{_DefaultAction, Action} -> Action end.
 

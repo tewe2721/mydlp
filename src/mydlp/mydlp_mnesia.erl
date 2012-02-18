@@ -319,7 +319,7 @@ handle_result({get_config_value, _}, {atomic, Result}) ->
 %% TODO: endpoint specific code
 handle_result({get_rule_table, _Channel}, {atomic, Result}) -> 
 	case Result of
-		[] -> [];
+		[] -> none;
 		[Table] -> Table end;
 
 handle_result({is_valid_usb_device_id, _DeviceId}, {atomic, Result}) -> 
