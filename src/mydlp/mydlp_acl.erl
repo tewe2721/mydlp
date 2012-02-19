@@ -375,9 +375,9 @@ pl_text(Files) -> pl_text(Files, []).
 pl_text([#file{text=undefined} = File|Files], Rets) -> 
 	File1 = case mydlp_api:get_text(File) of
 		{ok, Text} -> File#file{text = Text};
-		{error, cobject} -> File;
 		{error, compression} -> File;
-		{error, binary_format} -> File;
+		{error, audio} -> File;
+		{error, video} -> File;
 		{error, image} -> File;
 		_Else -> File#file{is_encrypted=true}
 	end,

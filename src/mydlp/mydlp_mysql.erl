@@ -491,11 +491,11 @@ write_matches(Matches) ->
 	Matches1 = [ M#match{id=mydlp_mnesia:get_unique_id(match)} || M <- Matches ],
 	mydlp_mnesia_write(Matches1).
 
-populate_match(Id, <<"e_archive">>, IFeatureId) ->
+populate_match(Id, <<"encrypted_archive">>, IFeatureId) ->
 	Func = e_archive_match,
 	new_match(Id, IFeatureId, Func);
 
-populate_match(Id, <<"e_file">>, IFeatureId) ->
+populate_match(Id, <<"encrypted_file">>, IFeatureId) ->
 	Func = e_file_match,
 	new_match(Id, IFeatureId, Func);
 
