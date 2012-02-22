@@ -56,13 +56,14 @@ public class MydlpImpl implements Mydlp.Iface {
 		}
 	}
 	
-	protected Throwable findRootCause(Throwable t) {
-		System.out.print(t.getClass().getSimpleName());
+	protected Boolean isMemoryError(Throwable t) {
+		if (t instanceof OutOfMemoryError)
+			return true;
+		
 		Throwable cause = t.getCause();
 		if (cause == null)
-			return t;
-		else
-			return findRootCause(cause);
+			return false;
+		return isMemoryError(cause);
 	}
 
 	@Override
@@ -80,8 +81,7 @@ public class MydlpImpl implements Mydlp.Iface {
 			logger.error("Can not allocate required memory", e);
 			return EMPTY;
 		} catch (IOException e) {
-			Throwable rootCause = findRootCause(e);
-			if (rootCause instanceof OutOfMemoryError)
+			if (isMemoryError(e))
 			{
 				logger.error("Can not allocate required memory", e);
 				return EMPTY;
