@@ -110,9 +110,7 @@ handle_call({thrift, java, Func, Params}, _From, #state{backend_java=TS} = State
 		thrift_client:call(TS, Func, Params)
 	catch _:{TSE, _Exception} ->
 			?ERROR_LOG("Error in thrift backend. \n", []),
-			{TSE, {error, exception_at_backend}};
-		Class:Error ->
-			{TS, {ierror, Class, Error}} end,
+			{TSE, {error, exception_at_backend}} end,
 		
 	{reply, Reply, State#state{backend_java=TS1}};
 
@@ -152,6 +150,7 @@ code_change(_OldVsn, State, _Extra) ->
 call_pool(Req) ->
 	Pid = pg2:get_closest_pid(?MODULE),
 	case gen_server:call(Pid, Req, 60000) of
+		{ok, <<"mydlp-internal/error">>} -> throw({error, exception_at_backend});
 		{ok, Ret} -> Ret;
 		{error, Reason} -> throw({error, Reason});
 		{ierror, Class, Error} -> mydlp_api:exception(Class, Error) end.
