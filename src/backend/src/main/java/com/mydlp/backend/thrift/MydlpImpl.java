@@ -11,8 +11,12 @@ import org.apache.thrift.TException;
 import org.apache.tika.Tika;
 import org.apache.tika.io.IOUtils;
 import org.apache.tika.metadata.Metadata;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class MydlpImpl implements Mydlp.Iface {
+	
+	private static Logger logger = LoggerFactory.getLogger(MydlpImpl.class);
 
 	protected static final String DEFAULT_ENCODING = "UTF-8";
 	protected static final ByteBuffer EMPTY = Charset.forName(DEFAULT_ENCODING)
@@ -41,13 +45,13 @@ public class MydlpImpl implements Mydlp.Iface {
 		try {
 			return tika.detect(inputStream);
 		} catch (IOException e) {
-			e.printStackTrace();
+			logger.error("Can not detect file type", e);
 			return "mydlp-internal/not-found";
 		} finally {
 			try {
 				inputStream.close();
 			} catch (IOException e) {
-				e.printStackTrace();
+				logger.error("Can not close stream", e);
 			}
 		}
 	}
@@ -63,14 +67,16 @@ public class MydlpImpl implements Mydlp.Iface {
 			metadata.add(Metadata.CONTENT_TYPE, MimeType);
 			Reader reader = tika.parse(inputStream, metadata);
 			return ByteBuffer.wrap(IOUtils.toByteArray(reader, DEFAULT_ENCODING));
-		} catch (IOException e) {
-			e.printStackTrace();
+		} catch (java.lang.OutOfMemoryError e) {
+			logger.error("Can not allocate required memory", e);
 			return EMPTY;
+		} catch (IOException e) {
+			throw new TException(e);
 		} finally {
 			try {
 				inputStream.close();
 			} catch (IOException e) {
-				e.printStackTrace();
+				logger.error("Can not close stream", e);
 			}
 		}
 
