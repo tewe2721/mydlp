@@ -57,6 +57,7 @@ public class MydlpImpl implements Mydlp.Iface {
 	}
 	
 	protected Throwable findRootCause(Throwable t) {
+		System.out.print(t.getClass().getSimpleName());
 		Throwable cause = t.getCause();
 		if (cause == null)
 			return t;
