@@ -55,6 +55,14 @@ public class MydlpImpl implements Mydlp.Iface {
 			}
 		}
 	}
+	
+	protected Throwable findRootCause(Throwable t) {
+		Throwable cause = t.getCause();
+		if (cause == null)
+			return t;
+		else
+			return findRootCause(cause);
+	}
 
 	@Override
 	public ByteBuffer getText(String FileName, String MimeType, ByteBuffer Data)
@@ -67,11 +75,18 @@ public class MydlpImpl implements Mydlp.Iface {
 			metadata.add(Metadata.CONTENT_TYPE, MimeType);
 			Reader reader = tika.parse(inputStream, metadata);
 			return ByteBuffer.wrap(IOUtils.toByteArray(reader, DEFAULT_ENCODING));
-		} catch (java.lang.OutOfMemoryError e) {
+		} catch (OutOfMemoryError e) {
 			logger.error("Can not allocate required memory", e);
 			return EMPTY;
 		} catch (IOException e) {
-			throw new TException(e);
+			Throwable rootCause = findRootCause(e);
+			if (rootCause instanceof OutOfMemoryError)
+			{
+				logger.error("Can not allocate required memory", e);
+				return EMPTY;
+			}
+			else
+				throw new TException(e);
 		} finally {
 			try {
 				inputStream.close();
