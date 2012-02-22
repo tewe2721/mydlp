@@ -26,6 +26,7 @@ INIT_EPOCH=/var/lib/mydlp/init_epoch
 
 CHOWN=/bin/chown
 QUARANTINE_DIR=/var/lib/mydlp/quarantine/
+REVISION_DIR=/var/lib/mydlp/revision/
 
 MYSQLC=/usr/bin/mysql
 SCHEMADIR=/usr/share/mydlp/schema/
@@ -62,6 +63,10 @@ generate_init_epoch() {
 
 chown_quarantine() {
 	$CHOWN -R 33.33 $QUARANTINE_DIR
+}
+
+chown_revision() {
+	$CHOWN -R jetty.adm $REVISION_DIR
 }
 
 remove_root_webapp() {
@@ -101,6 +106,9 @@ case "$1" in
 		fi
 		if $DPKGBIN --compare-versions "v0.9.12-1" gt "$2"; then
 			configure_solr
+		fi
+		if $DPKGBIN --compare-versions "v0.9.15-1" gt "$2"; then
+			chown_revision
 		fi
 	fi
 	remove_root_webapp

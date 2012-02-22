@@ -48,16 +48,14 @@
 	wait_for_tables/0,
 	get_regexes/1,
 	get_config_value/1,
-	is_fhash_of_gid/2,
-	is_shash_of_gid/2,
 	is_mime_of_dfid/2,
-	is_dr_fh_of_fid/2,
+	is_hash_of_gid/2,
+	pdm_of_gid/2,
 	get_record_fields/1,
 	dump_tables/1,
 	dump_client_tables/0,
 	truncate_all/0,
 	truncate_nondata/0,
-	truncate_bayes/0,
 	write/1,
 	delete/1,
 	flush_cache/0
@@ -78,12 +76,7 @@
 	get_rules_by_user/2,
 	get_fid/1,
 	remove_site/1,
-	remove_file_entry/1,
-	remove_group/1,
-	remove_file_from_group/2,
-	add_fhash/3,
-	add_shash/3,
-	set_gid_by_fid/2
+	add_fhash/3
 	]).
 
 -endif.
@@ -117,32 +110,23 @@
 	config,
 	mime_type,
 	file_hash,
+	file_fingerprint,
 	usb_device,
-	sentence_hash,
-	bayes_item_count,
-	bayes_positive,
-	bayes_negative,
 	regex
 ]).
 
 -define(OTHER_DATA_TABLES,[
 	{file_hash, ordered_set, 
-		fun() -> mnesia:add_table_index(file_hash, md5) end},
+		fun() -> mnesia:add_table_index(file_hash, hash),
+			 mnesia:add_table_index(file_hash, group_id) end},
+	{file_fingerprint, ordered_set, 
+		fun() -> mnesia:add_table_index(file_hash, fingerprint),
+			 mnesia:add_table_index(file_hash, group_id) end},
 	{usb_device, ordered_set, 
-		fun() -> mnesia:add_table_index(usb_device, device_id) end},
-	{sentence_hash, ordered_set, 
-		fun() -> mnesia:add_table_index(sentence_hash, phash2) end},
-	{file_group, ordered_set, 
-		fun() -> mnesia:add_table_index(file_group, file_id) end}
+		fun() -> mnesia:add_table_index(usb_device, device_id) end}
 ]).
 
--define(BAYES_TABLES, [
-	{bayes_item_count, set},
-	{bayes_positive, set},
-	{bayes_negative, set}
-]).
-
--define(DATA_TABLES, lists:append(?OTHER_DATA_TABLES, ?BAYES_TABLES)).
+-define(DATA_TABLES, ?OTHER_DATA_TABLES).
 
 -ifdef(__MYDLP_NETWORK).
 
@@ -187,13 +171,9 @@ get_record_fields_common(Record) ->
 		config -> record_info(fields, config);
 		usb_device -> record_info(fields, usb_device);
 		file_hash -> record_info(fields, file_hash);
-		sentence_hash -> record_info(fields, sentence_hash);
-		file_group -> record_info(fields, file_group);
+		file_fingerprint -> record_info(fields, file_fingerprint);
 		mime_type -> record_info(fields, mime_type);
 		regex -> record_info(fields, regex);
-		bayes_item_count -> record_info(fields, bayes_item_count);
-		bayes_positive -> record_info(fields, bayes_positive);
-		bayes_negative -> record_info(fields, bayes_negative);
 		_Else -> not_found
 	end.
 
@@ -275,20 +255,8 @@ get_fid(SIpAddr) -> aqc({get_fid, SIpAddr}, cache).
 
 remove_site(FilterId) -> aqc({remove_site, FilterId}, flush).
 
-remove_file_entry(FileId) -> aqc({remove_file_entry, FileId}, flush).
-
-remove_group(GroupId) -> aqc({remove_group, GroupId}, flush).
-
-remove_file_from_group(FileId, GroupId) -> aqc({remove_file_from_group, FileId, GroupId}, flush).
-
 add_fhash(Hash, FileId, GroupId) when is_binary(Hash) -> 
 	aqc({add_fhash, Hash, FileId, GroupId}, flush).
-
-add_shash(Hash, FileId, GroupId) when is_integer(Hash) -> add_shash([Hash], FileId, GroupId);
-add_shash(HList, FileId, GroupId) when is_list(HList) -> 
-	aqc({add_shl, HList, FileId, GroupId}, flush).
-
-set_gid_by_fid(FileId, GroupId) -> aqc({set_gid_by_fid, FileId, GroupId}, flush).
 
 new_authority(Node) -> gen_server:call(?MODULE, {new_authority, Node}, 30000).
 
@@ -311,16 +279,12 @@ get_regexes(GroupId) ->	aqc({get_regexes, GroupId}, cache).
 
 get_config_value(KeyB) -> aqc({get_config_value, KeyB}, nocache).
 
-is_fhash_of_gid(Hash, GroupIds) -> 
-	aqc({is_fhash_of_gid, Hash, GroupIds}, nocache).
-
-is_shash_of_gid(Hash, GroupIds) -> 
-	aqc({is_shash_of_gid, Hash, GroupIds}, nocache).
-
 is_mime_of_dfid(Mime, DataFormatIds) -> 
 	aqc({is_mime_of_dfid, Mime, DataFormatIds}, cache).
 
-is_dr_fh_of_fid(Hash, FileId) -> aqc({is_dr_fh_of_fid, Hash, FileId}, nocache).
+is_hash_of_gid(Hash, GroupId) -> aqc({is_hash_of_gid, Hash, GroupId}, nocache, dirty).
+
+pdm_of_gid(Fingerprints, GroupId) -> aqc({pdm_of_gid, Fingerprints, GroupId}, nocache, dirty).
 
 write(RecordList) when is_list(RecordList) -> aqc({write, RecordList}, flush);
 write(Record) when is_tuple(Record) -> write([Record]).
@@ -331,8 +295,6 @@ truncate_all() -> gen_server:call(?MODULE, truncate_all, 15000).
 
 truncate_nondata() -> gen_server:call(?MODULE, truncate_nondata, 15000).
 
-truncate_bayes() -> gen_server:call(?MODULE, truncate_bayes, 15000).
-
 flush_cache() -> cache_clean0().
 
 %%%%%%%%%%%%%% gen_server handles
@@ -340,22 +302,14 @@ flush_cache() -> cache_clean0().
 handle_result({is_mime_of_dfid, _Mime, DFIs}, {atomic, MDFIs}) -> 
 	lists:any(fun(I) -> lists:member(I, DFIs) end, MDFIs);
 
-handle_result({is_shash_of_gid, _Hash, HGIs}, {atomic, GIs}) -> 
-	lists:any(fun(I) -> lists:member(I, HGIs) end,GIs);
-
-handle_result({is_fhash_of_gid, _Hash, HGIs}, {atomic, GIs}) -> 
-	lists:any(fun(I) -> lists:member(I, HGIs) end,GIs);
+handle_result({is_hash_of_gid, _Hash, _GroupId}, {atomic, FIs}) -> 
+	case FIs of [] -> false; [_|_] -> true end;
 
 % TODO: instead of case statements, refining function definitions will make queries faster.
 handle_result({get_fid, _SIpAddr}, {atomic, Result}) -> 
 	case Result of
 		[] -> nofilter;
 		[FilterId] -> FilterId end;
-
-handle_result({is_dr_fh_of_fid, _, _}, {atomic, Result}) -> 
-	case Result of
-		[] -> false;
-		Else when is_list(Else) -> true end;
 
 handle_result({get_config_value, _}, {atomic, Result}) -> 
 	case Result of
@@ -365,7 +319,7 @@ handle_result({get_config_value, _}, {atomic, Result}) ->
 %% TODO: endpoint specific code
 handle_result({get_rule_table, _Channel}, {atomic, Result}) -> 
 	case Result of
-		[] -> [];
+		[] -> none;
 		[Table] -> Table end;
 
 handle_result({is_valid_usb_device_id, _DeviceId}, {atomic, Result}) -> 
@@ -484,55 +438,7 @@ handle_query({remove_file_entry, FI}) ->
 		H#file_hash.file_id == FI
 		]),
 	FHIs = ?QLCE(Q),
-
-	Q2 = ?QLCQ([H#sentence_hash.id ||
-		H <- mnesia:table(sentence_hash),
-		H#sentence_hash.file_id == FI
-		]),
-	SHIs = ?QLCE(Q2),
-
-	Q3 = ?QLCQ([G#file_group.id ||	
-		G <- mnesia:table(file_group),
-		G#file_group.file_id == FI
-		]),
-	FGIs = ?QLCE(Q3),
-
-	lists:foreach(fun(Id) -> mnesia:delete({file_hash, Id}) end, FHIs),
-	lists:foreach(fun(Id) -> mnesia:delete({sentence_hash, Id}) end, SHIs),
-	lists:foreach(fun(Id) -> mnesia:delete({file_group, Id}) end, FGIs);
-
-handle_query({remove_group, GI}) ->
-	Q = ?QLCQ([G#file_group.id ||
-		G <- mnesia:table(file_group),
-		G#file_group.group_id == GI 
-		]),
-	FGIs = ?QLCE(Q),
-	lists:foreach(fun(Id) -> mnesia:delete({file_group, Id}) end, FGIs);
-
-handle_query({remove_file_from_group, FI, GI}) ->
-	Q = ?QLCQ([G#file_group.id ||
-		G <- mnesia:table(file_group),
-		G#file_group.file_id == FI,
-		G#file_group.group_id == GI
-		]),
-	FGIs = ?QLCE(Q),
-	lists:foreach(fun(Id) -> mnesia:delete({file_group, Id}) end, FGIs);
-
-handle_query({add_fhash, Hash, FI, GI}) ->
-	NewId = get_unique_id(file_hash),
-	FileHash = #file_hash{id=NewId, file_id=FI, md5=Hash},
-	mnesia:write(FileHash),
-	add_file_group(FI, GI);
-
-handle_query({add_shl, HList, FI, GI}) ->
-	lists:foreach(fun(Hash) ->
-		NewId = get_unique_id(sentence_hash),
-		SentenceHash = #sentence_hash{id=NewId, file_id=FI, phash2=Hash},
-		mnesia:write(SentenceHash),
-		add_file_group(FI, GI)
-	end, HList);
-
-handle_query({set_gid_by_fid, FI, GI}) -> add_file_group(FI, GI);
+	lists:foreach(fun(Id) -> mnesia:delete({file_hash, Id}) end, FHIs);
 
 handle_query(Query) -> handle_query_common(Query).
 
@@ -562,24 +468,6 @@ handle_query(Query) -> handle_query_common(Query).
 
 -endif.
 
-handle_query_common({is_fhash_of_gid, Hash, _HGIs}) ->
-	Q = ?QLCQ([G#file_group.group_id ||
-		H <- mnesia:table(file_hash),
-		G <- mnesia:table(file_group),
-		H#file_hash.md5 == Hash,
-		H#file_hash.file_id == G#file_group.file_id
-		]),
-	?QLCE(Q);
-
-handle_query_common({is_shash_of_gid, Hash, _HGIs}) ->
-	Q = ?QLCQ([G#file_group.group_id ||
-		H <- mnesia:table(sentence_hash),
-		G <- mnesia:table(file_group),
-		H#sentence_hash.phash2 == Hash,
-		H#sentence_hash.file_id == G#file_group.file_id
-		]),
-	?QLCE(Q);
-
 handle_query_common({is_mime_of_dfid, Mime, _DFIs}) ->
 	Q = ?QLCQ([M#mime_type.data_format_id ||
 		M <- mnesia:table(mime_type),
@@ -587,13 +475,16 @@ handle_query_common({is_mime_of_dfid, Mime, _DFIs}) ->
 		]),
 	?QLCE(Q);
 
-handle_query_common({is_dr_fh_of_fid, Hash, FileId}) ->
+handle_query_common({is_hash_of_gid, Hash, GroupId}) ->
 	Q = ?QLCQ([F#file_hash.id ||
 		F <- mnesia:table(file_hash),
-		F#file_hash.file_id == FileId,
-		F#file_hash.md5 == Hash
+		F#file_hash.group_id == GroupId,
+		F#file_hash.hash == Hash
 		]),
 	?QLCE(Q);
+
+handle_query_common({pdm_of_gid, Fingerprints, GroupId}) ->
+	pdm_hit_count(Fingerprints, GroupId);
 
 handle_query_common({get_regexes, GroupId}) ->
 	Q = ?QLCQ([ R#regex.compiled ||
@@ -623,31 +514,31 @@ handle_query_common({delete, Item}) ->
 
 handle_query_common(Query) -> throw({error,{unhandled_query,Query}}).
 
-handle_async_query(flush, Query) ->
-	Return = evaluate_query(Query),
+handle_async_query(flush, Context, Query) ->
+	Return = evaluate_query(Context, Query),
 	cache_clean(),
 	Return;
 
-handle_async_query(cache, Query) ->
+handle_async_query(cache, Context, Query) ->
 	case cache_lookup(Query) of
 		{hit, {Query, R}} -> R;
-		miss ->	R = evaluate_query(Query),
+		miss ->	R = evaluate_query(Context, Query),
 			cache_insert(Query, R),
 			R end;
 
-handle_async_query(nocache, Query) ->
-	evaluate_query(Query).
+handle_async_query(nocache, Context, Query) ->
+	evaluate_query(Context, Query).
 
-handle_call({async_query, CacheOption, Query}, From, State) ->
+handle_call({async_query, CacheOption, Context, Query}, From, State) ->
 	Worker = self(),
 	mydlp_api:mspawn(fun() ->
-		Return= try	handle_async_query(CacheOption, Query)
+		Return= try	handle_async_query(CacheOption, Context, Query)
 			catch  	Class:Error ->
 				?ERROR_LOG("MNESIAQ: Error occured: Class: ["?S"]. Error: ["?S"].~n"
 						"Stack trace: "?S"~n"
-						"CacheOption: ["?S"]. Query: ["?S"]~n"
+						"CacheOption: ["?S"]. Context: ["?S"]. Query: ["?S"]~n"
 						"State: "?S"~n ",
-					[Class, Error, erlang:get_stacktrace(), CacheOption, Query, State]),
+					[Class, Error, erlang:get_stacktrace(), CacheOption, Context, Query, State]),
 					{ierror, {Class, Error}} end,
 		Worker ! {async_reply, Return, From}
 	end, 15000),
@@ -668,15 +559,6 @@ handle_call(truncate_nondata, From, State) ->
 	?ASYNC(fun() ->
 		lists:foreach(fun(T) -> mnesia:clear_table(T) end, nondata_tab_names()),
 		lists:foreach(fun(T) -> mydlp_mnesia:delete({unique_ids, T}) end, nondata_tab_names()),
-		cache_clean(),
-		Worker ! {async_reply, ok, From}
-	end, 15000),
-	{noreply, State};
-
-handle_call(truncate_bayes, From, State) ->
-	Worker = self(),
-	?ASYNC(fun() ->
-		lists:foreach(fun(T) -> mnesia:clear_table(T) end, bayes_tab_names()),
 		cache_clean(),
 		Worker ! {async_reply, ok, From}
 	end, 15000),
@@ -913,9 +795,21 @@ transaction(F) ->
 			{aborted, Reason}
 	end.
 
-evaluate_query(Query) ->
+dirty(F) ->
+	try {atomic, mnesia:activity(async_dirty, F)}
+	catch
+		_:Reason ->
+			{aborted, Reason}
+	end.
+
+evaluate_query(transaction, Query) ->
 	F = fun() -> handle_query(Query) end,
 	Result = transaction(F),
+	handle_result(Query, Result);
+
+evaluate_query(dirty, Query) ->
+	F = fun() -> handle_query(Query) end,
+	Result = dirty(F),
 	handle_result(Query, Result).
 
 cache_lookup(Query) ->
@@ -980,6 +874,8 @@ predict_need4te_1([{_ITId, _Threshold, _DataFormats, IFeatures}|ITypes]) ->
 		false -> predict_need4te_1(ITypes) end;
 predict_need4te_1([]) -> false.
 
+predict_need4te_2([{_Weight, {all, _FuncParams}}|IFeatures]) ->
+	predict_need4te_2(IFeatures);
 predict_need4te_2([{_Weight, {Func, _FuncParams}}|IFeatures]) ->
 	case get_matcher_req(Func) of
                 raw -> predict_need4te_2(IFeatures);
@@ -1049,20 +945,18 @@ get_unique_id(TableName) -> mnesia:dirty_update_counter(unique_ids, TableName, 1
 
 % aqc(Query) -> aqc(Query, nocache).
 
-aqc(Query, flush) -> async_query_call(Query, flush);
-aqc(Query, cache) -> async_query_call(Query, cache);
-aqc(Query, nocache) -> async_query_call(Query, nocache).
+aqc(Query, CacheOption) -> aqc(Query, CacheOption, transaction).
 
-async_query_call(Query, CacheOption) -> 
-	case gen_server:call(?MODULE, {async_query, CacheOption, Query}, 5000) of
+aqc(Query, CacheOption, Context) -> async_query_call(Query, CacheOption, Context).
+
+async_query_call(Query, CacheOption, Context) -> 
+	case gen_server:call(?MODULE, {async_query, CacheOption, Context, Query}, 14500) of
 		{ierror, {Class, Error}} -> mydlp_api:exception(Class, Error);
 		Else -> Else end.
 
 all_tab_names() -> tab_names1(?TABLES, []).
 
 nondata_tab_names() -> tab_names1(?NONDATA_TABLES, []).
-
-bayes_tab_names() -> tab_names1(?BAYES_TABLES, []).
 
 %tab_names() -> tab_names1(?TABLES, [unique_ids]).
 
@@ -1071,21 +965,17 @@ tab_names1([{Tab,_}|Tabs], Returns) -> tab_names1(Tabs, [Tab|Returns]);
 tab_names1([Tab|Tabs], Returns) when is_atom(Tab) ->  tab_names1(Tabs, [Tab|Returns]);
 tab_names1([], Returns) -> lists:reverse(Returns).
 
+pdm_hit_count(Fingerprints, GroupId) -> pdm_hit_count(Fingerprints, GroupId, 0).
+
+pdm_hit_count([Fingerprint|Rest], GroupId, Acc) ->
+	case mnesia:dirty_match_object(file_fingerprint, #file_fingerprint{id='_', file_id='_', group_id=GroupId, fingerprint=Fingerprint}) of
+		[] -> pdm_hit_count(Rest, GroupId, Acc);
+		[_|_] -> pdm_hit_count(Rest, GroupId, Acc + 1) end;
+pdm_hit_count([], _GroupId, Acc) -> Acc.
+
 -ifdef(__MYDLP_NETWORK).
 
 %% File Group functions
-
-add_file_group(FI, GI) ->
-	Q = ?QLCQ([G#file_group.id ||	
-		G <- mnesia:table(file_group),
-		G#file_group.file_id == FI,
-		G#file_group.group_id == GI 
-		]),
-	case ?QLCE(Q) of
-		[] -> 	NewId = get_unique_id(file_hash),
-			FG = #file_group{id=NewId, file_id=FI, group_id=GI},
-			mnesia:write(FG);
-		_Else -> ok end.
 
 remove_filters(FIs) -> lists:foreach(fun(Id) -> remove_filter(Id) end, FIs), ok.
 
@@ -1103,6 +993,7 @@ remove_rules(RIs) -> lists:foreach(fun(Id) -> remove_rule(Id) end, RIs), ok.
 remove_rule(RI) ->
 	Q1 = ?QLCQ([T#itype.data_formats ||	
 		T <- mnesia:table(itype),
+		T#itype.data_formats /= all,
 		T#itype.rule_id == RI
 		]),
 	DFIs = lists:flatten(?QLCE(Q1)),
@@ -1146,17 +1037,47 @@ remove_itype(ITI) ->
 remove_ifeatures(IFIs) -> lists:foreach(fun(Id) -> remove_ifeature(Id) end, IFIs), ok.
 
 remove_ifeature(IFI) ->
-	Q = ?QLCQ([M#match.id ||	
+	Q1 = ?QLCQ([M#match.func_params ||	
+		M <- mnesia:table(match),
+		M#match.ifeature_id == IFI,
+		M#match.func == md5_match
+		]),
+	FHGIs = ?QLCE(Q1),
+	remove_filehashes(lists:usort(lists:flatten(FHGIs))),
+
+	Q2 = ?QLCQ([M#match.func_params ||	
+		M <- mnesia:table(match),
+		M#match.ifeature_id == IFI,
+		M#match.func == pdm_match
+		]),
+	FFGIs = ?QLCE(Q2),
+	remove_filefingerprints(lists:usort(lists:flatten(FFGIs))),
+
+	Q0 = ?QLCQ([M#match.id ||	
 		M <- mnesia:table(match),
 		M#match.ifeature_id == IFI
 		]),
-	MIs = ?QLCE(Q),
+	MIs = ?QLCE(Q0),
 	remove_matches(MIs),
 	mnesia:delete({ifeature, IFI}).
 
 remove_matches(MIs) -> lists:foreach(fun(Id) -> remove_match(Id) end, MIs), ok.
 
 remove_match(MI) -> mnesia:delete({match, MI}).
+
+remove_filehashes(FHGIs) -> lists:foreach(fun(GroupId) -> remove_filehashes1(GroupId) end, FHGIs), ok.
+
+remove_filehashes1(GroupId) ->
+	FileHashes = mnesia:match_object(#file_hash{id='_', file_id='_', group_id=GroupId, hash='_'}),
+	lists:foreach(fun(#file_hash{id=Id}) -> mnesia:delete({file_hash, Id}) end, FileHashes),
+	ok.
+
+remove_filefingerprints(FHGIs) -> lists:foreach(fun(GroupId) -> remove_filefingerprints1(GroupId) end, FHGIs), ok.
+
+remove_filefingerprints1(GroupId) ->
+	Fingerprints = mnesia:match_object(#file_fingerprint{id='_', file_id='_', group_id=GroupId, fingerprint='_'}),
+	lists:foreach(fun(#file_fingerprint{id=Id}) -> mnesia:delete({file_fingerprint, Id}) end, Fingerprints),
+	ok.
 
 -endif.
 

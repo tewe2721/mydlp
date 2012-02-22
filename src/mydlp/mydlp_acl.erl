@@ -123,16 +123,16 @@ acl_call1(Query, Files, Timeout) -> gen_server:call(?MODULE, {acl, Query, Files,
 
 -ifdef(__MYDLP_NETWORK).
 
+acl_exec(none, _Source, []) -> pass;
 acl_exec(_RuleTables, _Source, []) -> pass;
 acl_exec(RuleTables, Source, Files) ->
 	acl_exec2(RuleTables, Source, Files).
 
 -endif.
 
-% acl_exec2([{{_Id, DefaultAction}, Rules}| Rest], Source, Files)  % Cannot be more than one filter
+acl_exec2(none, _Source, _Files) -> pass;
 acl_exec2({ACLOpts, {_Id, DefaultAction}, Rules}, Source, Files) ->
 	case { DefaultAction, acl_exec3(ACLOpts, Rules, Source, Files) } of
-		% {return, return}-> acl_exec2(Rest, Source, Files);  % Cannot be more than one filter
 		{DefaultAction, return} -> DefaultAction;
 		{_DefaultAction, Action} -> Action end.
 
@@ -355,6 +355,7 @@ execute_ifeatures(IFeatures, Addr, File) ->
 		lists:sum(PMapRet)
 	catch _:{timeout, _F, _T} -> {error, {file, File}, {misc, timeout}} end.
 
+apply_m(Weight, all, [_FuncParams, _Addr, _File]) -> Weight; %% match directly.
 apply_m(Weight, Func, [FuncParams, Addr, File]) ->
 	EarlyNeg = case get_matcher_req(Func) of
 		raw -> false;
@@ -374,9 +375,9 @@ pl_text(Files) -> pl_text(Files, []).
 pl_text([#file{text=undefined} = File|Files], Rets) -> 
 	File1 = case mydlp_api:get_text(File) of
 		{ok, Text} -> File#file{text = Text};
-		{error, cobject} -> File;
 		{error, compression} -> File;
-		{error, binary_format} -> File;
+		{error, audio} -> File;
+		{error, video} -> File;
 		{error, image} -> File;
 		_Else -> File#file{is_encrypted=true}
 	end,
@@ -384,9 +385,10 @@ pl_text([#file{text=undefined} = File|Files], Rets) ->
 pl_text([File|Files], Rets) -> pl_text(Files, [File|Rets]);
 pl_text([], Rets) -> lists:reverse(Rets).
 
-is_whitefile(File) ->
-	Hash = erlang:md5(File#file.data),
-	mydlp_mnesia:is_fhash_of_gid(Hash, [mydlp_mnesia:get_pgid()]).
+is_whitefile(_File) ->
+	%Hash = erlang:md5(File#file.data),
+	%mydlp_mnesia:is_fhash_of_gid(Hash, [mydlp_mnesia:get_pgid()])
+	false.
 
 drop_whitefile(Files) -> lists:filter(fun(F) -> not is_whitefile(F) end, Files).
 

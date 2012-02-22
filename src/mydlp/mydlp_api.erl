@@ -813,20 +813,6 @@ has_text(#file{text=Text}) when is_list(Text) ->
 has_text(_) -> true.
 
 %%--------------------------------------------------------------------
-%% @doc Returns hashes of normalized senteces from Text
-%% @end
-%%----------------------------------------------------------------------
-get_nsh(Text) -> 
-	Res = mydlp_regex:split_bin(
-		sentence,
-		Text),
-	Res1 = lists:filter(fun(I) -> string:len(I) > 10 end, Res), %%% 10 as string length threshold, shorter strings will be neglacted.
-	lists:map(fun(I) -> 
-			WL = lists:map(fun(W) -> mydlp_nlp_tr:safe_norm(W) end, mydlp_regex:match_bin(word, I)),
-			erlang:phash2(WL) 
-		end, Res1).
-
-%%--------------------------------------------------------------------
 %% @doc Analyzes structure of files. Creates new files if necessary.
 %% @end
 %%----------------------------------------------------------------------
@@ -1737,10 +1723,8 @@ use_client_policy(CDBBin) ->
 		{{rule_tables, RuleTables}, {items, ItemDump}} = CDBObj,
 		
 		mydlp_mnesia:truncate_all(),
-		[ ( catch mydlp_mnesia:write(I) ) || I <- ItemDump],
-		[ ( catch mydlp_mnesia:write(#rule_table{channel=C, table = RT}) )
-				|| {C, RT} <- RuleTables ],
-
+		( catch mydlp_mnesia:write(ItemDump) ),
+		( catch mydlp_mnesia:write([ #rule_table{channel=C, table = RT} || {C, RT} <- RuleTables ]) ),
 		mydlp_dynamic:load(),
 		mydlp_dynamic:populate_win32reg(),
 		mydlp_container:schedule_confupdate()

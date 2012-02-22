@@ -53,9 +53,6 @@ function getTableNames() {
 }
 
 function dumpCurrent() {
-	echo "FLUSH TABLES WITH READ LOCK;"
-	echo
-
 	local TABLES=$(getTableNames)
 	for t in $TABLES
 	do
@@ -63,16 +60,36 @@ function dumpCurrent() {
 	done
 
 	$MYSQLDUMP $TABLES
-	
-	echo "UNLOCK TABLES;"
 }
 
-DUMPFILENAME=$MYDLPDUMPDIR/mydlp-$(date +%s)-$$.gz
+TMPFILE=$(mktemp)
+
+DUMPFILENAME=""
+
+generateFilename() {
+	local HASH=$(md5sum $TMPFILE|cut -d' ' -f1)
+	DUMPFILENAME=$MYDLPDUMPDIR/$HASH.gz
+}
+
+writeToFile() {
+	if [ -e "$DUMPFILENAME" ]; then
+		true
+	else
+		cat $TMPFILE | gzip -c > $DUMPFILENAME
+	fi
+}
 
 function addNewRevision() {
-	echo "INSERT INTO $REVISION_TABLE (id, date, isInstalled, dumpPath) VALUES ('',now(), false, '$DUMPFILENAME')"|$MYSQL
+	local LAST_PATH=$(echo "SELECT dumpPath FROM $REVISION_TABLE ORDER BY id DESC LIMIT 1"|$MYSQL)
+	if [ -n "$LAST_PATH" -a "$LAST_PATH" == "$DUMPFILENAME" ]; then
+		true
+	else
+		echo "INSERT INTO $REVISION_TABLE (id, date, isInstalled, dumpPath) VALUES ('',now(), false, '$DUMPFILENAME')"|$MYSQL
+	fi
 }
 
-( dumpCurrent |gzip -c > $DUMPFILENAME ) && addNewRevision
 
+dumpCurrent > $TMPFILE && generateFilename && writeToFile && addNewRevision
+
+rm -f $TMPFILE
 

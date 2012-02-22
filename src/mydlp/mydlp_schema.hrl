@@ -112,25 +112,20 @@
 	error
 }).
 
-% TODO: refine
+%% refine match_object statements after any change
 -record(file_hash, {
 	id,
 	file_id,
-	md5
+	group_id,
+	hash
 }).
 
-% TODO: refine
--record(sentence_hash, {
+%% refine match_object statements after any change
+-record(file_fingerprint, {
 	id,
 	file_id,
-	phash2
-}).
-
-% TODO: refine
--record(file_group, {
-	id,
-	file_id,
-	group_id
+	group_id,
+	fingerprint
 }).
 
 -record(mime_type, {
@@ -139,23 +134,6 @@
 	mime
 }).
 
-% TODO: refine
--record(bayes_item_count, {
-	type,
-	count
-}).
-
-% TODO: refine
--record(bayes_positive, {
-	word_hash,
-	count
-}).
-
-% TODO: refine
--record(bayes_negative, {
-	word_hash,
-	count
-}).
 
 -endif.
 

@@ -29,4 +29,5 @@ service Mydlp_ui {
 	string receiveBegin(1: string Ipaddress)
 	string receiveChunk(1: string Ipaddress, 2: i64 Itemid, 3: binary Chunkdata, 4: i32 Chunknum, 5: i32 Chunknumtotal)
 
+	list<i64> getFingerprints(1: string Filename, 2: binary Data)
 }

@@ -26,11 +26,6 @@ mydlpconf_DATA = \
 	mydlp.conf \
 	denied_page.html
 
-resourcesdir = $(datadir)/mydlp/resources
-
-resources_DATA = \
-	mydlp_nlp_tr_kokler.txt
-
 dist_erl_DATA = \
 	dynamic_compile.erl \
 	gen_server_cluster.erl \
@@ -39,7 +34,6 @@ dist_erl_DATA = \
 	mydlp_acl.erl \
 	mydlp_api.erl \
 	mydlp_app.erl \
-	mydlp_bayeserl_store.erl \
 	mydlp_container.erl \
 	mydlp_distributor.erl \
 	mydlp_dynamic.erl \
@@ -52,7 +46,7 @@ dist_erl_DATA = \
 	mydlp_matchers.erl \
 	mydlp_mnesia.erl \
 	mydlp_mysql.erl \
-	mydlp_nlp_tr.erl \
+	mydlp_pdm.erl \
 	mydlp_pg_sup.erl \
 	mydlp_quarantine.erl \
 	mydlp_regex.erl \
@@ -63,7 +57,6 @@ dist_erl_DATA = \
 	mydlp_sup.erl \
 	mydlp_tc.erl \
 	mydlp_ts.erl \
-	mydlp_trainer.erl \
 	mydlp_workdir.erl \
 	mydlp_worker_sup.erl \
 	smtpc.erl \
@@ -124,9 +117,6 @@ $(boot_DATA): $(beam_DATA)
 $(html_DATA): $(dist_erl_DATA) overview.edoc 
 	@echo "Generating documentation..."
 	@$(ERL) -noshell -run edoc_run application mydlp '"."' '[{dir,"."}]'
-
-mydlp_nlp_tr_kokler.txt:
-	@$(WGET) http://zemberek.googlecode.com/svn/trunk/zemberek2/kaynaklar/tr/bilgi/duzyazi-kilavuz.txt -O mydlp_nlp_tr_kokler.txt
 
 check:
 	@echo "Running unit tests..."

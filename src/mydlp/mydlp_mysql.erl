@@ -36,7 +36,7 @@
 
 %% API
 -export([start_link/0,
-	compile_filters/0,
+	compile_customer/0,
 	compile_customer/1,
 	push_log/9,
 	is_multisite/0,
@@ -83,8 +83,7 @@ insert_log_file(LogId, Filename, MimeType, Size, Path) ->
 repopulate_mnesia() ->
 	gen_server:cast(?MODULE, repopulate_mnesia).
 
-compile_filters() -> 
-	gen_server:call(?MODULE, compile_filters, 60000).
+compile_customer() -> compile_customer(mydlp_mnesia:get_dfid()).
 
 compile_customer(FilterId) when is_integer(FilterId) ->
 	gen_server:call(?MODULE, {compile_customer, FilterId} , 60000).
@@ -100,17 +99,8 @@ handle_call({compile_customer, FilterId}, From, State) ->
 	Worker = self(),
 	?ASYNC(fun() ->
 			mydlp_mnesia:remove_site(FilterId),
-			Reply = populate_site(FilterId),
-                        Worker ! {async_reply, Reply, From}
-		end, 60000),
-        {noreply, State};
-
-handle_call(compile_filters, From, State) ->
-	Worker = self(),
-	?ASYNC(fun() ->
-			mydlp_mnesia:truncate_nondata(),
-			Reply = populate(),
-                        Worker ! {async_reply, Reply, From}
+			populate_site(FilterId),
+                        Worker ! {async_reply, ok, From}
 		end, 60000),
         {noreply, State};
 
@@ -259,6 +249,9 @@ init([]) ->
 		{ifeature_by_itype_id, <<"SELECT f.weight,f.matcher_id FROM InformationFeature AS f, InformationDescription_InformationFeature df, InformationType t WHERE t.id=? AND t.informationDescription_id=df.InformationDescription_id AND df.features_id=f.id">>},
 		{match_by_id, <<"SELECT m.id,m.functionName FROM Matcher AS m WHERE m.id=?">>},
 		{regex_by_matcher_id, <<"SELECT re.regex FROM MatcherArgument AS ma, RegularExpression AS re WHERE ma.coupledMatcher_id=? AND ma.coupledArgument_id=re.id">>},
+		{dd_by_matcher_id, <<"SELECT dd.id FROM MatcherArgument AS ma, NonCascadingArgument AS nca, DocumentDatabase AS dd WHERE ma.coupledMatcher_id=? AND ma.coupledArgument_id=nca.id AND nca.argument_id=dd.id">>},
+		{filehash_by_dd_id, <<"SELECT ddfe.id, ddfe.md5Hash FROM DocumentDatabase_DocumentDatabaseFileEntry AS dd, DocumentDatabaseFileEntry AS ddfe WHERE dd.DocumentDatabase_id=? AND dd.fileEntries_id=ddfe.id">>},
+		{filefingerprint_by_dd_id, <<"SELECT ddfe.id, df.fingerprint FROM DocumentDatabase_DocumentDatabaseFileEntry AS dd, DocumentDatabaseFileEntry AS ddfe, DocumentDatabaseFileEntry_DocumentFingerprint AS ddf, DocumentFingerprint AS df WHERE dd.DocumentDatabase_id=? AND dd.fileEntries_id=ddfe.id AND ddf.DocumentDatabaseFileEntry_id=ddfe.id AND df.id=ddf.fingerprints_id">>},
 		%{user_by_rule_id, <<"SELECT eu.id, eu.username FROM sh_ad_entry_user AS eu, sh_ad_cross AS c, sh_ad_entry AS e, sh_ad_group AS g, sh_ad_rule_cross AS rc WHERE rc.parent_rule_id=? AND rc.group_id=g.id AND rc.group_id=c.group_id AND c.entry_id=e.id AND c.entry_id=eu.entry_id">>},
 		%{user_by_rule_id, <<"SELECT eu.id, eu.username FROM sh_ad_entry_user AS eu, sh_ad_cross AS c, sh_ad_rule_cross AS rc WHERE rc.parent_rule_id=? AND rc.group_id=c.group_id AND c.entry_id=eu.entry_id">>},
 		{mimes_by_data_format_id, <<"SELECT m.mimeType FROM MIMEType AS m, DataFormat_MIMEType dm WHERE dm.DataFormat_id=? and dm.mimeTypes_id=m.id">>},
@@ -332,11 +325,18 @@ psqt(PreparedKey, Params) ->
 
 %%%%%%%%%%%% internal
 
-populate() -> 
-	populate_site(mydlp_mnesia:dcid()),
+mydlp_mnesia_write(I) when is_list(I) ->
+	L = get(mydlp_mnesia_write),
+	put(mydlp_mnesia_write, lists:append(I,L)),
+	ok;
+
+mydlp_mnesia_write(I) when is_tuple(I) ->
+	L = get(mydlp_mnesia_write),
+	put(mydlp_mnesia_write, [I|L]),
 	ok.
 
 populate_site(FilterId) ->
+	put(mydlp_mnesia_write, []),
 	%TODO: refine this
 	%{ok, FQ} = psq(filters_by_cid, [FilterId]),
 	populate_filters([[FilterId, <<"pass">> ]], FilterId),
@@ -352,12 +352,14 @@ populate_site(FilterId) ->
 	% TODO: refine and implement this
 	%{ok, UDQ} = psq(usb_device_by_cid, [FilterId]),
 	%populate_usb_devices(UDQ, FilterId),
+	mydlp_mnesia:write(get(mydlp_mnesia_write)),
+	erase(mydlp_mnesia_write),
 	ok.
 
 populate_configs([[Key, Value]|Rows], FilterId) ->
 	Id = mydlp_mnesia:get_unique_id(config),
 	C = #config{id=Id, filter_id=FilterId, key=Key, value=Value},
-	mydlp_mnesia:write(C),
+	mydlp_mnesia_write(C),
 	populate_configs(Rows, FilterId);
 populate_configs([], _FilterId) -> ok.
 
@@ -368,7 +370,7 @@ populate_filters([[Id, DActionS]|Rows], Id) ->
 	{ok, RQ} = psq(rules),
 	populate_rules(RQ, Id),
 	F = #filter{id=Id, default_action=DAction},
-	mydlp_mnesia:write(F),
+	mydlp_mnesia_write(F),
 	populate_filters(Rows, Id);
 populate_filters([], _FilterId) -> ok.
 
@@ -396,20 +398,20 @@ populate_rule(OrigId, Channel, Action, FilterId) ->
 	%{ok, TDQ} = psq(tdomains_by_rid, [Id]),
 	%TDs = lists:flatten(TDQ),
 	R = #rule{id=RuleId, orig_id=OrigId, channel=Channel, action=Action, filter_id=FilterId},
-	mydlp_mnesia:write(R).
+	mydlp_mnesia_write(R).
 
 populate_iprs([[Base, Subnet]| Rows], RuleId) ->
 	B1 = int_to_ip(Base),
 	S1 = int_to_ip(Subnet),
 	Id = mydlp_mnesia:get_unique_id(ipr),
 	I = #ipr{id=Id, rule_id=RuleId, ipbase=B1, ipmask=S1},
-	mydlp_mnesia:write(I),
+	mydlp_mnesia_write(I),
 	populate_iprs(Rows, RuleId);
 populate_iprs([], _RuleId) -> ok.
 
 %populate_users([[Id, Username]| Rows], Parent) ->
 %	U = #m_user{id=Id, parent=Parent, username=Username},
-%	mydlp_mnesia:write(U),
+%	mydlp_mnesia_write(U),
 %	populate_users(Rows, Parent);
 %populate_users([], _Parent) -> ok.
 
@@ -447,7 +449,7 @@ populate_itypes([[OrigId, Threshold]| Rows], RuleId) ->
 	T = #itype{id=ITypeId, orig_id=OrigId, rule_id=RuleId, data_formats=DataFormats, threshold=Threshold},
 	{ok, IFQ} = psq(ifeature_by_itype_id, [OrigId]),
 	populate_ifeatures(IFQ, ITypeId),
-	mydlp_mnesia:write(T),
+	mydlp_mnesia_write(T),
 	populate_itypes(Rows, RuleId);
 populate_itypes([], _RuleId) -> ok.
 
@@ -456,7 +458,7 @@ populate_ifeatures([[Weight, MatcherId]| Rows], ITypeId) ->
 	F = #ifeature{id=IFeatureId, itype_id=ITypeId, weight=Weight},
 	{ok, MQ} = psq(match_by_id, [MatcherId]),
 	populate_matches(MQ, IFeatureId),
-	mydlp_mnesia:write(F),
+	mydlp_mnesia_write(F),
 	populate_ifeatures(Rows, ITypeId);
 populate_ifeatures([], _RuleId) -> ok.
 
@@ -487,22 +489,14 @@ new_match(OrigId, IFeatureId, Func, FuncParams) ->
 
 write_matches(Matches) ->
 	Matches1 = [ M#match{id=mydlp_mnesia:get_unique_id(match)} || M <- Matches ],
-	mydlp_mnesia:write(Matches1).
+	mydlp_mnesia_write(Matches1).
 
-populate_match(Id, <<"e_archive">>, IFeatureId) ->
+populate_match(Id, <<"encrypted_archive">>, IFeatureId) ->
 	Func = e_archive_match,
 	new_match(Id, IFeatureId, Func);
 
-populate_match(Id, <<"e_file">>, IFeatureId) ->
+populate_match(Id, <<"encrypted_file">>, IFeatureId) ->
 	Func = e_file_match,
-	new_match(Id, IFeatureId, Func);
-
-populate_match(Id, <<"i_archive">>, IFeatureId) ->
-	Func = i_archive_match,
-	new_match(Id, IFeatureId, Func);
-
-populate_match(Id, <<"i_binary">>, IFeatureId) ->
-	Func = i_binary_match,
 	new_match(Id, IFeatureId, Func);
 
 populate_match(Id, <<"trid">>, IFeatureId) ->
@@ -541,47 +535,52 @@ populate_match(Id, <<"scode_ada">>, IFeatureId) ->
 	Func = scode_ada_match,
 	new_match(Id, IFeatureId, Func);
 
+populate_match(Id, <<"all">>, IFeatureId) ->
+	Func = all,
+	new_match(Id, IFeatureId, Func);
+
 populate_match(Id, <<"keyword">>, IFeatureId) ->
 	Func = regex_match,
 	{ok, REQ} = psq(regex_by_matcher_id, [Id]),
 	[[RegexS]] = REQ,
 	RegexId = mydlp_mnesia:get_unique_id(regex),
 	RegexGroupId = mydlp_mnesia:get_unique_id(regex_group_id),
-	R = #regex{id=RegexId, group_id=RegexGroupId, plain=RegexS},
-	mydlp_mnesia:write(R),
+	Regex1 = list_to_binary(mydlp_api:escape_regex(binary_to_list(RegexS))),
+	R = #regex{id=RegexId, group_id=RegexGroupId, plain=Regex1},
+	mydlp_mnesia_write(R),
 	FuncParams=[RegexGroupId],
 	new_match(Id, IFeatureId, Func, FuncParams);
 
-% TODO: refine this, currently unused
 populate_match(Id, <<"regex">>, IFeatureId) ->
 	Func = regex_match,
-	GroupsS = get_func_params(Id),
-	FuncParams = [ mydlp_api:binary_to_integer(G) || G <- GroupsS ],
+	{ok, REQ} = psq(regex_by_matcher_id, [Id]),
+	[[RegexS]] = REQ,
+	RegexId = mydlp_mnesia:get_unique_id(regex),
+	RegexGroupId = mydlp_mnesia:get_unique_id(regex_group_id),
+	R = #regex{id=RegexId, group_id=RegexGroupId, plain=RegexS},
+	mydlp_mnesia_write(R),
+	FuncParams=[RegexGroupId],
 	new_match(Id, IFeatureId, Func, FuncParams);
 
-% TODO: refine this, currently unused
-populate_match(Id, <<"file">>, IFeatureId) ->
-	Func = {group,file},
-	GroupsS = get_func_params(Id),
-	GroupsI = [ mydlp_api:binary_to_integer(G) || G <- GroupsS ],
-	{ok, [[SentenceHashI, SHCount, SHPercI, BayesI, BThresI, WhiteFileI]]} = psq(file_params_by_match_id, [Id]),
-	SentenceHash = case SentenceHashI of 0 -> false; _ -> true end,
-	SHPerc = SHPercI / 100,
-	Bayes = case BayesI of 0 -> false; _ -> true end,
-	BThres = BThresI / 100,
-	WhiteFile = case WhiteFileI of 0 -> false; _ -> true end,
+populate_match(Id, <<"document_hash">>, IFeatureId) ->
+	Func = md5_match,
+	{ok, DDQ} = psq(dd_by_matcher_id, [Id]),
+	[[DDId]] = DDQ,
+	{ok, FHQ} = psq(filehash_by_dd_id, [DDId]),
+	populate_filehashes(FHQ, DDId),
+	FuncParams=[DDId],
+	new_match(Id, IFeatureId, Func, FuncParams);
 
-	FuncParams = [{shash,SentenceHash}, {shash_count,SHCount}, {shash_percentage, SHPerc},
-			{bayes, Bayes}, {bayes_threshold, BThres},
-			{whitefile, WhiteFile}, {group_ids, GroupsI}],
+populate_match(Id, <<"document_pdm">>, IFeatureId) ->
+	Func = pdm_match,
+	{ok, DDQ} = psq(dd_by_matcher_id, [Id]),
+	[[DDId]] = DDQ,
+	{ok, FFQ} = psq(filefingerprint_by_dd_id, [DDId]),
+	populate_filefingerprints(FFQ, DDId),
+	FuncParams=[DDId],
 	new_match(Id, IFeatureId, Func, FuncParams);
 
 populate_match(Id, Matcher, _) -> throw({error, {unsupported_match, Id, Matcher} }).
-
-get_func_params(MatchId) ->
-	{ok, PQ} = psq(params_by_match_id, [MatchId]),
-	lists:append(PQ).
-
 
 populate_data_formats([DFId|DFs]) ->
 	{ok, MQ} = psq(mimes_by_data_format_id, [DFId]),
@@ -592,14 +591,28 @@ populate_data_formats([]) -> ok.
 populate_mimes([[Mime]|Rows], DataFormatId) ->
 	Id=mydlp_mnesia:get_unique_id(mime_type),
 	M = #mime_type{id=Id, mime=Mime, data_format_id=DataFormatId},
-	mydlp_mnesia:write(M),
+	mydlp_mnesia_write(M),
 	populate_mimes(Rows, DataFormatId);
 populate_mimes([], _DataFormatId) -> ok.
+
+populate_filehashes([[FileId,HexHash]|Rows], DDId) ->
+	Id=mydlp_mnesia:get_unique_id(file_hash),
+	F = #file_hash{id=Id, file_id=FileId, group_id=DDId, hash=mydlp_api:hex2bytelist(HexHash)},
+	mydlp_mnesia_write(F),
+	populate_filehashes(Rows, DDId);
+populate_filehashes([], _DDId) -> ok.
+
+populate_filefingerprints([[FileId,Fingerprint]|Rows], DDId) ->
+	Id=mydlp_mnesia:get_unique_id(file_fingerprint),
+	F = #file_fingerprint{id=Id, file_id=FileId, group_id=DDId, fingerprint=Fingerprint},
+	mydlp_mnesia_write(F),
+	populate_filefingerprints(Rows, DDId);
+populate_filefingerprints([], _DDId) -> ok.
 
 %populate_site_desc([[Id, StaticIpI]|Rows]) ->
 %	IpAddr = int_to_ip(StaticIpI),
 %	S = #site_desc{filter_id=Id, ipaddr=IpAddr},
-%	mydlp_mnesia:write(S),
+%	mydlp_mnesia_write(S),
 %	populate_site_desc(Rows);
 %populate_site_desc([]) -> ok.
 
@@ -609,7 +622,7 @@ populate_mimes([], _DataFormatId) -> ok.
 %		<<"block">> -> block end,
 %	U = #usb_device{id=mydlp_mnesia:get_unique_id(usb_device), 
 %			filter_id=FilterId, device_id=DeviceId, action=Action},
-%	mydlp_mnesia:write(U),
+%	mydlp_mnesia_write(U),
 %	populate_usb_devices(Rows, FilterId);
 %populate_usb_devices([], _FilterId) -> ok.
 

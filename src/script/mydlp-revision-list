@@ -6,20 +6,8 @@ MYDLPDUMPDIR="/var/lib/mydlp/revision"
 MYSQLC=/usr/bin/mysql
 MYSQLOPTS="-N"
 
-if [ -z "$1" ]; then
-	echo "$0 takes at least one argument."
-	exit 1
-fi
-
-if [ ! -e "$1" ]; then
-	echo "$0 should take a dump file as an argument"
-	exit 1
-fi
-
-DUMPFILENAME=$(readlink -f $1)
-
-if [ -n "$2" ]; then
-	MYDLPCONF=$2
+if [ -n "$1" ]; then
+	MYDLPCONF=$1
 fi
 
 MYSQLHOST=$(grep -e "^mysql_host" $MYDLPCONF|cut -f 2)
@@ -48,18 +36,5 @@ MYSQL="$MYSQLC $MYSQLOPTS $MYSQLARGS"
 
 REVISION_TABLE="Revision"
 
-function restoreDump() {
-	zcat $DUMPFILENAME|$MYSQL
-}
-
-function findFirstRevisionId() {
-	echo "SELECT id FROM $REVISION_TABLE WHERE dumpPath = '$DUMPFILENAME' ORDER BY id ASC LIMIT 1"|$MYSQL
-}
-
-function addRestoreRevision() {
-	local RRID=$(findFirstRevisionId)
-	echo "INSERT INTO $REVISION_TABLE (id, date, isInstalled, dumpPath, restoreRevision_id) VALUES ('',now(), false, '$DUMPFILENAME', $RRID)"|$MYSQL
-}
-
-restoreDump && addRestoreRevision
+echo "SELECT date, name, dumpPath FROM $REVISION_TABLE ORDER BY id DESC"|$MYSQL
 
