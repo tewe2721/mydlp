@@ -21,6 +21,9 @@ public class MydlpImpl implements Mydlp.Iface {
 	protected static final String DEFAULT_ENCODING = "UTF-8";
 	protected static final ByteBuffer EMPTY = Charset.forName(DEFAULT_ENCODING)
 			.encode(CharBuffer.wrap(""));
+	protected static final ByteBuffer ERROR = Charset.forName(DEFAULT_ENCODING)
+			.encode(CharBuffer.wrap("mydlp-internal/error"));
+	protected static final String MIME_NOT_FOUND = "mydlp-internal/not-found";
 	
 	protected Tika tika = new Tika();
 	
@@ -46,7 +49,10 @@ public class MydlpImpl implements Mydlp.Iface {
 			return tika.detect(inputStream);
 		} catch (IOException e) {
 			logger.error("Can not detect file type", e);
-			return "mydlp-internal/not-found";
+			return MIME_NOT_FOUND;
+		} catch (Throwable e) {
+			logger.error("Can not detect file type", e);
+			return MIME_NOT_FOUND;
 		} finally {
 			try {
 				inputStream.close();
@@ -77,17 +83,17 @@ public class MydlpImpl implements Mydlp.Iface {
 			metadata.add(Metadata.CONTENT_TYPE, MimeType);
 			Reader reader = tika.parse(inputStream, metadata);
 			return ByteBuffer.wrap(IOUtils.toByteArray(reader, DEFAULT_ENCODING));
-		} catch (OutOfMemoryError e) {
-			logger.error("Can not allocate required memory", e);
-			return EMPTY;
-		} catch (IOException e) {
+		} catch (Throwable e) {
 			if (isMemoryError(e))
 			{
 				logger.error("Can not allocate required memory", e);
 				return EMPTY;
 			}
 			else
-				throw new TException(e);
+			{
+				logger.error("Can not read text", e);
+				return ERROR;
+			}
 		} finally {
 			try {
 				inputStream.close();
