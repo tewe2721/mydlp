@@ -255,7 +255,7 @@ init([]) ->
 		%{user_by_rule_id, <<"SELECT eu.id, eu.username FROM sh_ad_entry_user AS eu, sh_ad_cross AS c, sh_ad_entry AS e, sh_ad_group AS g, sh_ad_rule_cross AS rc WHERE rc.parent_rule_id=? AND rc.group_id=g.id AND rc.group_id=c.group_id AND c.entry_id=e.id AND c.entry_id=eu.entry_id">>},
 		%{user_by_rule_id, <<"SELECT eu.id, eu.username FROM sh_ad_entry_user AS eu, sh_ad_cross AS c, sh_ad_rule_cross AS rc WHERE rc.parent_rule_id=? AND rc.group_id=c.group_id AND c.entry_id=eu.entry_id">>},
 		{mimes_by_data_format_id, <<"SELECT m.mimeType FROM MIMEType AS m, DataFormat_MIMEType dm WHERE dm.DataFormat_id=? and dm.mimeTypes_id=m.id">>},
-		%{usb_device_by_cid, <<"SELECT device_id, action FROM ep_usb_device WHERE customer_id=?">>},
+		{usb_devices, <<"SELECT deviceId, action FROM USBDevice">>},
 		%{customer_by_id, <<"SELECT id,static_ip FROM sh_customer WHERE id=?">>},
 		{insert_incident, <<"INSERT INTO IncidentLog (id, date, channel, ruleId, sourceIp, sourceUser, destination, informationTypeId, action, matcherMessage) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)">>},
 		{insert_incident_file, <<"INSERT INTO IncidentLogFile (id, incidentLog_id, filename, content_id) VALUES (NULL, ?, ?, ?)">>},
@@ -349,9 +349,8 @@ populate_site(FilterId) ->
 	%{ok, SQ} = psq(customer_by_id, [FilterId]),
 	%populate_site_desc(SQ),
 
-	% TODO: refine and implement this
-	%{ok, UDQ} = psq(usb_device_by_cid, [FilterId]),
-	%populate_usb_devices(UDQ, FilterId),
+	{ok, UDQ} = psq(usb_devices),
+	populate_usb_devices(UDQ, FilterId),
 	mydlp_mnesia:write(get(mydlp_mnesia_write)),
 	erase(mydlp_mnesia_write),
 	ok.
@@ -616,15 +615,13 @@ populate_filefingerprints([], _DDId) -> ok.
 %	populate_site_desc(Rows);
 %populate_site_desc([]) -> ok.
 
-%populate_usb_devices([[DeviceId, ActionB]|Rows], FilterId) ->
-%	Action = case ActionB of
-%		<<"pass">> -> pass;
-%		<<"block">> -> block end,
-%	U = #usb_device{id=mydlp_mnesia:get_unique_id(usb_device), 
-%			filter_id=FilterId, device_id=DeviceId, action=Action},
-%	mydlp_mnesia_write(U),
-%	populate_usb_devices(Rows, FilterId);
-%populate_usb_devices([], _FilterId) -> ok.
+populate_usb_devices([[DeviceId, ActionB]|Rows], FilterId) ->
+	Action =  rule_action_to_atom(ActionB),
+	U = #usb_device{id=mydlp_mnesia:get_unique_id(usb_device), 
+			filter_id=FilterId, device_id=DeviceId, action=Action},
+	mydlp_mnesia_write(U),
+	populate_usb_devices(Rows, FilterId);
+populate_usb_devices([], _FilterId) -> ok.
 
 %get_rule_cid(RuleId) ->
 %	case psq(cid_of_rule_by_id, [RuleId]) of
