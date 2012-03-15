@@ -45,7 +45,8 @@
 	compileCustomer/1,
 	getRuletable/2,
 	receiveBegin/1,
-	receiveChunk/5
+	receiveChunk/5,
+	requeueIncident/1
 	]).
 
 %%%%% EXTERNAL INTERFACE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -101,6 +102,11 @@ getFingerprints(Filename, Data) ->
 	FList = mydlp_pdm:fingerprint(Text),
 	mydlp_api:clean_files(F),
 	lists:usort(FList).
+
+requeueIncident(Incidentid) ->
+	%% TODO: resend with mydlp_smtpc
+	mydlp_mysql:requeued(Incidentid).
+
 
 -endif.
 

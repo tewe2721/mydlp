@@ -39,6 +39,7 @@
 	compile_customer/0,
 	compile_customer/1,
 	push_log/9,
+	requeued/1,
 	is_multisite/0,
 	get_denied_page/0,
 	insert_log_file/5,
@@ -79,6 +80,9 @@ insert_log_file(LogId, Filename) ->
 
 insert_log_file(LogId, Filename, MimeType, Size, Path) -> 
 	gen_server:cast(?MODULE, {insert_log_file, LogId, Filename, MimeType, Size, Path}).
+
+requeued(LogId) -> 
+	gen_server:cast(?MODULE, {requeued, LogId}).
 
 repopulate_mnesia() ->
 	gen_server:cast(?MODULE, repopulate_mnesia).
@@ -173,6 +177,12 @@ handle_cast(repopulate_mnesia, State) ->
 	end),
 	{noreply, State};
 
+handle_cast({requeued, LogId}, State) ->
+	?ASYNC0(fun() ->
+		psq(update_requeue_status, [LogId])
+	end),
+	{noreply, State};
+
 handle_cast(_Msg, State) ->
 	{noreply, State}.
 
@@ -264,6 +274,7 @@ init([]) ->
 %		{update_archive_file, <<"UPDATE log_archive_file SET filename=?, log_archive_data_id=? WHERE id = ?">>},
 		{incident_data_by_path, <<"SELECT id FROM IncidentLogFileContent WHERE localPath = ?">>},
 		{insert_incident_data, <<"INSERT INTO IncidentLogFileContent (id, mimeType, size, localPath) VALUES (NULL, ?, ?, ?)">>},
+		{update_requeue_status, <<"UPDATE IncidentLogRequeueStatus SET isRequeued=TRUE, date=now() WHERE incidentLog_id=?">>},
 		{denied_page, <<"SELECT c.value FROM Config AS c WHERE c.configKey=\"denied_page_html\"">>}
 
 	]],
@@ -353,6 +364,7 @@ populate_site(FilterId) ->
 	populate_usb_devices(UDQ, FilterId),
 	mydlp_mnesia:write(get(mydlp_mnesia_write)),
 	erase(mydlp_mnesia_write),
+	mydlp_mnesia:compile_regex(),
 	ok.
 
 populate_configs([[Key, Value]|Rows], FilterId) ->
