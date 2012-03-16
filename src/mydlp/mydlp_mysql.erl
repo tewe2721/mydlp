@@ -671,7 +671,8 @@ pre_push_log(RuleId, Ip, User, Destination, Action, Channel) ->
 %		RId when is_integer(RId) -> {get_rule_cid(RId), RId} end,
 	User1 = case User of
 		nil -> null;
-		Else -> Else
+		U when is_list(U) -> string:to_lower(U);
+		U when is_binary(U) -> string:to_lower(binary_to_list(U))
 	end,
 	Ip1 = case ip_to_int(Ip) of
 		nil -> null;
