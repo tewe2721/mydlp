@@ -733,37 +733,37 @@ rr_files([], _WorkDir, Ret) -> lists:flatten(lists:reverse(Ret)).
 
 -ifdef(__MYDLP_NETWORK).
 
-acl_msg(_Time, _Channel, _RuleId, _Action, _Ip, _User, _To, _ITypeId, [], _Misc) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="post-data"}, _Misc) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="urlencoded-data"}, _Misc) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="uri-data"}, _Misc) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="seap-data"}, _Misc) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="resp-data"}, _Misc) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="data"}, _Misc) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name=undefined, filename=undefined}, _Misc) -> ok;
-acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, #file{} = File, Misc) ->
-	acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, [File], Misc);
-acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc) ->
+acl_msg(_Time, _Channel, _RuleId, _Action, _Ip, _User, _To, _ITypeId, [], _Misc, _Payload) -> ok;
+acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="post-data"}, _Misc, _Payload) -> ok;
+acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="urlencoded-data"}, _Misc, _Payload) -> ok;
+acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="uri-data"}, _Misc, _Payload) -> ok;
+acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="seap-data"}, _Misc, _Payload) -> ok;
+acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="resp-data"}, _Misc, _Payload) -> ok;
+acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="data"}, _Misc, _Payload) -> ok;
+acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name=undefined, filename=undefined}, _Misc, _Payload) -> ok;
+acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, #file{} = File, Misc, Payload) ->
+	acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, [File], Misc, Payload);
+acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc, Payload) ->
 	FileS = string:join([file_to_str(F) || F <- Files] , ", "),
 	acl_msg1(Channel, RuleId, Action, Ip, User, To, ITypeId, FileS, Misc),
-	mydlp_incident:l({Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc}),
+	mydlp_incident:l({Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc, Payload}),
 	ok.
 
 -endif.
 
 -ifdef(__MYDLP_ENDPOINT).
 
-acl_msg(_Time, _Channel, _RuleId, _Action, _Ip, _User, _To, _ITypeId, [], _Misc) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="post-data"}, _Misc) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="urlencoded-data"}, _Misc) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="uri-data"}, _Misc) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="seap-data"}, _Misc) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="resp-data"}, _Misc) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="data"}, _Misc) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name=undefined, filename=undefined}, _Misc) -> ok;
-acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, #file{} = File, Misc) ->
-	acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, [File], Misc);
-acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc) ->
+acl_msg(_Time, _Channel, _RuleId, _Action, _Ip, _User, _To, _ITypeId, [], _Misc, _Payload) -> ok;
+acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="post-data"}, _Misc, _Payload) -> ok;
+acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="urlencoded-data"}, _Misc, _Payload) -> ok;
+acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="uri-data"}, _Misc, _Payload) -> ok;
+acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="seap-data"}, _Misc, _Payload) -> ok;
+acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="resp-data"}, _Misc, _Payload) -> ok;
+acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="data"}, _Misc, _Payload) -> ok;
+acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name=undefined, filename=undefined}, _Misc, _Payload) -> ok;
+acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, #file{} = File, Misc, Payload) ->
+	acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, [File], Misc, Payload);
+acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc, _Payload) ->
 	FileSs = [file_to_str(F) || F <- Files],
 	FileS = string:join(FileSs, ", "),
 	acl_msg1(Channel, RuleId, Action, Ip, User, To, ITypeId, FileS, Misc),

@@ -124,22 +124,31 @@ code_change(_OldVsn, State, _Extra) ->
 
 %%%%%%%%%%%%%%%%% internal
 
-process_log_tuple({Time, web = Channel, RuleId, archive = Action, Ip, User, To, ITypeId, Files, Misc}) ->
+process_log_tuple({Time, web = Channel, RuleId, archive = Action, Ip, User, To, ITypeId, Files, Misc, Payload}) ->
 	Files1 = lists:filter(fun(F) -> 
 		?BB_S(F#file.dataref) > ?CFG(archive_minimum_size)
 		end, Files),
-	process_log_tuple1({Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files1, Misc});
-process_log_tuple({Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc}) ->
-	process_log_tuple1({Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc}).
+	process_log_tuple1({Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files1, Misc, Payload});
+process_log_tuple({Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc, Payload}) ->
+	process_log_tuple1({Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc, Payload}).
 
-process_log_tuple1({_Time, _Channel, _RuleId, _Action, _Ip, _User, _To, _ITypeId, [], _Misc}) -> ok;
-process_log_tuple1({Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc}) ->
+process_log_tuple1({_Time, _Channel, _RuleId, _Action, _Ip, _User, _To, _ITypeId, [], _Misc, _Payload}) -> ok;
+process_log_tuple1({Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc, Payload}) ->
 	IsLogData = case Action of
 		quarantine -> true;
 		archive -> true;
 		_Else -> false end,
 	LogId = mydlp_mysql:push_log(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc),
 	process_log_files(LogId, IsLogData, Files),
+	case {Channel, Action} of
+		{mail, quarantine} -> process_payload(LogId, Payload);
+		_Else2 -> ok end,
+	ok.
+
+process_payload(_LogId, none) -> ok;
+process_payload(LogId, Payload) ->
+	Data = erlang:term_to_binary(Payload, [compressed]),
+	mydlp_quarantine:s(payload, LogId, Data),
 	ok.
 
 process_log_files(LogId, false = IsLogData, [File|Files]) ->

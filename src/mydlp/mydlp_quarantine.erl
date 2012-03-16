@@ -36,6 +36,8 @@
 %% API
 -export([start_link/0,
 	s/1,
+	s/3,
+	l/2,
 	stop/0]).
 
 %% gen_server callbacks
@@ -49,6 +51,10 @@
 -record(state, {quarantine_dir, quarantine_uid, quarantine_gid}).
 
 s(Data) -> gen_server:call(?MODULE, {s, Data}, 20000).
+
+s(Cat, Id, Data) -> gen_server:call(?MODULE, {s, Cat, Id, Data}, 20000).
+
+l(Cat, Id) -> gen_server:call(?MODULE, {s, Cat, Id}, 20000).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -76,6 +82,46 @@ handle_call({s, Data}, From, #state{quarantine_dir=Dir, quarantine_uid=Uid, quar
 				file:change_owner(FilePath, Uid, Gid) end,
 
 		Worker ! {async_reply, {ok, FilePath}, From}
+	end),
+	
+	{noreply, State};
+
+handle_call({s, Cat, Id, Data}, From, #state{quarantine_dir=Dir, quarantine_uid=Uid, quarantine_gid=Gid} = State) ->
+	Worker = self(),
+	?ASYNC0(fun() ->
+		CName = case Cat of
+			payload -> "payload";
+			Else -> throw({ierror, {unkown_category, Else}}) end,
+		IdS = case Id of
+			I when is_integer(I) -> integer_to_list(I);
+			I when is_binary(I) -> binary_to_list(I);
+			I when is_list(I) -> I end,
+		FilePath = Dir ++ CName ++ "/" ++ IdS,
+		case filelib:is_file(FilePath) of
+			true -> ok;
+			false -> file:write_file(FilePath, Data, [raw]), 
+				file:change_owner(FilePath, Uid, Gid) end,
+
+		Worker ! {async_reply, {ok, FilePath}, From}
+	end),
+	
+	{noreply, State};
+
+handle_call({l, Cat, Id}, From, #state{quarantine_dir=Dir} = State) ->
+	Worker = self(),
+	?ASYNC0(fun() ->
+		CName = case Cat of
+			payload -> "payload";
+			Else -> throw({ierror, {unkown_category, Else}}) end,
+		IdS = case Id of
+			I when is_integer(I) -> integer_to_list(I);
+			I when is_binary(I) -> binary_to_list(I);
+			I when is_list(I) -> I end,
+		FilePath = Dir ++ CName ++ "/" ++ IdS,
+		Reply = case filelib:is_file(FilePath) of
+			true -> {ok, Data} = file:read_file(FilePath), file:delete(FilePath), Data;
+			false -> <<>> end,
+		Worker ! {async_reply, {ok, Reply}, From}
 	end),
 	
 	{noreply, State};

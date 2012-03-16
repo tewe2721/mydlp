@@ -351,7 +351,10 @@ log_req(#smtpd_fsm{message_record=MessageR}, Action,
 	Src = get_from(MessageR),
 	Dest = get_dest_addresses(MessageR),
 	Time = erlang:localtime(),
-        ?ACL_LOG(Time, mail, RuleId, Action, nil, Src, Dest, IType, File, Misc).
+	Payload = case Action of
+		quarantine -> MessageR;
+		_Else -> none end,
+        ?ACL_LOG_P(Time, mail, RuleId, Action, nil, Src, Dest, IType, File, Misc, Payload).
 
 get_dest_domains(#message{rcpt_to=RcptTo, to=ToH, cc=CCH, bcc=BCCH})->
 	RcptToA = lists:map(fun(S) -> mime_util:dec_addr(S) end, RcptTo),
