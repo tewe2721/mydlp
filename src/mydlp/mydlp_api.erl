@@ -446,6 +446,32 @@ is_valid_nino1([_, _ |Rest]) ->
 		_Else -> false end.
 
 %%--------------------------------------------------------------------
+%% @doc Checks whether string is a valid South Africa Identity Document number. 
+%% @end
+%%----------------------------------------------------------------------
+is_valid_said(SAIDStr) ->
+	Clean = remove_chars(SAIDStr, " -"),
+	Clean1 = string:to_lower(Clean),
+	case string:len(Clean1) of
+		13 -> is_valid_said1(Clean1);
+		_Else -> false end.
+
+is_valid_said1([_O1,_E1, O2, E2, O3, E3,_O4,_E4,_O5,_E5, O6,_E6,_CS] = SAIDStr) ->
+	CSChk = list_to_integer([O6]) < 2, %% should be 0 or 1
+	MMChk = list_to_integer([O2, E2]) < 13, %% should be a number from 1 to 12
+	DDChk = list_to_integer([O3, E3]) < 32, %% should be a number from 1 to 31
+	CSChk and MMChk and DDChk and is_valid_said2(SAIDStr).
+
+is_valid_said2([O1,E1,O2,E2,O3,E3,O4,E4,O5,E5,O6,E6,CS]) ->
+	OddSum = lists:sum(lists:map(fun(NC) -> list_to_integer([NC]) end, [O1,O2,O3,O4,O5,O6])),
+	EvenCCI = list_to_integer([E1,E2,E3,E4,E5,E6]),
+	EvenCCDI = EvenCCI * 2,
+	EvenCCDSum = lists:sum(lists:map(fun(NC) -> list_to_integer([NC]) end, integer_to_list(EvenCCDI))),
+	Sum = OddSum + EvenCCDSum,
+	CSI = list_to_integer([CS]),
+	CSI == 10 - (Sum rem 10).
+
+%%--------------------------------------------------------------------
 %% @doc Gets response from ports
 %% @end
 %%----------------------------------------------------------------------

@@ -538,6 +538,10 @@ populate_match(Id, <<"uk_nino">>, IFeatureId) ->
 	Func = uk_nino_match,
 	new_match(Id, IFeatureId, Func);
 
+populate_match(Id, <<"said">>, IFeatureId) ->
+	Func = said_match,
+	new_match(Id, IFeatureId, Func);
+
 populate_match(Id, <<"scode">>, IFeatureId) ->
 	Func = scode_match,
 	new_match(Id, IFeatureId, Func);

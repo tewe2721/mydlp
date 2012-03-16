@@ -58,6 +58,9 @@
 	uk_nino_match/0,
 	uk_nino_match/1,
 	uk_nino_match/3,
+	said_match/0,
+	said_match/1,
+	said_match/3,
 	e_file_match/0,
 	e_file_match/1,
 	e_file_match/3,
@@ -157,6 +160,16 @@ uk_nino_match(_Conf, _Addr, File) ->
 	 	nino, 
 		File#file.text),
 	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_nino(I) end, Res).
+
+said_match() -> text.
+
+said_match(_Conf) -> none.
+
+said_match(_Conf, _Addr, File) ->
+	Res = mydlp_regex:match_bin(
+	 	said, 
+		File#file.text),
+	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_said(I) end, Res).
 
 -define(CFILE_MINSIZE, 128).
 
