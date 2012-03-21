@@ -108,7 +108,9 @@ requeueIncident(Incidentid) ->
 			{ok, Data} -> 	MessageR = erlang:binary_to_term(Data),
 					mydlp_smtpc:mail(MessageR),
 					mydlp_mysql:requeued(Incidentid);
-			{ierror, _} ->	mydlp_mysql:delete_log_requeue(Incidentid) end
+			{ierror, _} ->	mydlp_mysql:delete_log_requeue(Incidentid), 
+					?ERROR_LOG("REQUEUE_INCIDENT: Payload cannot find. Deleting DB entry. IncidentId: ["?S"].~n", [Incidentid])
+					end
         catch Class:Error ->
                 ?ERROR_LOG("REQUEUE_INCIDENT: Error occured: Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
                         [Class, Error, erlang:get_stacktrace()])
