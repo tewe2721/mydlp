@@ -293,7 +293,7 @@ init([]) ->
 		{incident_data_by_path, <<"SELECT id FROM IncidentLogFileContent WHERE localPath = ?">>},
 		{insert_incident_data, <<"INSERT INTO IncidentLogFileContent (id, mimeType, size, localPath) VALUES (NULL, ?, ?, ?)">>},
 		{insert_incident_requeue, <<"INSERT INTO IncidentLogRequeueStatus (id, incidentLog_id, isRequeued) VALUES (NULL, ?, false)">>},
-		{insert_incident_requeue, <<"DELETE FROM IncidentLogRequeueStatus WHERE incidentLog_id=?">>},
+		{delete_incident_requeue, <<"DELETE FROM IncidentLogRequeueStatus WHERE incidentLog_id=?">>},
 		{update_requeue_status, <<"UPDATE IncidentLogRequeueStatus SET isRequeued=TRUE, date=now() WHERE incidentLog_id=?">>},
 		{denied_page, <<"SELECT c.value FROM Config AS c WHERE c.configKey=\"denied_page_html\"">>}
 
