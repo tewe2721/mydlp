@@ -44,6 +44,7 @@
 	get_denied_page/0,
 	insert_log_file/5,
 	insert_log_file/2,
+	insert_log_requeue/1,
 	repopulate_mnesia/0,
 	stop/0]).
 
@@ -74,6 +75,9 @@
 
 push_log(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc) ->
 	gen_server:call(?MODULE, {push_log, {Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc}}, 60000).
+
+insert_log_requeue(LogId) -> 
+	gen_server:cast(?MODULE, {insert_log_requeue, LogId}).
 
 insert_log_file(LogId, Filename) -> 
 	gen_server:cast(?MODULE, {insert_log_file, LogId, Filename}).
@@ -147,6 +151,12 @@ handle_call(_Msg, _From, State) ->
 handle_cast({insert_log_file, LogId, Filename}, State) ->
 	?ASYNC(fun() ->
 		lpsq(insert_incident_file, [LogId, Filename, null], 30000)
+	end, 30000),
+	{noreply, State};
+
+handle_cast({insert_log_requeue, LogId}, State) ->
+	?ASYNC(fun() ->
+		lpsq(insert_incident_requeue, [LogId], 30000)
 	end, 30000),
 	{noreply, State};
 
@@ -274,6 +284,7 @@ init([]) ->
 %		{update_archive_file, <<"UPDATE log_archive_file SET filename=?, log_archive_data_id=? WHERE id = ?">>},
 		{incident_data_by_path, <<"SELECT id FROM IncidentLogFileContent WHERE localPath = ?">>},
 		{insert_incident_data, <<"INSERT INTO IncidentLogFileContent (id, mimeType, size, localPath) VALUES (NULL, ?, ?, ?)">>},
+		{insert_incident_requeue, <<"INSERT INTO IncidentLogRequeueStatus (id, incidentLog_id, isRequeued) VALUES (NULL, ?, false)">>},
 		{update_requeue_status, <<"UPDATE IncidentLogRequeueStatus SET isRequeued=TRUE, date=now() WHERE incidentLog_id=?">>},
 		{denied_page, <<"SELECT c.value FROM Config AS c WHERE c.configKey=\"denied_page_html\"">>}
 

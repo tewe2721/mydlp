@@ -141,7 +141,8 @@ process_log_tuple1({Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files,
 	LogId = mydlp_mysql:push_log(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc),
 	process_log_files(LogId, IsLogData, Files),
 	case {Channel, Action} of
-		{mail, quarantine} -> process_payload(LogId, Payload);
+		{mail, quarantine} -> 	process_payload(LogId, Payload),
+					mydlp_mysql:insert_log_requeue(LogId);
 		_Else2 -> ok end,
 	ok.
 
