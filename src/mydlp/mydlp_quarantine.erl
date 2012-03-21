@@ -54,7 +54,7 @@ s(Data) -> gen_server:call(?MODULE, {s, Data}, 20000).
 
 s(Cat, Id, Data) -> gen_server:call(?MODULE, {s, Cat, Id, Data}, 20000).
 
-l(Cat, Id) -> gen_server:call(?MODULE, {s, Cat, Id}, 20000).
+l(Cat, Id) -> gen_server:call(?MODULE, {l, Cat, Id}, 20000).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -64,13 +64,13 @@ handle_call({s, Data}, From, #state{quarantine_dir=Dir, quarantine_uid=Uid, quar
 		Hash = mydlp_api:md5_hex(Data),
 
 		L1Dir = Dir ++ string:substr(Hash, 1, 1),
-		case filelib:is_regular(L1Dir) of
+		case filelib:is_dir(L1Dir) of
 			false -> file:make_dir(L1Dir),
 				file:change_owner(L1Dir, Uid, Gid);
 			true -> ok end,
 
 		L2Dir = L1Dir ++ "/" ++ string:substr(Hash, 2, 2),
-		case filelib:is_regular(L2Dir) of
+		case filelib:is_dir(L2Dir) of
 			false -> file:make_dir(L2Dir),
 				file:change_owner(L2Dir, Uid, Gid);
 			true -> ok end,
@@ -119,9 +119,9 @@ handle_call({l, Cat, Id}, From, #state{quarantine_dir=Dir} = State) ->
 			I when is_list(I) -> I end,
 		FilePath = Dir ++ CName ++ "/" ++ IdS,
 		Reply = case filelib:is_file(FilePath) of
-			true -> {ok, Data} = file:read_file(FilePath), file:delete(FilePath), Data;
-			false -> <<>> end,
-		Worker ! {async_reply, {ok, Reply}, From}
+			true -> {ok, Data} = file:read_file(FilePath), file:delete(FilePath), {ok, Data};
+			false -> {ierror, nofile} end,
+		Worker ! {async_reply, Reply, From}
 	end),
 	
 	{noreply, State};
@@ -155,6 +155,13 @@ init([]) ->
 	Dir = ?CFG(quarantine_dir),
 	Uid = ?CFG(quarantine_uid),
 	Gid = ?CFG(quarantine_gid),
+
+	PDir = Dir ++ "payload",
+
+	case filelib:is_dir(PDir) of
+		false -> file:make_dir(PDir),
+			file:change_owner(PDir, Uid, Gid);
+		true -> ok end,
 
 	{ok, #state{quarantine_dir=Dir, quarantine_uid=Uid, quarantine_gid=Gid}}.
 

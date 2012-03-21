@@ -45,6 +45,7 @@
 	insert_log_file/5,
 	insert_log_file/2,
 	insert_log_requeue/1,
+	delete_log_requeue/1,
 	repopulate_mnesia/0,
 	stop/0]).
 
@@ -55,8 +56,6 @@
 	handle_info/2,
 	terminate/2,
 	code_change/3]).
-
--include_lib("eunit/include/eunit.hrl").
 
 -record(state, {
 	host,
@@ -78,6 +77,9 @@ push_log(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc) ->
 
 insert_log_requeue(LogId) -> 
 	gen_server:cast(?MODULE, {insert_log_requeue, LogId}).
+
+delete_log_requeue(LogId) -> 
+	gen_server:cast(?MODULE, {delete_log_requeue, LogId}).
 
 insert_log_file(LogId, Filename) -> 
 	gen_server:cast(?MODULE, {insert_log_file, LogId, Filename}).
@@ -160,6 +162,12 @@ handle_cast({insert_log_requeue, LogId}, State) ->
 	end, 30000),
 	{noreply, State};
 
+handle_cast({delete_log_requeue, LogId}, State) ->
+	?ASYNC(fun() ->
+		lpsq(delete_incident_requeue, [LogId], 30000)
+	end, 30000),
+	{noreply, State};
+
 handle_cast({insert_log_file, LogId, Filename, MimeType, Size, Path}, State) ->
 	% Probably will create problems in multisite use.
 	?ASYNC(fun() ->
@@ -189,7 +197,7 @@ handle_cast(repopulate_mnesia, State) ->
 
 handle_cast({requeued, LogId}, State) ->
 	?ASYNC0(fun() ->
-		psq(update_requeue_status, [LogId])
+		lpsq(update_requeue_status, [LogId], 30000)
 	end),
 	{noreply, State};
 
@@ -285,6 +293,7 @@ init([]) ->
 		{incident_data_by_path, <<"SELECT id FROM IncidentLogFileContent WHERE localPath = ?">>},
 		{insert_incident_data, <<"INSERT INTO IncidentLogFileContent (id, mimeType, size, localPath) VALUES (NULL, ?, ?, ?)">>},
 		{insert_incident_requeue, <<"INSERT INTO IncidentLogRequeueStatus (id, incidentLog_id, isRequeued) VALUES (NULL, ?, false)">>},
+		{insert_incident_requeue, <<"DELETE FROM IncidentLogRequeueStatus WHERE incidentLog_id=?">>},
 		{update_requeue_status, <<"UPDATE IncidentLogRequeueStatus SET isRequeued=TRUE, date=now() WHERE incidentLog_id=?">>},
 		{denied_page, <<"SELECT c.value FROM Config AS c WHERE c.configKey=\"denied_page_html\"">>}
 

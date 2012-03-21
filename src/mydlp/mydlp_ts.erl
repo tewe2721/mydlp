@@ -104,10 +104,11 @@ getFingerprints(Filename, Data) ->
 	lists:usort(FList).
 
 requeueIncident(Incidentid) ->
-	try     Data = mydlp_quarantine:l(payload, Incidentid),
-		MessageR = erlang:binary_to_term(Data),
-		mydlp_smtpc:mail(MessageR),
-		mydlp_mysql:requeued(Incidentid)
+	try     case mydlp_quarantine:l(payload, Incidentid) of
+			{ok, Data} -> 	MessageR = erlang:binary_to_term(Data),
+					mydlp_smtpc:mail(MessageR),
+					mydlp_mysql:requeued(Incidentid);
+			{ierror, _} ->	mydlp_mysql:delete_log_requeue(Incidentid) end
         catch Class:Error ->
                 ?ERROR_LOG("REQUEUE_INCIDENT: Error occured: Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
                         [Class, Error, erlang:get_stacktrace()])
