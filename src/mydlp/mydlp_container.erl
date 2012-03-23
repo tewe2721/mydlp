@@ -185,10 +185,10 @@ handle_cast({setprop, ObjId, Key, Value}, #state{object_tree=OT} = State) ->
 			{noreply, State}
 			end;
 
-handle_cast({pushfile, ObjId, FilePath}, #state{object_tree=OT} = State) ->
+handle_cast({pushfile, ObjId, {raw, FilePath}}, #state{object_tree=OT} = State) ->
 	case gb_trees:lookup(ObjId, OT) of
 		{value, #object{eof_flag=false} = Obj} -> 
-			OT1 = gb_trees:enter(ObjId, Obj#object{filepath=qp_decode(FilePath), buffer=[]}, OT),
+			OT1 = gb_trees:enter(ObjId, Obj#object{filepath=FilePath, buffer=[]}, OT),
 			{noreply, State#state{object_tree=OT1}};
 		{value, #object{eof_flag=true} = Obj} -> 
 			?ERROR_LOG("PUSHFILE: eof_flag is true, not pushing file: ObjId="?S", FilePath="?S", Object="?S"~n",
@@ -198,6 +198,8 @@ handle_cast({pushfile, ObjId, FilePath}, #state{object_tree=OT} = State) ->
 				[ObjId, OT]),
 			{noreply, State}
 			end;
+
+handle_cast({pushfile, ObjId, FilePath}, State) -> handle_cast({pushfile, ObjId, {raw, qp_decode(FilePath)}}, State);
 
 handle_cast({pushchunk, ObjId, ChunkPath}, State) ->
 	try	{ok, DataChunk} = file:read_file(ChunkPath),
@@ -334,9 +336,11 @@ is_inbound(#object{prop_dict=PD}) ->
 		error -> false end.
 
 get_channel(#object{prop_dict=PD}) ->
-	case dict:find("printerName", PD) of
+	case dict:find("channel", PD) of
+		{ok, "discovery"} -> discovery;
+	error -> case dict:find("printerName", PD) of
 		{ok, _} -> printer;
-		error -> endpoint end.
+		error -> endpoint end end.
 
 get_type(#object{prop_dict=PD}) ->
 	case dict:find("type", PD) of
@@ -354,7 +358,7 @@ object_to_file(Obj) ->
 	Type = get_type(Obj),
 	object_to_file(Type, Obj).
 
-object_to_file(regular,#object{prop_dict=PD, filepath=undefined, data=Data}) ->
+object_to_file(regular, #object{prop_dict=PD, filepath=undefined, data=Data}) ->
 	Filename = case dict:find("filename", PD) of
 		{ok, FN} -> qp_decode(FN);
 		error -> "seap-data" end,

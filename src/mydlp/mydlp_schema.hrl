@@ -134,6 +134,15 @@
 	mime
 }).
 
+-record(fs_entry, {
+	file_path,
+	entry_id,
+	parent_id,
+	is_dir,
+	file_size,
+	last_modified
+}).
+
 
 -endif.
 

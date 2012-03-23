@@ -205,6 +205,9 @@ load_src(Src) ->
 -define(CONFDEF_FUNCTIONAL, [
 	{maximum_push_size, integer, "1048576"},
 	{sync_interval, integer, "300000"},
+	{discover_fs_interval, integer, "7200000"},
+	{discover_fs_paths, string, "C:\\Users;C:\\Documents and Settings"},
+	{discover_fs_on_startup, boolean, "false"},
 	{log_level, integer, "0"},
 	{log_limit, integer, "10485760"},
 	{usb_serial_access_control, boolean, "false"},

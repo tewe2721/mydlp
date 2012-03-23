@@ -1748,7 +1748,7 @@ use_client_policy(CDBBin) ->
 	try	CDBObj = erlang:binary_to_term(CDBBin), % TODO: binary_to_term/2 with safe option
 		{{rule_tables, RuleTables}, {items, ItemDump}} = CDBObj,
 		
-		mydlp_mnesia:truncate_all(),
+		mydlp_mnesia:truncate_nondata(),
 		( catch mydlp_mnesia:write(ItemDump) ),
 		( catch mydlp_mnesia:write([ #rule_table{channel=C, table = RT} || {C, RT} <- RuleTables ]) ),
 		mydlp_dynamic:load(),
