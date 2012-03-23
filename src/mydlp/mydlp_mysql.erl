@@ -272,6 +272,15 @@ init([]) ->
 		{configs, <<"SELECT configKey,value FROM Config">>},
 		{rules, <<"SELECT id,DTYPE,action FROM Rule WHERE enabled=1 order by priority desc">>},
 		{network_by_rule_id, <<"SELECT n.ipBase,n.ipMask FROM Network AS n, RuleItem AS ri WHERE ri.rule_id=? AND n.id=ri.item_id">>},
+		{user_s_by_rule_id, <<"SELECT u.username FROM RuleUserStatic AS u, RuleItem AS ri WHERE ri.rule_id=? AND u.id=ri.item_id">>},
+		{user_ad_u_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=u.id">>},
+		{user_ad_o_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, ADDomainItem i, ADDomainOU o, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=o.id AND o.id=i.parent_id AND i.id=u.id">>},
+		{domain_item_parent_by_id, <<"SELECT i.parent_id FROM ADDomainItem AS i WHERE i.id=?">>},
+		{domain_root_by_id, <<"SELECT r.id, r.domain_id FROM ADDomainRoot AS r WHERE r.id=?">>},
+		{domain_names_by_id, <<"SELECT d.domainName, d.netbiosName FROM ADDomain AS d WHERE d.id=?">>},
+		{domain_aliases_by_id, <<"SELECT a.domainAlias FROM ADDomainAlias AS a, ADDomain_ADDomainAlias AS da WHERE da.ADDomain_id=? AND a.id=da.aliases_id">>},
+		{domain_user_sam_by_id, <<"SELECT u.sAMAccountName FROM ADDomainUser AS u WHERE u.id=?">>},
+		{domain_user_aliases_by_id, <<"SELECT a.userAlias FROM ADDomainUserAlias AS a, ADDomainUser_ADDomainUserAlias AS ua WHERE ua.ADDomainUser_id=? AND a.id=ua.aliases_id">>},
 		{itype_by_rule_id, <<"SELECT t.id,d.threshold FROM InformationType AS t, InformationDescription AS d, RuleItem AS ri WHERE ri.rule_id=? AND t.id=ri.item_id AND d.id=t.informationDescription_id">>},
 		{data_formats_by_itype_id, <<"SELECT df.dataFormats_id FROM InformationType_DataFormat AS df WHERE df.InformationType_id=?">>},
 		{ifeature_by_itype_id, <<"SELECT f.weight,f.matcher_id FROM InformationFeature AS f, InformationDescription_InformationFeature df, InformationType t WHERE t.id=? AND t.informationDescription_id=df.InformationDescription_id AND df.features_id=f.id">>},
@@ -280,7 +289,6 @@ init([]) ->
 		{dd_by_matcher_id, <<"SELECT dd.id FROM MatcherArgument AS ma, NonCascadingArgument AS nca, DocumentDatabase AS dd WHERE ma.coupledMatcher_id=? AND ma.coupledArgument_id=nca.id AND nca.argument_id=dd.id">>},
 		{filehash_by_dd_id, <<"SELECT ddfe.id, ddfe.md5Hash FROM DocumentDatabase_DocumentDatabaseFileEntry AS dd, DocumentDatabaseFileEntry AS ddfe WHERE dd.DocumentDatabase_id=? AND dd.fileEntries_id=ddfe.id">>},
 		{filefingerprint_by_dd_id, <<"SELECT ddfe.id, df.fingerprint FROM DocumentDatabase_DocumentDatabaseFileEntry AS dd, DocumentDatabaseFileEntry AS ddfe, DocumentDatabaseFileEntry_DocumentFingerprint AS ddf, DocumentFingerprint AS df WHERE dd.DocumentDatabase_id=? AND dd.fileEntries_id=ddfe.id AND ddf.DocumentDatabaseFileEntry_id=ddfe.id AND df.id=ddf.fingerprints_id">>},
-		%{user_by_rule_id, <<"SELECT eu.id, eu.username FROM sh_ad_entry_user AS eu, sh_ad_cross AS c, sh_ad_entry AS e, sh_ad_group AS g, sh_ad_rule_cross AS rc WHERE rc.parent_rule_id=? AND rc.group_id=g.id AND rc.group_id=c.group_id AND c.entry_id=e.id AND c.entry_id=eu.entry_id">>},
 		%{user_by_rule_id, <<"SELECT eu.id, eu.username FROM sh_ad_entry_user AS eu, sh_ad_cross AS c, sh_ad_rule_cross AS rc WHERE rc.parent_rule_id=? AND rc.group_id=c.group_id AND c.entry_id=eu.entry_id">>},
 		{mimes_by_data_format_id, <<"SELECT m.mimeType FROM MIMEType AS m, DataFormat_MIMEType dm WHERE dm.DataFormat_id=? and dm.mimeTypes_id=m.id">>},
 		{usb_devices, <<"SELECT deviceId, action FROM USBDevice">>},
@@ -416,8 +424,8 @@ populate_rule(OrigId, Channel, Action, FilterId) ->
 	{ok, IQ} = psq(network_by_rule_id, [OrigId]),
 	RuleId = mydlp_mnesia:get_unique_id(rule),
 	populate_iprs(IQ, RuleId),
-	%{ok, UQ} = psq(user_by_rule_id, [Id]),
-	%populate_users(UQ, Parent),
+
+	populate_rule_users(OrigId, RuleId),
 
 	{ok, ITQ} = psq(itype_by_rule_id, [OrigId]),
 	populate_itypes(ITQ, RuleId),
@@ -440,11 +448,64 @@ populate_iprs([[Base, Subnet]| Rows], RuleId) ->
 	populate_iprs(Rows, RuleId);
 populate_iprs([], _RuleId) -> ok.
 
-%populate_users([[Id, Username]| Rows], Parent) ->
-%	U = #m_user{id=Id, parent=Parent, username=Username},
-%	mydlp_mnesia_write(U),
-%	populate_users(Rows, Parent);
-%populate_users([], _Parent) -> ok.
+populate_rule_users(RuleOrigId, RuleId) -> 
+	{ok, USQ} = psq(user_s_by_rule_id, [RuleOrigId]),
+	populate_users_s(USQ, RuleId),
+
+	{ok, UAUQ} = psq(user_ad_u_by_rule_id, [RuleOrigId]),
+	populate_users_ad_u(UAUQ, RuleId),
+
+	{ok, UAOQ} = psq(user_ad_o_by_rule_id, [RuleOrigId]),
+	populate_users_ad_u(UAOQ, RuleId),
+
+	ok.
+
+populate_users_s([[Username]| Rows], RuleId) ->
+	new_user(Username, RuleId),
+	populate_users_s(Rows, RuleId);
+populate_users_s([], _RuleId) -> ok.
+
+populate_users_ad_u([[OrigId]| Rows], RuleId) ->
+	Usernames = get_usernames(OrigId),
+	lists:foreach(fun(Username) -> new_user(Username, RuleId) end, Usernames),
+	populate_users_ad_u(Rows, RuleId);
+populate_users_ad_u([], _RuleId) -> ok.
+
+get_usernames(OrigId) ->
+	Users = get_users(OrigId),
+	Domains = get_domains(OrigId),
+	L = lists:map(fun(U) ->
+		lists:map(fun(D) ->
+			<<U/binary, "@" , D/binary>>
+		end, Domains)
+	end, Users),
+	lists:flatten(L).
+
+get_domains(OrigId) ->
+	DomainId = get_domain_id(OrigId),
+	{ok, [[DomainName,NetbiosName]]} = psq(domain_names_by_id, [DomainId]), %% TODO: cache may be used to improve performance.
+	{ok, DAQ} = psq(domain_aliases_by_id, [DomainId]),
+	DomainAliases = lists:append(DAQ),
+	[DomainName,NetbiosName] ++ DomainAliases.
+
+get_users(OrigId) ->
+	{ok, [[SAMName]]} = psq(domain_user_sam_by_id, [OrigId]),
+	{ok, AAQ} = psq(domain_user_aliases_by_id, [OrigId]),
+	UserAliases = lists:append(AAQ),
+	[SAMName] ++ UserAliases.
+
+get_domain_id(ItemId) ->
+	{ok, [[ParentId]]} = psq(domain_item_parent_by_id, [ItemId]),
+	case psq(domain_root_by_id, [ParentId]) of
+		{ok, []} -> get_domain_id(ParentId);
+		{ok, [[ParentId, DomainId]]} -> DomainId end.
+
+new_user(Username, RuleId) ->
+	Id = mydlp_mnesia:get_unique_id(m_user),
+	UsernameH = mydlp_api:hash_un(Username),
+	User = #m_user{id=Id, rule_id=RuleId, un_hash=UsernameH},
+	mydlp_mnesia_write(User),
+	ok.
 
 int_to_ip(nil) -> nil;
 int_to_ip(N4) ->

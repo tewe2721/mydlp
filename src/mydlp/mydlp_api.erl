@@ -87,6 +87,12 @@ is_uuri_char(X) when X == $- ; X == $_ ; X == $. ; X == $~ -> true;
 is_uuri_char(X) -> is_digit(X) or is_alpha(X).
 
 %%--------------------------------------------------------------------
+%% @doc Check if a byte is defined as an Filename character.
+%% @end
+%%----------------------------------------------------------------------
+is_fn_char(X) -> is_uuri_char(X) or is_ruri_char(X).
+
+%%--------------------------------------------------------------------
 %% @doc Check if a byte is defined as an HTTP URI reserved character.
 %% @end
 %%----------------------------------------------------------------------
@@ -1274,10 +1280,22 @@ normalize_fn(FN) when is_atom(FN) -> normalize_fn(atom_to_list(FN));
 normalize_fn(_FN) -> "nofilename".
 
 normalize_fn([C|FN], Acc) ->
-	case is_uuri_char(C) of
+	case is_fn_char(C) of
 		true -> normalize_fn(FN, [C|Acc]);
 		false -> normalize_fn(FN, [$_|Acc]) end;
 normalize_fn([], Acc) -> lists:reverse(Acc).
+
+%%-------------------------------------------------------------------------
+%% @doc Normalizes usernames.
+%% @end
+%%-------------------------------------------------------------------------
+
+hash_un(UN) when is_list(UN) ->
+	UN1 = mydlp_pdm:to_lower_str(UN),
+	UN2 = normalize_fn(UN1),
+	erlang:phash2(UN2);
+hash_un(UN) when is_binary(UN) ->
+	hash_un(binary_to_list(UN)).
 
 %%-------------------------------------------------------------------------
 %% @doc Returns category of misc given mime type.

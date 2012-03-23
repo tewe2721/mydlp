@@ -48,7 +48,7 @@
 -record(m_user, {
 	id,
 	rule_id,
-	username
+	un_hash
 }).
 
 -record(itype, {

@@ -32,6 +32,8 @@
 %% API
 -export([fingerprint/1]).
 
+-export([to_lower_str/1]).
+
 -define(KGRAMSIZE, 50).
 -define(WINDOWSIZE, 100).
 
@@ -110,6 +112,11 @@ normal_bin(C) when C >= 8192, C =< 8303 -> <<>>; %% Unicode General Punctuation 
 normal_bin(C) when C >= 11776, C =< 11903 -> <<>>; %% Unicode Supplemental Punctuation	U+2E00	U+2E7F
 normal_bin(C) when C >= 12288, C =< 12351 -> <<>>; %% Unicode CJK Symbols and Punctuation	U+3000	U+303F
 normal_bin(C) -> C1 = to_lower(C), <<C1/utf8>>.
+
+to_lower_str(Str) -> to_lower_str(Str, []).
+
+to_lower_str([C|Rest], Ret) -> to_lower_str(Rest, [to_lower(C)|Ret]);
+to_lower_str([], Ret) -> lists:reverse(Ret).
 
 to_lower(382) -> $z; % custom z
 to_lower(381) -> $z; % custom Z

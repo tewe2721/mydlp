@@ -146,7 +146,7 @@
 	rule,
 	ipr, 
 	{m_user, ordered_set, 
-		fun() -> mnesia:add_table_index(m_user, username) end},
+		fun() -> mnesia:add_table_index(m_user, un_hash) end},
 	itype,
 	ifeature,
 	match, 
@@ -438,12 +438,13 @@ handle_query({get_all_rules, Channel, _DestList}) ->
 	resolve_all(Rules);
 
 handle_query({get_rules_by_user, Channel, Who}) ->
+	WhoH = mydlp_api:hash_un(Who),
 	Q = ?QLCQ([{R#rule.id, R#rule.orig_id, R#rule.action} || 
 			R <- mnesia:table(rule),
 			U <- mnesia:table(m_user),
 			U#m_user.rule_id == R#rule.id,
 			R#rule.channel == Channel,
-			U#m_user.username == Who
+			U#m_user.un_hash == WhoH
 			]),
 	Rules = ?QLCE(Q),
 	resolve_all(Rules);
@@ -1066,6 +1067,21 @@ remove_rule(RI) ->
 		T#itype.rule_id == RI
 		]),
 	ITIs = ?QLCE(Q2),
+
+	Q3 = ?QLCQ([I#ipr.id ||	
+		I <- mnesia:table(ipr),
+		I#ipr.rule_id == RI
+		]),
+	IIs = ?QLCE(Q3),
+
+	Q4 = ?QLCQ([U#m_user.id ||	
+		U <- mnesia:table(m_user),
+		U#m_user.rule_id == RI
+		]),
+	UIs = ?QLCE(Q4),
+
+	lists:foreach(fun(Id) -> mnesia:delete({ipr, Id}) end, IIs),
+	lists:foreach(fun(Id) -> mnesia:delete({m_user, Id}) end, UIs),
 
 	remove_data_formats(DFIs),
 	remove_itypes(ITIs),
