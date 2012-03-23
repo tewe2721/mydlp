@@ -65,11 +65,6 @@
 
 %API network
 -export([
-	get_fs_entry/1,
-	del_fs_entry/1,
-	add_fs_entry/1,
-	fs_entry_list_dir/1,
-	fs_entry_list_dir_dir/1,
 	new_authority/1,
 	get_mnesia_nodes/0,
 	get_rules/2,
@@ -91,6 +86,10 @@
 % API endpoint 
 -export([
 	get_rule_table/1,
+	get_fs_entry/1,
+	del_fs_entry/1,
+	add_fs_entry/1,
+	fs_entry_list_dir/1,
 	is_valid_usb_device_id/1
 	]).
 
@@ -194,7 +193,6 @@ get_record_fields_common(Record) ->
 		file_fingerprint -> record_info(fields, file_fingerprint);
 		mime_type -> record_info(fields, mime_type);
 		regex -> record_info(fields, regex);
-		fs_entry -> record_info(fields, fs_entry);
 		_Else -> not_found
 	end.
 
@@ -220,6 +218,7 @@ get_record_fields_functional(Record) ->
 get_record_fields_functional(Record) ->
         case Record of
 		rule_table -> record_info(fields, rule_table);
+		fs_entry -> record_info(fields, fs_entry);
 		_Else -> not_found
 	end.
 
@@ -258,16 +257,6 @@ wait_for_tables() ->
 
 -ifdef(__MYDLP_NETWORK).
 
-get_fs_entry(FilePath) -> aqc({get_fs_entry, FilePath}, nocache).
-
-del_fs_entry(FilePath) -> aqc({del_fs_entry, FilePath}, nocache).
-
-fs_entry_list_dir(EntryId) -> aqc({fs_entry_list_dir, EntryId}, nocache).
-
-fs_entry_list_dir_dir(EntryId) -> aqc({fs_entry_list_dir_dir, EntryId}, nocache).
-
-add_fs_entry(Record) when is_tuple(Record) -> write(Record, nocache).
-
 get_rules(Channel, Who) -> aqc({get_rules, Channel, Who}, cache).
 
 get_all_rules(Channel) -> aqc({get_all_rules, Channel}, cache).
@@ -296,6 +285,14 @@ new_authority(Node) -> gen_server:call(?MODULE, {new_authority, Node}, 30000).
 -ifdef(__MYDLP_ENDPOINT).
 
 get_rule_table(Channel) -> aqc({get_rule_table, Channel}, cache).
+
+get_fs_entry(FilePath) -> aqc({get_fs_entry, FilePath}, nocache).
+
+del_fs_entry(FilePath) -> aqc({del_fs_entry, FilePath}, nocache).
+
+fs_entry_list_dir(EntryId) -> aqc({fs_entry_list_dir, EntryId}, nocache).
+
+add_fs_entry(Record) when is_tuple(Record) -> write(Record, nocache).
 
 is_valid_usb_device_id(DeviceId) -> aqc({is_valid_usb_device_id, DeviceId}, cache).
 
@@ -338,17 +335,6 @@ handle_result({is_mime_of_dfid, _Mime, DFIs}, {atomic, MDFIs}) ->
 handle_result({is_hash_of_gid, _Hash, _GroupId}, {atomic, FIs}) -> 
 	case FIs of [] -> false; [_|_] -> true end;
 
-handle_result({get_fs_entry, _FilePath}, {atomic, Result}) -> 
-	case Result of
-		[] -> none;
-		[FSEntry] -> FSEntry end;
-
-handle_result({fs_entry_list_dir, _EntryId}, {atomic, Result}) -> 
-	[ FP || #fs_entry{file_path=FP} <- Result ];
-
-handle_result({fs_entry_list_dir_dir, _EntryId}, {atomic, Result}) -> 
-	[ FP || #fs_entry{file_path=FP} <- Result ];
-
 % TODO: instead of case statements, refining function definitions will make queries faster.
 handle_result({get_fid, _SIpAddr}, {atomic, Result}) -> 
 	case Result of
@@ -365,6 +351,14 @@ handle_result({get_rule_table, _Channel}, {atomic, Result}) ->
 	case Result of
 		[] -> none;
 		[Table] -> Table end;
+
+handle_result({get_fs_entry, _FilePath}, {atomic, Result}) -> 
+	case Result of
+		[] -> none;
+		[FSEntry] -> FSEntry end;
+
+handle_result({fs_entry_list_dir, _EntryId}, {atomic, Result}) -> 
+	[ FP || #fs_entry{file_path=FP} <- Result ];
 
 handle_result({is_valid_usb_device_id, _DeviceId}, {atomic, Result}) -> 
 	case Result of
@@ -486,18 +480,6 @@ handle_query({remove_file_entry, FI}) ->
 	FHIs = ?QLCE(Q),
 	lists:foreach(fun(Id) -> mnesia:delete({file_hash, Id}) end, FHIs);
 
-handle_query({get_fs_entry, FilePath}) ->
-	mnesia:read(fs_entry, FilePath);
-
-handle_query({del_fs_entry, FilePath}) ->
-	mnesia:delete({fs_entry, FilePath});
-
-handle_query({fs_entry_list_dir, EntryId}) ->
-	mnesia:match_object(#fs_entry{file_path='_', entry_id='_', parent_id=EntryId, file_size='_', last_modified='_', is_dir='_'});
-
-handle_query({fs_entry_list_dir_dir, EntryId}) ->
-	mnesia:match_object(#fs_entry{file_path='_', entry_id='_', parent_id=EntryId, file_size='_', last_modified='_', is_dir=true});
-
 handle_query(Query) -> handle_query_common(Query).
 
 -endif.
@@ -511,6 +493,18 @@ handle_query({get_rule_table, Channel}) ->
 		R#rule_table.channel == Channel
 		]),
 	?QLCE(Q);
+
+handle_query({get_fs_entry, FilePath}) ->
+	mnesia:read(fs_entry, FilePath);
+
+handle_query({del_fs_entry, FilePath}) ->
+	mnesia:delete({fs_entry, FilePath});
+
+handle_query({fs_entry_list_dir, EntryId}) ->
+	mnesia:match_object(#fs_entry{file_path='_', entry_id='_', parent_id=EntryId, file_size='_', last_modified='_'});
+
+handle_query({fs_entry_list_dir_dir, EntryId}) ->
+	mnesia:match_object(#fs_entry{file_path='_', entry_id='_', parent_id=EntryId, file_size='_', last_modified='_'});
 
 % TODO: should be refined for multi-site usage
 handle_query({is_valid_usb_device_id, DeviceId}) ->

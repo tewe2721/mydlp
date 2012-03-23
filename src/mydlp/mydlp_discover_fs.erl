@@ -83,7 +83,9 @@ handle_cast({q, ParentId, FilePath}, #state{discover_queue=Q, discover_inprog=tr
 handle_cast(consume, #state{discover_queue=Q} = State) ->
 	case queue:out(Q) of
 		{{value, {ParentId, FilePath}}, Q1} ->
-			try	discover(ParentId, FilePath),
+			try	case has_discover_rule() of
+					true -> discover(ParentId, FilePath);
+					false -> ok end,
 				consume(),
 				{noreply, State#state{discover_queue=Q1}}
 			catch Class:Error ->
@@ -91,6 +93,7 @@ handle_cast(consume, #state{discover_queue=Q} = State) ->
 						"Class: ["?S"]. Error: ["?S"].~n"
 						"Stack trace: "?S"~n.FilePath: "?S"~nState: "?S"~n ",	
 						[Class, Error, erlang:get_stacktrace(), FilePath, State]),
+					consume(),
 					{noreply, State#state{discover_queue=Q1}} end;
 		{empty, _} ->
 			schedule(?CFG(discover_fs_interval)),
@@ -119,7 +122,14 @@ handle_info(_Info, State) ->
 
 %%%%%%%%%%%%%%%% Implicit functions
 
-schedule(Interval) -> timer:send_after(Interval, schedule_now).
+has_discover_rule() ->
+	case mydlp_mnesia:get_rule_table(discovery) of
+		none -> false;
+		{_ACLOpts, {_Id, pass}, []} -> false;
+		_Else -> true end.
+	
+schedule(Interval) ->
+	timer:send_after(Interval, schedule_now).
 
 schedule() ->
 	Paths = ?CFG(discover_fs_paths),
@@ -136,10 +146,10 @@ start_link() ->
 	end.
 
 stop() ->
-	timer:send_after(60000, schedule_startup),
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
+	timer:send_after(60000, schedule_startup),
 	{ok, #state{discover_queue=queue:new()}}.
 
 terminate(_Reason, _State) ->
@@ -161,51 +171,54 @@ is_changed(#fs_entry{file_path=FP, file_size=FSize, last_modified=LMod} = E) ->
 			true;
 		false -> false end.
 
-fs_entry(ParentId, FilePath, IsDir) ->
+fs_entry(ParentId, FilePath) ->
 	case mydlp_mnesia:get_fs_entry(FilePath) of
 		none -> Id = mydlp_mnesia:get_unique_id(fs_entry),
-			E = #fs_entry{file_path=FilePath, entry_id=Id, parent_id=ParentId, is_dir=IsDir},
+			E = #fs_entry{file_path=FilePath, entry_id=Id, parent_id=ParentId},
 			mydlp_mnesia:add_fs_entry(E), %% bulk write may improve performance
 			E;
 		#fs_entry{} = FS -> FS end.
 
 discover_file(#fs_entry{file_path=FP}) -> 
-	?ASYNC(fun() ->
-		try	{ok, ObjId} = mydlp_container:new(),
-			ok = mydlp_container:setprop(ObjId, "channel", "discovery"),
-			ok = mydlp_container:pushfile(ObjId, {raw, FP}),
-			{ok, Action} = mydlp_container:aclq(ObjId),
-			case Action of
-				block -> ok = file:delete(FP);
-				pass -> ok end
-		catch Class:Error ->
-			?ERROR_LOG("ACLQ: Error occured: Class: ["?S"]. Error: ["?S"].~n"
-					"Stack trace: "?S"~nFilePath: ["?S"].~n",
-				[Class, Error, erlang:get_stacktrace(), FP])
-		end
-	end, 1800000),
+	try	timer:sleep(20),
+		{ok, ObjId} = mydlp_container:new(),
+		ok = mydlp_container:setprop(ObjId, "channel", "discovery"),
+		ok = mydlp_container:pushfile(ObjId, {raw, FP}),
+		ok = mydlp_container:eof(ObjId),
+		{ok, Action} = mydlp_container:aclq(ObjId),
+		ok = mydlp_container:destroy(ObjId),
+		case Action of
+			block -> ok = file:delete(FP);
+			pass -> ok end
+	catch Class:Error ->
+		?ERROR_LOG("DISCOVER FILE: Error occured: Class: ["?S"]. Error: ["?S"].~n"
+				"Stack trace: "?S"~nFilePath: ["?S"].~n",
+			[Class, Error, erlang:get_stacktrace(), FP])
+	end,
 	ok.
 
 discover_dir(#fs_entry{file_path=FP, entry_id=EId}) ->
-	{ok, CList} = file:list_dir(FP),
+	CList = case file:list_dir(FP) of
+		{ok, LD} -> LD;
+		{error, _} -> [] end,
 	OList = mydlp_mnesia:fs_entry_list_dir(EId),
 	MList = lists:umerge([CList, OList]),
 	[ q(EId, filename:absname(FN, FP)) || FN <- MList ],
 	ok.
 
 discover_dir_dir(#fs_entry{file_path=FP, entry_id=EId}) ->
-	OList = mydlp_mnesia:fs_entry_list_dir_dir(EId),
+	OList = mydlp_mnesia:fs_entry_list_dir(EId),
 	[ q(EId, filename:absname(FN, FP)) || FN <- OList ],
 	ok.
 
 discover(ParentId, FilePath) ->
 	case filelib:is_regular(FilePath) of
-		true -> E = fs_entry(ParentId, FilePath, false),
+		true -> E = fs_entry(ParentId, FilePath),
 			case is_changed(E) of
 				true -> discover_file(E);
 				false -> ok end;
 	false -> case filelib:is_dir(FilePath) of
-		true -> E = fs_entry(ParentId, FilePath, true),
+		true -> E = fs_entry(ParentId, FilePath),
 			case is_changed(E) of
 				true -> discover_dir(E);
 				false -> discover_dir_dir(E) end;
