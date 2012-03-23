@@ -329,24 +329,14 @@ flush_cache() -> cache_clean0().
 
 %%%%%%%%%%%%%% gen_server handles
 
-handle_result({is_mime_of_dfid, _Mime, DFIs}, {atomic, MDFIs}) -> 
-	lists:any(fun(I) -> lists:member(I, DFIs) end, MDFIs);
+-ifdef(__MYDLP_NETWORK).
 
-handle_result({is_hash_of_gid, _Hash, _GroupId}, {atomic, FIs}) -> 
-	case FIs of [] -> false; [_|_] -> true end;
+handle_result(Query, Result) -> handle_result_common(Query, Result).
 
-% TODO: instead of case statements, refining function definitions will make queries faster.
-handle_result({get_fid, _SIpAddr}, {atomic, Result}) -> 
-	case Result of
-		[] -> nofilter;
-		[FilterId] -> FilterId end;
+-endif.
 
-handle_result({get_config_value, _}, {atomic, Result}) -> 
-	case Result of
-		[] -> none;
-		[ValB] -> ValB end;
+-ifdef(__MYDLP_ENDPOINT).
 
-%% TODO: endpoint specific code
 handle_result({get_rule_table, _Channel}, {atomic, Result}) -> 
 	case Result of
 		[] -> none;
@@ -365,7 +355,28 @@ handle_result({is_valid_usb_device_id, _DeviceId}, {atomic, Result}) ->
 		[] -> false;
 		[_|_] -> true end;
 
-handle_result(_Query, {atomic, Objects}) -> Objects.
+handle_result(Query, Result) -> handle_result_common(Query, Result).
+
+-endif.
+
+handle_result_common({is_mime_of_dfid, _Mime, DFIs}, {atomic, MDFIs}) -> 
+	lists:any(fun(I) -> lists:member(I, DFIs) end, MDFIs);
+
+handle_result_common({is_hash_of_gid, _Hash, _GroupId}, {atomic, FIs}) -> 
+	case FIs of [] -> false; [_|_] -> true end;
+
+% TODO: instead of case statements, refining function definitions will make queries faster.
+handle_result_common({get_fid, _SIpAddr}, {atomic, Result}) -> 
+	case Result of
+		[] -> nofilter;
+		[FilterId] -> FilterId end;
+
+handle_result_common({get_config_value, _}, {atomic, Result}) -> 
+	case Result of
+		[] -> none;
+		[ValB] -> ValB end;
+
+handle_result_common(_Query, {atomic, Objects}) -> Objects.
 
 -ifdef(__MYDLP_NETWORK).
 
