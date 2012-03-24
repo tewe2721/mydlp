@@ -114,8 +114,9 @@ init([]) ->
 'SEAP_REQ'({data, "DESTROY" ++ Rest}, State) -> 
 	{ ObjId } = get_req_args(Rest),
 	'DESTROY_RESP'(State, ObjId);
-'SEAP_REQ'({data, "CONFUPDATE" ++ _Rest}, State) -> 
-	'CONFUPDATE_RESP'(State);
+'SEAP_REQ'({data, "CONFUPDATE" ++ Rest}, State) -> 
+	{ ArgStr } = get_arg_str(Rest),
+	'CONFUPDATE_RESP'(State, ArgStr);
 'SEAP_REQ'({data, "HELP" ++ _Rest}, State) -> 
 	'HELP_RESP'(State);
 'SEAP_REQ'({data, _Else}, State) -> 
@@ -169,7 +170,10 @@ init([]) ->
 	send_ok(State),
 	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
 
-'CONFUPDATE_RESP'(State) ->
+'CONFUPDATE_RESP'(State, ArgStr) ->
+	case ArgStr of
+		"" -> mydlp_container:unset_user();
+		U when is_list(U) -> mydlp_container:set_user(U) end,
 	Reply = case mydlp_container:confupdate() of
 		true -> "yes";
 		false -> "no" end,
@@ -301,6 +305,10 @@ get_req_args(Rest) ->
 		[ObjIdS] -> { list_to_integer(ObjIdS) };
 		[ObjIdS, ChunkSize] -> { list_to_integer(ObjIdS), list_to_integer(ChunkSize) };
 		_Else -> throw({error, {obj_id_not_found, Rest}}) end.
+
+get_arg_str(Rest) ->
+	Rest1 = rm_trailing_crlf(Rest),
+	string:strip(Rest1).
 
 get_setprop_args(Rest) ->
 	Rest1 = rm_trailing_crlf(Rest),

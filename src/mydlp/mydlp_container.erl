@@ -36,6 +36,9 @@
 -export([start_link/0,
 	schedule_confupdate/0,
 	confupdate/0,
+	get_user/0,
+	set_user/1,
+	unset_user/0,
 	new/0,
 	setprop/3,
 	getprop/2,
@@ -69,6 +72,7 @@
 
 -record(state, {
 	confupdate=true,
+	username=unknown,
 	object_tree
 	}).
 
@@ -77,6 +81,12 @@
 schedule_confupdate() -> gen_server:cast(?MODULE, schedule_confupdate).
 
 confupdate() -> gen_server:call(?MODULE, confupdate).
+
+get_user() -> gen_server:call(?MODULE, get_user).
+
+set_user(Username) -> gen_server:cast(?MODULE, {set_user, Username}).
+
+unset_user() -> gen_server:cast(?MODULE, {set_user, unknown}).
 
 new() -> gen_server:call(?MODULE, new).
 
@@ -107,6 +117,9 @@ destroy(ObjId) -> gen_server:cast(?MODULE, {destroy, ObjId}).
 
 handle_call(confupdate, _From, #state{confupdate=ConfUpdate} = State) ->
 	{reply, ConfUpdate, State#state{confupdate=false}};
+
+handle_call(get_user, _From, #state{username=Username} = State) ->
+	{reply, Username, State};
 
 handle_call(new, _From, #state{object_tree=OT} = State) ->
 	{_MegaSecs, Secs, MicroSecs} = erlang:now(),
@@ -173,6 +186,9 @@ handle_call(_Msg, _From, State) ->
 
 handle_cast(schedule_confupdate, State) ->
 	{noreply, State#state{confupdate=true}};
+
+handle_cast({set_user, Username}, State) ->
+	{noreply, State#state{username=Username}};
 
 handle_cast({setprop, ObjId, Key, Value}, #state{object_tree=OT} = State) ->
 	case gb_trees:lookup(ObjId, OT) of

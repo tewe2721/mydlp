@@ -428,8 +428,7 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 	DFFiles = df_to_files(State),
 	QRet = mydlp_acl:qi(web,DFFiles),
 	acl_ret(QRet, DFFiles, State);
-'REQ_OK'(#state{addr=SAddr,
-		icap_headers=#icap_headers{x_client_ip=CAddr},
+'REQ_OK'(#state{icap_headers=#icap_headers{x_client_ip=CAddr},
 		http_request=#http_request{path=Uri},
 		http_req_headers=#http_headers{host=DestHost} } = State) ->
 	DFFiles = df_to_files(State),
@@ -437,10 +436,10 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 	DestHost1 = case DestHost of
 		undefined -> mydlp_api:get_host(Uri);
 		DH -> DH end,
-
 	DestList = [list_to_binary(DestHost1)],
+	AclQ = #aclq{channel=web, src_addr=CAddr, destinations=DestList},
 
-	QRet = mydlp_acl:q(web, SAddr, CAddr, DestList, DFFiles),
+	QRet = mydlp_acl:q(AclQ, DFFiles),
 	acl_ret(QRet, DFFiles, State).
 
 acl_ret(QRet, DFFiles, State) -> 

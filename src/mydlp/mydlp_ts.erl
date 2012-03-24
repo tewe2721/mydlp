@@ -43,7 +43,7 @@
 -export([
 	getFingerprints/2,
 	compileCustomer/1,
-	getRuletable/2,
+	getRuletable/3,
 	receiveBegin/1,
 	receiveChunk/5,
 	requeueIncident/1
@@ -67,11 +67,12 @@ handle_function(Function, Args) when is_atom(Function), is_tuple(Args) ->
 
 compileCustomer(Customerid) -> mydlp_mysql:compile_customer(Customerid).
 
-getRuletable(Ipaddress, Revisionid) ->
+getRuletable(Ipaddress, Userh, Revisionid) ->
 	RevisionIdI = mydlp_api:binary_to_integer(Revisionid),
+	UserHI = mydlp_api:binary_to_integer(Userh),
 	ClientIpS = binary_to_list(Ipaddress),
 	ClientIp = mydlp_api:str_to_ip(ClientIpS),
-	mydlp_api:generate_client_policy(ClientIp, RevisionIdI).
+	mydlp_api:generate_client_policy(ClientIp, UserHI, RevisionIdI).
 
 receiveBegin(_Ipaddress) -> 
 	{ok, Ret} = mydlp_container:new(), 

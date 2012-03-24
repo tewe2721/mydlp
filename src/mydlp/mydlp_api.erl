@@ -1748,8 +1748,8 @@ str_to_ip(IpStr) ->
 %% @end
 %%-------------------------------------------------------------------------
 %%%%%%%%%%%%% TODO: beware of race condifitons when compile_customer had been called.
-generate_client_policy(IpAddr, RevisionId) -> 
-	RuleTables = mydlp_acl:get_remote_rule_tables(IpAddr), 
+generate_client_policy(IpAddr, UserH, RevisionId) -> 
+	RuleTables = mydlp_acl:get_remote_rule_tables(IpAddr, UserH), 
 	ItemDump = mydlp_mnesia:dump_client_tables(),
 	CDBObj = {{rule_tables, RuleTables}, {items, ItemDump}},
 	CDBHash = erlang:phash2(CDBObj),
@@ -1784,11 +1784,13 @@ get_client_policy_revision_id() ->
 	MailRuleTable = mydlp_mnesia:get_rule_table(mail),
 	EndpointRuleTable = mydlp_mnesia:get_rule_table(endpoint),
 	PrinterRuleTable = mydlp_mnesia:get_rule_table(printer),
+	DiscoveryRuleTable = mydlp_mnesia:get_rule_table(discovery),
 	RuleTables = [
 		{web, WebRuleTable},
 		{mail, MailRuleTable},
 		{endpoint, EndpointRuleTable},
-		{printer, PrinterRuleTable}
+		{printer, PrinterRuleTable},
+		{discovery, DiscoveryRuleTable}
 	],
 	ItemDump = mydlp_mnesia:dump_client_tables(),
 	CDBObj = {{rule_tables, RuleTables}, {items, ItemDump}},

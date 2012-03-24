@@ -24,7 +24,7 @@ service Mydlp_ui {
 
 	void compileCustomer(1: i32 Customerid)
 
-	binary getRuletable(1: string Ipaddress, 2: string Revisionid)
+	binary getRuletable(1: string Ipaddress, 2: string Userh, 3: string Revisionid)
 
 	string receiveBegin(1: string Ipaddress)
 	string receiveChunk(1: string Ipaddress, 2: i64 Itemid, 3: binary Chunkdata, 4: i32 Chunknum, 5: i32 Chunknumtotal)

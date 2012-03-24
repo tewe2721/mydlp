@@ -82,4 +82,11 @@
 		is_encrypted = false
         }).
 
+-record(aclq, {
+		channel :: 'web' | 'mail' | 'endpoint' | 'printer' | 'discovery',
+		src_addr=unknown,
+		src_user_h=unknown,
+		destinations=[]
+        }).
+
 -endif.

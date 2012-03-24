@@ -105,7 +105,10 @@ call_timer(Interval) -> timer:send_after(Interval, sync_now).
 sync() ->
 	RevisionI = mydlp_api:get_client_policy_revision_id(),
 	RevisionS = integer_to_list(RevisionI),
-	Url = "https://" ++ ?CFG(management_server_address) ++ "/sync?rid=" ++ RevisionS,
+	User = mydlp_container:get_user(),
+	UserHI = mydlp_api:hash_un(User),
+	UserHS = integer_to_list(UserHI),
+	Url = "https://" ++ ?CFG(management_server_address) ++ "/sync?rid=" ++ RevisionS ++ "&uh=" ++ UserHS,
 	case catch httpc:request(Url) of
 		{ok, {{_HttpVer, Code, _Msg}, _Headers, Body}} -> 
 			case {Code, Body} of

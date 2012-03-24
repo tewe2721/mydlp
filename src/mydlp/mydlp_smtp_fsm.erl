@@ -84,10 +84,9 @@ start_link() ->
 init([]) ->
 	process_flag(trap_exit, true),
 
-	EFA = ?CFG(smtp_enable_for_all),
 	BOF = ?CFG(smtp_bypass_on_fail),
 
-	{ok, 'WAIT_FOR_SOCKET', #smtpd_fsm{enable_for_all=EFA, bypass_on_fail=BOF}}.
+	{ok, 'WAIT_FOR_SOCKET', #smtpd_fsm{bypass_on_fail=BOF}}.
 
 %%-------------------------------------------------------------------------
 %% Func: StateName/2
@@ -162,12 +161,11 @@ init([]) ->
 	'REQ_OK'(State#smtpd_fsm{files=Files}).
 
 % {Action, {{rule, Id}, {file, File}, {matcher, Func}, {misc, Misc}}}
-'REQ_OK'(#smtpd_fsm{enable_for_all=true, files=Files, message_record=MessageR} = State) ->
-	AclRet = mydlp_acl:qa(mail, get_dest_domains(MessageR), Files),
-	process_aclret(AclRet, State);
-'REQ_OK'(#smtpd_fsm{enable_for_all=false, files=Files, 
-		message_record=(#message{mail_from=MailFrom} = MessageR)} = State) ->
-	AclRet = mydlp_acl:qu(mail, list_to_binary([MailFrom]), get_dest_domains(MessageR), Files),
+'REQ_OK'(#smtpd_fsm{files=Files, message_record=(#message{mail_from=MailFrom} = MessageR)} = State) ->
+	UserH = mydlp_api:hash_un(MailFrom),
+	Destinations = get_dest_domains(MessageR),
+	AclQ = #aclq{channel=mail, src_user_h=UserH, destinations=Destinations},
+	AclRet = mydlp_acl:q(AclQ, Files),
 	process_aclret(AclRet, State).
 
 process_aclret(AclRet, #smtpd_fsm{files=Files} = State) ->

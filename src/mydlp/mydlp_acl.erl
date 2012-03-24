@@ -38,11 +38,8 @@
 -ifdef(__MYDLP_NETWORK).
 
 -export([
-	get_remote_rule_tables/1,
-	q/5,
-	qu/4,
-	qa/3,
-	qm/2
+	get_remote_rule_tables/2,
+	q/2
 	]).
 
 -endif.
@@ -74,15 +71,9 @@
 
 -ifdef(__MYDLP_NETWORK).
 
-get_remote_rule_tables(Addr) -> acl_call({get_remote_rule_tables, Addr}).
+get_remote_rule_tables(Addr, UserH) -> acl_call({get_remote_rule_tables, Addr, UserH}).
 
-q(Channel, Site, Addr, DestList, Files) -> acl_call({q, Channel, Site, DestList, Addr}, Files).
-
-qu(Channel, User, _Dest, Files) -> acl_call({qu, Channel, site, User}, Files).
-
-qa(Channel, DestList, Files) -> acl_call({qa, Channel, site, DestList}, Files).
-
-qm(Channel, Files) -> acl_call({qm, Channel, site}, Files).
+q(AclQ, Files) -> acl_call({q, AclQ}, Files).
 
 -endif.
 
@@ -93,7 +84,7 @@ qm(Channel, Files) -> acl_call({qm, Channel, site}, Files).
 % For handling inbound request.
 qi(Channel, Files) -> acl_call({qi, Channel}, Files).
 
-qe(Channel, Files) -> acl_call({qe, Channel, site}, Files).
+qe(Channel, Files) -> acl_call({qe, Channel}, Files).
 
 -ifdef(__MYDLP_NETWORK).
 
@@ -172,40 +163,15 @@ acl_exec3({TextExtraction} = ACLOpts, AllRules, Source, Files, ExNewFiles, Clean
 
 -ifdef(__MYDLP_NETWORK).
 
-%% it needs refactoring for trusted domains
-handle_acl({q, Channel, SAddr, DestList, Addr}, Files, #state{is_multisite=true}) ->
-	case mydlp_mnesia:get_fid(SAddr) of
-		nofilter -> block;
-		CustomerId -> 
-			Rules = mydlp_mnesia:get_rules_for_fid(Channel, CustomerId, DestList, Addr),
-			acl_exec(Rules, [{cid, CustomerId}, {addr, Addr}], Files) end;
-
-handle_acl({q, Channel, _Site, DestList, Addr}, Files, #state{is_multisite=false}) ->
-	%Rules = mydlp_mnesia:get_rules(Addr),
+handle_acl({q, #aclq{src_addr=Addr} = AclQ}, Files, _State) ->
 	CustomerId = mydlp_mnesia:get_dfid(),
-	Rules = mydlp_mnesia:get_rules_for_fid(Channel, CustomerId, DestList, Addr),
+	Rules = mydlp_mnesia:get_rules(CustomerId, AclQ),
 	acl_exec(Rules, [{cid, CustomerId}, {addr, Addr}], Files);
 
-handle_acl({get_remote_rule_tables, Addr}, _Files, _State) ->
+handle_acl({get_remote_rule_tables, Addr, UserH}, _Files, _State) ->
 	CustomerId = mydlp_mnesia:get_dfid(),
 	% TODO: change needed for multi-site use
-	mydlp_mnesia:get_remote_rule_tables(CustomerId, Addr); 
-
-%% now this is used for only SMTP, and in SMTP domain part of, mail adresses itself a siteid for customer.
-%% it needs refactoring for both multisite and trusted domains
-handle_acl({qu, Channel, _Site, User}, Files, _State) ->
-	Rules = mydlp_mnesia:get_rules_by_user(Channel, User),
-	acl_exec(Rules, [{cid, mydlp_mnesia:get_dfid()}, {user, User}], Files);
-
-handle_acl({qa, Channel, _Site, DestList}, Files, _State) ->
-	Rules = mydlp_mnesia:get_all_rules(Channel, DestList),
-	acl_exec(Rules, [{cid, mydlp_mnesia:get_dfid()}], Files);
-
-handle_acl({qm, Channel, _Site}, Files, _State) ->
-	Rules = mydlp_mnesia:get_all_rules(Channel),
-	acl_exec(Rules, [{cid, mydlp_mnesia:get_dfid()}], Files);
-
-handle_acl({qe, Channel, Site}, Files, State) -> handle_acl({qm, Channel, Site}, Files, State);
+	mydlp_mnesia:get_remote_rule_tables(CustomerId, Addr, UserH);
 
 handle_acl(Q, _Files, _State) -> throw({error, {undefined_query, Q}}).
 
@@ -213,15 +179,15 @@ handle_acl(Q, _Files, _State) -> throw({error, {undefined_query, Q}}).
 
 -ifdef(__MYDLP_ENDPOINT).
 
-handle_acl({qe, _Channel, _Site}, [#file{mime_type= <<"mydlp-internal/usb-device;id=unknown">>}] = Files, _State) ->
+handle_acl({qe, _Channel}, [#file{mime_type= <<"mydlp-internal/usb-device;id=unknown">>}] = Files, _State) ->
 	{?CFG(error_action), mydlp_api:empty_aclr(Files, usb_device_id_unknown)};
 
-handle_acl({qe, _Channel, _Site}, [#file{mime_type= <<"mydlp-internal/usb-device;id=", DeviceId/binary>>}] = Files, _State) ->
+handle_acl({qe, _Channel}, [#file{mime_type= <<"mydlp-internal/usb-device;id=", DeviceId/binary>>}] = Files, _State) ->
 	case mydlp_mnesia:is_valid_usb_device_id(DeviceId) of % TODO: need refinements for multi-user usage.
 		true -> pass;
 		false -> {block, mydlp_api:empty_aclr(Files, usb_device_rejected)} end;
 
-handle_acl({qe, Channel, _Site}, Files, _State) ->
+handle_acl({qe, Channel}, Files, _State) ->
 	Rules = mydlp_mnesia:get_rule_table(Channel),
 	acl_exec2(Rules, [{cid, mydlp_mnesia:get_dfid()}], Files);
 

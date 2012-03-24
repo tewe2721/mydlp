@@ -188,7 +188,6 @@ load_src(Src) ->
 	{smtp_next_hop_host, string, "localhost"},
 	{smtp_next_hop_port, integer, "10027"},
 	{smtp_bypass_on_fail, boolean, "true"},
-	{smtp_enable_for_all, boolean, "true"},
 	{mail_archive, boolean, "false"},
 	{icap_reqmod_path, string, "/dlp"},
 	{icap_respmod_path, string, "/dlp-respmod"},
