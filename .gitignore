@@ -2,6 +2,9 @@ Makefile
 Makefile.in
 aclocal.m4
 autom4te.cache
+confdefs.h
+conftest
+conftest.erl
 config.guess
 config.guess.cdbs-orig
 config.log
@@ -19,11 +22,14 @@ ltmain.sh
 py-compile
 install-sh
 missing
-*.beam
 mydlp.app
 mydlp.rel
+*.beam
 *.boot
 *.script
+*~
+package_version
+package_revision
 src/mydlp/overview.edoc
 src/mydlp/*.html
 !src/mydlp/denied_page.html
@@ -49,8 +55,4 @@ debian/mydlp
 debian/mydlp.*.debhelper
 debian/stamp-autotools-files
 debian/stamp-makefile-build
-confdefs.h
-conftest
-conftest.erl
-*~
 

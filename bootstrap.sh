@@ -34,6 +34,9 @@ echo "Current version is $NEXTVERSION-$REVISION"
 applyTemplate configure.ac.tmpl configure.ac
 applyTemplate debian/changelog.tmpl debian/changelog
 
+echo $NEXTVERSION > package_version
+echo $REVISION > package_revision
+
 git submodule init
 git submodule update
 
