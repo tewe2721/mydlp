@@ -64,10 +64,23 @@ is_mysql_alive() {
 	$MYSQLADM -s ping >/dev/null 2>&1  
 }
 
+is_tables_initialized() {
+	[ -z "$(echo 'show tables'|$MYSQLC mydlp|grep -e '^Rule$')" ] && \
+	[ -z "$(echo 'show tables'|$MYSQLC mydlp|grep -e '^Config$')" ] && \
+	[ -z "$(echo 'show tables'|$MYSQLC mydlp_log|grep -e '^IncidentLog$')" ]
+}
+
 wait_for_mysqld() {
 	for i in $(seq 10); do
 	    sleep 1
 	    if is_mysql_alive; then break; fi
+	done
+}
+
+wait_for_tables() {
+	for i in $(seq 60); do
+	    sleep 1
+	    if is_tables_initialized; then break; fi
 	done
 }
 
@@ -187,6 +200,13 @@ reload_squid() {
 start_jetty() {
 	echo " * Starting Jetty..."
 	/etc/init.d/jetty start > /dev/null
+	if is_tables_initialized ; then
+		true
+	else
+		echo -n " * Waiting for database tables... "
+		wait_for_tables
+		echo "OK"
+	fi
 }
 
 stop_jetty() {
