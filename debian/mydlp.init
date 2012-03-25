@@ -65,9 +65,9 @@ is_mysql_alive() {
 }
 
 is_tables_initialized() {
-	[ -z "$(echo 'show tables'|$MYSQLC mydlp|grep -e '^Rule$')" ] && \
-	[ -z "$(echo 'show tables'|$MYSQLC mydlp|grep -e '^Config$')" ] && \
-	[ -z "$(echo 'show tables'|$MYSQLC mydlp_log|grep -e '^IncidentLog$')" ]
+	[ -n "$(echo 'show tables'|$MYSQLC mydlp|grep -e '^Rule$')" ] && \
+	[ -n "$(echo 'show tables'|$MYSQLC mydlp|grep -e '^Config$')" ] && \
+	[ -n "$(echo 'show tables'|$MYSQLC mydlp_log|grep -e '^IncidentLog$')" ]
 }
 
 wait_for_mysqld() {
