@@ -286,6 +286,7 @@ init([]) ->
 		{ifeature_by_itype_id, <<"SELECT f.weight,f.matcher_id FROM InformationFeature AS f, InformationDescription_InformationFeature df, InformationType t WHERE t.id=? AND t.informationDescription_id=df.InformationDescription_id AND df.features_id=f.id">>},
 		{match_by_id, <<"SELECT m.id,m.functionName FROM Matcher AS m WHERE m.id=?">>},
 		{regex_by_matcher_id, <<"SELECT re.regex FROM MatcherArgument AS ma, RegularExpression AS re WHERE ma.coupledMatcher_id=? AND ma.coupledArgument_id=re.id">>},
+		{kg_regexes_by_matcher_id, <<"SELECT re.regex FROM MatcherArgument AS ma, NonCascadingArgument AS nca, RegularExpressionGroup_RegularExpressionGroupEntry AS gre, RegularExpressionGroupEntry AS re WHERE ma.coupledMatcher_id=? AND ma.coupledArgument_id=nca.id AND nca.argument_id=gre.RegularExpressionGroup_id AND gre.entries_id=re.id">>},
 		{dd_by_matcher_id, <<"SELECT dd.id FROM MatcherArgument AS ma, NonCascadingArgument AS nca, DocumentDatabase AS dd WHERE ma.coupledMatcher_id=? AND ma.coupledArgument_id=nca.id AND nca.argument_id=dd.id">>},
 		{filehash_by_dd_id, <<"SELECT ddfe.id, ddfe.md5Hash FROM DocumentDatabase_DocumentDatabaseFileEntry AS dd, DocumentDatabaseFileEntry AS ddfe WHERE dd.DocumentDatabase_id=? AND dd.fileEntries_id=ddfe.id">>},
 		{filefingerprint_by_dd_id, <<"SELECT ddfe.id, df.fingerprint FROM DocumentDatabase_DocumentDatabaseFileEntry AS dd, DocumentDatabaseFileEntry AS ddfe, DocumentDatabaseFileEntry_DocumentFingerprint AS ddf, DocumentFingerprint AS df WHERE dd.DocumentDatabase_id=? AND dd.fileEntries_id=ddfe.id AND ddf.DocumentDatabaseFileEntry_id=ddfe.id AND df.id=ddf.fingerprints_id">>},
@@ -579,6 +580,11 @@ new_match(Id, Parent, Func) -> new_match(Id, Parent, Func, []).
 new_match(OrigId, IFeatureId, Func, FuncParams) ->
 	#match{orig_id=OrigId, ifeature_id=IFeatureId, func=Func, func_params=FuncParams}.
 
+write_regex(RegexGroupId, RegexS) ->
+	RegexId = mydlp_mnesia:get_unique_id(regex),
+	R = #regex{id=RegexId, group_id=RegexGroupId, plain=RegexS},
+	mydlp_mnesia_write(R).
+
 write_matches(Matches) ->
 	Matches1 = [ M#match{id=mydlp_mnesia:get_unique_id(match)} || M <- Matches ],
 	mydlp_mnesia_write(Matches1).
@@ -639,11 +645,20 @@ populate_match(Id, <<"keyword">>, IFeatureId) ->
 	Func = regex_match,
 	{ok, REQ} = psq(regex_by_matcher_id, [Id]),
 	[[RegexS]] = REQ,
-	RegexId = mydlp_mnesia:get_unique_id(regex),
 	RegexGroupId = mydlp_mnesia:get_unique_id(regex_group_id),
 	Regex1 = list_to_binary(mydlp_api:escape_regex(binary_to_list(RegexS))),
-	R = #regex{id=RegexId, group_id=RegexGroupId, plain=Regex1},
-	mydlp_mnesia_write(R),
+	write_regex(RegexGroupId, Regex1),
+	FuncParams=[RegexGroupId],
+	new_match(Id, IFeatureId, Func, FuncParams);
+
+populate_match(Id, <<"keyword_group">>, IFeatureId) ->
+	Func = regex_match,
+	RegexGroupId = mydlp_mnesia:get_unique_id(regex_group_id),
+	{ok, REQ} = psq(kg_regexes_by_matcher_id, [Id]),
+	lists:foreach(fun([RegexS]) ->
+		Regex1 = list_to_binary(mydlp_api:escape_regex(binary_to_list(RegexS))),
+		write_regex(RegexGroupId, Regex1)
+	end, REQ),
 	FuncParams=[RegexGroupId],
 	new_match(Id, IFeatureId, Func, FuncParams);
 
@@ -651,10 +666,8 @@ populate_match(Id, <<"regex">>, IFeatureId) ->
 	Func = regex_match,
 	{ok, REQ} = psq(regex_by_matcher_id, [Id]),
 	[[RegexS]] = REQ,
-	RegexId = mydlp_mnesia:get_unique_id(regex),
 	RegexGroupId = mydlp_mnesia:get_unique_id(regex_group_id),
-	R = #regex{id=RegexId, group_id=RegexGroupId, plain=RegexS},
-	mydlp_mnesia_write(R),
+	write_regex(RegexGroupId, RegexS),
 	FuncParams=[RegexGroupId],
 	new_match(Id, IFeatureId, Func, FuncParams);
 
