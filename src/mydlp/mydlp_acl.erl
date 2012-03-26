@@ -236,7 +236,8 @@ handle_call({acl, Query, Files, Timeout}, From, State) ->
 		Return = try 
 			Result = handle_acl(Query, Files, State),
 			{ok, Result}
-		catch Class:Error ->
+		catch throw:{error,eacces} -> {error, {throw, {error,eaccess}}};
+		      Class:Error ->
 			?ERROR_LOG("Error occured on ACL query: ["?S"]. Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
 				[Query, Class, Error, erlang:get_stacktrace()]),
 			{error, {Class,Error}} end,

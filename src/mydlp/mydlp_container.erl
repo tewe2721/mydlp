@@ -326,7 +326,9 @@ log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}
 	User = get_user(Obj),
 	Channel = get_channel(Obj),
 	Time = erlang:localtime(),
-        ?ACL_LOG(Time, Channel, RuleId, Action, nil, User, nil, IType, File, Misc).
+	case {Channel, Action, Misc, ?CFG(ignore_discover_max_size_exceeded)} of
+		{discovery, log, max_size_exceeded, true} -> ok;
+		_Else -> ?ACL_LOG(Time, Channel, RuleId, Action, nil, User, nil, IType, File, Misc) end.
 
 is_inbound(#object{prop_dict=PD}) ->
 	case dict:find("direction", PD) of
