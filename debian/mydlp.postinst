@@ -42,7 +42,7 @@ generate_keys() {
 
 	[ -e $SSLDIR/private.pem ] || $OPENSSL genrsa > $SSLDIR/private.pem
 
-	[ -e $SSLDIR/public.pem ] || (echo -e "TR\nAnkara\nTechnopolis\nMyDLP\nMyDLP\n*\nsupport@mydlp.com\n"| $OPENSSL req -new -x509 -key $SSLDIR/private.pem -out $SSLDIR/public.pem)
+	[ -e $SSLDIR/public.pem ] || (echo -e "TR\nAnkara\nTechnopolis\nMyDLP\nMyDLP\n*\nsupport@mydlp.com\n"| $OPENSSL req -new -x509 -days 3650 -key $SSLDIR/private.pem -out $SSLDIR/public.pem)
 
 	[ -e $SSLDIR/user.der ] || $OPENSSL x509 -in $SSLDIR/public.pem -outform DER -out $SSLDIR/user.der
 	
