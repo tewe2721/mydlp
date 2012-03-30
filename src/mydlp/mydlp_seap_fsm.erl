@@ -308,7 +308,8 @@ get_req_args(Rest) ->
 
 get_arg_str(Rest) ->
 	Rest1 = rm_trailing_crlf(Rest),
-	string:strip(Rest1).
+	ArgStr = string:strip(Rest1),
+	{ArgStr}.
 
 get_setprop_args(Rest) ->
 	Rest1 = rm_trailing_crlf(Rest),

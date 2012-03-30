@@ -1295,7 +1295,9 @@ hash_un(UN) when is_list(UN) ->
 	UN2 = normalize_fn(UN1),
 	erlang:phash2(UN2);
 hash_un(UN) when is_binary(UN) ->
-	hash_un(binary_to_list(UN)).
+	hash_un(binary_to_list(UN));
+hash_un(UN) when is_atom(UN) ->
+	hash_un(atom_to_list(UN)).
 
 %%-------------------------------------------------------------------------
 %% @doc Returns category of misc given mime type.

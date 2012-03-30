@@ -35,7 +35,6 @@
 
 %% API
 -export([start_link/0,
-	sync/0,
 	stop/0]).
 
 %% gen_server callbacks
