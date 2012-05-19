@@ -69,6 +69,11 @@ denied_page_src() ->
 		not_found -> <<"Denied!!!">> end,
 	binary_to_list(DPBin).
 
+escape_quote(Str) -> escape_quote(Str, []).
+
+escape_quote([$"|Str], Acc) -> escape_quote(Str, [$",$\\|Acc]);
+escape_quote([C|Str], Acc) -> escape_quote(Str, [C|Acc]);
+escape_quote([], Acc) -> lists:reverse(Acc).
 
 mydlp_denied_page_src(DeniedPageSrc) when is_list(DeniedPageSrc) ->
 "-module(mydlp_denied_page).
@@ -79,7 +84,7 @@ mydlp_denied_page_src(DeniedPageSrc) when is_list(DeniedPageSrc) ->
 	get_base64_str/0
 ]).
 
-get() -> <<\"" ++ DeniedPageSrc ++ "\">>. 
+get() -> <<\"" ++ escape_quote(DeniedPageSrc) ++ "\">>. 
 
 get_base64_str() -> \"" ++ 
 	binary_to_list(
