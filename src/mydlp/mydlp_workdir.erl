@@ -125,6 +125,7 @@ handle_cast(_Msg, State) ->
 
 handle_info(cleanup_now, State) ->
 	cleanup(),
+	(catch mydlp_mnesia:remove_old_user_address()),
 	call_timer(),
         {noreply, State};
 

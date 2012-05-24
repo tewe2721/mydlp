@@ -160,15 +160,13 @@ init([]) ->
 'WAIT_FOR_SOCKET'({socket_ready, Socket, _CommType}, State) when is_port(Socket) ->
 	inet:setopts(Socket, [{active, once}, {packet, line}, list]),
 	{ok, {IP, _Port}} = inet:peername(Socket),
-	{UserName, UserHash} = mydlp_mnesia:get_user_from_address(IP),
-	{next_state, 'ICAP_REQ_LINE', State#state{socket=Socket, addr=IP, 
-		username=UserName, un_hash=UserHash}, ?CFG(fsm_timeout)};
+	{next_state, 'ICAP_REQ_LINE', State#state{socket=Socket, addr=IP}, ?CFG(fsm_timeout)};
 'WAIT_FOR_SOCKET'(Other, State) ->
 	?DEBUG("ICAP FSM: 'WAIT_FOR_SOCKET'. Unexpected message: ~p\n", [Other]),
 	%% Allow to receive async messages
 	{next_state, 'WAIT_FOR_SOCKET', State}.
 
-%% Notification event coming from client
+% Notification event coming from client
 'ICAP_REQ_LINE'({data, Line}, #state{path_reqmod=ReqmodPath, path_respmod=RespmodPath} = State) ->
 	Line1 = case Line of
 		L when is_list(L) -> Line;
@@ -216,6 +214,7 @@ init([]) ->
 		I -> K = string:substr(IcapHeaderLine, 1, I-1),
 			K1 = http_util:to_lower(K),
 			[$\s| V] = string:substr(IcapHeaderLine, I+1), {K1, rm_trailing_crlf(V)} end,
+
         IcapHeaders1 = case Key of
                 "connection" -> IcapHeaders#icap_headers{connection=Value};
                 "encapsulated" -> IcapHeaders#icap_headers{encapsulated=raw_to_encapsulatedh(Value)};
@@ -227,7 +226,10 @@ init([]) ->
 				other=[#http_header{key=Key, value=Value}|Others]}   %% misc other headers
         end,
 
-        {next_state, 'ICAP_HEADER', State#state{icap_headers=IcapHeaders1}, ?CFG(fsm_timeout)};
+	{UserName, UserHash} = case IcapHeaders1#icap_headers.x_client_ip of
+		undefined -> {nil, unknown};
+		IP -> mydlp_mnesia:get_user_from_address(IP) end,
+        {next_state, 'ICAP_HEADER', State#state{username=UserName, un_hash=UserHash, icap_headers=IcapHeaders1}, ?CFG(fsm_timeout)};
 
 'ICAP_HEADER'(timeout, State) ->
 	?DEBUG("~p Client connection timeout - closing.\n", [self()]),

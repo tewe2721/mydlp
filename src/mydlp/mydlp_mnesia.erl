@@ -490,7 +490,7 @@ handle_query({save_user_address, IpAddress, UserHash, UserName}) ->
 	mnesia:write(U);
 
 handle_query(remove_old_user_address) ->
-	AgeLimit = calendar:time_to_seconds(erlang:now()) - 600,
+	AgeLimit = calendar:time_to_seconds(erlang:now()) - 900,
 	Q = ?QLCQ([U#user_address.ipaddr ||
 		U <- mnesia:table(user_address),
 		U#user_address.last_seen < AgeLimit
