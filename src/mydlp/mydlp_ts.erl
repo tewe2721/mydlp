@@ -46,7 +46,8 @@
 	getRuletable/3,
 	receiveBegin/1,
 	receiveChunk/5,
-	requeueIncident/1
+	requeueIncident/1,
+	registerUserAddress/3
 	]).
 
 %%%%% EXTERNAL INTERFACE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -117,6 +118,14 @@ requeueIncident(Incidentid) ->
                         [Class, Error, erlang:get_stacktrace()])
         end, ok.
 
+registerUserAddress(Ipaddress, Userh, Data) -> 
+	Usern = try [{username,Username}] = erlang:binary_to_term(Data), Username
+		catch _:_ -> nil end,
+	UserHI = mydlp_api:binary_to_integer(Userh),
+	ClientIpS = binary_to_list(Ipaddress),
+	ClientIp = mydlp_api:str_to_ip(ClientIpS),
+	mydlp_mnesia:save_user_address(ClientIp, UserHI, Usern),
+	ok.
 
 -endif.
 

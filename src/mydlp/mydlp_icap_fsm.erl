@@ -55,6 +55,8 @@
 -record(state, {
 	socket,
 	addr,
+	username=nil,
+	un_hash=unknown,
 	icap_request,
 	icap_headers,
 	icap_body=[],
@@ -158,7 +160,9 @@ init([]) ->
 'WAIT_FOR_SOCKET'({socket_ready, Socket, _CommType}, State) when is_port(Socket) ->
 	inet:setopts(Socket, [{active, once}, {packet, line}, list]),
 	{ok, {IP, _Port}} = inet:peername(Socket),
-	{next_state, 'ICAP_REQ_LINE', State#state{socket=Socket, addr=IP}, ?CFG(fsm_timeout)};
+	{UserName, UserHash} = mydlp_mnesia:get_user_from_address(IP),
+	{next_state, 'ICAP_REQ_LINE', State#state{socket=Socket, addr=IP, 
+		username=UserName, un_hash=UserHash}, ?CFG(fsm_timeout)};
 'WAIT_FOR_SOCKET'(Other, State) ->
 	?DEBUG("ICAP FSM: 'WAIT_FOR_SOCKET'. Unexpected message: ~p\n", [Other]),
 	%% Allow to receive async messages
@@ -430,14 +434,15 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 	acl_ret(QRet, DFFiles, State);
 'REQ_OK'(#state{icap_headers=#icap_headers{x_client_ip=CAddr},
 		http_request=#http_request{path=Uri},
-		http_req_headers=#http_headers{host=DestHost} } = State) ->
+		http_req_headers=#http_headers{host=DestHost},
+		un_hash=UserHash } = State) ->
 	DFFiles = df_to_files(State),
 
 	DestHost1 = case DestHost of
 		undefined -> mydlp_api:get_host(Uri);
 		DH -> DH end,
 	DestList = [list_to_binary(DestHost1)],
-	AclQ = #aclq{channel=web, src_addr=CAddr, destinations=DestList},
+	AclQ = #aclq{channel=web, src_addr=CAddr, src_user_h=UserHash, destinations=DestList},
 
 	QRet = mydlp_acl:q(AclQ, DFFiles),
 	acl_ret(QRet, DFFiles, State).
@@ -557,7 +562,9 @@ reply(What, #state{socket=Socket, icap_request=IcapReq, http_request=HttpReq,
 	inet:setopts(Socket, [{packet, line}, list]),
 
 	{next_state, 'ICAP_REQ_LINE', 
-		State#state{icap_request=undefined,
+		State#state{	username=nil,
+				un_hash=unknown,
+				icap_request=undefined,
 				icap_headers=undefined,
 				icap_body=[],
 				icap_rencap=undefined,
@@ -770,16 +777,16 @@ uri_to_fn(Uri) ->
 				I2 -> string:substr(LC, 1, I2 - 1) end end.
 
 log_req(#state{icap_headers=#icap_headers{x_client_ip=Addr},
-		http_req_headers=(#http_headers{host=DestHost})}, Action,
+		http_req_headers=(#http_headers{host=DestHost}), username=UserName}, Action,
 		{{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
 	Time = erlang:localtime(),
-	?ACL_LOG(Time, web, RuleId, Action, Addr, nil, DestHost, IType, File, Misc);
+	?ACL_LOG(Time, web, RuleId, Action, Addr, UserName, DestHost, IType, File, Misc);
 
 log_req(#state{icap_headers=#icap_headers{x_client_ip=Addr},
-		http_res_headers=(#http_headers{host=DestHost})}, Action, 
+		http_res_headers=(#http_headers{host=DestHost}), username=UserName}, Action, 
 		{{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
 	Time = erlang:localtime(),
-	?ACL_LOG(Time, web, RuleId, Action, Addr, nil, DestHost, IType, File, Misc).
+	?ACL_LOG(Time, web, RuleId, Action, Addr, UserName, DestHost, IType, File, Misc).
 
 get_path(("/" ++ _Str) = Uri) -> Uri;
 get_path("icap://" ++ Str) ->

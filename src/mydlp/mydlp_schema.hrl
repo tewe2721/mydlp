@@ -78,6 +78,13 @@
 	filter_id
 }).
 
+-record(user_address, {
+	ipaddr,
+	un_hash,
+	username,
+	last_seen
+}).
+
 -endif.
 
 

@@ -71,7 +71,10 @@
 	get_remote_rule_tables/3,
 	get_fid/1,
 	remove_site/1,
-	add_fhash/3
+	add_fhash/3,
+	save_user_address/3,
+	remove_old_user_address/0,
+	get_user_from_address/1
 	]).
 
 -endif.
@@ -145,7 +148,9 @@
 	itype,
 	ifeature,
 	match, 
-	site_desc
+	site_desc,
+	{user_address, ordered_set, 
+		fun() -> mnesia:add_table_index(user_address, last_seen) end}
 ]).
 
 -endif.
@@ -203,6 +208,7 @@ get_record_fields_functional(Record) ->
 		ifeature -> record_info(fields, ifeature);
 		match -> record_info(fields, match);
 		site_desc -> record_info(fields, site_desc);
+		user_address -> record_info(fields,user_address);
 		_Else -> not_found
 	end.
 
@@ -223,6 +229,9 @@ get_record_fields(Record) ->
 	case get_record_fields_common(Record) of
 		not_found -> get_record_fields_functional(Record);
 		Else -> Else end.
+
+get_copy_media(user_address) -> ram_copies;
+get_copy_media(_Else) -> disc_copies.
 
 %-define(QLCQ(ListC), qlc:q(ListC, [{cache, ets}])).
 
@@ -264,6 +273,12 @@ add_fhash(Hash, FileId, GroupId) when is_binary(Hash) ->
 	aqc({add_fhash, Hash, FileId, GroupId}, flush).
 
 new_authority(Node) -> gen_server:call(?MODULE, {new_authority, Node}, 30000).
+
+save_user_address(IpAddress, UserHash, UserName) -> aqc({save_user_address, IpAddress, UserHash, UserName}, nocache).
+
+remove_old_user_address() -> aqc(remove_old_user_address, nocache).
+
+get_user_from_address(IpAddress) -> aqc({get_user_from_address, IpAddress}, nocache).
 
 -endif.
 
@@ -315,6 +330,11 @@ flush_cache() -> cache_clean0().
 %%%%%%%%%%%%%% gen_server handles
 
 -ifdef(__MYDLP_NETWORK).
+
+handle_result({get_user_from_address, _IpAddress}, {atomic, Result}) -> 
+	case Result of
+		[] -> {nil, unknown};
+		[#user_address{username=UserName, un_hash=UserHash}] -> {UserName, UserHash} end;
 
 handle_result(Query, Result) -> handle_result_common(Query, Result).
 
@@ -463,6 +483,23 @@ handle_query({remove_file_entry, FI}) ->
 		]),
 	FHIs = ?QLCE(Q),
 	lists:foreach(fun(Id) -> mnesia:delete({file_hash, Id}) end, FHIs);
+
+handle_query({save_user_address, IpAddress, UserHash, UserName}) ->
+	U = #user_address{ipaddr=IpAddress, un_hash=UserHash, username=UserName,
+			last_seen=calendar:time_to_seconds(erlang:now())},
+	mnesia:write(U);
+
+handle_query(remove_old_user_address) ->
+	AgeLimit = calendar:time_to_seconds(erlang:now()) - 600,
+	Q = ?QLCQ([U#user_address.ipaddr ||
+		U <- mnesia:table(user_address),
+		U#user_address.last_seen < AgeLimit
+		]),
+	UAIs = ?QLCE(Q),
+	lists:foreach(fun(Id) -> mnesia:delete({user_address, Id}) end, UAIs);
+
+handle_query({get_user_from_address, IpAddress}) ->
+	mnesia:read(user_address, IpAddress);
 
 handle_query(Query) -> handle_query_common(Query).
 
@@ -770,7 +807,7 @@ start_table(false = _IsDistributionInit, Table) -> init_table(Table);
 start_table(true = _IsDistributionInit, {RecordAtom, _, _}) -> 
 	LocalTables = mnesia:system_info(local_tables),
 	case lists:member(RecordAtom, LocalTables) of
-		false -> mnesia:add_table_copy(RecordAtom, node(), disc_copies);
+		false -> mnesia:add_table_copy(RecordAtom, node(), get_copy_media(RecordAtom));
 		true -> ok end, ok.
 
 init_table({RecordAtom, TableType, InitFun}) ->
@@ -802,7 +839,7 @@ create_table(RecordAtom, RecordAttributes, TableType, InitFun) ->
 			[{attributes, 
 				RecordAttributes },
 				{type, TableType},
-				{disc_copies, [node()]}]),
+				{get_copy_media(RecordAtom), [node()]}]),
 
 	transaction(InitFun).
 

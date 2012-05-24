@@ -32,4 +32,6 @@ service Mydlp_ui {
 	list<i64> getFingerprints(1: string Filename, 2: binary Data)
 
 	oneway void requeueIncident(1: i64 Incidentid)
+
+	oneway void registerUserAddress(1: string Ipaddress, 2: string Userh, 3: binary Payload)
 }

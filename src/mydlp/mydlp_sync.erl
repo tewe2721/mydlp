@@ -107,8 +107,9 @@ sync() ->
 	User = mydlp_container:get_user(),
 	UserHI = mydlp_api:hash_un(User),
 	UserHS = integer_to_list(UserHI),
+	Data = erlang:term_to_binary([{username, User}]),
 	Url = "https://" ++ ?CFG(management_server_address) ++ "/sync?rid=" ++ RevisionS ++ "&uh=" ++ UserHS,
-	case catch httpc:request(Url) of
+	case catch httpc:request(post, {Url, [], "application/octet-stream", Data}, [], []) of
 		{ok, {{_HttpVer, Code, _Msg}, _Headers, Body}} -> 
 			case {Code, Body} of
 				{200, <<>>} -> ?ERROR_LOG("SYNC: Empty response: Url="?S"~n", [Url]);
