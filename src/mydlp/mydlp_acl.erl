@@ -295,44 +295,49 @@ execute_itypes_pf(ITypes, Addr, File) ->
 		false -> neg;
 		{ok, _IType, Ret} -> Ret end.
 
-execute_itype_pf({ITypeOrigId, Threshold, all, IFeatures}, Addr, File) ->
-	execute_itype_pf1(ITypeOrigId, Threshold, IFeatures, Addr, File);
-execute_itype_pf({ITypeOrigId, Threshold, DataFormats, IFeatures}, Addr, 
+execute_itype_pf({ITypeOrigId, all, IFeatures}, Addr, File) ->
+	execute_itype_pf1(ITypeOrigId, IFeatures, Addr, File);
+execute_itype_pf({ITypeOrigId, DataFormats, IFeatures}, Addr, 
 		#file{mime_type=MT} = File) ->
         case mydlp_mnesia:is_mime_of_dfid(MT, DataFormats) of
                 false -> neg;
-		true -> execute_itype_pf1(ITypeOrigId, Threshold, IFeatures, Addr, File) end.
+		true -> execute_itype_pf1(ITypeOrigId, IFeatures, Addr, File) end.
 
-execute_itype_pf1(ITypeOrigId, Threshold, IFeatures, Addr, File) ->
+execute_itype_pf1(ITypeOrigId, IFeatures, Addr, File) ->
 	case execute_ifeatures(IFeatures, Addr, File) of
-		I when is_integer(I), I >= Threshold -> 
-				{pos, {file, File}, {itype, ITypeOrigId}, 
-				{misc, "score=" ++ integer_to_list(I)}};
-		I when is_integer(I) -> neg;
+		neg -> neg;
+		pos -> {pos, {file, File}, {itype, ITypeOrigId}, {misc, ""}};
 		{error, {file, File}, {misc, Misc}} ->
 				{error, {file, File}, {itype, ITypeOrigId}, {misc, Misc}};
 		E -> E end.
 
 execute_ifeatures([], _Addr, _File) -> 0;
 execute_ifeatures(IFeatures, Addr, File) -> 
-	try	PMapRet = mydlp_api:pmap(fun({Weight, {Func, FuncParams}}) ->
-						apply_m(Weight, Func, [FuncParams, Addr, File]) end,
+	try	PAllRet = mydlp_api:pall(fun({Threshold, {Func, FuncParams}}) ->
+						apply_m(Threshold, Func, [FuncParams, Addr, File]) end,
 					IFeatures, 120000),
-		%%%% TODO: Check for PMapRet whether contains error
-		lists:sum(PMapRet)
+		%%%% TODO: Check for PAnyRet whether contains error
+		case PAllRet of
+			false -> neg;
+			%%% TODO: Unused results data can be used for more detailed logging.
+			{ok, _Results} -> pos end
 	catch _:{timeout, _F, _T} -> {error, {file, File}, {misc, timeout}} end.
 
-apply_m(Weight, all, [_FuncParams, _Addr, _File]) -> Weight; %% match directly.
-apply_m(Weight, Func, [FuncParams, Addr, File]) ->
+apply_m(_Threshold, all, [_FuncParams, _Addr, _File]) -> pos; %% match directly.
+apply_m(Threshold, Func, [FuncParams, Addr, File]) ->
 	EarlyNeg = case get_matcher_req(Func) of
 		raw -> false;
 		analyzed -> false;
 		text -> not mydlp_api:has_text(File) end,
 	case EarlyNeg of
-		true -> 0;
+		true -> neg;
 		false -> FuncOpts = get_func_opts(Func, FuncParams),
-			Count = apply(mydlp_matchers, Func, [FuncOpts, Addr, File]),
-			Count * Weight end.
+			Score = apply(mydlp_matchers, Func, [FuncOpts, Addr, File]),
+			case (Score >= Threshold) of
+				true -> pos; %% TODO: scores should be logged
+				false -> neg
+			end
+	end.
 
 get_matcher_req(Func) -> apply(mydlp_matchers, Func, []).
 

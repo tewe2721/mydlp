@@ -55,14 +55,13 @@
 	id,
 	rule_id,
 	orig_id,
-	data_formats=[],
-	threshold
+	data_formats=[]
 }).
 
 -record(ifeature, {
 	id,
 	itype_id,
-	weight
+	threshold
 }).
 
 -record(match, {

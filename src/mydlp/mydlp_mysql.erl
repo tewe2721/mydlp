@@ -281,9 +281,9 @@ init([]) ->
 		{domain_aliases_by_id, <<"SELECT a.domainAlias FROM ADDomainAlias AS a, ADDomain_ADDomainAlias AS da WHERE da.ADDomain_id=? AND a.id=da.aliases_id">>},
 		{domain_user_sam_by_id, <<"SELECT u.sAMAccountName FROM ADDomainUser AS u WHERE u.id=?">>},
 		{domain_user_aliases_by_id, <<"SELECT a.userAlias FROM ADDomainUserAlias AS a, ADDomainUser_ADDomainUserAlias AS ua WHERE ua.ADDomainUser_id=? AND a.id=ua.aliases_id">>},
-		{itype_by_rule_id, <<"SELECT t.id,d.threshold FROM InformationType AS t, InformationDescription AS d, RuleItem AS ri WHERE ri.rule_id=? AND t.id=ri.item_id AND d.id=t.informationDescription_id">>},
+		{itype_by_rule_id, <<"SELECT t.id FROM InformationType AS t, RuleItem AS ri WHERE ri.rule_id=? AND t.id=ri.item_id">>},
 		{data_formats_by_itype_id, <<"SELECT df.dataFormats_id FROM InformationType_DataFormat AS df WHERE df.InformationType_id=?">>},
-		{ifeature_by_itype_id, <<"SELECT f.weight,f.matcher_id FROM InformationFeature AS f, InformationDescription_InformationFeature df, InformationType t WHERE t.id=? AND t.informationDescription_id=df.InformationDescription_id AND df.features_id=f.id">>},
+		{ifeature_by_itype_id, <<"SELECT f.threshold,f.matcher_id FROM InformationFeature AS f, InformationDescription_InformationFeature df, InformationType t WHERE t.id=? AND t.informationDescription_id=df.InformationDescription_id AND df.features_id=f.id">>},
 		{match_by_id, <<"SELECT m.id,m.functionName FROM Matcher AS m WHERE m.id=?">>},
 		{regex_by_matcher_id, <<"SELECT re.regex FROM MatcherArgument AS ma, RegularExpression AS re WHERE ma.coupledMatcher_id=? AND ma.coupledArgument_id=re.id">>},
 		{kg_regexes_by_matcher_id, <<"SELECT re.regex FROM MatcherArgument AS ma, NonCascadingArgument AS nca, RegularExpressionGroup_RegularExpressionGroupEntry AS gre, RegularExpressionGroupEntry AS re WHERE ma.coupledMatcher_id=? AND ma.coupledArgument_id=nca.id AND nca.argument_id=gre.RegularExpressionGroup_id AND gre.entries_id=re.id">>},
@@ -536,19 +536,19 @@ pr_data_formats(ITypeOrigId) ->
 				_Else2 -> DataFormats end;
 		_Else -> DataFormats end.
 
-populate_itypes([[OrigId, Threshold]| Rows], RuleId) ->
+populate_itypes([[OrigId]| Rows], RuleId) ->
 	DataFormats = pr_data_formats(OrigId),
 	ITypeId = mydlp_mnesia:get_unique_id(itype),
-	T = #itype{id=ITypeId, orig_id=OrigId, rule_id=RuleId, data_formats=DataFormats, threshold=Threshold},
+	T = #itype{id=ITypeId, orig_id=OrigId, rule_id=RuleId, data_formats=DataFormats},
 	{ok, IFQ} = psq(ifeature_by_itype_id, [OrigId]),
 	populate_ifeatures(IFQ, ITypeId),
 	mydlp_mnesia_write(T),
 	populate_itypes(Rows, RuleId);
 populate_itypes([], _RuleId) -> ok.
 
-populate_ifeatures([[Weight, MatcherId]| Rows], ITypeId) ->
+populate_ifeatures([[Threshold, MatcherId]| Rows], ITypeId) ->
 	IFeatureId = mydlp_mnesia:get_unique_id(ifeature),
-	F = #ifeature{id=IFeatureId, itype_id=ITypeId, weight=Weight},
+	F = #ifeature{id=IFeatureId, itype_id=ITypeId, threshold=Threshold},
 	{ok, MQ} = psq(match_by_id, [MatcherId]),
 	populate_matches(MQ, IFeatureId),
 	mydlp_mnesia_write(F),

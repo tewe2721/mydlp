@@ -274,11 +274,11 @@ add_fhash(Hash, FileId, GroupId) when is_binary(Hash) ->
 
 new_authority(Node) -> gen_server:call(?MODULE, {new_authority, Node}, 30000).
 
-save_user_address(IpAddress, UserHash, UserName) -> aqc({save_user_address, IpAddress, UserHash, UserName}, nocache).
+save_user_address(IpAddress, UserHash, UserName) -> aqc({save_user_address, IpAddress, UserHash, UserName}, nocache, dirty).
 
-remove_old_user_address() -> aqc(remove_old_user_address, nocache).
+remove_old_user_address() -> aqc(remove_old_user_address, nocache, dirty).
 
-get_user_from_address(IpAddress) -> aqc({get_user_from_address, IpAddress}, nocache).
+get_user_from_address(IpAddress) -> aqc({get_user_from_address, IpAddress}, nocache, dirty).
 
 -endif.
 
@@ -485,21 +485,23 @@ handle_query({remove_file_entry, FI}) ->
 	lists:foreach(fun(Id) -> mnesia:delete({file_hash, Id}) end, FHIs);
 
 handle_query({save_user_address, IpAddress, UserHash, UserName}) ->
-	U = #user_address{ipaddr=IpAddress, un_hash=UserHash, username=UserName,
-			last_seen=calendar:time_to_seconds(erlang:now())},
-	mnesia:write(U);
+	{MegaSecs, Secs, _MicroSecs} = erlang:now(),
+        Born = 1000000*MegaSecs + Secs,
+	U = #user_address{ipaddr=IpAddress, un_hash=UserHash, username=UserName, last_seen=Born},
+	mnesia:dirty_write(U);
 
 handle_query(remove_old_user_address) ->
-	AgeLimit = calendar:time_to_seconds(erlang:now()) - 900,
+	{MegaSecs, Secs, _MicroSecs} = erlang:now(),
+        AgeLimit = 1000000*MegaSecs + Secs - 900,
 	Q = ?QLCQ([U#user_address.ipaddr ||
 		U <- mnesia:table(user_address),
 		U#user_address.last_seen < AgeLimit
 		]),
 	UAIs = ?QLCE(Q),
-	lists:foreach(fun(Id) -> mnesia:delete({user_address, Id}) end, UAIs);
+	lists:foreach(fun(Id) -> mnesia:dirty_delete({user_address, Id}) end, UAIs);
 
 handle_query({get_user_from_address, IpAddress}) ->
-	mnesia:read(user_address, IpAddress);
+	mnesia:dirty_read(user_address, IpAddress);
 
 handle_query(Query) -> handle_query_common(Query).
 
@@ -941,15 +943,15 @@ predict_need4te([{_RId, _RAction, ITypes}|Rules]) ->
 		false -> predict_need4te(Rules) end;
 predict_need4te([]) -> false.
 
-predict_need4te_1([{_ITId, _Threshold, _DataFormats, IFeatures}|ITypes]) ->
+predict_need4te_1([{_ITId, _DataFormats, IFeatures}|ITypes]) ->
 	case predict_need4te_2(IFeatures) of
 		true -> true;
 		false -> predict_need4te_1(ITypes) end;
 predict_need4te_1([]) -> false.
 
-predict_need4te_2([{_Weight, {all, _FuncParams}}|IFeatures]) ->
+predict_need4te_2([{_Threshold, {all, _FuncParams}}|IFeatures]) ->
 	predict_need4te_2(IFeatures);
-predict_need4te_2([{_Weight, {Func, _FuncParams}}|IFeatures]) ->
+predict_need4te_2([{_Threshold, {Func, _FuncParams}}|IFeatures]) ->
 	case get_matcher_req(Func) of
                 raw -> predict_need4te_2(IFeatures);
                 analyzed -> true;
@@ -964,15 +966,14 @@ resolve_rules([{RId, ROrigId,RAction}|PS], Rules) ->
 resolve_rules([], Rules) -> lists:reverse(Rules).
 
 find_itypes(RuleId) ->
-	QM = ?QLCQ([{T#itype.orig_id, T#itype.threshold, 
-			T#itype.data_formats, find_ifeatures(T#itype.id)} ||
+	QM = ?QLCQ([{T#itype.orig_id, T#itype.data_formats, find_ifeatures(T#itype.id)} ||
 			T <- mnesia:table(itype),
 			T#itype.rule_id == RuleId
 		]),
 	?QLCE(QM).
 
 find_ifeatures(ITypeId) ->
-	QM = ?QLCQ([{F#ifeature.weight, find_func(F#ifeature.id)} ||
+	QM = ?QLCQ([{F#ifeature.threshold, find_func(F#ifeature.id)} ||
 			F <- mnesia:table(ifeature),
 			F#ifeature.itype_id == ITypeId
 		]),

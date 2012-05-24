@@ -1666,15 +1666,25 @@ pmap_f(Parent, Fun, I) ->
 	Parent ! Message.
 
 %%-------------------------------------------------------------------------
+%% @doc Paralel lists:all function with managed spawns, stacks and return anything other than false or neg
+%% @end
+%%-------------------------------------------------------------------------
+pall(Fun, ListOfArgs) -> pall(Fun, ListOfArgs, ?CFG(spawn_timeout)).
+
+pall(Fun, ListOfArgs, Timeout) -> pany(Fun, ListOfArgs, Timeout, true).
+
+%%-------------------------------------------------------------------------
 %% @doc Paralel lists:any function with managed spawns, returns for anything other than false or neg
 %% @end
 %%-------------------------------------------------------------------------
 
 pany(Fun, ListOfArgs) -> pany(Fun, ListOfArgs, ?CFG(spawn_timeout)).
 
-pany(Fun, ListOfArgs, Timeout) ->
+pany(Fun, ListOfArgs, Timeout) -> pany(Fun, ListOfArgs, Timeout, false).
+
+pany(Fun, ListOfArgs, Timeout, IsPAll) ->
 	Self = self(),
-	Pid = mspawn(fun() -> pany_sup_f(Self, Fun, ListOfArgs, Timeout) end, Timeout + 2000),
+	Pid = mspawn(fun() -> pany_sup_f(Self, Fun, ListOfArgs, Timeout, IsPAll) end, Timeout + 2000),
 	pany_gather(Pid, Timeout).
 
 pany_gather(Pid, Timeout) ->
@@ -1685,24 +1695,43 @@ pany_gather(Pid, Timeout) ->
 		exit({timeout, {pany, Pid}})
 	end.
 
-pany_sup_f(Parent, Fun, ListOfArgs, Timeout) -> 
+pany_sup_f(Parent, Fun, ListOfArgs, Timeout, IsPAll) -> 
 	Self = self(),
 	Pids = lists:map(fun(I) -> mspawn_link(fun() -> pany_child_f(Self, Fun, I, Timeout) end) end, ListOfArgs),
 	NumberOfPids = length(Pids),
-	pany_sup_gather(NumberOfPids, Parent, Timeout).
+	pany_sup_gather(NumberOfPids, Parent, Timeout, IsPAll, []).
 
-pany_sup_gather(0, Parent, _Timeout) -> pany_sup_return(Parent, false);
-pany_sup_gather(NumberOfPids, Parent, Timeout) ->
+pany_sup_gather(0, Parent, _Timeout, false = _IsPAll, _Results) -> 
+	pany_sup_return(Parent, false);
+pany_sup_gather(NumberOfPids, Parent, Timeout, false = IsPAll, Results) ->
 	receive
-		{_Pid, _I, false} -> 		pany_sup_gather(NumberOfPids - 1, Parent, Timeout);
-		{_Pid, _I, neg} -> 		pany_sup_gather(NumberOfPids - 1, Parent, Timeout);
-		{_Pid, _I, negative} -> 	pany_sup_gather(NumberOfPids - 1, Parent, Timeout);
+		{_Pid, _I, false} -> 		pany_sup_gather(NumberOfPids - 1, Parent, Timeout, IsPAll, Results);
+		{_Pid, _I, neg} -> 		pany_sup_gather(NumberOfPids - 1, Parent, Timeout, IsPAll, Results);
+		{_Pid, _I, negative} -> 	pany_sup_gather(NumberOfPids - 1, Parent, Timeout, IsPAll, Results);
 		{_Pid, {ierror, Reason}} -> 	pany_sup_return(Parent, {ierror, Reason} ),
 						exit({pany_error});
 		{_Pid, {timeout, I, T}} -> 	pany_sup_return(Parent, {ierror, {exit, {timeout, I, T}}} ),
 						exit({pany_timeout});
-		{_Pid, I, Else} -> 		pany_sup_return(Parent, {ok, I, Else} ),
+		{_Pid, I, Else} -> 		pany_sup_return(Parent, {ok, I, Else}),
 						exit({pany_returned})
+	after Timeout + 1000 -> % delay for receiving other timeout messages
+		exit({timeout, pany_sup_gather}) % not needed to emit to parent
+	end;
+pany_sup_gather(0, Parent, _Timeout, true = _IsPAll, Results) -> 
+	pany_sup_return(Parent, {ok, lists:reverse(Results)});
+pany_sup_gather(NumberOfPids, Parent, Timeout, true = IsPAll, Results) ->
+	receive
+		{_Pid, _I, false} -> 		pany_sup_return(Parent, false),
+						exit({pany_returned});
+		{_Pid, _I, neg} -> 		pany_sup_return(Parent, false),
+						exit({pany_returned});
+		{_Pid, _I, negative} -> 	pany_sup_return(Parent, false),
+						exit({pany_returned});
+		{_Pid, {ierror, Reason}} -> 	pany_sup_return(Parent, {ierror, Reason} ),
+						exit({pany_error});
+		{_Pid, {timeout, I, T}} -> 	pany_sup_return(Parent, {ierror, {exit, {timeout, I, T}}} ),
+						exit({pany_timeout});
+		{_Pid, _I, Else} -> 		pany_sup_gather(NumberOfPids - 1, Parent, Timeout, IsPAll, [Else|Results])
 	after Timeout + 1000 -> % delay for receiving other timeout messages
 		exit({timeout, pany_sup_gather}) % not needed to emit to parent
 	end.
