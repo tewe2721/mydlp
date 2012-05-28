@@ -33,5 +33,5 @@ service Mydlp_ui {
 
 	oneway void requeueIncident(1: i64 Incidentid)
 
-	oneway void registerUserAddress(1: string Ipaddress, 2: string Userh, 3: binary Payload)
+	string registerUserAddress(1: string Ipaddress, 2: string Userh, 3: binary Payload)
 }

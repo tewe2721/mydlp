@@ -125,7 +125,7 @@ registerUserAddress(Ipaddress, Userh, Data) ->
 	ClientIpS = binary_to_list(Ipaddress),
 	ClientIp = mydlp_api:str_to_ip(ClientIpS),
 	mydlp_mnesia:save_user_address(ClientIp, UserHI, Usern),
-	ok.
+	Usern.
 
 -endif.
 
