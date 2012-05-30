@@ -27,6 +27,7 @@ mydlpconf_DATA = \
 	denied_page.html
 
 dist_erl_DATA = \
+	mydlp_license.erl \
 	dynamic_compile.erl \
 	gen_server_cluster.erl \
 	mime_util.erl \

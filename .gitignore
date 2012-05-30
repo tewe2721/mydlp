@@ -35,6 +35,7 @@ src/mydlp/*.html
 !src/mydlp/denied_page.html
 src/mydlp/*.log
 src/mydlp/*.pid
+src/mydlp/mydlp_license.erl
 src/mydlp/example/*.html
 src/mydlp/deprecated/*.html
 src/mydlp/edoc-info

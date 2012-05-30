@@ -129,18 +129,9 @@ registerUserAddress(Ipaddress, Userh, Data) ->
 	mydlp_mnesia:save_user_address(ClientIp, UserHI, Usern),
 	Usern.
 
-saveLicenseKey(_LicenseKey) -> ok.
+saveLicenseKey(LicenseKey) -> mydlp_license:save_license_key(LicenseKey).
 
--define(COMMUNITY_LIC, #licenseObject{
-        license_type= <<"community">>,
-        number_of_users=0,
-        administrative_users=0,
-        expiration_date=0,
-        is_trial=false,
-        is_valid=true
-        }).
-
-getLicense() -> ?COMMUNITY_LIC.
+getLicense() -> mydlp_license:license().
 
 -endif.
 

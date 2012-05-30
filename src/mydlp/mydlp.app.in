@@ -38,6 +38,7 @@
         mydlp_fsm,
         mydlp_icap_fsm,
         mydlp_item_receive,
+        mydlp_license,
         mydlp_loglevel,
         mydlp_logger_h,
         mydlp_matchers,
@@ -69,6 +70,7 @@
   {env,
    [
     {shared_workers, [
+          {mydlp_license, start_link,[]},
           {mydlp_distributor, start_link,[]},
           {mydlp_mysql, start_link,[]},
           {mydlp_mnesia, start_link,[]},
