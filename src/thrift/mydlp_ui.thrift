@@ -20,6 +20,16 @@
 
 namespace java com.mydlp.ui.thrift
 
+struct LicenseObject {
+  1: string license_type,
+  2: i64 number_of_users,
+  3: i64 administrative_users,
+  4: i64 expiration_date,
+  5: bool is_trial,
+  6: bool is_valid
+}
+
+
 service Mydlp_ui {
 
 	void compileCustomer(1: i32 Customerid)
@@ -34,4 +44,8 @@ service Mydlp_ui {
 	oneway void requeueIncident(1: i64 Incidentid)
 
 	string registerUserAddress(1: string Ipaddress, 2: string Userh, 3: binary Payload)
+
+	oneway void saveLicenseKey(1: string licenseKey)
+
+	LicenseObject getLicense()
 }

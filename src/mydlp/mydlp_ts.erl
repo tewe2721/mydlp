@@ -47,7 +47,9 @@
 	receiveBegin/1,
 	receiveChunk/5,
 	requeueIncident/1,
-	registerUserAddress/3
+	registerUserAddress/3,
+	saveLicenseKey/1,
+	getLicense/0
 	]).
 
 %%%%% EXTERNAL INTERFACE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -126,6 +128,19 @@ registerUserAddress(Ipaddress, Userh, Data) ->
 	ClientIp = mydlp_api:str_to_ip(ClientIpS),
 	mydlp_mnesia:save_user_address(ClientIp, UserHI, Usern),
 	Usern.
+
+saveLicenseKey(_LicenseKey) -> ok.
+
+-define(COMMUNITY_LIC, #licenseObject{
+        license_type= <<"community">>,
+        number_of_users=0,
+        administrative_users=0,
+        expiration_date=0,
+        is_trial=false,
+        is_valid=true
+        }).
+
+getLicense() -> ?COMMUNITY_LIC.
 
 -endif.
 
