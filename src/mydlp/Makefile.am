@@ -27,7 +27,6 @@ mydlpconf_DATA = \
 	denied_page.html
 
 dist_erl_DATA = \
-	mydlp_license.erl \
 	dynamic_compile.erl \
 	gen_server_cluster.erl \
 	mime_util.erl \
@@ -64,6 +63,10 @@ dist_erl_DATA = \
 	smtpc_fsm.erl \
 	smtpd_cmd.erl
 
+mydlp_erl = \
+	mydlp_license.erl \
+	$(dist_erl_DATA)
+
 dist_hrl_DATA = \
 	mydlp.hrl \
 	mydlp_big_binary.hrl \
@@ -72,7 +75,7 @@ dist_hrl_DATA = \
 	mydlp_schema.hrl
 
 beam_DATA = \
-	$(dist_erl_DATA:.erl=.beam) \
+	$(mydlp_erl:.erl=.beam) \
 	mydlp.app
 
 boot_DATA = \
@@ -91,6 +94,10 @@ html_DATA = \
 	overview-summary.html \
 	modules-frame.html \
 	packages-frame.html
+
+mydlp_edoc = \
+	mydlp_license.html \
+	$(html_DATA)
 
 erldir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/src
 hrldir = $(ERLANG_INSTALL_LIB_DIR_mydlp)/include
@@ -115,7 +122,7 @@ $(boot_DATA): $(beam_DATA)
 	@echo "Generating boot scripts..."
 	@$(ERLC) -I. $<
 
-$(html_DATA): $(dist_erl_DATA) overview.edoc 
+$(mydlp_edoc): $(mydlp_erl) overview.edoc 
 	@echo "Generating documentation..."
 	@$(ERL) -noshell -run edoc_run application mydlp '"."' '[{dir,"."}]'
 
@@ -136,5 +143,5 @@ run-production: $(beam_DATA) $(boot_DATA)
 	@MYDLP_CONF=mydlp.conf MYDLP_MNESIA_DIR=Mnesia.devel $(ERL) -pa ../thrift/gen-erl -sname console -config mydlp-sasl -boot mydlp 
 
 clean-local:
-	rm -rf $(beam_DATA) $(boot_DATA) $(html_DATA) mydlp.rel overview.edoc Mnesia.*
+	rm -rf $(beam_DATA) $(boot_DATA) $(mydlp_edoc) mydlp.rel overview.edoc Mnesia.*
 
