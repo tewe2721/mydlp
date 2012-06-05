@@ -61,6 +61,9 @@ check_piddir() {
 }
 
 is_mysql_alive() {
+	if [ -n "$NOLOCALMYSQL" -a "$NOLOCALMYSQL" == "true" ]; then
+                return 0;
+        fi
 	$MYSQLADM -s ping >/dev/null 2>&1  
 }
 
@@ -71,6 +74,9 @@ is_tables_initialized() {
 }
 
 wait_for_mysqld() {
+	if [ -n "$NOLOCALMYSQL" -a "$NOLOCALMYSQL" == "true" ]; then
+                return 0;
+        fi
 	for i in $(seq 10); do
 	    sleep 1
 	    if is_mysql_alive; then break; fi
@@ -79,9 +85,12 @@ wait_for_mysqld() {
 
 wait_for_tables() {
 	for i in $(seq 60); do
-	    sleep 1
-	    if is_tables_initialized; then break; fi
+		sleep 1
+		if is_tables_initialized; then 
+			return 0
+		fi
 	done
+	return 1
 }
 
 is_port_open() {
@@ -104,16 +113,26 @@ wait_for_backend() {
 }
 
 start_mysql() {
+	if [ -n "$NOLOCALMYSQL" -a "$NOLOCALMYSQL" == "true" ]; then
+                return 0;
+        fi
 	start_mysqld
 	check_mysql_db
 }
 
 start_mysqld() {
+	if [ -n "$NOLOCALMYSQL" -a "$NOLOCALMYSQL" == "true" ]; then
+                return 0;
+        fi
 	is_mysql_alive || $SERV mysql start >/dev/null 2>&1 
 	wait_for_mysqld
 }
 
 check_mysql_db() {
+	if [ -n "$NOLOCALMYSQL" -a "$NOLOCALMYSQL" == "true" ]; then
+                return 0;
+        fi
+
 	# Import MySQL schema
 	if (echo|$MYSQLC); then
 		if [ -z "$(echo 'show databases'|$MYSQLC|grep -e '^mydlp$')" ]; then
@@ -188,38 +207,114 @@ status_backend() {
         status_of_proc -p $PIDFILE2 mydlp MyDLP 2>&1 > /dev/null 
 }
 
-reload_squid() {
-	SQUIDPID=$(pgrep $SQUIDBINNAME)
-	wait_for_icap
-	if [ -n "$SQUIDPID" ]; then
-		echo " * Reloading Squid..."
-		[ -x $SQUIDBIN ] && $SQUIDBIN -k reconfigure
-	fi
-}
-
 start_jetty() {
+	if [ -n "$NOJETTY" -a "$NOJETTY" == "true" ]; then
+		return 0;
+	fi
 	echo " * Starting Jetty..."
-	/etc/init.d/jetty start > /dev/null
+	$SERV start > /dev/null
 	if is_tables_initialized ; then
 		true
 	else
 		echo -n " * Waiting for database tables... "
-		wait_for_tables
+		wait_for_tables || (echo -n " * Tables could not been initialized... Exiting."; exit 1)
 		echo "OK"
 	fi
 }
 
 stop_jetty() {
+	if [ -n "$NOJETTY" -a "$NOJETTY" == "true" ]; then
+		return 0;
+	fi
 	if status_jetty; then
 		echo " * Stopping Jetty..."
-		/etc/init.d/jetty stop > /dev/null
+		$SERV jetty stop > /dev/null
 	else
 		echo " * Jetty is not running..."
 	fi
 }
 
 status_jetty() {
-	/etc/init.d/jetty status 2>&1 > /dev/null
+	if [ -n "$NOJETTY" -a "$NOJETTY" == "true" ]; then
+		return 0;
+	fi
+	$SERV jetty status 2>&1 > /dev/null
+}
+
+is_squid_alive() {
+	if [ -n "$NOSQUID" -a "$NOSQUID" == "true" ]; then
+		return 0;
+	fi
+	SQUIDPID=$(pgrep $SQUIDBINNAME)
+	[ -n "$SQUIDPID" ]
+}
+
+
+reload_squid() {
+	if [ -n "$NOSQUID" -a "$NOSQUID" == "true" ]; then
+		return 0;
+	fi
+	wait_for_icap
+	if is_squid_alive; then
+		echo " * Reloading Squid..."
+		[ -x $SQUIDBIN ] && $SQUIDBIN -k reconfigure
+	fi
+}
+
+ensure_squid() {
+	if [ -n "$NOSQUID" -a "$NOSQUID" == "true" ]; then
+		return 0;
+	fi
+	wait_for_smtp_cf
+	is_squid_alive || $SERV squid3 start
+}
+
+ensure_postfix() {
+	if [ -n "$NOPOSTFIX" -a "$NOPOSTFIX" == "true" ]; then
+		return 0;
+	fi
+	is_postfix_alive || $SERV postfix start
+}
+
+is_postfix_alive_i() {
+	queue=$(postconf -h queue_directory 2>/dev/null || echo /var/spool/postfix)
+	if [ -f ${queue}/pid/master.pid ]; then
+		pid=$(sed 's/ //g' ${queue}/pid/master.pid)
+		# what directory does the executable live in.  stupid prelink systems.
+		dir=$(ls -l /proc/$pid/exe 2>/dev/null | sed 's/.* -> //; s/\/[^\/]*$//')
+		if [ "X$dir" = "X/usr/lib/postfix" ]; then
+			echo y
+		fi
+	fi
+}
+
+is_postfix_alive() {
+	if [ -n "$NOPOSTFIX" -a "$NOPOSTFIX" == "true" ]; then
+		return 0;
+	fi
+	POSTFIX_RUNNING=$(is_postfix_alive_i)
+	[ -n "$POSTFIX_RUNNING" ]
+}
+
+ensure_apache() {
+	if [ -n "$NOJETTY" -a "$NOJETTY" == "true" ]; then
+                return 0;
+        fi
+	is_apache_alive || $SERV apache2 start
+}
+
+is_apache_alive() {
+	if [ -n "$NOJETTY" -a "$NOJETTY" == "true" ]; then 
+                return 0;
+        fi
+	$SERV apache2 status 2>&1 > /dev/null
+}
+
+stop_apache() {
+	if [ -n "$NOJETTY" -a "$NOJETTY" == "true" ]; then 
+                return 0;
+        fi
+	$SERV apache2 stop
 }
 
 case "$1" in
@@ -229,13 +324,17 @@ case "$1" in
 	start_mysql
 	start_jetty
 	start_backend
+	ensure_postfix
 	start_mydlp
 	cleanpids
+	ensure_squid
 	reload_squid
+	ensure_apache
 	;;
   stop)
 	check_piddir
 	cleanpids
+	stop_apache
 	stop_mydlp
 	stop_backend
 	stop_jetty
@@ -248,6 +347,7 @@ case "$1" in
   restart)
 	check_piddir
 	cleanpids
+	stop_apache
 	stop_mydlp
 	stop_backend
 	stop_jetty
@@ -256,9 +356,12 @@ case "$1" in
 	start_mysql
 	start_jetty
 	start_backend
+	ensure_postfix
 	start_mydlp
 	cleanpids
+	ensure_squid
 	reload_squid
+	ensure_apache
 	;;
 
   status)
@@ -267,7 +370,7 @@ case "$1" in
 	;;
 
   *)
-	log_action_msg "Usage: /etc/init.d/myldp {start|stop|reload|force-reload|restart|status}"
+	log_action_msg "Usage: /etc/init.d/mydlp {start|stop|reload|force-reload|restart|status}"
 	exit 1
 esac
 
