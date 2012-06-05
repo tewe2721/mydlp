@@ -136,7 +136,7 @@ function startMyDLP {
         $INITSCRIPT start > /dev/null 2>&1
         waitForIcap
         echo "Started MyDLP."
-	if [ -n "$NOPOSTFIX" -a "$NOPOSTFIX" == "true" ]; then
+	if [ -n "$NOSQUID" -a "$NOSQUID" == "true" ]; then
 		true 
 	else
 		echo "Reconfiguring Squid..."
@@ -188,18 +188,26 @@ function getMQSize {
         fi
 }
 
-function doesMQhaveConnRefusedMsg() {
+function doesNotMQhaveConnRefusedMsg() {
 	if [ -n "$NOPOSTFIX" -a "$NOPOSTFIX" == "true" ]; then
 		return 0
 	fi
-	postqueue -p|grep -q -F '(connect to 127.0.0.1[127.0.0.1]:10026: Connection refused)'
+	if postqueue -p|grep -q -F '(connect to 127.0.0.1[127.0.0.1]:10026: Connection refused)'; then
+		return 1
+	else
+		return 0
+	fi
 }
 
-function doesMQhaveLostConnMsg() {
+function doesNotMQhaveLostConnMsg() {
 	if [ -n "$NOPOSTFIX" -a "$NOPOSTFIX" == "true" ]; then
 		return 0
 	fi
-	postqueue -p|grep -q -F '(lost connection with 127.0.0.1[127.0.0.1] while sending end of data -- message may be sent more than once)'
+	if postqueue -p|grep -q -F '(lost connection with 127.0.0.1[127.0.0.1] while sending end of data -- message may be sent more than once)'; then
+		return 1
+	else
+		return 0
+	fi
 }
 
 function hasMQPassedLimit() {
@@ -214,7 +222,7 @@ function isMQSane() {
 	if [ -n "$NOPOSTFIX" -a "$NOPOSTFIX" == "true" ]; then
 		return 0
 	fi
-	doesMQhaveConnRefusedMsg
+	doesNotMQhaveLostConnMsg
 }
 
 function flushMQ() {
@@ -240,7 +248,7 @@ function restartSquid {
 }
 
 function isMyDLPAlive {
-        isJavaAlive && isErlAlive && isIcapOpen && isSmtpCFOpen && doesMQhaveConnRefusedMsg
+        isJavaAlive && isErlAlive && isIcapOpen && isSmtpCFOpen && doesNotMQhaveConnRefusedMsg
 }
 
 function isSquidAlive {
