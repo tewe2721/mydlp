@@ -258,6 +258,6 @@ fi
 if [ -n "$NOPOSTFIX" -a "$NOPOSTFIX" == "true" ]; then
 	true
 else
-	isMQSane || ( echo "Flushing MQ..." && flushMQ )
+	isMQSane || flushMQ
 fi
 
