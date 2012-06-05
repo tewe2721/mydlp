@@ -477,10 +477,14 @@ get_usernames(OrigId) ->
 	Domains = get_domains(OrigId),
 	L = lists:map(fun(U) ->
 		lists:map(fun(D) ->
-			<<U/binary, "@" , D/binary>>
+			concat_username(U,D)
 		end, Domains)
 	end, Users),
 	lists:flatten(L).
+
+concat_username(<<>>, _D) -> []; % lists:flatten will drop this.
+concat_username(U, <<>>) -> <<U/binary>>;
+concat_username(U, D) -> <<U/binary, "@" , D/binary>>.
 
 get_domains(OrigId) ->
 	DomainId = get_domain_id(OrigId),
