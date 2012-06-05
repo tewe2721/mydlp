@@ -228,7 +228,7 @@ stop_jetty() {
 	fi
 	if status_jetty; then
 		echo " * Stopping Jetty..."
-		$SERV jetty stop > /dev/null
+		$SERV jetty stop 2>&1 > /dev/null
 	else
 		echo " * Jetty is not running..."
 	fi
