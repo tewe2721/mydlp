@@ -133,11 +133,11 @@ handle_call(get_denied_page, _From, State) ->
 handle_call({push_log, {Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc}}, From, State) ->
 	Worker = self(),
 	?ASYNC(fun() ->
-			{_FilterId, RuleId1, Ip1, User1, To1, ActionS, ChannelS} = 
+			{_FilterId, RuleId1, Ip1, User1, To1, ActionS, ChannelS, Visible} = 
 				pre_push_log(RuleId, Ip, User, To, Action, Channel),
 			{atomic, ILId} = ltransaction(fun() ->
 					psqt(insert_incident, 
-						[Time, ChannelS, RuleId1, Ip1, User1, To1, ITypeId, ActionS, Misc]),
+						[Time, ChannelS, RuleId1, Ip1, User1, To1, ITypeId, ActionS, Misc, Visible]),
 					last_insert_id_t() end, 30000),
 			Reply = ILId,	
                         Worker ! {async_reply, Reply, From}
@@ -294,7 +294,7 @@ init([]) ->
 		{mimes_by_data_format_id, <<"SELECT m.mimeType FROM MIMEType AS m, DataFormat_MIMEType dm WHERE dm.DataFormat_id=? and dm.mimeTypes_id=m.id">>},
 		{usb_devices, <<"SELECT deviceId, action FROM USBDevice">>},
 		%{customer_by_id, <<"SELECT id,static_ip FROM sh_customer WHERE id=?">>},
-		{insert_incident, <<"INSERT INTO IncidentLog (id, date, channel, ruleId, sourceIp, sourceUser, destination, informationTypeId, action, matcherMessage) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)">>},
+		{insert_incident, <<"INSERT INTO IncidentLog (id, date, channel, ruleId, sourceIp, sourceUser, destination, informationTypeId, action, matcherMessage, visible) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)">>},
 		{insert_incident_file, <<"INSERT INTO IncidentLogFile (id, incidentLog_id, filename, content_id) VALUES (NULL, ?, ?, ?)">>},
 %		{insert_archive, <<"INSERT INTO log_archive (id, customer_id, rule_id, protocol, src_ip, src_user, destination, log_archive_file_id) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)">>},
 %		{new_archive_file_entry, <<"INSERT INTO log_archive_file (id) VALUES (NULL)">>},
@@ -795,7 +795,10 @@ pre_push_log(RuleId, Ip, User, Destination, Action, Channel) ->
 		printer -> <<"P">>;
 		discovery -> <<"D">> 
 	end,
-	{0, RuleId, Ip1, User1, Destination1, ActionS, ChannelS}.
+	Visible = case RuleId of
+		-1 -> 0;
+		_Else -> 1 end,
+	{0, RuleId, Ip1, User1, Destination1, ActionS, ChannelS, Visible}.
 
 -endif.
 
