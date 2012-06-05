@@ -36,6 +36,7 @@ MYSQLADM=/usr/bin/mysqladmin
 
 SQUIDBIN=/usr/sbin/squid3
 SQUIDBINNAME=squid3
+SQUIDSSLCRTDDIR=/var/lib/ssl_db/
 
 ICAPPORT=1344
 JETTYPORT=8009
@@ -266,6 +267,14 @@ ensure_squid() {
 		return 0;
 	fi
 	is_squid_alive || $SERV squid3 start
+}
+
+ensure_squid_ssl_crtd_dir_rights() {
+	if [ -n "$NOSQUID" -a "$NOSQUID" == "true" ]; then
+		return 0;
+	fi
+	[ -d $SQUIDSSLCRTDDIR ] || mkdir $SQUIDSSLCRTDDIR
+	chown proxy.proxy -R $SQUIDSSLCRTDDIR
 }
 
 ensure_postfix() {
