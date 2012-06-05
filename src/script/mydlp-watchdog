@@ -23,7 +23,7 @@ function isAlive {
         local PROCNAME=$2
 
         if [ ! -e "$PIDFILE" ]; then
-                return false
+                return 1
         fi
 
         local PID=$(cat $PIDFILE)
