@@ -333,10 +333,10 @@ acl_ret(QRet, Obj, DFFiles) ->
 					block
 	end.
 
-archive_req(Obj, {{rule, RId}, {file, _}, {itype, IType}, {misc, _}}, DFFiles) ->
+archive_req(Obj, {{rule, RId}, {file, _}, {itype, IType}, {misc, Misc}}, DFFiles) ->
         case DFFiles of
                 [] -> ok;
-                _Else -> log_req(Obj, archive, {{rule, RId}, {file, DFFiles}, {itype, IType}, {misc,""}}) end.
+                _Else -> log_req(Obj, archive, {{rule, RId}, {file, DFFiles}, {itype, IType}, {misc, Misc}}) end.
 
 log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
 	User = get_user(Obj),

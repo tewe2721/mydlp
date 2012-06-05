@@ -479,10 +479,10 @@ acl_ret(QRet, DFFiles, State) ->
 					'BLOCK_REQ'(block, State)
 	end.
 
-archive_req(State, {{rule, RId}, {file, _}, {itype, IType}, {misc, _}}, DFFiles) ->
+archive_req(State, {{rule, RId}, {file, _}, {itype, IType}, {misc, Misc}}, DFFiles) ->
 	case DFFiles of
 		[] -> ok;
-		_Else -> log_req(State, archive, {{rule, RId}, {file, DFFiles}, {itype, IType}, {misc,""}}) end.
+		_Else -> log_req(State, archive, {{rule, RId}, {file, DFFiles}, {itype, IType}, {misc, Misc}}) end.
 
 pass_req(#state{log_pass=false}, _Files) -> ok;
 pass_req(#state{log_pass=LogPassLL, icap_mod_mode=reqmod} = State, Files) -> 

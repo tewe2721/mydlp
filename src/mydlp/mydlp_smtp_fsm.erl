@@ -203,10 +203,10 @@ post_query(State, AclR, Files) ->
 			% mydlp_incident will clean files.
 		false -> mydlp_api:clean_files(Files) end.
 
-archive_req(State, {{rule, RId}, {file, _}, {itype, IType}, {misc, _}}, Files) ->
+archive_req(State, {{rule, RId}, {file, _}, {itype, IType}, {misc, Misc}}, Files) ->
 	case Files of
 		[] -> ok;
-		_Else -> log_req(State, archive, {{rule, RId}, {file, Files}, {itype, IType}, {misc,""}}) end.
+		_Else -> log_req(State, archive, {{rule, RId}, {file, Files}, {itype, IType}, {misc, Misc}}) end.
 
 % refined this
 'BLOCK_REQ'(block, #smtpd_fsm{spool_ref=Ref, message_record=MessageR} = State) ->
