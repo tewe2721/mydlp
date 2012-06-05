@@ -136,9 +136,12 @@ function startMyDLP {
         $INITSCRIPT start > /dev/null 2>&1
         waitForIcap
         echo "Started MyDLP."
-        echo "Reconfiguring Squid..."
-        squid3 -k reconfigure
-        echo "Flushing Postfix Mail Queue..."
+	if [ -n "$NOPOSTFIX" -a "$NOPOSTFIX" == "true" ]; then
+		true 
+	else
+		echo "Reconfiguring Squid..."
+		squid3 -k reconfigure
+        fi
 }
 
 function stopPostfix {

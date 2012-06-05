@@ -212,7 +212,7 @@ start_jetty() {
 		return 0;
 	fi
 	echo " * Starting Jetty..."
-	$SERV start > /dev/null
+	$SERV jetty start > /dev/null
 	if is_tables_initialized ; then
 		true
 	else
@@ -265,7 +265,6 @@ ensure_squid() {
 	if [ -n "$NOSQUID" -a "$NOSQUID" == "true" ]; then
 		return 0;
 	fi
-	wait_for_smtp_cf
 	is_squid_alive || $SERV squid3 start
 }
 
@@ -300,7 +299,15 @@ ensure_apache() {
 	if [ -n "$NOJETTY" -a "$NOJETTY" == "true" ]; then
                 return 0;
         fi
-	is_apache_alive || $SERV apache2 start
+	is_apache_alive || start_apache
+}
+
+start_apache() {
+	if [ -n "$NOJETTY" -a "$NOJETTY" == "true" ]; then
+                return 0;
+        fi
+	echo " * Starting Apache..."
+	$SERV apache2 start 2>&1 > /dev/null
 }
 
 is_apache_alive() {
@@ -314,7 +321,7 @@ stop_apache() {
 	if [ -n "$NOJETTY" -a "$NOJETTY" == "true" ]; then 
                 return 0;
         fi
-	$SERV apache2 stop
+	$SERV apache2 stop 2>&1 > /dev/null
 }
 
 case "$1" in
