@@ -266,15 +266,11 @@ ensure_squid() {
 	if [ -n "$NOSQUID" -a "$NOSQUID" == "true" ]; then
 		return 0;
 	fi
-	is_squid_alive || $SERV squid3 start
-}
 
-ensure_squid_ssl_crtd_dir_rights() {
-	if [ -n "$NOSQUID" -a "$NOSQUID" == "true" ]; then
-		return 0;
-	fi
 	[ -d $SQUIDSSLCRTDDIR ] || mkdir $SQUIDSSLCRTDDIR
 	chown proxy.proxy -R $SQUIDSSLCRTDDIR
+
+	is_squid_alive || $SERV squid3 start
 }
 
 ensure_postfix() {
