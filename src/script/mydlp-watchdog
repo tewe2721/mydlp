@@ -18,6 +18,10 @@ WATCHDOGLOGFILE=/var/log/mydlp/watchdog.log
 
 MQLIMIT=100
 
+if test -f /etc/default/mydlp; then
+        . /etc/default/mydlp
+fi
+
 function isAlive {
         local PIDFILE=$1
         local PROCNAME=$2
@@ -67,6 +71,9 @@ function waitForSmtpCF() {
 }
 
 function isSquidProcAlive {
+	if [ -n "$NOSQUID" -a "$NOSQUID" == "true" ]; then
+		return 0	
+	fi
         isAlive $SQUIDPIDFILE $SQUIDPROCNAME || \
                 ( echo "Squid cache is dead !!!" && false )
 }
@@ -82,24 +89,34 @@ function isJavaAlive {
 }
 
 function stopSquid() {
+	if [ -n "$NOSQUID" -a "$NOSQUID" == "true" ]; then
+		return 0	
+	fi
         echo "Killing Squid..."
-        killall $SQUIDPROCNAME
+        $SQUIDINIT stop > /dev/null 2>&1
         sleep 2
-        killall $SQUIDPROCNAME
+	
+        [ -n "$(pgrep $SQUIDPROCNAME)" ] && killall $SQUIDPROCNAME
         sleep 1
-        killall -9 $SQUIDPROCNAME
+        [ -n "$(pgrep $SQUIDPROCNAME)" ] && killall -9 $SQUIDPROCNAME
         sleep 1
         echo "Killed Squid..."
         true
 }
 
 function cleanSquidCache() {
+	if [ -n "$NOSQUID" -a "$NOSQUID" == "true" ]; then
+		return 0	
+	fi
         echo "Cleaning Squid cache directories..."
         rm -rf /var/spool/squid3/*
         echo "Cleaned."
 }
 
 function startSquid {
+	if [ -n "$NOSQUID" -a "$NOSQUID" == "true" ]; then
+		return 0	
+	fi
         echo "Starting Squid..."
         $SQUIDINIT start > /dev/null 2>&1
         echo "Started Squid."
@@ -125,11 +142,16 @@ function startMyDLP {
 }
 
 function stopPostfix {
+	if [ -n "$NOPOSTFIX" -a "$NOPOSTFIX" == "true" ]; then
+		return 0
+	fi
         $POSTFIXINIT stop > /dev/null 2>&1
 }
 
 function startPostfix {
-        waitForSmtpCF
+	if [ -n "$NOPOSTFIX" -a "$NOPOSTFIX" == "true" ]; then
+		return 0
+	fi
         $POSTFIXINIT start > /dev/null 2>&1
 }
 
@@ -147,6 +169,10 @@ function logRestart {
 }
 
 function getMQSize {
+	if [ -n "$NOPOSTFIX" -a "$NOPOSTFIX" == "true" ]; then
+		echo 0
+		return 0
+	fi
         local PQRESP=$(postqueue -p|tail -1)
         if [ -n "$PQRESP" ]; then
                 if [ "$PQRESP" == "Mail queue is empty" ]; then
@@ -159,12 +185,39 @@ function getMQSize {
         fi
 }
 
-function isMQSane() {
+function doesMQhaveConnRefusedMsg() {
+	if [ -n "$NOPOSTFIX" -a "$NOPOSTFIX" == "true" ]; then
+		return 0
+	fi
+	postqueue -p|grep -q -F '(connect to 127.0.0.1[127.0.0.1]:10026: Connection refused)'
+}
+
+function doesMQhaveLostConnMsg() {
+	if [ -n "$NOPOSTFIX" -a "$NOPOSTFIX" == "true" ]; then
+		return 0
+	fi
+	postqueue -p|grep -q -F '(lost connection with 127.0.0.1[127.0.0.1] while sending end of data -- message may be sent more than once)'
+}
+
+function hasMQPassedLimit() {
+	if [ -n "$NOPOSTFIX" -a "$NOPOSTFIX" == "true" ]; then
+		return 0
+	fi
         local MQSIZE=$(getMQSize)
         [ "$MQSIZE" -le "$MQLIMIT" ]
 }
 
+function isMQSane() {
+	if [ -n "$NOPOSTFIX" -a "$NOPOSTFIX" == "true" ]; then
+		return 0
+	fi
+	doesMQhaveConnRefusedMsg
+}
+
 function flushMQ() {
+	if [ -n "$NOPOSTFIX" -a "$NOPOSTFIX" == "true" ]; then
+		return 0
+	fi
         postqueue -f
 }
 
@@ -184,16 +237,27 @@ function restartSquid {
 }
 
 function isMyDLPAlive {
-        isJavaAlive && isErlAlive && isIcapOpen && isSmtpCFOpen
+        isJavaAlive && isErlAlive && isIcapOpen && isSmtpCFOpen && doesMQhaveConnRefusedMsg
 }
 
 function isSquidAlive {
+	if [ -n "$NOSQUID" -a "$NOSQUID" == "true" ]; then
+		return 0	
+	fi
         isSquidProcAlive && isCachePortOpen
 }
 
 isMyDLPAlive || ( echo "MyDLP is not properly running. Restarting MyDLP..." && restartMyDLP )
 
-isSquidAlive || ( echo "Squid is not properly running. Restarting Squid..." && restartSquid )
+if [ -n "$NOSQUID" -a "$NOSQUID" == "true" ]; then
+	true
+else
+	isSquidAlive || ( echo "Squid is not properly running. Restarting Squid..." && restartSquid )
+fi
 
-isMQSane || ( echo "There are more than $MQLIMIT mails in the MQ, flushing MQ..." && flushMQ )
+if [ -n "$NOPOSTFIX" -a "$NOPOSTFIX" == "true" ]; then
+	true
+else
+	isMQSane || ( echo "Flushing MQ..." && flushMQ )
+fi
 
