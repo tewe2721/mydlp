@@ -122,7 +122,10 @@ requeueIncident(Incidentid) ->
         end, ok.
 
 registerUserAddress(Ipaddress, Userh, Data) -> 
-	Usern0 = try 	[{username,Username}] = erlang:binary_to_term(Data), Username
+	Usern0 = try 	case erlang:binary_to_term(Data) of
+				[{username,nil}] -> "";
+				[{username,unknown}] -> "";
+				[{username,Username}] -> Username end
 		catch Class:Error ->
 			?ERROR_LOG("REGISTER_USER_ADDRESS: Error occured when deserializing: Class: ["?S"]. Error: ["?S"].~n"
 					"Data: ["?S"]. UserHash: ["?S"]. IPAddr: ["?S"]. ~nStack trace: "?S"~n",
