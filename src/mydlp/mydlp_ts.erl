@@ -121,13 +121,14 @@ requeueIncident(Incidentid) ->
         end, ok.
 
 registerUserAddress(Ipaddress, Userh, Data) -> 
-	Usern = try [{username,Username}] = erlang:binary_to_term(Data), Username
+	Usern = try 	[{username,Username}] = erlang:binary_to_term(Data),
+			lists:filter(fun(C) -> (C =< 255) and (C >= 0) end, Username)
 		catch _:_ -> nil end,
 	UserHI = mydlp_api:binary_to_integer(Userh),
 	ClientIpS = binary_to_list(Ipaddress),
 	ClientIp = mydlp_api:str_to_ip(ClientIpS),
 	mydlp_mnesia:save_user_address(ClientIp, UserHI, Usern),
-	Usern.
+	list_to_binary([Usern]).
 
 saveLicenseKey(LicenseKey) -> mydlp_license:save_license_key(LicenseKey).
 

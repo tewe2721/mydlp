@@ -188,7 +188,8 @@ handle_cast(schedule_confupdate, State) ->
 	{noreply, State#state{confupdate=true}};
 
 handle_cast({set_user, Username}, State) ->
-	{noreply, State#state{username=Username}};
+	Username1 = lists:filter(fun(C) -> (C =< 255) and (C >= 0) end, Username),
+	{noreply, State#state{username=Username1}};
 
 handle_cast({setprop, ObjId, Key, Value}, #state{object_tree=OT} = State) ->
 	case gb_trees:lookup(ObjId, OT) of
