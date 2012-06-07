@@ -124,7 +124,10 @@ requeueIncident(Incidentid) ->
 registerUserAddress(Ipaddress, Userh, Data) -> 
 	Usern = try 	[{username,Username}] = erlang:binary_to_term(Data),
 			lists:filter(fun(C) -> (C =< 255) and (C >= 0) end, Username)
-		catch _:_ -> nil end,
+		catch Class:Error ->
+			?ERROR_LOG("REGISTER_USER_ADDRESS: Error occured: Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
+				[Class, Error, erlang:get_stacktrace()]),
+			nil end,
 	UserHI = mydlp_api:binary_to_integer(Userh),
 	ClientIpS = binary_to_list(Ipaddress),
 	ClientIp = mydlp_api:str_to_ip(ClientIpS),
