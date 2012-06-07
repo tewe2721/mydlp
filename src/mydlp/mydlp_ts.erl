@@ -125,7 +125,8 @@ registerUserAddress(Ipaddress, Userh, Data) ->
 	Usern0 = try 	case erlang:binary_to_term(Data) of
 				[{username,nil}] -> "";
 				[{username,unknown}] -> "";
-				[{username,Username}] -> Username end
+				[{username,Username}] when is_binary(Username)-> binary_to_list(Username);
+				[{username,Username}] when is_list(Username)-> Username end
 		catch Class:Error ->
 			?ERROR_LOG("REGISTER_USER_ADDRESS: Error occured when deserializing: Class: ["?S"]. Error: ["?S"].~n"
 					"Data: ["?S"]. UserHash: ["?S"]. IPAddr: ["?S"]. ~nStack trace: "?S"~n",
