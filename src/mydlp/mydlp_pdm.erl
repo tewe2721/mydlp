@@ -37,7 +37,9 @@
 -define(KGRAMSIZE, 50).
 -define(WINDOWSIZE, 100).
 
+-define(MINBYTES, ?KGRAMSIZE + ?WINDOWSIZE).
 
+fingerprint(<<Bin/binary>>) when size(Bin) < ?MINBYTES -> [];
 fingerprint(<<Bin/binary>>) -> fingerprint(Bin, 0, <<>>, [], none, ?WINDOWSIZE, 0, 0, []);
 fingerprint(L) when is_list(L) -> fingerprint(list_to_binary(L)).
 
