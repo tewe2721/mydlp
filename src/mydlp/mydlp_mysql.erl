@@ -301,6 +301,7 @@ init([]) ->
 		{match_by_id, <<"SELECT m.id,m.functionName FROM Matcher AS m WHERE m.id=?">>},
 		{regex_by_matcher_id, <<"SELECT re.regex FROM MatcherArgument AS ma, RegularExpression AS re WHERE ma.coupledMatcher_id=? AND ma.coupledArgument_id=re.id">>},
 		{kg_regexes_by_matcher_id, <<"SELECT re.regex FROM MatcherArgument AS ma, NonCascadingArgument AS nca, RegularExpressionGroup_RegularExpressionGroupEntry AS gre, RegularExpressionGroupEntry AS re WHERE ma.coupledMatcher_id=? AND ma.coupledArgument_id=nca.id AND nca.argument_id=gre.RegularExpressionGroup_id AND gre.entries_id=re.id">>},
+		{kg_rdbms_regexes_by_matcher_id, <<"SELECT rev.string FROM MatcherArgument AS ma, NonCascadingArgument AS nca, RegularExpressionGroup AS reg, RDBMSEnumeratedValue AS rev WHERE ma.coupledMatcher_id=? AND ma.coupledArgument_id=nca.id AND nca.argument_id=reg.id AND reg.rdbmsInformationTarget_id=rev.informationTarget_id">>},
 		{dd_by_matcher_id, <<"SELECT dd.id FROM MatcherArgument AS ma, NonCascadingArgument AS nca, DocumentDatabase AS dd WHERE ma.coupledMatcher_id=? AND ma.coupledArgument_id=nca.id AND nca.argument_id=dd.id">>},
 		{filehash_by_dd_id, <<"SELECT ddfe.id, ddfe.md5Hash FROM DocumentDatabase_DocumentDatabaseFileEntry AS dd, DocumentDatabaseFileEntry AS ddfe WHERE dd.DocumentDatabase_id=? AND dd.fileEntries_id=ddfe.id">>},
 		{filefingerprint_by_dd_id, <<"SELECT ddfe.id, df.fingerprint FROM DocumentDatabase_DocumentDatabaseFileEntry AS dd, DocumentDatabaseFileEntry AS ddfe, DocumentFingerprint AS df WHERE dd.DocumentDatabase_id=? AND dd.fileEntries_id=ddfe.id AND df.document_id=ddfe.id">>},
@@ -678,6 +679,11 @@ populate_match(Id, <<"keyword_group">>, IFeatureId) ->
 		Regex1 = list_to_binary(mydlp_api:escape_regex(binary_to_list(RegexS))),
 		write_regex(RegexGroupId, Regex1)
 	end, REQ),
+	{ok, REREQ} = psq(kg_rdbms_regexes_by_matcher_id, [Id]),
+	lists:foreach(fun([RegexS]) ->
+		Regex2 = list_to_binary(mydlp_api:escape_regex(binary_to_list(RegexS))),
+		write_regex(RegexGroupId, Regex2)
+	end, REREQ),
 	FuncParams=[RegexGroupId],
 	new_match(Id, IFeatureId, Func, FuncParams);
 
