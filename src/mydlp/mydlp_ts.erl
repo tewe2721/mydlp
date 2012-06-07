@@ -122,12 +122,19 @@ requeueIncident(Incidentid) ->
         end, ok.
 
 registerUserAddress(Ipaddress, Userh, Data) -> 
-	Usern = try 	[{username,Username}] = erlang:binary_to_term(Data),
-			lists:filter(fun(C) -> (C =< 255) and (C >= 0) end, Username)
+	Usern0 = try 	[{username,Username}] = erlang:binary_to_term(Data), Username
 		catch Class:Error ->
-			?ERROR_LOG("REGISTER_USER_ADDRESS: Error occured: Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
-				[Class, Error, erlang:get_stacktrace()]),
-			nil end,
+			?ERROR_LOG("REGISTER_USER_ADDRESS: Error occured when deserializing: Class: ["?S"]. Error: ["?S"].~n"
+					"Data: ["?S"]. UserHash: ["?S"]. IPAddr: ["?S"]. ~nStack trace: "?S"~n",
+				[Class, Error, Data, Userh, Ipaddress, erlang:get_stacktrace()]),
+			"" end,
+
+	Usern = try 	lists:filter(fun(C) -> (C =< 255) and (C >= 0) end, Usern0)
+		catch Class2:Error2 ->
+			?ERROR_LOG("REGISTER_USER_ADDRESS: Error occured when filtering: Class: ["?S"]. Error: ["?S"].~n"
+					"Username: ["?S"]. UserHash: ["?S"]. IPAddr: ["?S"]. ~nStack trace: "?S"~n",
+				[Class2, Error2, Usern0, Userh, Ipaddress, erlang:get_stacktrace()]),
+			"" end,
 	UserHI = mydlp_api:binary_to_integer(Userh),
 	ClientIpS = binary_to_list(Ipaddress),
 	ClientIp = mydlp_api:str_to_ip(ClientIpS),
