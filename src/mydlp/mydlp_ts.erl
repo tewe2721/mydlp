@@ -41,7 +41,7 @@
 	]).
 
 -export([
-	getFingerprints/2,
+	generateFingerprints/3,
 	compileCustomer/1,
 	getRuletable/3,
 	receiveBegin/1,
@@ -100,12 +100,13 @@ receiveChunk(_Ipaddress, Itemid, Chunkdata, _Chunknum, _Chunknumtotal) ->
 		ok -> <<"ok">>;
 		_Else -> <<"error">> end.
 
-getFingerprints(Filename, Data) -> 
+generateFingerprints(DocumentId, Filename, Data) -> 
 	F = #file{filename=Filename, dataref=?BB_C(Data)},
 	Text = mydlp_api:concat_texts(F),
 	FList = mydlp_pdm:fingerprint(Text),
 	mydlp_api:clean_files(F),
-	lists:usort(FList).
+	lists:usort(FList),
+	mydlp_mysql:save_fingerprints(DocumentId, FList).
 
 requeueIncident(Incidentid) ->
 	try     case mydlp_quarantine:l(payload, Incidentid) of

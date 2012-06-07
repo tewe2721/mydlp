@@ -47,6 +47,7 @@
 	insert_log_requeue/1,
 	delete_log_requeue/1,
 	repopulate_mnesia/0,
+	save_fingerprints/2,
 	stop/0]).
 
 %% gen_server callbacks
@@ -86,6 +87,9 @@ insert_log_file(LogId, Filename) ->
 
 insert_log_file(LogId, Filename, MimeType, Size, Path) -> 
 	gen_server:cast(?MODULE, {insert_log_file, LogId, Filename, MimeType, Size, Path}).
+
+save_fingerprints(DocumentId, FingerprintList) -> 
+	gen_server:call(?MODULE, {save_fingerprints, DocumentId, FingerprintList}).
 
 requeued(LogId) -> 
 	gen_server:cast(?MODULE, {requeued, LogId}).
@@ -143,6 +147,16 @@ handle_call({push_log, {Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Mi
                         Worker ! {async_reply, Reply, From}
 		end, 30000),
 	{noreply, State};
+
+handle_call({save_fingerprints, DocumentId, FingerprintList}, From, State) ->
+	Worker = self(),
+	?ASYNC(fun() ->
+			transaction(fun() ->
+				lists:foreach(fun(F) -> psqt(insert_fingerprint, [F, DocumentId]) end, FingerprintList) 
+			end, 60000),
+                        Worker ! {async_reply, ok, From}
+		end, 60000),
+        {noreply, State};
 
 handle_call(stop, _From,  State) ->
 	{stop, normalStop, State};
@@ -289,10 +303,11 @@ init([]) ->
 		{kg_regexes_by_matcher_id, <<"SELECT re.regex FROM MatcherArgument AS ma, NonCascadingArgument AS nca, RegularExpressionGroup_RegularExpressionGroupEntry AS gre, RegularExpressionGroupEntry AS re WHERE ma.coupledMatcher_id=? AND ma.coupledArgument_id=nca.id AND nca.argument_id=gre.RegularExpressionGroup_id AND gre.entries_id=re.id">>},
 		{dd_by_matcher_id, <<"SELECT dd.id FROM MatcherArgument AS ma, NonCascadingArgument AS nca, DocumentDatabase AS dd WHERE ma.coupledMatcher_id=? AND ma.coupledArgument_id=nca.id AND nca.argument_id=dd.id">>},
 		{filehash_by_dd_id, <<"SELECT ddfe.id, ddfe.md5Hash FROM DocumentDatabase_DocumentDatabaseFileEntry AS dd, DocumentDatabaseFileEntry AS ddfe WHERE dd.DocumentDatabase_id=? AND dd.fileEntries_id=ddfe.id">>},
-		{filefingerprint_by_dd_id, <<"SELECT ddfe.id, df.fingerprint FROM DocumentDatabase_DocumentDatabaseFileEntry AS dd, DocumentDatabaseFileEntry AS ddfe, DocumentDatabaseFileEntry_DocumentFingerprint AS ddf, DocumentFingerprint AS df WHERE dd.DocumentDatabase_id=? AND dd.fileEntries_id=ddfe.id AND ddf.DocumentDatabaseFileEntry_id=ddfe.id AND df.id=ddf.fingerprints_id">>},
+		{filefingerprint_by_dd_id, <<"SELECT ddfe.id, df.fingerprint FROM DocumentDatabase_DocumentDatabaseFileEntry AS dd, DocumentDatabaseFileEntry AS ddfe, DocumentFingerprint AS df WHERE dd.DocumentDatabase_id=? AND dd.fileEntries_id=ddfe.id AND df.document_id=ddfe.id">>},
 		%{user_by_rule_id, <<"SELECT eu.id, eu.username FROM sh_ad_entry_user AS eu, sh_ad_cross AS c, sh_ad_rule_cross AS rc WHERE rc.parent_rule_id=? AND rc.group_id=c.group_id AND c.entry_id=eu.entry_id">>},
 		{mimes_by_data_format_id, <<"SELECT m.mimeType FROM MIMEType AS m, DataFormat_MIMEType dm WHERE dm.DataFormat_id=? and dm.mimeTypes_id=m.id">>},
 		{usb_devices, <<"SELECT deviceId, action FROM USBDevice">>},
+		{insert_fingerprint, <<"INSERT INTO DocumentFingerprint (id, fingerprint, document_id) VALUES (NULL, ?, ?)">>},
 		%{customer_by_id, <<"SELECT id,static_ip FROM sh_customer WHERE id=?">>},
 		{insert_incident, <<"INSERT INTO IncidentLog (id, date, channel, ruleId, sourceIp, sourceUser, destination, informationTypeId, action, matcherMessage, visible) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)">>},
 		{insert_incident_file, <<"INSERT INTO IncidentLogFile (id, incidentLog_id, filename, content_id) VALUES (NULL, ?, ?, ?)">>},
@@ -345,7 +360,7 @@ lpsq(PreparedKey, Params, Timeout) ->
 
 %transaction(Fun) -> transaction(Fun, 5000).
 
-%transaction(Fun, Timeout) -> mysql:transaction(pl, Fun, Timeout).
+transaction(Fun, Timeout) -> mysql:transaction(pp, Fun, Timeout).
 
 %ltransaction(Fun) -> ltransaction(Fun, 5000).
 
