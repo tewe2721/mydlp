@@ -413,6 +413,15 @@ populate_win32reg() ->
 	{ok, RegHandle} = win32reg:open([read,write]),
 	win32reg:change_key_create(RegHandle, "\\hklm\\software\\MyDLP"),
 	populate_win32reg(RegHandle, ?CONFREG).
+
+populate_win32reg(RegHandle, [print_monitor|Rest]) ->
+	RegVal = case ?CFG(print_monitor) of
+			true -> case mydlp_mnesia:get_rule_table(printer) of 
+					{_, {_, pass}, [_|_]} -> 1;
+					_Else -> 0 end;
+			false -> 0 end,
+	win32reg:set_value(RegHandle, "print_monitor", RegVal),
+	populate_win32reg(RegHandle, Rest);
 populate_win32reg(RegHandle, [ConfKey|Rest]) ->
 	ConfKeyS = atom_to_list(ConfKey),
 	RegVal = case ?CFG(ConfKey) of
