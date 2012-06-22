@@ -267,8 +267,7 @@ ensure_squid() {
 		return 0;
 	fi
 
-	[ -d $SQUIDSSLCRTDDIR ] || mkdir $SQUIDSSLCRTDDIR
-	chown proxy.proxy -R $SQUIDSSLCRTDDIR
+	[ -d $SQUIDSSLCRTDDIR ] && chown proxy.proxy -R $SQUIDSSLCRTDDIR
 
 	is_squid_alive || $SERV squid3 start
 }
