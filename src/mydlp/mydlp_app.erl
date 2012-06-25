@@ -180,10 +180,10 @@ start_inets() ->
 	configure_proxy().
 
 configure_proxy() -> 
-	case {os:getenv("LICENSE_PROXY_HOST"), os:getenv("LICENSE_PROXY_PORT")} of
-		{false, _} -> ok;
-		{_, false} -> ok;
-		{Host, Port} -> http:set_option(proxy, {{Host, list_to_integer(Port)}, ["localhost"]}) end,
+%	case {os:getenv("LICENSE_PROXY_HOST"), os:getenv("LICENSE_PROXY_PORT")} of
+%		{false, _} -> ok;
+%		{_, false} -> ok;
+%		{Host, Port} -> http:set_option(proxy, {{Host, list_to_integer(Port)}, ["localhost"]}) end,
 	ok.
 
 -endif.

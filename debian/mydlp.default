@@ -19,7 +19,3 @@ NOLOCALMYSQL="false"
 # Set true to disable control of Postix
 NOPOSTFIX="false"
 
-# If you have to use an HTTP proxy server to access internet,
-# you have to set variables below to communicate license server.
-#LICENSE_PROXY_HOST="proxy.hostname.com"
-#LICENSE_PROXY_PORT="3128"
