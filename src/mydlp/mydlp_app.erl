@@ -76,6 +76,7 @@ start(_Type, _Args) ->
         application:load(mydlp),
         error_logger:add_report_handler(mydlp_logger_h, ?CFG(log_dir)),
 	create_pid_file(),
+	start_inets(),
 
 	Protocols = get_protocols(),
 
@@ -174,6 +175,17 @@ get_agents() ->
 	{ok, Agents} = application:get_env(agents),
 	Agents.
 
+start_inets() ->
+	inets:start(),
+	configure_proxy().
+
+configure_proxy() -> 
+	case {os:getenv("LICENSE_PROXY_HOST"), os:getenv("LICENSE_PROXY_PORT")} of
+		{false, _} -> ok;
+		{_, false} -> ok;
+		{Host, Port} -> http:set_option(proxy, {{Host, list_to_integer(Port)}, ["localhost"]}) end,
+	ok.
+
 -endif.
 
 -ifdef(__MYDLP_ENDPOINT).
@@ -183,5 +195,8 @@ get_protocols() -> [ ?SEAP ].
 get_sworkers() ->  ?ENDPOINT_SWORKERS.
 
 get_agents() -> [].
+
+start_inets() ->
+	inets:start().
 
 -endif.
