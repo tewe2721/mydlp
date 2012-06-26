@@ -308,6 +308,26 @@ to_iban_value(C) when C >= $A , C =< $Z -> C - $A + 10;
 to_iban_value(_C) -> throw({error, unexcepected_character}).
 
 
+%%------------------------------------------------------------------------
+%% @doc Checks whether string is a valid permanent identification number
+%% @end
+%%------------------------------------------------------------------------
+
+is_valid_pan([_WS, _I1, _I2, _I3, _I4, I5 | _Tail]) ->
+	case I5 of
+		$C -> true;
+		$P -> true;
+		$H -> true;
+		$F -> true;
+		$A -> true;
+		$T -> true;
+		$B -> true;
+		$L -> true;
+		$J -> true;
+		$G -> true;
+		_Else -> false
+	end.
+
 %%--------------------------------------------------------------------
 %% @doc Checks whether string is a valid TR ID number
 %% @end
@@ -328,8 +348,9 @@ is_valid_trid1(TrIdStr) ->
 %% @doc Checks whether string is a valid SSN number
 %% @end
 %%----------------------------------------------------------------------
-is_valid_ssn(SSNStr) ->
-	Clean = remove_chars(SSNStr, " -"),
+is_valid_ssn([_WS|SSNStr]) ->
+	SSNStr1 = string:substr(SSNStr, 1, string:len(SSNStr) - 1),
+	Clean = remove_chars(SSNStr1, " -"),
 	case string:len(Clean) of 
 		9 ->
 			AreaN = list_to_integer(string:substr(Clean,1,3)),

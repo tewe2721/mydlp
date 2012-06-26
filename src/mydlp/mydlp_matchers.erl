@@ -78,7 +78,10 @@
 	scode_ada_match/3,
 	cc_match/0,
 	cc_match/1,
-	cc_match/3
+	cc_match/3,
+	pan_match/0,
+	pan_match/1,
+	pan_match/3
 ]).
 
 -include_lib("eunit/include/eunit.hrl").
@@ -120,6 +123,17 @@ trid_match(_Conf, _Addr, File) ->
 		File#file.text),
 	
 	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_trid(I) end, Res).
+
+pan_match() -> text.
+
+pan_match(_Conf) -> none.
+
+pan_match(_Conf, _Addr, File) ->
+	Res = mydlp_regex:match_bin(
+		pan,
+		File#file.text),
+
+	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_pan(I) end, Res).
 
 ssn_match() -> text.
 
