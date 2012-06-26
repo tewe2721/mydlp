@@ -328,6 +328,33 @@ is_valid_pan([_WS, _I1, _I2, _I3, _I4, I5 | _Tail]) ->
 		_Else -> false
 	end.
 
+%%----------------------------------------------------------------------
+%% @doc Checks whether string is a valid Brasil CPF Number
+%% @end
+%%----------------------------------------------------------------------
+
+is_valid_cpf(CpfStr)->
+	Clean = remove_chars(CpfStr, " .-"),
+	is_valid_cpf1(Clean).
+
+is_valid_cpf1("00000000000") -> false;
+is_valid_cpf1(CpfStr) ->
+	[I1,I2,I3,I4,I5,I6,I7,I8,I9,I10,I11] =
+		lists:map(fun(I) -> I - $0 end, CpfStr),
+	S1 = 11- ((10*I1 + 9*I2 + 8*I3 + 7*I4 + 6*I5+
+		5*I6 + 4*I7 + 3*I8 + 2*I9) rem 11), 
+	case S1 >= 10 of
+		true -> T1 = 0;
+		false -> T1 = S1
+	end,
+	S2 = 11- ((11*I1 + 10*I2 + 9*I3 + 8*I4 + 7*I5+
+		6*I6 + 5*I7 + 4*I8 + 3*I9 + 2*T1) rem 11),
+	case S2 >= 10 of
+		true -> T2 = 0;
+		false -> T2 = S2
+	end,
+	(T1 == I10) and (T2 == I11).
+
 %%--------------------------------------------------------------------
 %% @doc Checks whether string is a valid TR ID number
 %% @end

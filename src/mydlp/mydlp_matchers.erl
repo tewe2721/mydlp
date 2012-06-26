@@ -81,7 +81,10 @@
 	cc_match/3,
 	pan_match/0,
 	pan_match/1,
-	pan_match/3
+	pan_match/3,
+	cpf_match/0,
+	cpf_match/1,
+	cpf_match/3
 ]).
 
 -include_lib("eunit/include/eunit.hrl").
@@ -134,6 +137,17 @@ pan_match(_Conf, _Addr, File) ->
 		File#file.text),
 
 	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_pan(I) end, Res).
+
+cpf_match() -> text.
+
+cpf_match(_Conf) -> none.
+
+cpf_match(_Conf, _Addr, File) ->
+	Res = mydlp_regex:match_bin(
+		cpf,
+		File#file.text),
+
+	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_cpf(I) end, Res).
 
 ssn_match() -> text.
 

@@ -169,7 +169,8 @@ init([]) ->
 		{word, rec("\\d*(?:[.,]\\d+)+|[\\w\\p{L}]+-[\\w\\p{L}]+|[\\w\\p{L}]+", [unicode])},
 		{hexencoded, rec("[a-fA-F0-9\\r\\n]{512,}")},
 		{base64encoded, rec("[\\+/a-zA-Z0-9\\r\\n]{256,}(?:={1,}|[\\r\\n])")},
-		{pan, rec("\\s(?:[A-Z]){5}(?:[0-9]){4}(?:[A-Z]){1}\\s", [unicode])}
+		{pan, rec("\\s(?:[A-Z]){5}(?:[0-9]){4}(?:[A-Z]){1}\\s", [unicode])},
+		{cpf, rec("(?:\\d{3}\\s{0,1}\.\\s{0,1}){2}(?:\\d{3}\\s{0,1}-\\s{0,1}\\d{2})", [unicode])}
 	],
 	BT = insert_all(BInREs, gb_trees:empty()),
 
