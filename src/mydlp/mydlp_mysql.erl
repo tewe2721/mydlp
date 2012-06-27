@@ -629,6 +629,10 @@ populate_match(Id, <<"iban">>, IFeatureId) ->
 	Func = iban_match,
 	new_match(Id, IFeatureId, Func);
 
+populate_match(Id, <<"aba">>, IFeatureId) ->
+	Func = aba_match,
+	new_match(Id, IFeatureId, Func);
+
 populate_match(Id, <<"cc">>, IFeatureId) ->
 	Func = cc_match,
 	new_match(Id, IFeatureId, Func);

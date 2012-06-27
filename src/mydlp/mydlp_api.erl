@@ -307,6 +307,26 @@ to_iban_value(C) when C >= $a , C =< $z -> C - $a + 10;
 to_iban_value(C) when C >= $A , C =< $Z -> C - $A + 10;
 to_iban_value(_C) -> throw({error, unexcepected_character}).
 
+%%--------------------------------------------------------------------
+%% @doc Checks whether string is a valid ABA Routing Number
+%% @end
+%%----------------------------------------------------------------------
+is_valid_aba(AbaStr) ->
+	Clean = remove_chars(AbaStr, " -"),
+	is_valid_aba1(Clean).
+
+is_valid_aba1([A1,A2|Rest]) ->
+	case  list_to_integer([A1,A2]) of
+		P when P =< 12 ->  check_aba_modulus([A1,A2|Rest]);
+		P when 21 =< P,  P =< 32 ->  check_aba_modulus([A1,A2|Rest]);
+		P when 21 =< P,  P =< 32 ->  check_aba_modulus([A1,A2|Rest])
+	end.
+		
+check_aba_modulus(Str) ->
+	check_aba_modulus1([ C - $0 || C <- Str]).
+
+check_aba_modulus1([A1, A2, A3, A4, A5, A6, A7, A8, A9]) ->
+	((3 * (A1 + A4 + A7)) + (7 * (A2 + A5 + A8)) + (A3 + A6 + A9)) rem 10 == 0. 
 
 %%--------------------------------------------------------------------
 %% @doc Checks whether string is a valid TR ID number
