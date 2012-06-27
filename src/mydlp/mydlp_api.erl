@@ -328,6 +328,26 @@ is_valid_pan([_WS, _I1, _I2, _I3, _I4, I5 | _Tail]) ->
 		_Else -> false
 	end.
 
+%%---------------------------------------------------------------------
+%% @doc Checks whether string is a valid China Identity Card Number
+%% @end 
+%%---------------------------------------------------------------------
+
+is_valid_china_icn(IcnStr) ->
+	Clean = remove_chars(IcnStr, " "),
+	is_valid_china_icn1(Clean).
+
+is_valid_china_icn1(IcnStr) ->
+	CheckSumList = "10X98765432",
+	[I1,I2,I3,I4,I5,I6,I7,I8,I9,I10,I11,I12,I13,I14,I15,I16,I17,_I18] =
+		lists:map(fun(I) -> I - $0 end, IcnStr),
+	S1 = (I1*7 + I2*9 + I3*10 + I4*5 + I5*8 + I6*4 + I7*2 + I8*1 +
+		I9*6 + I10*3 + I11*7 + I12*9 + I13*10 + I14*5 + I15*8 +
+		I16*4 + I17*2) rem 11,
+	Result = lists:nth(S1, CheckSumList),
+	LastElement = lists:last(IcnStr),
+	Result == LastElement.
+
 %%----------------------------------------------------------------------
 %% @doc Checks whether string is a valid Brasil CPF Number
 %% @end
