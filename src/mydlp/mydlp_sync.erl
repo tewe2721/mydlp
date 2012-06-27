@@ -87,6 +87,7 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
+	inets:start(),
 	call_timer(15000),
 	{ok, #state{}}.
 

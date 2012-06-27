@@ -653,6 +653,18 @@ populate_match(Id, <<"said">>, IFeatureId) ->
 	Func = said_match,
 	new_match(Id, IFeatureId, Func);
 
+populate_match(Id, <<"pan">>, IFeatureId) ->
+	Func = pan_match,
+	new_match(Id, IFeatureId, Func);
+
+populate_match(Id, <<"cpf">>, IFeatureId) ->
+	Func = cpf_match,
+	new_match(Id, IFeatureId, Func);
+
+populate_match(Id, <<"china_icn">>, IFeatureId) ->
+	Func = china_icn_match,
+	new_match(Id, IFeatureId, Func);
+
 populate_match(Id, <<"scode">>, IFeatureId) ->
 	Func = scode_match,
 	new_match(Id, IFeatureId, Func);
