@@ -344,7 +344,7 @@ is_valid_china_icn1(IcnStr) ->
 	S1 = (I1*7 + I2*9 + I3*10 + I4*5 + I5*8 + I6*4 + I7*2 + I8*1 +
 		I9*6 + I10*3 + I11*7 + I12*9 + I13*10 + I14*5 + I15*8 +
 		I16*4 + I17*2) rem 11,
-	Result = lists:nth(S1, CheckSumList),
+	Result = lists:nth(S1+1, CheckSumList),
 	LastElement = lists:last(IcnStr),
 	Result == LastElement.
 
