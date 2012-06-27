@@ -171,7 +171,7 @@ init([]) ->
 		{base64encoded, rec("[\\+/a-zA-Z0-9\\r\\n]{256,}(?:={1,}|[\\r\\n])")},
 		{pan, rec("\\s(?:[A-Z]){5}(?:[0-9]){4}(?:[A-Z]){1}\\s", [unicode])},
 		{cpf, rec("(?:\\d{3}\\s{0,1}\.\\s{0,1}){2}(?:\\d{3}\\s{0,1}-\\s{0,1}\\d{2})", [unicode])},
-		{icn, rec("\\s(?:\\d{18})\\s", [unicode])}
+		{icn, rec("\\s(?:\\d{17}[\\dX])\\s", [unicode])}
 	],
 	BT = insert_all(BInREs, gb_trees:empty()),
 
