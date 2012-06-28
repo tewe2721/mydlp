@@ -43,6 +43,9 @@
 	iban_match/0,
 	iban_match/1,
 	iban_match/3,
+	aba_match/0,
+	aba_match/1,
+	aba_match/3,
 	trid_match/0,
 	trid_match/1,
 	trid_match/3,
@@ -121,6 +124,16 @@ iban_match(_Conf, _Addr, File) ->
 	 	iban, 
 		File#file.text),
 	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_iban(I) end, Res).
+
+aba_match() -> text.
+
+aba_match(_Conf) -> none.
+
+aba_match(_Conf, _Addr, File) ->
+	Res = mydlp_regex:match_bin(
+	 	aba, 
+		File#file.text),
+	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_aba(I) end, Res).
 
 trid_match() -> text.
 
