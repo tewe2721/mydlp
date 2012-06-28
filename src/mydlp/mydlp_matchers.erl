@@ -175,7 +175,7 @@ cc_edate_match(_Conf, _Addr, File) ->
 		edate,
 		File#file.text),
 
-	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_cc_edata(I) end, Res).
+	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_cc_edate(I) end, Res).
 
 ssn_match() -> text.
 
