@@ -669,6 +669,10 @@ populate_match(Id, <<"cc_edate">>, IFeatureId) ->
 	Func = cc_edate_match,
 	new_match(Id, IFeatureId, Func);
 
+populate_match(Id, <<"birthdate">>, IFeatureId) ->
+	Func = birthdate_match,
+	new_match(Id, IFeatureId, Func);
+
 populate_match(Id, <<"scode">>, IFeatureId) ->
 	Func = scode_match,
 	new_match(Id, IFeatureId, Func);

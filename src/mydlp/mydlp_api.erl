@@ -418,6 +418,28 @@ is_valid_cc_edate(EdateStr) ->
 	ValidMonth and ValidYear.	
 
 %%--------------------------------------------------------------------
+%% @doc Checks whether string is a valid birthdate
+%% @end
+%%--------------------------------------------------------------------
+
+is_valid_birthdate(BirthdateString) ->
+	[I1,I2,_I3,I4,I5,_I6,I7,I8,I9,I10] =
+		lists:map(fun(I) -> I - $0 end, BirthdateString),
+	P1 = I1*10 + I2,
+	P2 = I4*10 + I5,
+	P3 = I7*1000 + I8*100 + I9*10 + I10,
+	case (P1 > 0) and (P1 < 32) and (P2 > 0) and (P2 < 32) of
+		true -> ValidDM = true;
+		false -> ValidDM = false
+	end,
+	{Y, _M, _D} = date(),
+	case (P3 > 1900) and (P3 =< Y) of
+		true -> ValidY = true;
+		false -> ValidY = false
+	end,
+	ValidDM and ValidY.
+
+%%--------------------------------------------------------------------
 %% @doc Checks whether string is a valid TR ID number
 %% @end
 %%----------------------------------------------------------------------

@@ -173,7 +173,8 @@ init([]) ->
 		{pan, rec("\\s(?:[A-Z]){5}(?:[0-9]){4}(?:[A-Z]){1}\\s", [unicode])},
 		{cpf, rec("(?:\\d{3}\\s{0,1}\.\\s{0,1}){2}(?:\\d{3}\\s{0,1}-\\s{0,1}\\d{2})", [unicode])},
 		{icn, rec("\\s(?:\\d{17}[\\dX])\\s", [unicode])},
-		{edate, rec("(?:\\d{2}/\\d{2})", [unicode])}
+		{edate, rec("(?:\\d{2}[/-]\\d{2})", [unicode])},
+		{birthdate, rec("(?:\\d{2}[/-]){2}(?:\\d{4})", [unicode])}
 	],
 	BT = insert_all(BInREs, gb_trees:empty()),
 
