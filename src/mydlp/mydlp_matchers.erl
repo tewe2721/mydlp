@@ -87,7 +87,10 @@
 	cpf_match/3,
 	china_icn_match/0,
 	china_icn_match/1,
-	china_icn_match/3
+	china_icn_match/3,
+	cc_edate_match/0,
+	cc_edate_match/1,
+	cc_edate_match/3
 ]).
 
 -include_lib("eunit/include/eunit.hrl").
@@ -162,6 +165,17 @@ china_icn_match(_Conf, _Addr, File) ->
 		File#file.text),
 
 	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_china_icn(I) end, Res).
+
+cc_edate_match() -> text.
+
+cc_edate_match(_Conf) -> none.
+
+cc_edate_match(_Conf, _Addr, File) ->
+	Res = mydlp_regex:match_bin(
+		edate,
+		File#file.text),
+
+	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_cc_edata(I) end, Res).
 
 ssn_match() -> text.
 

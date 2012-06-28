@@ -384,14 +384,14 @@ is_valid_cc_edate(EdateStr) ->
 	[I1,I2,_I3,I4,I5] = 
 		lists:map(fun(I) -> I - $0 end, EdateStr),
 	Mm = I1*10 + I2,
-	case (Mm =< 12) and (Mm > 0) of
+	case Mm <= 12 and Mm >= 0 of
 		true -> ValidMonth = true;
 		false -> ValidMonth = false
 	end,
 	Yy = I4*10 + I5,
-	{Y, _M, _D} = date(),
+	{Y, M, D} = date(),
 	YearNow = Y rem 100,
-	case (Yy >= YearNow) and (Yy =< (YearNow + 10)) of
+	case Yy >= YearNow and Yy <= (YearNow + 10) of
 		true -> ValidYear = true;
 		false -> ValidYear = false
 	end,

@@ -661,6 +661,10 @@ populate_match(Id, <<"china_icn">>, IFeatureId) ->
 	Func = china_icn_match,
 	new_match(Id, IFeatureId, Func);
 
+populate_match(Id, <<"cc_edate">>, IFeatureId) ->
+	Func = cc_edate__match,
+	new_match(Id, IFeatureId, Func);
+
 populate_match(Id, <<"scode">>, IFeatureId) ->
 	Func = scode_match,
 	new_match(Id, IFeatureId, Func);
