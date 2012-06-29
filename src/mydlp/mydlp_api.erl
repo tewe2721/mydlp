@@ -422,7 +422,7 @@ is_valid_cc_edate(EdateStr) ->
 %% @end
 %%--------------------------------------------------------------------
 
-is_valid_birthdate(BirthdateString) ->
+is_valid_birthdate(BirthdateString) when length(BirthdateString) == 10 ->
 	[I1,I2,_I3,I4,I5,_I6,I7,I8,I9,I10] =
 		lists:map(fun(I) -> I - $0 end, BirthdateString),
 	P1 = I1*10 + I2,
@@ -433,11 +433,39 @@ is_valid_birthdate(BirthdateString) ->
 		false -> ValidDM = false
 	end,
 	{Y, _M, _D} = date(),
-	case (P3 > 1900) and (P3 =< Y) of
+	case (P3 > 1899) and (P3 =< Y) of
 		true -> ValidY = true;
 		false -> ValidY = false
 	end,
-	ValidDM and ValidY.
+	ValidDM and ValidY;
+
+is_valid_birthdate(BirthdateString) when length(BirthdateString) == 11 ->
+	MonthStr = string:substr(BirthdateString, 4, 3),
+	[I1,I2,_I3,_I4,_I5,_I6,_I7,I8,I9,I10,I11] =
+		lists:map(fun(I) -> I - $0 end, BirthdateString),
+	P1 = I1*10 + I2,
+	P2 = I8*1000 + I9*100 + I10*10 + I11,
+	{Y, _M, _D} = date(),
+	case (P1 > 0) and (P1 < 32) and (P2 > 1899) and (P2 =< Y) of
+		true -> ValidDY = true;
+		false -> ValidDY = false
+	end,
+	case MonthStr of
+		"Jan" -> ValidM = true;
+		"Feb" -> ValidM = true;
+		"Mar" -> ValidM = true;
+		"Apr" -> ValidM = true;
+		"May" -> ValidM = true;
+		"Jun" -> ValidM = true;
+		"Jul" -> ValidM = true;
+		"Aug" -> ValidM = true;
+		"Sep" -> ValidM = true;
+		"Oct" -> ValidM = true;
+		"Nov" -> ValidM = true;
+		"Dec" -> ValidM = true;
+		_ -> ValidM = false
+	end,
+	ValidM and ValidDY.
 
 %%--------------------------------------------------------------------
 %% @doc Checks whether string is a valid TR ID number
