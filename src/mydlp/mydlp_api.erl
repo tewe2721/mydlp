@@ -422,35 +422,26 @@ is_valid_cc_edate(EdateStr) ->
 %% @end
 %%--------------------------------------------------------------------
 
-is_valid_birthdate(BirthdateString) when (length(BirthdateString) == 10) ->
-	[Head|_Tail] = string:tokens(BirthdateString, "-/"),
-	case length(Head) == 4 of
-		true -> is_valid_birthdate1(BirthdateString);
-		false -> is_valid_birthdate2(BirthdateString)
+is_valid_birthdate(BirthdateString) when length(BirthdateString) == 10 ->
+	[Head|_Tail] = string:tokens(BirthdateString, "-/ "),
+	case re:run(Head, "^[0-9]+$") == nomatch of
+		true-> is_valid_nonnumeric_birthdate(BirthdateString);
+		false-> is_valid_numeric_birthdate(BirthdateString)
 	end;
 
-%is_valid_birthdate(BirthdateString) when length(BirthdateString) == 10 ->
-%	[I1,I2,_I3,I4,I5,_I6,I7,I8,I9,I10] =
-%		lists:map(fun(I) -> I - $0 end, BirthdateString),
-%	P1 = I1*10 + I2,
-%	P2 = I4*10 + I5,
-%	P3 = I7*1000 + I8*100 + I9*10 + I10,
-%	case (P1 > 0) and (P1 < 32) and (P2 > 0) and (P2 < 32) of
-%		true -> ValidDM = true;
-%		false -> ValidDM = false
-%	end,
-%	{Y, _M, _D} = date(),
-%	case (P3 > 1899) and (P3 =< Y) of
-%		true -> ValidY = true;
-%		false -> ValidY = false
-%	end,
-%	ValidDM and ValidY;
-
 is_valid_birthdate(BirthdateString) when length(BirthdateString) == 11 ->
-	MonthStr = string:substr(BirthdateString, 4, 3),
-	[I1,I2,_I3,_I4,_I5,_I6,_I7,I8,I9,I10,I11] =
+	[Head|_Tail] = string:tokens(BirthdateString, "/.- "),
+	[I1,I2,_I3,_I4,I5,I6,_I7,I8,I9,I10,I11] =
 		lists:map(fun(I) -> I - $0 end, BirthdateString),
-	P1 = I1*10 + I2,
+	case re:run(Head, "^[0-9]+$") of 
+		nomatch -> MonthStr = string:substr(BirthdateString, 1, 3),
+				case I6 == $\, - $0 of
+					true -> P1 = I5; % For mmm d, yyyy
+					false -> P1 = I5*10 + I6 %For mmm dd yyyy
+				end;
+		_ -> MonthStr = string:substr(BirthdateString, 4, 3), % For dd mmm yyyy
+				P1 = I1*10 + I2
+	end,
 	P2 = I8*1000 + I9*100 + I10*10 + I11,
 	{Y, _M, _D} = date(),
 	case (P1 > 0) and (P1 < 32) and (P2 > 1899) and (P2 =< Y) of
@@ -474,6 +465,7 @@ is_valid_birthdate(BirthdateString) when length(BirthdateString) == 11 ->
 	end,
 	ValidM and ValidDY;
 
+%For mmm dd, yyyy
 is_valid_birthdate(BirthdateString) when length(BirthdateString) == 12 ->
 	MonthStr = string:substr(BirthdateString, 1, 3),
 	[_I1,_I2,_I3,_I4,I5,I6,_I7,_I8,I9,I10,I11,I12] =
@@ -501,6 +493,13 @@ is_valid_birthdate(BirthdateString) when length(BirthdateString) == 12 ->
 		_ -> ValidM = false
 	end,
 	ValidM and ValidDY.
+
+is_valid_numeric_birthdate(BirthdateString) ->
+	[Head|_Tail] = string:tokens(BirthdateString, "/.-"),
+	case length(Head) of
+		4 -> is_valid_birthdate1(BirthdateString);%For dd-mm-yyyy
+		2 -> is_valid_birthdate2(BirthdateString)%For yyyy-mm-dd
+	end.
 
 is_valid_birthdate1(BirthdateString) ->
 	[I1,I2,I3,I4,_I5,I6,I7,_I8,I9,I10] = 
@@ -536,6 +535,33 @@ is_valid_birthdate2(BirthdateString) ->
 		false -> ValidY = false
 	end,
 	ValidDM and ValidY.
+
+is_valid_nonnumeric_birthdate(BirthdateString)->
+	MonthStr = string:substr(BirthdateString, 1, 3),
+	[_I1,_I2,_I3,_I4,I5,_I6,I7,I8,I9,I10] =
+		lists:map(fun(I) -> I - $0 end, BirthdateString),
+	P3 = I7*1000 + I8*100 + I9*10 + I10,
+	{Y,_M,_D} =  date(),
+	case (I5 > 0) and (I5 < 32) and (P3 > 1899) and (P3 =< Y) of
+		true -> ValidMY = true;
+		false -> ValidMY = false
+	end,
+	case MonthStr of
+		"Jan" -> ValidM = true;
+		"Feb" -> ValidM = true;
+		"Mar" -> ValidM = true;
+		"Apr" -> ValidM = true;
+		"May" -> ValidM = true;
+		"Jun" -> ValidM = true;
+		"Jul" -> ValidM = true;
+		"Aug" -> ValidM = true;
+		"Sep" -> ValidM = true;
+		"Oct" -> ValidM = true;
+		"Nov" -> ValidM = true;
+		"Dec" -> ValidM = true;
+		_ -> ValidM = false
+	end,
+	ValidMY and ValidM.
 
 %%--------------------------------------------------------------------
 %% @doc Checks whether string is a valid TR ID number
