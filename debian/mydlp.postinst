@@ -94,8 +94,13 @@ configure_solr() {
 	/bin/cp -f /usr/share/mydlp/ui/solr.schema.xml /etc/solr/conf/schema.xml
 }
 
+fix_jetty_init_grep_typo() {
+	/bin/grep -q '\[:space:\]' /etc/init.d/jetty && /bin/sed -i -s 's/\[:space:\]/[[:space:]]/g' /etc/init.d/jetty
+}
+
 case "$1" in
     configure)
+	fix_jetty_init_grep_typo
 	if [ -z "$2" ]; then
 		generate_init_epoch
 		generate_keys
