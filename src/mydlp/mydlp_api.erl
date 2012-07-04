@@ -422,146 +422,72 @@ is_valid_cc_edate(EdateStr) ->
 %% @end
 %%--------------------------------------------------------------------
 
-is_valid_birthdate(BirthdateString) when length(BirthdateString) == 10 ->
-	[Head|_Tail] = string:tokens(BirthdateString, "-/ "),
-	case re:run(Head, "^[0-9]+$") == nomatch of
-		true-> is_valid_nonnumeric_birthdate(BirthdateString);
-		false-> is_valid_numeric_birthdate(BirthdateString)
-	end;
+is_valid_birthdate(BirthdateStr) ->
 
-is_valid_birthdate(BirthdateString) when length(BirthdateString) == 11 ->
-	[Head|_Tail] = string:tokens(BirthdateString, "/.- "),
-	[I1,I2,_I3,_I4,I5,I6,_I7,I8,I9,I10,I11] =
-		lists:map(fun(I) -> I - $0 end, BirthdateString),
-	case re:run(Head, "^[0-9]+$") of 
-		nomatch -> MonthStr = string:substr(BirthdateString, 1, 3),
-				case I6 == $\, - $0 of
-					true -> P1 = I5; % For mmm d, yyyy
-					false -> P1 = I5*10 + I6 %For mmm dd yyyy
-				end;
-		_ -> MonthStr = string:substr(BirthdateString, 4, 3), % For dd mmm yyyy
-				P1 = I1*10 + I2
-	end,
-	P2 = I8*1000 + I9*100 + I10*10 + I11,
-	{Y, _M, _D} = date(),
-	case (P1 > 0) and (P1 < 32) and (P2 > 1899) and (P2 =< Y) of
-		true -> ValidDY = true;
-		false -> ValidDY = false
-	end,
-	case MonthStr of
-		"Jan" -> ValidM = true;
-		"Feb" -> ValidM = true;
-		"Mar" -> ValidM = true;
-		"Apr" -> ValidM = true;
-		"May" -> ValidM = true;
-		"Jun" -> ValidM = true;
-		"Jul" -> ValidM = true;
-		"Aug" -> ValidM = true;
-		"Sep" -> ValidM = true;
-		"Oct" -> ValidM = true;
-		"Nov" -> ValidM = true;
-		"Dec" -> ValidM = true;
-		_ -> ValidM = false
-	end,
-	ValidM and ValidDY;
+	{Year, Month, Day} = split_birthdate_string(BirthdateStr),
+	(is_valid_year(Year) and is_valid_month(Month)) and is_valid_day(Day).
 
-%For mmm dd, yyyy
-is_valid_birthdate(BirthdateString) when length(BirthdateString) == 12 ->
-	MonthStr = string:substr(BirthdateString, 1, 3),
-	[_I1,_I2,_I3,_I4,I5,I6,_I7,_I8,I9,I10,I11,I12] =
-		lists:map(fun(I) -> I - $0 end, BirthdateString),
-	P1 = I5*10 + I6,
-	P2 = I9*1000 + I10*100 + I11*10 + I12,
-	{Y, _M, _D} = date(),
-	case (P1 > 0) and (P1 < 32) and (P2 > 1899) and (P2 =< Y) of
-		true -> ValidDY = true;
-		false -> ValidDY = false
-	end,
-	case MonthStr of
-		"Jan" -> ValidM = true;
-		"Feb" -> ValidM = true;
-		"Mar" -> ValidM = true;
-		"Apr" -> ValidM = true;
-		"May" -> ValidM = true;
-		"Jun" -> ValidM = true;
-		"Jul" -> ValidM = true;
-		"Aug" -> ValidM = true;
-		"Sep" -> ValidM = true;
-		"Oct" -> ValidM = true;
-		"Nov" -> ValidM = true;
-		"Dec" -> ValidM = true;
-		_ -> ValidM = false
-	end,
-	ValidM and ValidDY.
+split_birthdate_string(BirthdateStr) ->
+	Clean = remove_chars(BirthdateStr, ","),
+	SplittedDate = string:tokens(Clean, "/-. "),
+	[Head|Tail] = SplittedDate,
+	{LeftList, Year} = case is_year_string(Head) of 
+				true -> {Tail, Head};
+				false -> {lists:sublist(SplittedDate, 2), lists:last(Tail)}
+			end,
+	{Day, Month} = find_month_string(LeftList),
+	{Year, Month, Day}.
 
-is_valid_numeric_birthdate(BirthdateString) ->
-	[Head|_Tail] = string:tokens(BirthdateString, "/.-"),
-	case length(Head) of
-		4 -> is_valid_birthdate1(BirthdateString);%For dd-mm-yyyy
-		2 -> is_valid_birthdate2(BirthdateString)%For yyyy-mm-dd
+is_year_string(Str) ->
+	case length(Str) of
+		4 -> is_all_digit(Str);
+		_ -> false
 	end.
 
-is_valid_birthdate1(BirthdateString) ->
-	[I1,I2,I3,I4,_I5,I6,I7,_I8,I9,I10] = 
-		lists:map(fun(I) -> I - $0 end, BirthdateString),
-	P1 = I9*10 + I10,
-	P2 = I6*10 + I7,
-	P3 = I1*1000 + I2*100 + I3*10 + I4,
-	case (P1 > 0) and (P1 < 32) and (P2 > 0) and (P2 < 32) of
-		true -> ValidDM = true;
-		false -> ValidDM = false
-	end,
-	{Y, _M, _D} = date(),
-	case (P3 > 1899) and (P3 =< Y) of
-		true -> ValidY = true;
-		false -> ValidY = false
-	end,
-	ValidDM and ValidY.
+find_month_string([H,T]) when length(H) == 3 -> {T, H};
+find_month_string([H,T]) when length(T) == 3 -> {H, T};
+find_month_string([H,T]) when length(H) == 2 ->
+	case (list_to_integer(H) < 13) and (list_to_integer(H) > 0) of 
+		true -> {T,H};
+		false -> {H, T}
+	end;
+find_month_string([H,T]) -> {H, T}.
 
+is_valid_year(Year) ->
+	[I1,I2,I3,I4] = lists:map(fun(I) -> I - $0 end, Year),
+	Y = I1*1000 + I2*100 + I3*10 + I4,
+	{Yy, _M, _D} = date(),
+	((Y > 1899) and (Y =< Yy)).
 
-is_valid_birthdate2(BirthdateString) ->
-	[I1,I2,_I3,I4,I5,_I6,I7,I8,I9,I10] = 
-		lists:map(fun(I) -> I - $0 end, BirthdateString),
-	P1 = I1*10 + I2,
-	P2 = I4*10 + I5,
-	P3 = I7*1000 + I8*100 + I9*10 + I10,
-	case (P1 > 0) and (P1 < 32) and (P2 > 0) and (P2 < 32) of
-		true -> ValidDM = true;
-		false -> ValidDM = false
-	end,
-	{Y, _M, _D} = date(),
-	case (P3 > 1899) and (P3 =< Y) of
-		true -> ValidY = true;
-		false -> ValidY = false
-	end,
-	ValidDM and ValidY.
+is_valid_month(MonthStr) ->
+	case is_all_digit(MonthStr) of
+		true -> ((list_to_integer(MonthStr) > 0) and (list_to_integer(MonthStr) < 13));
+		false ->
+			case MonthStr of
+				"Jan" -> true;
+				"Feb" -> true;
+				"Mar" -> true;
+				"Apr" -> true;
+				"May" -> true;
+				"Jun" -> true;
+				"Jul" -> true;
+				"Aug" -> true;
+				"Sep" -> true;
+				"Oct" -> true;
+				"Nov" -> true;
+				"Dec" -> true;
+				_ -> false
+			end
+	end.
 
-is_valid_nonnumeric_birthdate(BirthdateString)->
-	MonthStr = string:substr(BirthdateString, 1, 3),
-	[_I1,_I2,_I3,_I4,I5,_I6,I7,I8,I9,I10] =
-		lists:map(fun(I) -> I - $0 end, BirthdateString),
-	P3 = I7*1000 + I8*100 + I9*10 + I10,
-	{Y,_M,_D} =  date(),
-	case (I5 > 0) and (I5 < 32) and (P3 > 1899) and (P3 =< Y) of
-		true -> ValidMY = true;
-		false -> ValidMY = false
-	end,
-	case MonthStr of
-		"Jan" -> ValidM = true;
-		"Feb" -> ValidM = true;
-		"Mar" -> ValidM = true;
-		"Apr" -> ValidM = true;
-		"May" -> ValidM = true;
-		"Jun" -> ValidM = true;
-		"Jul" -> ValidM = true;
-		"Aug" -> ValidM = true;
-		"Sep" -> ValidM = true;
-		"Oct" -> ValidM = true;
-		"Nov" -> ValidM = true;
-		"Dec" -> ValidM = true;
-		_ -> ValidM = false
-	end,
-	ValidMY and ValidM.
+is_valid_day(Day) when length(Day) == 2 ->
+	[I1,I2] = lists:map(fun(I) -> I - $0 end, Day),
+	D = I1*10 + I2,
+	((D > 0) and (D < 32));
+
+is_valid_day(Day) when length(Day) == 1 ->
+	[I1] = lists:map(fun(I) -> I - $0 end, Day),
+	((I1 > 0) and (I1 < 10)).
 
 %%--------------------------------------------------------------------
 %% @doc Checks whether string is a valid TR ID number
@@ -1954,6 +1880,7 @@ pany_gather(Pid, Timeout) ->
 pany_sup_f(Parent, Fun, ListOfArgs, Timeout, IsPAll) -> 
 	Self = self(),
 	Pids = lists:map(fun(I) -> mspawn_link(fun() -> pany_child_f(Self, Fun, I, Timeout) end) end, ListOfArgs),
+
 	NumberOfPids = length(Pids),
 	pany_sup_gather(NumberOfPids, Parent, Timeout, IsPAll, []).
 
