@@ -106,6 +106,7 @@ patch_mysql_schema() {
 		if $DPKGBIN --compare-versions "$PATCHVERSION" gt "$PACKAGEOLDVERSION"; then
 			local PATCHDB=$(echo $p|/bin/sed -sr 's/^[0-9\.-]+___//g'|/bin/sed -s 's/___.*$//g')
 			local PATCHFILE="$SCHEMADIFFDIR""$p"
+			echo "Applying database ($PATCHDB) schema patch for $PATCHVERSION : $p ..."
 			$MYSQLC $PATCHDB < $PATCHFILE
 		fi
 	done
