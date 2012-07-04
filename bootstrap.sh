@@ -6,8 +6,8 @@ if [ -n "$1" ]; then
 	REVISION=$1
 fi
 
-#CURRENTVERSION=$(git describe |sed -s 's/-.*$//')
-CURRENTVERSION=$(git tag|tail -1)
+CURRENTVERSION=$(git describe |sed -s 's/-.*$//')
+#CURRENTVERSION=$(git tag|tail -1)
 NEXTVERSION=""
 
 function incrementVersion {
