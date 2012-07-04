@@ -28,13 +28,13 @@ CHOWN=/bin/chown
 QUARANTINE_DIR=/var/lib/mydlp/quarantine/
 REVISION_DIR=/var/lib/mydlp/revision/
 
+LSBIN=/bin/ls
 MYSQLC=/usr/bin/mysql
-SCHEMADIR=/usr/share/mydlp/schema/
+SCHEMADIFFDIR=/usr/share/mydlp/schema/diffs/
 
 AWKBIN=/usr/bin/awk
 DPKGBIN=/usr/bin/dpkg
 ECHOBIN=/bin/echo
-
 
 # Generates SSL keys
 generate_keys() {
@@ -98,10 +98,30 @@ fix_jetty_init_grep_typo() {
 	/bin/grep -q '\[:space:\]' /etc/init.d/jetty && /bin/sed -i -s 's/\[:space:\]/[[:space:]]/g' /etc/init.d/jetty
 }
 
+patch_mysql_schema() {
+	local PACKAGEOLDVERSION=$1
+	for p in $(/bin/ls $SCHEMADIFFDIR)
+	do
+		local PATCHVERSION=$(echo $p|/bin/sed -s 's/___.*$//g')
+		if $DPKGBIN --compare-versions "$PATCHVERSION" gt "$PACKAGEOLDVERSION"; then
+			local PATCHDB=$(echo $p|/bin/sed -sr 's/^[0-9\.-]+___//g'|/bin/sed -s 's/___.*$//g')
+			local PATCHFILE="$SCHEMADIFFDIR""$p"
+			$MYSQLC $PATCHDB < $PATCHFILE
+		fi
+	done
+}
+
 case "$1" in
     configure)
 	fix_jetty_init_grep_typo
-	if [ -z "$2" ]; then
+	if [ -n "$2" ]; then
+		# update
+		patch_mysql_schema $2
+	#	if $DPKGBIN --compare-versions "0.9.15-1" gt "$2"; then
+	#		dependant work
+	#	fi
+	else
+		# first install
 		generate_init_epoch
 		generate_keys
 		configure_apache
@@ -111,10 +131,6 @@ case "$1" in
 		configure_jetty
 		configure_solr
 		chown_revision
-
-		#if $DPKGBIN --compare-versions "0.9.15-1" gt "$2"; then
-		#	dependant work
-		#fi
 	fi
 	remove_root_webapp
 	install_webapp
