@@ -1,1 +1,1 @@
-SUBDIRS = thrift backend mydlp ui script
+SUBDIRS = schema thrift backend mydlp ui script

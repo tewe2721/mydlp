@@ -33,6 +33,7 @@ PIDFILE3=/var/run/jetty.pid
 SERV=/usr/sbin/service
 MYSQLC=/usr/bin/mysql
 MYSQLADM=/usr/bin/mysqladmin
+SCHEMADIR=/usr/share/mydlp/schema
 
 SQUIDBIN=/usr/sbin/squid3
 SQUIDBINNAME=squid3
@@ -145,10 +146,12 @@ check_mysql_db() {
 		if [ -z "$(echo 'show databases'|$MYSQLC|grep -e '^mydlp$')" ]; then
 			echo " * Creating MySQL database (mydlp)..."
 			$MYSQLADM create mydlp
+			$MYSQLC mydlp < $SCHEMADIR/HEAD_mydlp.sql
 		fi
 		if [ -z "$(echo 'show databases'|$MYSQLC|grep -e '^mydlp_log$')" ]; then
 			echo " * Creating MySQL database (mydlp_log)..."
 			$MYSQLADM create mydlp_log
+			$MYSQLC mydlp_log < $SCHEMADIR/HEAD_mydlp_log.sql
 		fi
 	else
 		echo "Cannot find mysql-client!!!"
