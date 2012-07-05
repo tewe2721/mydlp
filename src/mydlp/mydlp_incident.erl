@@ -124,7 +124,7 @@ code_change(_OldVsn, State, _Extra) ->
 
 %%%%%%%%%%%%%%%%% internal
 
-process_log_tuple({Time, web = Channel, RuleId, archive = Action, Ip, User, To, ITypeId, Files, Misc, Payload}) ->
+process_log_tuple({Time, web = Channel, RuleId, archive = Action, Ip, User, To, -1 = ITypeId, Files, Misc, Payload}) ->
 	Files1 = lists:filter(fun(F) -> 
 		?BB_S(F#file.dataref) > ?CFG(archive_minimum_size)
 		end, Files),
