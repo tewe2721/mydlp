@@ -418,16 +418,28 @@ is_valid_cc_edate(EdateStr) ->
 	ValidMonth and ValidYear.	
 
 %%--------------------------------------------------------------------
+%% @doc Checks whether string is a valid date
+%% @end
+%%--------------------------------------------------------------------
+
+is_valid_date(DateStr) ->
+	{Year, Month, Day} = split_date_string(DateStr),
+	(is_valid_year(Year) and is_valid_month(Month)) and is_valid_day(Day).
+
+is_valid_year(Year) ->
+	[I1,I2,I3,I4] = lists:map(fun(I) -> I - $0 end, Year),
+	Y = I1*1000 + I2*100 + I3*10 + I4,
+	((Y >= 1000) and (Y =< 3000)).
+%%--------------------------------------------------------------------
 %% @doc Checks whether string is a valid birthdate
 %% @end
 %%--------------------------------------------------------------------
 
 is_valid_birthdate(BirthdateStr) ->
+	{Year, Month, Day} = split_date_string(BirthdateStr),
+	(is_valid_birthdate_year(Year) and is_valid_month(Month)) and is_valid_day(Day).
 
-	{Year, Month, Day} = split_birthdate_string(BirthdateStr),
-	(is_valid_year(Year) and is_valid_month(Month)) and is_valid_day(Day).
-
-split_birthdate_string(BirthdateStr) ->
+split_date_string(BirthdateStr) ->
 	Clean = remove_chars(BirthdateStr, ","),
 	SplittedDate = string:tokens(Clean, "/-. "),
 	[Head|Tail] = SplittedDate,
@@ -453,7 +465,7 @@ find_month_string([H,T]) when length(H) == 2 ->
 	end;
 find_month_string([H,T]) -> {H, T}.
 
-is_valid_year(Year) ->
+is_valid_birthdate_year(Year) ->
 	[I1,I2,I3,I4] = lists:map(fun(I) -> I - $0 end, Year),
 	Y = I1*1000 + I2*100 + I3*10 + I4,
 	{Yy, _M, _D} = date(),

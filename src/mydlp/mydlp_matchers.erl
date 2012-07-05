@@ -96,7 +96,10 @@
 	cc_edate_match/3,
 	birthdate_match/0,
 	birthdate_match/1,
-	birthdate_match/3
+	birthdate_match/3,
+	gdate_match/0,
+	gdate_match/1,
+	gdate_match/3
 ]).
 
 -include_lib("eunit/include/eunit.hrl").
@@ -192,6 +195,17 @@ cc_edate_match(_Conf, _Addr, File) ->
 		File#file.text),
 
 	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_cc_edate(I) end, Res).
+
+gdate_match() -> text.
+
+gdate_match(_Conf) -> none.
+
+gdate_match(_Conf, _Addr, File) ->
+	Res = mydlp_regex:match_bin(
+		birthdate,
+		File#file.text),
+	
+	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_date(I) end, Res).
 
 birthdate_match() -> text.
 
