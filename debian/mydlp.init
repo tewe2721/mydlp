@@ -106,15 +106,22 @@ is_port_open() {
 	netstat -nltp 2>/dev/null|grep LISTEN|awk '-F ' '{print $4;}'|awk -F: '{print $NF;}'|grep -qe "^$PORTNUM$"
 }
 
+wait_for_jetty() {
+	for i in $(seq 30); do
+	    sleep 1
+	    if is_port_open $JETTYPORT; then break; fi
+	done
+}
+
 wait_for_icap() {
-	for i in $(seq 10); do
+	for i in $(seq 15); do
 	    sleep 1
 	    if is_port_open $ICAPPORT; then break; fi
 	done
 }
 
 wait_for_backend() {
-	for i in $(seq 10); do
+	for i in $(seq 15); do
 	    sleep 1
 	    if is_port_open $BACKENDPORT; then break; fi
 	done
@@ -312,7 +319,21 @@ ensure_apache() {
 	if [ -n "$NOJETTY" -a "$NOJETTY" == "true" ]; then
                 return 0;
         fi
-	is_apache_alive || start_apache
+	echo " * Waiting for Jetty to load context..."
+	wait_for_jetty
+	if is_apache_alive; then
+		start_apache
+	else
+		reload_apache
+	fi
+}
+
+reload_apache() {
+	if [ -n "$NOJETTY" -a "$NOJETTY" == "true" ]; then
+                return 0;
+        fi
+	echo " * Reloading Apache Web Server..."
+	$SERV apache2 reload 2>&1 > /dev/null
 }
 
 start_apache() {
