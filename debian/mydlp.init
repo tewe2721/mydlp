@@ -322,9 +322,9 @@ ensure_apache() {
 	echo " * Waiting for Jetty to load context..."
 	wait_for_jetty
 	if is_apache_alive; then
-		start_apache
-	else
 		reload_apache
+	else
+		start_apache
 	fi
 }
 
