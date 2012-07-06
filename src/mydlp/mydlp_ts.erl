@@ -147,7 +147,8 @@ registerUserAddress(Ipaddress, Userh, Data) ->
 
 saveLicenseKey(LicenseKey) ->
 	mydlp_license:save_license_key(LicenseKey),
-	mydlp_license:sync_result().
+	Msg = mydlp_license:sync_result(),
+	list_to_binary(Msg).
 
 getLicense() -> mydlp_license:license().
 
