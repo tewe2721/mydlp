@@ -18,7 +18,7 @@
 #	<prerm> remove in-favour <new-package> <version>
 
 configure_apache() {
-	/usr/sbin/a2dissite mydlp-site
+	/usr/sbin/a2dissite mydlp
 }
 
 case "$1" in
