@@ -339,7 +339,7 @@ is_in_valid_distance(ListOfIndexes, ListOfThresholds) when length(ListOfIndexes)
 is_in_valid_distance([Head|Tail], ListOfThresholds) ->
 	SubList = find_in_distance([Head|Tail]),
 	SumOfThresholds = lists:sum(ListOfThresholds),
-	EarlyNeg = (length(SubList) =< SumOfThresholds),
+	EarlyNeg = (length(SubList) < SumOfThresholds),
 	case EarlyNeg of 
 		true -> is_in_valid_distance(Tail, ListOfThresholds);
 		false -> case is_all_thresholds_satisfied(SubList, ListOfThresholds, 1) of
