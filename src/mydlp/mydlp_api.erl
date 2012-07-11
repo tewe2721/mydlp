@@ -675,12 +675,14 @@ is_valid_said2([O1,E1,O2,E2,O3,E3,O4,E4,O5,E5,O6,E6,CS]) ->
 %% @doc Gets response from ports
 %% @end
 %%----------------------------------------------------------------------
-get_port_resp(Port, Ret) ->
+get_port_resp(Port, Ret) -> get_port_resp(Port, Ret, 180000).
+
+get_port_resp(Port, Ret, Timeout) ->
 	receive
 		{ Port, {data, Data}} -> get_port_resp(Port, [Data|Ret]);
 		{ Port, {exit_status, 0}} -> {ok, list_to_binary(lists:reverse(Ret))};
 		{ Port, {exit_status, RetCode}} -> { error, {retcode, RetCode} }
-	after 180000 -> { error, timeout }
+	after Timeout -> { error, timeout }
 	end.
 
 get_port_resp(Port) ->

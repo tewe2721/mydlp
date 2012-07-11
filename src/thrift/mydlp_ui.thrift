@@ -45,7 +45,7 @@ service Mydlp_ui {
 
 	string registerUserAddress(1: string Ipaddress, 2: string Userh, 3: binary Payload)
 
-	oneway void saveLicenseKey(1: string licenseKey)
+	string saveLicenseKey(1: string licenseKey)
 
 	LicenseObject getLicense()
 }

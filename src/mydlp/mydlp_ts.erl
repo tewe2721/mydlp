@@ -145,7 +145,10 @@ registerUserAddress(Ipaddress, Userh, Data) ->
 	mydlp_mnesia:save_user_address(ClientIp, UserHI, Usern),
 	Usern.
 
-saveLicenseKey(LicenseKey) -> mydlp_license:save_license_key(LicenseKey).
+saveLicenseKey(LicenseKey) ->
+	mydlp_license:save_license_key(LicenseKey),
+	Msg = mydlp_license:sync_result(),
+	list_to_binary(Msg).
 
 getLicense() -> mydlp_license:license().
 
