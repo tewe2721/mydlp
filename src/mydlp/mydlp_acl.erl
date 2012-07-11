@@ -320,10 +320,10 @@ execute_ifeatures(IFeatures, Addr, File) ->
 		case PAllRet of
 			false -> neg;
 			%%% TODO: Unused results data can be used for more detailed logging.
-			{ok, Results} -> control_distance(Results) end
+			{ok, Results} -> is_distance_satisfied(Results) end
 	catch _:{timeout, _F, _T} -> {error, {file, File}, {misc, timeout}} end.
 
-control_distance(Results) ->
+is_distance_satisfied(Results) ->
 	[ListOfIndexes, ListOfThresholds] = regulate_results(Results, 1),
 	lists:keysort(1, ListOfIndexes),
 	%time to distance control
@@ -354,7 +354,7 @@ is_all_thresholds_satisfied(SubList, Thresholds, Index) when length(Thresholds) 
 is_all_thresholds_satisfied(SubList, Thresholds, Index) ->
 	Ret = is_threshold_satisfied(Index, SubList, lists:nth(Index, Thresholds)),
 	case Ret of
-		true -> is_all_thresholds_satisfied;
+		true -> is_all_thresholds_satisfied(SubList, Thresholds, Index+1);
 		false -> false
 	end.
 
@@ -381,7 +381,7 @@ regulate_results([Head|Tail], Number) ->
 
 apply_m(_Threshold, all, [_FuncParams, _Addr, _File]) -> pos; %% match directly.
 apply_m(Threshold, Func, [FuncParams, Addr, File]) ->
-	%Distance = 100,
+	Distance = 100,
 	EarlyNeg = case get_matcher_req(Func) of
 		raw -> false;
 		analyzed -> false;
@@ -390,7 +390,8 @@ apply_m(Threshold, Func, [FuncParams, Addr, File]) ->
 		true -> neg;
 		false -> FuncOpts = get_func_opts(Func, FuncParams),
 			{Score, IndexList} = apply(mydlp_matchers, Func, [FuncOpts, Addr, File]),
-			case (Score >= Threshold) of
+			EarlyNegForDistance = (length(IndexList) >= Threshold),
+			case ((Score >= Threshold) and EarlyNegForDistance) of
 				true -> {pos, Threshold, {Score, IndexList}}; % TODO: Scores should be logged.
 				false -> neg
 			end

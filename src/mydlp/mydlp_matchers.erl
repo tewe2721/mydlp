@@ -215,7 +215,6 @@ birthdate_match(_Conf, _Addr, File) ->
 	Res = mydlp_regex:match_bin(
 		birthdate,
 		File#file.text),
-	
 	Score = mydlp_api:filter_count(fun({I, _W}) -> mydlp_api:is_valid_birthdate(I) end, Res),
 	{Score, lists:map(fun({_P,I}) -> I end, Res)}.
 
