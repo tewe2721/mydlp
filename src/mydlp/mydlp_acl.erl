@@ -320,11 +320,68 @@ execute_ifeatures(IFeatures, Addr, File) ->
 		case PAllRet of
 			false -> neg;
 			%%% TODO: Unused results data can be used for more detailed logging.
-			{ok, _Results} -> pos end
+			{ok, Results} -> control_distance(Results) end
 	catch _:{timeout, _F, _T} -> {error, {file, File}, {misc, timeout}} end.
+
+control_distance(Results) ->
+	[ListOfIndexes, ListOfThresholds] = regulate_results(Results, 1),
+	lists:keysort(1, ListOfIndexes),
+	%time to distance control
+	is_in_valid_distance(ListOfIndexes, ListOfThresholds).
+
+is_in_valid_distance(ListOfIndexes, ListOfThresholds) when length(ListOfIndexes) == 1 ->
+	Ret = is_all_thresholds_satisfied(ListOfIndexes, ListOfThresholds, 1),
+	case Ret of 
+		true -> pos;
+		false -> neg
+	end;
+
+is_in_valid_distance([Head|Tail], ListOfThresholds) ->
+	SubList = find_in_distance([Head|Tail]),
+	SumOfThresholds = lists:sum(ListOfThresholds),
+	EarlyNeg = (length(SubList) =< SumOfThresholds),
+	case EarlyNeg of 
+		true -> is_in_valid_distance(Tail, ListOfThresholds);
+		false -> case is_all_thresholds_satisfied(SubList, ListOfThresholds, 1) of
+				true -> pos;
+				false -> is_in_valid_distance(Tail, ListOfThresholds)
+			 end
+	end.
+
+is_all_thresholds_satisfied(SubList, Thresholds, Index) when length(Thresholds) == Index ->
+	is_threshold_satisfied(Index, SubList, lists:nth(Index, Thresholds));
+
+is_all_thresholds_satisfied(SubList, Thresholds, Index) ->
+	Ret = is_threshold_satisfied(Index, SubList, lists:nth(Index, Thresholds)),
+	case Ret of
+		true -> is_all_thresholds_satisfied;
+		false -> false
+	end.
+
+is_threshold_satisfied(Index, SubIndexList, Threshold) ->
+	SubElements = lists:filter(fun({_I, W}) -> W == Index end, SubIndexList),
+	(length(SubElements) >= Threshold).		
+
+find_in_distance([Head|Tail]) ->
+	{IndexValue, _WIT} = Head,
+	lists:takewhile(fun({I, _W}) -> I < (IndexValue +100) end, [Head|Tail]).
+	
+regulate_results(Results, Number) when length(Results) == 1 ->
+	[Head|_Tail] = Results,
+	{pos, Threshold, {_Score, IndexList}} = Head,
+	IndexesWithNumbers = lists:map(fun(I) -> {I, Number} end, IndexList),
+	[IndexesWithNumbers, [Threshold]];
+		
+regulate_results([Head|Tail], Number) ->
+	NewNumber = Number + 1,
+	[OtherIndexes, OtherThresholds] = regulate_results(Tail, NewNumber),
+	{pos, Threshold, {_Score, IndexList}} = Head, 
+	IndexesWithNumbers = lists:map(fun(I) -> {I, Number} end, IndexList),
+	[lists:append(IndexesWithNumbers, OtherIndexes), lists:append([Threshold], OtherThresholds)].
 
 apply_m(_Threshold, all, [_FuncParams, _Addr, _File]) -> pos; %% match directly.
 apply_m(Threshold, Func, [FuncParams, Addr, File]) ->
+	%Distance = 100,
 	EarlyNeg = case get_matcher_req(Func) of
 		raw -> false;
 		analyzed -> false;
@@ -332,9 +389,9 @@ apply_m(Threshold, Func, [FuncParams, Addr, File]) ->
 	case EarlyNeg of
 		true -> neg;
 		false -> FuncOpts = get_func_opts(Func, FuncParams),
-			Score = apply(mydlp_matchers, Func, [FuncOpts, Addr, File]),
+			{Score, IndexList} = apply(mydlp_matchers, Func, [FuncOpts, Addr, File]),
 			case (Score >= Threshold) of
-				true -> pos; %% TODO: scores should be logged
+				true -> {pos, Threshold, {Score, IndexList}}; % TODO: Scores should be logged.
 				false -> neg
 			end
 	end.

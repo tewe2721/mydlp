@@ -101,9 +101,15 @@ handle_re({match_count, GIs}, Data, _State) ->
 
 handle_re({mbin, BInKey}, Data, #state{builtin_tree=BT}) ->
 	RE = gb_trees:get(BInKey, BT),
-	case re:run(Data, RE, [global, {capture, all, list}]) of
-		nomatch -> [];
-		{match, Captured} -> lists:append(Captured) end;
+	Patterns = case re:run(Data, RE, [global, {capture, all, list}]) of
+			nomatch -> [];
+			{match, Captured} -> lists:append(Captured) 
+		end,
+	Indexes = case length(Patterns) of
+			0 -> [];
+			_ -> find_indexes(Data, RE)
+		end,
+	return_as_tuple(Patterns, Indexes);
 
 handle_re({longest_bin, BInKey}, Data, #state{builtin_tree=BT}) ->
 	RE = gb_trees:get(BInKey, BT),
@@ -132,6 +138,19 @@ handle_re({score_suite, BInKey}, Data, #state{builtin_suite_tree=BST}) ->
 	score_regex_suite(RES, Data);
 
 handle_re(Call, _Data, _State) -> throw({error,{unhandled_re_call,Call}}).
+
+find_indexes(Data, RE) ->
+	{match, IndexList} = re:run(Data, RE, [global, {capture, all, index}]),
+	lists:map(fun([{I,_T}]) -> I end, IndexList).
+
+return_as_tuple(Patterns, Indexes) when length(Patterns) == 0 -> [];
+
+return_as_tuple(Patterns, [HI|_TI])  when length(Patterns) == 1 -> 
+	[HP|_TP] = Patterns,
+	[{HP, HI}];
+
+return_as_tuple([HP|TP], [HI|TI]) ->
+	lists:append([{HP, HI}], return_as_tuple(TP, TI)).
 
 handle_info({async_reply, Reply, From}, State) ->
 	gen_server:reply(From, Reply),
