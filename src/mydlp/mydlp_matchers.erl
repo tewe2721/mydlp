@@ -216,7 +216,7 @@ birthdate_match(_Conf, _Addr, File) ->
 		birthdate,
 		File#file.text),
 	
-	Score = mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_birthdate(I) end, Res),
+	Score = mydlp_api:filter_count(fun({I, _W}) -> mydlp_api:is_valid_birthdate(I) end, Res),
 	{Score, lists:map(fun({_P,I}) -> I end, Res)}.
 
 ssn_match() -> text.
