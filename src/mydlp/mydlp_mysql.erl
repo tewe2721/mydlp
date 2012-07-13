@@ -267,17 +267,17 @@ init([]) ->
 	LDB = ?CFG(mysql_log_database),
 	PoolSize = ?CFG(mysql_pool_size),
 	
-	{ok, MPid} = mysql:start_link(pp, Host, Port, User, Password, DB, fun(_,_,_,_) -> ok end),
+	{ok, MPid} = mysql:start_link(pp, Host, Port, User, Password, DB, fun(_,_,_,_) -> ok end, utf8),
 	erlang:monitor(process, MPid), 
 	
-	PoolReturns = [ mysql:connect(pp, Host, undefined, User, Password, DB, true) || _I <- lists:seq(1, 2)],
+	PoolReturns = [ mysql:connect(pp, Host, undefined, User, Password, DB, utf8, true) || _I <- lists:seq(1, 2)],
 	PPids = [ P || {ok, P} <- PoolReturns ],
 	[ erlang:monitor(process, P) || P <- PPids ],
 
 	%{ok, MPid2} = mysql:start_link(pl, Host, Port, User, Password, LDB, fun(_,_,_,_) -> ok end),
 	%erlang:monitor(process, MPid2), 
 	
-	PoolReturns2 = [ mysql:connect(pl, Host, undefined, User, Password, LDB, true) || _I <- lists:seq(1, PoolSize)],
+	PoolReturns2 = [ mysql:connect(pl, Host, undefined, User, Password, LDB, utf8, true) || _I <- lists:seq(1, PoolSize)],
 	PPids2 = [ P || {ok, P} <- PoolReturns2 ],
 	[ erlang:monitor(process, P) || P <- PPids2 ],
 
@@ -484,7 +484,7 @@ populate_users_s([], _RuleId) -> ok.
 
 populate_users_ad_u([[OrigId]| Rows], RuleId) ->
 	Usernames = get_usernames(OrigId),
-	lists:foreach(fun(Username) -> new_user(Username, RuleId) end, Usernames),
+	lists:foreach(fun({Username}) -> new_user(Username, RuleId) end, Usernames),
 	populate_users_ad_u(Rows, RuleId);
 populate_users_ad_u([], _RuleId) -> ok.
 
@@ -493,14 +493,16 @@ get_usernames(OrigId) ->
 	Domains = get_domains(OrigId),
 	L = lists:map(fun(U) ->
 		lists:map(fun(D) ->
-			concat_username(U,D)
+			UU = unicode:characters_to_list(U),
+			UD = unicode:characters_to_list(D),
+			concat_username(UU,UD)
 		end, Domains)
 	end, Users),
 	lists:flatten(L).
 
 concat_username(<<>>, _D) -> []; % lists:flatten will drop this.
-concat_username(U, <<>>) -> <<U/binary>>;
-concat_username(U, D) -> <<U/binary, "@" , D/binary>>.
+concat_username(U, <<>>) -> {U};
+concat_username(U, D) -> {U ++ "@" ++ D}.
 
 get_domains(OrigId) ->
 	DomainId = get_domain_id(OrigId),
@@ -819,8 +821,10 @@ pre_push_log(RuleId, Ip, User, Destination, Action, Channel) ->
 %		RId when is_integer(RId) -> {get_rule_cid(RId), RId} end,
 	User1 = case User of
 		nil -> null;
-		U when is_list(U) -> string:to_lower(U);
-		U when is_binary(U) -> string:to_lower(binary_to_list(U))
+		unknown -> null;
+		null -> null;
+		U when is_list(U) -> unicode:characters_to_binary(U);
+		U when is_binary(U) -> U
 	end,
 	Ip1 = case ip_to_int(Ip) of
 		nil -> null;

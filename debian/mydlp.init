@@ -143,6 +143,11 @@ start_mysqld() {
 	wait_for_mysqld
 }
 
+create_db() {
+	local DBNAME=$1
+	echo "CREATE DATABASE $DBNAME DEFAULT CHARACTER SET utf8 DEFAULT COLLATE utf8_general_ci"|$MYSQLC
+}
+
 check_mysql_db() {
 	if [ -n "$NOLOCALMYSQL" -a "$NOLOCALMYSQL" == "true" ]; then
                 return 0;
@@ -152,12 +157,12 @@ check_mysql_db() {
 	if (echo|$MYSQLC); then
 		if [ -z "$(echo 'show databases'|$MYSQLC|grep -e '^mydlp$')" ]; then
 			echo " * Creating MySQL database (mydlp)..."
-			$MYSQLADM create mydlp
+			create_db mydlp
 			$MYSQLC mydlp < $SCHEMADIR/HEAD_mydlp.sql
 		fi
 		if [ -z "$(echo 'show databases'|$MYSQLC|grep -e '^mydlp_log$')" ]; then
 			echo " * Creating MySQL database (mydlp_log)..."
-			$MYSQLADM create mydlp_log
+			create_db mydlp_log
 			$MYSQLC mydlp_log < $SCHEMADIR/HEAD_mydlp_log.sql
 		fi
 	else
