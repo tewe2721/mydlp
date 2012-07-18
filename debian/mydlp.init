@@ -145,7 +145,7 @@ start_mysqld() {
 
 create_db() {
 	local DBNAME=$1
-	echo "CREATE DATABASE $DBNAME DEFAULT CHARACTER SET utf8 DEFAULT COLLATE utf8_general_ci"|$MYSQLC
+	echo "CREATE DATABASE $DBNAME DEFAULT CHARACTER SET utf8mb4 DEFAULT COLLATE utf8mb4_general_ci"|$MYSQLC
 }
 
 check_mysql_db() {
