@@ -54,12 +54,35 @@ function getTableNames() {
 
 function dumpCurrent() {
 	local TABLES=$(getTableNames)
+	local IS_FIRST="true"
+
+	echo -n "LOCK TABLES "
 	for t in $TABLES
 	do
-		echo "TRUNCATE $t;"
+		if [ "$IS_FIRST" == "true" ]; then
+			local IS_FIRST="false"
+		else
+			echo -n ", "
+		fi
+		echo -n "$t WRITE"
+	done
+	echo ";"
+	echo
+
+	echo "SET foreign_key_checks = 0;"
+	echo
+
+	for t in $TABLES
+	do
+		echo "DELETE FROM $t;"
 	done
 
 	$MYSQLDUMP $TABLES
+
+	echo "SET foreign_key_checks = 1;"
+	echo
+
+	echo "UNLOCK TABLES;"
 }
 
 TMPFILE=$(mktemp)
