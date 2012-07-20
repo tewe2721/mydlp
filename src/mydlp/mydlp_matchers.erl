@@ -104,173 +104,188 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
-regex_match() -> text.
+regex_match() -> {text, da}.
 
 regex_match(RGIs) -> RGIs.
 
 regex_match(RGIs, _Addr, File) ->
 	mydlp_regex:match_count(RGIs, File#file.text).
 
-cc_match() -> text.
+cc_match() -> {text, da}.
 
 cc_match(_Conf) -> none.
 
 cc_match(_Conf, _Addr, File) ->
-	Res = mydlp_regex:match_bin(
+	{Data, IndexList} = mydlp_regex:match_bin(
 	 	credit_card, 
 		File#file.text),
-	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_cc(I) end, Res).
+	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_cc(I) end, Data, IndexList),
+	{length(WIList), WIList}.	
 
-iban_match() -> text.
+iban_match() -> {text, da}.
 
 iban_match(_Conf) -> none.
 
 iban_match(_Conf, _Addr, File) ->
-	Res = mydlp_regex:match_bin(
+	{Data, IndexList} = mydlp_regex:match_bin(
 	 	iban, 
 		File#file.text),
-	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_iban(I) end, Res).
+	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_iban(I) end, Data, IndexList),
+	{length(WIList), WIList}.
 
-aba_match() -> text.
+aba_match() -> {text, da}.
 
 aba_match(_Conf) -> none.
 
 aba_match(_Conf, _Addr, File) ->
-	Res = mydlp_regex:match_bin(
+	{Data, IndexList} = mydlp_regex:match_bin(
 	 	aba, 
 		File#file.text),
-	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_aba(I) end, Res).
+	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_aba(I) end, Data, IndexList),
+	{length(WIList), WIList}.
 
-trid_match() -> text.
+trid_match() -> {text, da}.
 
 trid_match(_Conf) -> none.
 
 trid_match(_Conf, _Addr, File) ->
-	Res = mydlp_regex:match_bin(
+	{Data, IndexList} = mydlp_regex:match_bin(
 	 	trid, 
 		File#file.text),
-	
-	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_trid(I) end, Res).
+	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_trid(I) end, Data, IndexList),
+	{length(WIList), WIList}.
 
-pan_match() -> text.
+pan_match() -> {text, da}.
 
 pan_match(_Conf) -> none.
 
 pan_match(_Conf, _Addr, File) ->
-	Res = mydlp_regex:match_bin(
+	{Data, IndexList} = mydlp_regex:match_bin(
 		pan,
 		File#file.text),
 
-	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_pan(I) end, Res).
+	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_pan(I) end, Data, IndexList),
+	{length(WIList), WIList}.
 
-cpf_match() -> text.
+cpf_match() -> {text, da}.
 
 cpf_match(_Conf) -> none.
 
 cpf_match(_Conf, _Addr, File) ->
-	Res = mydlp_regex:match_bin(
+	{Data, IndexList} = mydlp_regex:match_bin(
 		cpf,
 		File#file.text),
 
-	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_cpf(I) end, Res).
+	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_cpf(I) end, Data, IndexList),
+	{length(WIList), WIList}.
 
-china_icn_match() -> text.
+china_icn_match() -> {text, da}.
 
 china_icn_match(_Conf) -> none.
 
 china_icn_match(_Conf, _Addr, File) ->
-	Res = mydlp_regex:match_bin(
+	{Data, IndexList} = mydlp_regex:match_bin(
 		icn,
 		File#file.text),
 
-	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_china_icn(I) end, Res).
+	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_china_icn(I) end, Data, IndexList),
+	{length(WIList), WIList}.
 
-cc_edate_match() -> text.
+cc_edate_match() -> {text, da}.
 
 cc_edate_match(_Conf) -> none.
 
 cc_edate_match(_Conf, _Addr, File) ->
-	Res = mydlp_regex:match_bin(
+	{Data, IndexList} = mydlp_regex:match_bin(
 		edate,
 		File#file.text),
+	erlang:display("cc:edate"),
+	erlang:display(IndexList),
+	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_cc_edate(I) end, Data, IndexList),
+	{length(WIList), WIList}.
 
-	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_cc_edate(I) end, Res).
-
-gdate_match() -> text.
+gdate_match() -> {text, da}.
 
 gdate_match(_Conf) -> none.
 
 gdate_match(_Conf, _Addr, File) ->
-	Res = mydlp_regex:match_bin(
+	{Data, IndexList} = mydlp_regex:match_bin(
 		birthdate,
 		File#file.text),
-	
-	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_date(I) end, Res).
 
-birthdate_match() -> text.
+	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_date(I) end, Data, IndexList),
+	{length(WIList), WIList}.
+
+birthdate_match() -> {text, da}.
 
 birthdate_match(_Conf) -> none.
 
 birthdate_match(_Conf, _Addr, File) ->
-	Res = mydlp_regex:match_bin(
+	{Data, IndexList} = mydlp_regex:match_bin(
 		birthdate,
 		File#file.text),
-	
-	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_birthdate(I) end, Res).
 
-ssn_match() -> text.
+	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_birthdate(I) end, Data, IndexList),
+	{length(WIList), WIList}.
+
+ssn_match() -> {text, da}.
 
 ssn_match(_Conf) -> none.
 
 ssn_match(_Conf, _Addr, File) ->
-	Res = mydlp_regex:match_bin(
+	{Data, IndexList} = mydlp_regex:match_bin(
 	 	ssn, 
 		File#file.text),
-	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_ssn(I) end, Res).
+	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_ssn(I) end, Data, IndexList),
+	{length(WIList), WIList}.
 
-canada_sin_match() -> text.
+canada_sin_match() -> {text, da}.
 
 canada_sin_match(_Conf) -> none.
 
 canada_sin_match(_Conf, _Addr, File) ->
-	Res = mydlp_regex:match_bin(
+	{Data, IndexList} = mydlp_regex:match_bin(
 	 	sin, 
 		File#file.text),
-	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_sin(I) end, Res).
+	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_sin(I) end, Data, IndexList),
+	{length(WIList), WIList}.
 
-france_insee_match() -> text.
+france_insee_match() -> {text, da}.
 
 france_insee_match(_Conf) -> none.
 
 france_insee_match(_Conf, _Addr, File) ->
-	Res = mydlp_regex:match_bin(
+	{Data, IndexList} = mydlp_regex:match_bin(
 	 	insee, 
 		File#file.text),
-	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_insee(I) end, Res).
+	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_insee(I) end, Data, IndexList),
+	{length(WIList), WIList}.
 
-uk_nino_match() -> text.
+uk_nino_match() -> {text, da}.
 
 uk_nino_match(_Conf) -> none.
 
 uk_nino_match(_Conf, _Addr, File) ->
-	Res = mydlp_regex:match_bin(
+	{Data, IndexList} = mydlp_regex:match_bin(
 	 	nino, 
 		File#file.text),
-	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_nino(I) end, Res).
+	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_nino(I) end, Data, IndexList),
+	{length(WIList), WIList}.
 
-said_match() -> text.
+said_match() -> {text, da}.
 
 said_match(_Conf) -> none.
 
 said_match(_Conf, _Addr, File) ->
-	Res = mydlp_regex:match_bin(
+	{Data, IndexList} = mydlp_regex:match_bin(
 	 	said, 
 		File#file.text),
-	mydlp_api:filter_count(fun(I) -> mydlp_api:is_valid_said(I) end, Res).
+	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_said(I) end, Data, IndexList),
+	{length(WIList), WIList}.
 
 -define(CFILE_MINSIZE, 128).
 
-e_archive_match() -> analyzed.
+e_archive_match() -> {analyzed, dna}.
 
 e_archive_match(_Conf) -> none.
 
@@ -284,7 +299,7 @@ e_archive_match(_Opts, _Addr, _File) -> 0.
 
 -define(EFILE_MINSIZE, 256).
 
-e_file_match() -> analyzed.
+e_file_match() -> {analyzed, dna}.
 
 e_file_match(_Conf) -> none.
 
@@ -297,7 +312,7 @@ e_file_match(_Opts, _Addr, #file{data=Data, mime_type=MimeType, is_encrypted=tru
 		false -> 0 end;
 e_file_match(_Opts, _Addr, _File) -> 0.
 
-p_text_match() -> analyzed.
+p_text_match() -> {analyzed, dna}.
 
 p_text_match(_Conf) -> none.
 
@@ -318,7 +333,7 @@ p_text_match1(#file{data=Data}) ->
 	lists:max([S1,S2]).
 
 % TODO: refine this
-md5_match() -> raw.
+md5_match() -> {raw, dna}.
 
 md5_match([HGI]) -> HGI.
 
@@ -328,7 +343,7 @@ md5_match(HGI, _Addr, File) ->
 		true -> 1;
 		false -> 0 end.
 
-pdm_match() -> text.
+pdm_match() -> {text, dna}.
 
 pdm_match([FGI]) -> FGI.
 
@@ -336,14 +351,14 @@ pdm_match(FGI, _Addr, File) ->
 	FList = mydlp_pdm:fingerprint(File#file.text),
 	mydlp_mnesia:pdm_of_gid(FList, FGI).
 
-scode_match() -> text.
+scode_match() -> {text, dna}.
 
 scode_match(_Conf) -> none.
 
 scode_match(_Conf, _Addr, File) ->
 	mydlp_regex:score_suite(scode, File#file.text).
 
-scode_ada_match() -> text.
+scode_ada_match() -> {text, dna}.
 
 scode_ada_match(_Conf) -> none.
 

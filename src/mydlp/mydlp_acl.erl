@@ -291,51 +291,158 @@ execute_itypes_pf(ITypes, Addr, File) ->
                 _Else ->	File end,
 
 	PAnyRet = mydlp_api:pany(fun(T) -> execute_itype_pf(T, Addr, File1) end, ITypes, 150000),
+	
 	case PAnyRet of
 		false -> neg;
 		{ok, _IType, Ret} -> Ret end.
 
-execute_itype_pf({ITypeOrigId, all, IFeatures}, Addr, File) ->
-	execute_itype_pf1(ITypeOrigId, IFeatures, Addr, File);
-execute_itype_pf({ITypeOrigId, DataFormats, IFeatures}, Addr, 
+execute_itype_pf({ITypeOrigId, all, Distance, IFeatures}, Addr, File) ->
+	execute_itype_pf1(ITypeOrigId, Distance, IFeatures, Addr, File);
+execute_itype_pf({ITypeOrigId, DataFormats, Distance, IFeatures}, Addr, 
 		#file{mime_type=MT} = File) ->
         case mydlp_mnesia:is_mime_of_dfid(MT, DataFormats) of
                 false -> neg;
-		true -> execute_itype_pf1(ITypeOrigId, IFeatures, Addr, File) end.
+		true -> execute_itype_pf1(ITypeOrigId, Distance, IFeatures, Addr, File) end.
 
-execute_itype_pf1(ITypeOrigId, IFeatures, Addr, File) ->
-	case execute_ifeatures(IFeatures, Addr, File) of
+execute_itype_pf1(ITypeOrigId, Distance, IFeatures, Addr, File) ->
+	case execute_ifeatures(Distance, IFeatures, Addr, File) of
 		neg -> neg;
 		pos -> {pos, {file, File}, {itype, ITypeOrigId}, {misc, ""}};
 		{error, {file, File}, {misc, Misc}} ->
 				{error, {file, File}, {itype, ITypeOrigId}, {misc, Misc}};
 		E -> E end.
 
-execute_ifeatures([], _Addr, _File) -> 0;
-execute_ifeatures(IFeatures, Addr, File) -> 
-	try	PAllRet = mydlp_api:pall(fun({Threshold, {Func, FuncParams}}) ->
-						apply_m(Threshold, Func, [FuncParams, Addr, File]) end,
+execute_ifeatures(_Distance, [], _Addr, _File) -> 0;
+execute_ifeatures(Distance, IFeatures, Addr, File) ->
+	try	UseDistance = case Distance of
+			undefined -> false;
+			_Else -> lists:all(fun({_Threshold, {Func, _FuncParams}}) ->
+						is_distance_applicable(Func) end, IFeatures) end,
+	
+		PAllRet = mydlp_api:pall(fun({Threshold, {Func, FuncParams}}) ->
+						apply_m(Threshold, Distance, UseDistance, Func, [FuncParams, Addr, File]) end,
 					IFeatures, 120000),
 		%%%% TODO: Check for PAnyRet whether contains error
-		case PAllRet of
-			false -> neg;
-			%%% TODO: Unused results data can be used for more detailed logging.
-			{ok, _Results} -> pos end
+		case {PAllRet, UseDistance} of
+			{false, _} -> neg;
+			{{ok, _Results}, false} -> pos;
+			{{ok, Results}, true } -> is_distance_satisfied(Results, Distance) end
 	catch _:{timeout, _F, _T} -> {error, {file, File}, {misc, timeout}} end.
 
-apply_m(_Threshold, all, [_FuncParams, _Addr, _File]) -> pos; %% match directly.
-apply_m(Threshold, Func, [FuncParams, Addr, File]) ->
+%% Controls information feature is applicable for distance property.
+is_distance_applicable(Func) ->
+	case get_matcher_req(Func) of
+		{_, dna} -> false;
+		{_, da} -> true end.
+
+
+is_distance_satisfied(Results, Distance) ->
+	[ListOfIndexes, ListOfThresholds] = regulate_results(Results),
+	%time to distance control
+	[{I, _T}|_Tail] = ListOfIndexes,
+	{TailOfIndexList, SubList} = find_in_distance(ListOfIndexes, Distance, I),
+	is_in_valid_distance(TailOfIndexList, SubList, ListOfThresholds, Distance).
+
+%% Controls whether fetching indexes are in a suitable distance or not. In addition; iterates all indexes.
+is_in_valid_distance([], DistanceList,  ListOfThresholds, _Distance) -> 
+	case is_all_thresholds_satisfied(DistanceList, ListOfThresholds) of
+		true -> pos;
+		false -> neg
+	end;
+
+is_in_valid_distance([{IV, _T}|Tail], [E], ListOfThresholds, Distance) ->
+	case is_all_thresholds_satisfied([E], ListOfThresholds) of
+		true -> pos;
+		false -> {NewIndexList, NewDistanceList} = find_in_distance([{IV, _T}|Tail], Distance, IV),
+			 is_in_valid_distance(NewIndexList, NewDistanceList, ListOfThresholds, Distance)
+	end;
+
+is_in_valid_distance(ListOfIndexes, DistanceList, ListOfThresholds, Distance) ->
+	SumOfThresholds = lists:sum(ListOfThresholds),
+	[_H1,{IndexValue, T}|TailOfDistanceList] = DistanceList,
+	EarlyNeg = (length(DistanceList) < SumOfThresholds),
+	case EarlyNeg of 
+		true -> {TailOfIndexList, NewDistanceList} = find_in_distance(ListOfIndexes, Distance, IndexValue),
+			is_in_valid_distance(TailOfIndexList, [{IndexValue, T}]++TailOfDistanceList++NewDistanceList, ListOfThresholds, Distance);
+		false -> case is_all_thresholds_satisfied(DistanceList, ListOfThresholds) of
+				true -> pos;
+				false -> {TailOfIndexList, NewDistanceList} = find_in_distance(ListOfIndexes, Distance, IndexValue),
+					is_in_valid_distance(TailOfIndexList, [{IndexValue, T}]++TailOfDistanceList++NewDistanceList, ListOfThresholds, Distance)
+			 end
+	end.
+
+%% Controls whether list, which contains indexes in a certain distance, includes all information features in a certain amount of threshold.
+is_all_thresholds_satisfied([], Acc) ->
+	lists:all(fun(I) -> I =< 0 end, Acc);
+
+is_all_thresholds_satisfied([{_I, T}|Tail], ThresholdList) ->
+	Acc1 = lists:sublist(ThresholdList, T-1) ++ [lists:nth(T, ThresholdList) - 1] ++ lists:nthtail(T, ThresholdList),
+	is_all_thresholds_satisfied(Tail, Acc1).
+
+%% Returns remaining index list and the list which is in predefined distance.
+find_in_distance(Results, Distance, IndexValue) -> find_in_distance(Results, Distance, IndexValue, []). 
+
+find_in_distance([], _Distance, _IndexValue, Acc) -> {[],lists:reverse(Acc)};
+
+find_in_distance([{IV, T}|Tail], Distance, IndexValue, Acc) ->
+	case (IV =< (IndexValue+Distance)) of
+		true -> find_in_distance(Tail, Distance, IndexValue, [{IV, T}|Acc]);
+		false -> {[{IV, T}|Tail], lists:reverse(Acc)}
+	end.
+
+%% Puts flags to the index list, which index comes from which information feature.
+regulate_results(Results) -> regulate_results(Results, 1, [], []).
+
+regulate_results([], _Number, AccIndex, AccThreshold) ->
+	IndexList = lists:keysort(1, lists:flatten(AccIndex)),
+	[IndexList, lists:reverse(AccThreshold)];
+		
+regulate_results([Head|Tail], Number, AccIndex, AccThreshold) ->
+	NewNumber = Number + 1,
+	{pos, Threshold, {_Score, IndexList}} = Head, 
+	IndexesWithNumbers = lists:map(fun(I) -> {I, Number} end, IndexList),
+	regulate_results(Tail, NewNumber, [IndexesWithNumbers|AccIndex], [Threshold|AccThreshold]).
+
+is_early_distance_satisfied([], _Threshold, _Distance) -> false;
+
+is_early_distance_satisfied(_Indexes, 1 = _Threshold, _Distance) -> true;
+
+is_early_distance_satisfied([_] = _Indexes, 1 = _Threshold, _Distance) -> true;
+
+is_early_distance_satisfied([_] = _Indexes, _Threshold, _Distance) -> false;
+
+is_early_distance_satisfied([Head|Tail], Threshold, Distance)->
+	[Head2|_Tail2] = Tail,
+	case ((Head2 - Head) =< Distance) of
+		true -> true;
+		false -> is_early_distance_satisfied(Tail, Threshold, Distance)
+	end.
+
+apply_m(_Threshold, _Distance, _IsDistanceApplicable,all, [_FuncParams, _Addr, _File]) -> pos; %% match directly.
+apply_m(Threshold, Distance, IsDistanceApplicable, Func, [FuncParams, Addr, File]) ->
 	EarlyNeg = case get_matcher_req(Func) of
-		raw -> false;
-		analyzed -> false;
-		text -> not mydlp_api:has_text(File) end,
+		{raw, _} -> false;
+		{analyzed, _} -> false;
+		{text, _} -> not mydlp_api:has_text(File) end,
 	case EarlyNeg of
 		true -> neg;
 		false -> FuncOpts = get_func_opts(Func, FuncParams),
-			Score = apply(mydlp_matchers, Func, [FuncOpts, Addr, File]),
-			case (Score >= Threshold) of
-				true -> pos; %% TODO: scores should be logged
-				false -> neg
+			IndexRet = apply(mydlp_matchers, Func, [FuncOpts, Addr, File]),
+			case IndexRet of
+				{Score, IndexList} ->
+						EarlyNegForDistance = case IsDistanceApplicable of
+										false -> true;
+										true -> is_early_distance_satisfied(IndexList, Threshold, Distance)
+									end,
+						case ((Score >= Threshold) and EarlyNegForDistance) of
+							true -> {pos, Threshold, {Score, IndexList}}; % TODO: Scores should be logged.
+							false -> neg
+						end;
+				Score -> 
+						case (Score >= Threshold) of
+							true -> {pos, Threshold, {Score, dna}}; % TODO: Scores should be logged.
+							false -> neg
+						end
 			end
 	end.
 

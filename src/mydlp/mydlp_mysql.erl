@@ -295,7 +295,7 @@ init([]) ->
 		{domain_aliases_by_id, <<"SELECT a.domainAlias FROM ADDomainAlias AS a, ADDomain_ADDomainAlias AS da WHERE da.ADDomain_id=? AND a.id=da.aliases_id">>},
 		{domain_user_sam_by_id, <<"SELECT u.sAMAccountName FROM ADDomainUser AS u WHERE u.id=?">>},
 		{domain_user_aliases_by_id, <<"SELECT a.userAlias FROM ADDomainUserAlias AS a, ADDomainUser_ADDomainUserAlias AS ua WHERE ua.ADDomainUser_id=? AND a.id=ua.aliases_id">>},
-		{itype_by_rule_id, <<"SELECT t.id FROM InformationType AS t, RuleItem AS ri WHERE ri.rule_id=? AND t.id=ri.item_id">>},
+		{itype_by_rule_id, <<"SELECT t.id, CASE WHEN d.distanceEnabled=1 THEN 1 ELSE 0 END, d.distance FROM InformationType AS t, RuleItem AS ri, InformationDescription AS d WHERE ri.rule_id=? AND t.id=ri.item_id AND t.InformationDescription_id=d.id">>},
 		{data_formats_by_itype_id, <<"SELECT df.dataFormats_id FROM InformationType_DataFormat AS df WHERE df.InformationType_id=?">>},
 		{ifeature_by_itype_id, <<"SELECT f.threshold,f.matcher_id FROM InformationFeature AS f, InformationDescription_InformationFeature df, InformationType t WHERE t.id=? AND t.informationDescription_id=df.InformationDescription_id AND df.features_id=f.id">>},
 		{match_by_id, <<"SELECT m.id,m.functionName FROM Matcher AS m WHERE m.id=?">>},
@@ -438,8 +438,9 @@ populate_rules([[Id, DTYPE, ActionS] |Rows], FilterId) ->
 populate_rules([], _FilterId) -> ok.
 
 populate_rule(OrigId, Channel, Action, FilterId) ->
-	{ok, IQ} = psq(network_by_rule_id, [OrigId]),
 	RuleId = mydlp_mnesia:get_unique_id(rule),
+
+	{ok, IQ} = psq(network_by_rule_id, [OrigId]),
 	populate_iprs(IQ, RuleId),
 
 	populate_rule_users(OrigId, RuleId),
@@ -558,10 +559,13 @@ pr_data_formats(ITypeOrigId) ->
 				_Else2 -> DataFormats end;
 		_Else -> DataFormats end.
 
-populate_itypes([[OrigId]| Rows], RuleId) ->
+populate_itypes([[OrigId,DistanceEnabled,Distance]| Rows], RuleId) ->
 	DataFormats = pr_data_formats(OrigId),
 	ITypeId = mydlp_mnesia:get_unique_id(itype),
-	T = #itype{id=ITypeId, orig_id=OrigId, rule_id=RuleId, data_formats=DataFormats},
+	DistanceValue = case {DistanceEnabled,Distance} of
+		{0, _} -> undefined;
+		{1, D} -> D end,
+	T = #itype{id=ITypeId, orig_id=OrigId, rule_id=RuleId, data_formats=DataFormats, distance=DistanceValue},
 	{ok, IFQ} = psq(ifeature_by_itype_id, [OrigId]),
 	populate_ifeatures(IFQ, ITypeId),
 	mydlp_mnesia_write(T),

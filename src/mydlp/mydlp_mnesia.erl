@@ -943,7 +943,7 @@ predict_need4te([{_RId, _RAction, ITypes}|Rules]) ->
 		false -> predict_need4te(Rules) end;
 predict_need4te([]) -> false.
 
-predict_need4te_1([{_ITId, _DataFormats, IFeatures}|ITypes]) ->
+predict_need4te_1([{_ITId, _DataFormats, _Distance, IFeatures}|ITypes]) ->
 	case predict_need4te_2(IFeatures) of
 		true -> true;
 		false -> predict_need4te_1(ITypes) end;
@@ -953,9 +953,9 @@ predict_need4te_2([{_Threshold, {all, _FuncParams}}|IFeatures]) ->
 	predict_need4te_2(IFeatures);
 predict_need4te_2([{_Threshold, {Func, _FuncParams}}|IFeatures]) ->
 	case get_matcher_req(Func) of
-                raw -> predict_need4te_2(IFeatures);
-                analyzed -> true;
-                text -> true end;
+                {raw, _} -> predict_need4te_2(IFeatures);
+                {analyzed, _} -> true;
+                {text, _} -> true end;
 predict_need4te_2([]) -> false.
 
 get_matcher_req(Func) -> apply(mydlp_matchers, Func, []).
@@ -966,7 +966,7 @@ resolve_rules([{RId, ROrigId,RAction}|PS], Rules) ->
 resolve_rules([], Rules) -> lists:reverse(Rules).
 
 find_itypes(RuleId) ->
-	QM = ?QLCQ([{T#itype.orig_id, T#itype.data_formats, find_ifeatures(T#itype.id)} ||
+	QM = ?QLCQ([{T#itype.orig_id, T#itype.data_formats, T#itype.distance, find_ifeatures(T#itype.id)} ||
 			T <- mnesia:table(itype),
 			T#itype.rule_id == RuleId
 		]),

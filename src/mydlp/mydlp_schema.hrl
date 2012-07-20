@@ -55,6 +55,7 @@
 	id,
 	rule_id,
 	orig_id,
+	distance,
 	data_formats=[]
 }).
 
