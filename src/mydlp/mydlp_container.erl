@@ -188,8 +188,8 @@ handle_cast(schedule_confupdate, State) ->
 	{noreply, State#state{confupdate=true}};
 
 handle_cast({set_user, Username}, State) ->
-	Username1 = lists:filter(fun(C) -> (C =< 255) and (C >= 0) end, Username),
-	{noreply, State#state{username=Username1}};
+	UsernameU = qp_decode(Username),
+	{noreply, State#state{username=UsernameU}};
 
 handle_cast({setprop, ObjId, Key, Value}, #state{object_tree=OT} = State) ->
 	case gb_trees:lookup(ObjId, OT) of
@@ -340,7 +340,7 @@ archive_req(Obj, {{rule, RId}, {file, _}, {itype, IType}, {misc, Misc}}, DFFiles
                 _Else -> log_req(Obj, archive, {{rule, RId}, {file, DFFiles}, {itype, IType}, {misc, Misc}}) end.
 
 log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
-	User = get_user(Obj),
+	User = get_user(),
 	Channel = get_channel(Obj),
 	Time = erlang:localtime(),
 	case {Channel, Action, Misc, ?CFG(ignore_discover_max_size_exceeded)} of
@@ -368,10 +368,10 @@ get_type(#object{prop_dict=PD}) ->
 		{ok, _Else} -> regular;
 		error -> regular  end.
 
-get_user(#object{prop_dict=PD}) ->
-	case dict:find("user", PD) of
-		{ok, User} -> User;
-		error -> nil  end.
+%get_user(#object{prop_dict=PD}) ->
+%	case dict:find("user", PD) of
+%		{ok, User} -> User;
+%		error -> nil  end.
 
 object_to_file(Obj) ->
 	Type = get_type(Obj),

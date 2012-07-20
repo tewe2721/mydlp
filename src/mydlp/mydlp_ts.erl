@@ -122,7 +122,7 @@ requeueIncident(Incidentid) ->
         end, ok.
 
 registerUserAddress(Ipaddress, Userh, Data) -> 
-	Usern0 = try 	case erlang:binary_to_term(Data) of
+	Usern = try 	case erlang:binary_to_term(Data) of
 				[{username,nil}] -> "";
 				[{username,unknown}] -> "";
 				[{username,Username}] when is_binary(Username)-> binary_to_list(Username);
@@ -133,17 +133,16 @@ registerUserAddress(Ipaddress, Userh, Data) ->
 				[Class, Error, Data, Userh, Ipaddress, erlang:get_stacktrace()]),
 			"" end,
 
-	Usern = try 	lists:filter(fun(C) -> (C =< 255) and (C >= 0) end, Usern0)
-		catch Class2:Error2 ->
-			?ERROR_LOG("REGISTER_USER_ADDRESS: Error occured when filtering: Class: ["?S"]. Error: ["?S"].~n"
-					"Username: ["?S"]. UserHash: ["?S"]. IPAddr: ["?S"]. ~nStack trace: "?S"~n",
-				[Class2, Error2, Usern0, Userh, Ipaddress, erlang:get_stacktrace()]),
-			"" end,
 	UserHI = mydlp_api:binary_to_integer(Userh),
 	ClientIpS = binary_to_list(Ipaddress),
 	ClientIp = mydlp_api:str_to_ip(ClientIpS),
 	mydlp_mnesia:save_user_address(ClientIp, UserHI, Usern),
-	Usern.
+	try unicode:characters_to_binary(Usern)
+		catch Class2:Error2 ->
+			?ERROR_LOG("REGISTER_USER_ADDRESS: Error occured when converting to unicode: Class: ["?S"]. Error: ["?S"].~n"
+					"Usern: ["?S"]. IPAddr: ["?S"]. ~nStack trace: "?S"~n",
+				[Class2, Error2, Usern, Ipaddress, erlang:get_stacktrace()]),
+		<<>> end.
 
 saveLicenseKey(LicenseKey) ->
 	mydlp_license:save_license_key(LicenseKey),
