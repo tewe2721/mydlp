@@ -248,8 +248,12 @@ check_luhn([], _, Tot) -> 0 == (Tot rem 10).
 %% @doc Checks whether string is a valid credit card
 %% @end
 %%----------------------------------------------------------------------
+-define(WS, [9, 10, 12, 13, 32]).
+-define(WS_WITH_DASH, [$-|?WS]).
+-define(WS_WITH_DASH_AND_DOT, [$.,$-|?WS]).
+
 is_valid_cc(CCStr) ->
-	Clean = remove_chars(CCStr, " -"),
+	Clean = remove_chars(CCStr, ?WS_WITH_DASH),
 	case check_luhn(Clean) of
 		false -> false;
 		true -> is_valid_cc(Clean, length(Clean))
@@ -282,7 +286,7 @@ is_valid_cc(_,_) -> false.
 %% @end
 %%----------------------------------------------------------------------
 is_valid_iban(IbanStr) ->
-	Clean = remove_chars(IbanStr, " -"),
+	Clean = remove_chars(IbanStr, ?WS_WITH_DASH),
 	is_valid_iban1(Clean).
 
 is_valid_iban1([CC1, CC2, CD1, CD2|Rest]) ->
@@ -312,7 +316,7 @@ to_iban_value(_C) -> throw({error, unexcepected_character}).
 %% @end
 %%----------------------------------------------------------------------
 is_valid_aba(AbaStr) ->
-	Clean = remove_chars(AbaStr, " -"),
+	Clean = remove_chars(AbaStr, ?WS_WITH_DASH),
 	is_valid_aba1(Clean).
 
 is_valid_aba1([A1,A2|Rest]) ->
@@ -354,7 +358,7 @@ is_valid_pan([_WS, _I1, _I2, _I3, _I4, I5 | _Tail]) ->
 %%---------------------------------------------------------------------
 
 is_valid_china_icn(IcnStr) ->
-	Clean = remove_chars(IcnStr, " "),
+	Clean = remove_chars(IcnStr, ?WS),
 	is_valid_china_icn1(Clean).
 
 is_valid_china_icn1(IcnStr) ->
@@ -374,7 +378,7 @@ is_valid_china_icn1(IcnStr) ->
 %%----------------------------------------------------------------------
 
 is_valid_cpf(CpfStr)->
-	Clean = remove_chars(CpfStr, " .-"),
+	Clean = remove_chars(CpfStr, ?WS_WITH_DASH_AND_DOT),
 	is_valid_cpf1(Clean).
 
 is_valid_cpf1("00000000000") -> false;
@@ -401,8 +405,9 @@ is_valid_cpf1(CpfStr) ->
 %%-------------------------------------------------------------------
 
 is_valid_cc_edate(EdateStr) ->
+	Clean = remove_chars(EdateStr, ?WS),
 	[I1,I2,_I3,I4,I5] = 
-		lists:map(fun(I) -> I - $0 end, EdateStr),
+		lists:map(fun(I) -> I - $0 end, Clean),
 	Mm = I1*10 + I2,
 	case (Mm =< 12) and (Mm > 0) of
 		true -> ValidMonth = true;
@@ -506,7 +511,7 @@ is_valid_day(Day) when length(Day) == 1 ->
 %% @end
 %%----------------------------------------------------------------------
 is_valid_trid(TrIdStr) ->
-	Clean = remove_chars(TrIdStr, " -"),
+	Clean = remove_chars(TrIdStr, ?WS_WITH_DASH),
 	is_valid_trid1(Clean).
 
 is_valid_trid1("00000000000") -> false;
@@ -523,7 +528,7 @@ is_valid_trid1(TrIdStr) ->
 %%----------------------------------------------------------------------
 is_valid_ssn([_WS|SSNStr]) ->
 	SSNStr1 = string:substr(SSNStr, 1, string:len(SSNStr) - 1),
-	Clean = remove_chars(SSNStr1, " -"),
+	Clean = remove_chars(SSNStr1, ?WS_WITH_DASH),
 	case string:len(Clean) of 
 		9 ->
 			AreaN = list_to_integer(string:substr(Clean,1,3)),
@@ -546,7 +551,7 @@ is_valid_ssn([_WS|SSNStr]) ->
 %% @end
 %%----------------------------------------------------------------------
 is_valid_sin(SINStr) ->
-	Clean = remove_chars(SINStr, " -"),
+	Clean = remove_chars(SINStr, ?WS_WITH_DASH),
 	is_valid_sin1(Clean).
 
 is_valid_sin1("000000000") -> false;
@@ -557,7 +562,7 @@ is_valid_sin1(SINStr) -> check_luhn(SINStr).
 %% @end
 %%----------------------------------------------------------------------
 is_valid_insee(INSEEStr) ->
-	Clean = remove_chars(INSEEStr, " -"),
+	Clean = remove_chars(INSEEStr, ?WS_WITH_DASH),
 	case string:len(Clean) of 
 		15 ->
 			SexN = list_to_integer(string:substr(Clean,1,1)),
@@ -610,7 +615,7 @@ is_valid_inseeF(SexN, YearN, MonthN, BirthPlaceN, RestN, ControlN) ->
 %% @end
 %%----------------------------------------------------------------------
 is_valid_nino(SINStr) ->
-	Clean = remove_chars(SINStr, " -"),
+	Clean = remove_chars(SINStr, ?WS_WITH_DASH),
 	Clean1 = string:to_lower(Clean),
 	case string:len(Clean1) of
 		9 -> is_valid_nino1(Clean1);
@@ -650,7 +655,7 @@ is_valid_nino1([_, _ |Rest]) ->
 %% @end
 %%----------------------------------------------------------------------
 is_valid_said(SAIDStr) ->
-	Clean = remove_chars(SAIDStr, " -"),
+	Clean = remove_chars(SAIDStr, ?WS_WITH_DASH),
 	Clean1 = string:to_lower(Clean),
 	case string:len(Clean1) of
 		13 -> is_valid_said1(Clean1);
@@ -1186,6 +1191,22 @@ ext_to_file(Ext) ->
 		dataref=?BB_C(Data)} 
 		|| {Filename,Data} <- Ext].
 
+%%-----------------------------------------------------------------------
+%% @doc Checks whether funciton returns true. In addition returns indexes of occurrences.
+%%
+%%------------------------------------------------------------------------
+
+regex_filter_map(Fun, Data, IndexList) -> regex_filter_map(Fun, Data, IndexList, []).
+
+regex_filter_map(_Fun, _Data, [], Acc) -> lists:reverse(Acc);
+
+regex_filter_map(Fun, Data, [I|List], Acc) ->
+	{Index, Length} = I,
+	MatchString = binary:bin_to_list(Data, {Index, Length}),
+	case Fun(MatchString) of
+		true -> regex_filter_map(Fun, Data, List, [Index|Acc]);
+		false -> regex_filter_map(Fun, Data, List, Acc) end.
+
 %%--------------------------------------------------------------------
 %% @doc Checks whether function returns true more than count for given function
 %% @end
@@ -1610,15 +1631,19 @@ is_cobject_mime(MimeType) ->
 %% @end
 %%-------------------------------------------------------------------------
 
-binary_size(Obj) when is_binary(Obj) -> size(Obj);
-binary_size(Obj) when is_list(Obj) ->
-	L1 = lists:map(fun(I) -> binary_size(I) end, Obj),
-	lists:sum(L1);
-binary_size(Obj) when is_integer(Obj), 0 =< Obj, Obj =< 255 -> 1;
-binary_size(Obj) when is_integer(Obj) -> throw({error, bad_integer, Obj});
-binary_size(Obj) when is_atom(Obj) -> throw({error, bad_element});
-binary_size(Obj) when is_tuple(Obj) -> throw({error, bad_element});
-binary_size(_Obj) -> throw({error, bad_element}).
+binary_size([]) -> 0;
+binary_size([_|_] = Obj) -> binary_size(lists:flatten(Obj), 0);
+binary_size(Obj) -> binary_size(Obj, 0).
+
+binary_size(<<Obj/binary>>, Acc) -> Acc + size(Obj);
+binary_size([] , Acc) -> Acc;
+binary_size([O|Rest], Acc) ->
+	binary_size(Rest, Acc + binary_size(O));
+binary_size(Obj, _Acc) when is_integer(Obj), 0 =< Obj, Obj =< 255 -> 1;
+binary_size(Obj, _Acc) when is_integer(Obj) -> throw({error, bad_integer, Obj});
+binary_size(Obj, _Acc) when is_atom(Obj) -> throw({error, bad_element_atom, Obj});
+binary_size(Obj, _Acc) when is_tuple(Obj) -> throw({error, bad_element_tuple, Obj});
+binary_size(Obj, _Acc) -> throw({error, bad_element, Obj}).
 
 %%-------------------------------------------------------------------------
 %% @doc Converts mime objects to files

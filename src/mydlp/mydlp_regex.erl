@@ -101,15 +101,23 @@ handle_re({match_count, GIs}, Data, _State) ->
 
 handle_re({mbin, BInKey}, Data, #state{builtin_tree=BT}) ->
 	RE = gb_trees:get(BInKey, BT),
-	Patterns = case re:run(Data, RE, [global, {capture, all, list}]) of
+%	erlang:display({zort1}),
+%	Patterns = case re:run(Data, RE, [global, {capture, all, list}]) of
+%			nomatch -> [];
+%			{match, Captured} -> lists:append(Captured) 
+%		end,
+%	erlang:display({zort2}),
+%	Indexes = case length(Patterns) of
+%			0 -> [];
+%			_ -> find_indexes(Data, RE)
+%		end,
+%	erlang:display({zort3}),
+%	return_as_tuple(Patterns, Indexes);
+	IndexList = case re:run(Data, RE, [global, {capture, all, index}]) of
 			nomatch -> [];
-			{match, Captured} -> lists:append(Captured) 
+			{match, Captured} -> lists:append(Captured)
 		end,
-	Indexes = case length(Patterns) of
-			0 -> [];
-			_ -> find_indexes(Data, RE)
-		end,
-	return_as_tuple(Patterns, Indexes);
+	{Data, IndexList};
 
 handle_re({longest_bin, BInKey}, Data, #state{builtin_tree=BT}) ->
 	RE = gb_trees:get(BInKey, BT),
@@ -139,18 +147,19 @@ handle_re({score_suite, BInKey}, Data, #state{builtin_suite_tree=BST}) ->
 
 handle_re(Call, _Data, _State) -> throw({error,{unhandled_re_call,Call}}).
 
-find_indexes(Data, RE) ->
-	{match, IndexList} = re:run(Data, RE, [global, {capture, all, index}]),
-	lists:map(fun([{I,_T}]) -> I end, IndexList).
+%find_indexes(Data, RE) ->
+%	{match, IndexList} = re:run(Data, RE, [global, {capture, all, index}]),
+%	lists:map(fun([{I,_T}]) -> I end, IndexList).
 
-return_as_tuple(Patterns, Indexes) when length(Patterns) == 0 -> [];
+%return_as_tuple(Patterns, Indexes) when length(Patterns) == 0 -> erlang:display(zort5), [];
 
-return_as_tuple(Patterns, [HI|_TI])  when length(Patterns) == 1 -> 
-	[HP|_TP] = Patterns,
-	[{HP, HI}];
+%return_as_tuple(Patterns, [HI|_TI])  when length(Patterns) == 1 -> 
+%	[HP|_TP] = Patterns,
+%	erlang:display({zort4}),
+%	[{HP, HI}];
 
-return_as_tuple([HP|TP], [HI|TI]) ->
-	lists:append([{HP, HI}], return_as_tuple(TP, TI)).
+%return_as_tuple([HP|TP], [HI|TI]) ->
+%	lists:append([{HP, HI}], return_as_tuple(TP, TI)).
 
 handle_info({async_reply, Reply, From}, State) ->
 	gen_server:reply(From, Reply),
@@ -172,17 +181,17 @@ stop() ->
 init([]) ->
 	BInREs = [
 		%{credit_card, rec("\\b(?:\\d[ -]{0,4}?){13,16}\\b")}
-		{credit_card, rec("(?:\\d[ -]{0,4}){13,16}", [unicode])},
-		{iban, rec("(?:[a-zA-Z][ -]{0,4}){2}(?:[0-9][ -]{0,4}){2}(?:[a-zA-Z0-9][ -]{0,4}){4}(?:[0-9][ -]{0,4}){7}(?:[a-zA-Z0-9][ -]{0,4}){0,16}", [unicode])},
+		{credit_card, rec("(?:\\d[\\s-]{0,3}){13,16}", [unicode])},
+		{iban, rec("[a-zA-Z]{2}\\s{0,2}[0-9]{2}\\s{0,2}[a-zA-Z0-9]{4}\\s{0,2}[0-9]{7}\\s{0,2}[a-zA-Z0-9]{0,16}", [unicode])},
 		{aba, rec("\\d{4}-?\\d{4}-?\\d", [unicode])},
-		{trid, rec("(?:\\d[ -]{0,2}){11}", [unicode])},
+		{trid, rec("\\d{11}", [unicode])},
 		{ssn, rec("\\s(?:\\d{3}-\\d{2}-\\d{4})\\s", [unicode])},
 		%{ssn, rec("(?:\\d{3} ?-? ?\\d{2} ?-? ?\\d{4})")},
 		{sin, rec("(?:\\d{3} ?-? ?\\d{3} ?-? ?\\d{3})", [unicode])},
 		%{insee, rec("(?:\\d{1} ?-? ?\\d{2} ?-? ?\\d{2} ?-? ?\\d{5} ?-? ?\\d{3} ?-? ?\\d{2})")},
 		{insee, rec("(?:\\d{1} ?\\d{2} ?\\d{2} ?\\d{5} ?\\d{3} ?(?:\\d{2})?)", [unicode])},
 		{nino, rec("(?:[A-Za-z]{2}\\d{6}[A-Za-z]{0,1})", [unicode])},
-		{said, rec("(?:\\d[ -]{0,1}){13}", [unicode])},
+		{said, rec("\\d{13}", [unicode])},
 		%{nino, rec("(?:[A-Za-z]{2} ?-? ?\\d{2} ?-? ?\\d{2} ?-? ?\\d{2} ?-? ?[A-Za-z]{0,1})")},
 		{nonwc, rec("[^A-Za-z0-9]+", [unicode])},
 		{sentence, rec("[\\n\\r\\t\\.!?]+\\s{0,1}\\){0,1}\\s+", [unicode])},
@@ -192,7 +201,7 @@ init([]) ->
 		{pan, rec("\\s(?:[A-Z]){5}(?:[0-9]){4}(?:[A-Z]){1}\\s", [unicode])},
 		{cpf, rec("(?:\\d{3}\\s{0,1}\.\\s{0,1}){2}(?:\\d{3}\\s{0,1}-\\s{0,1}\\d{2})", [unicode])},
 		{icn, rec("\\s(?:\\d{17}[\\dX])\\s", [unicode])},
-		{edate, rec("(?:\\d{2}[/-]\\d{2})", [unicode])},
+		{edate, rec("\\s(?:\\d{2}[/-]\\d{2})\\s", [unicode])},
 		{birthdate, rec("(?:(?:\\d{2}[/-]){2}(?:\\d{4}))|(?:\\d{2}[/-\\s][A-Za-z]{3}[/-\\s]\\d{4})|"
 				"(?:[A-Za-z]{3}\\s{1,5}\\d{1,2}(?:,){0,1}\\s{1,5}\\d{4})|"
 				"(?:\\d{4}[/-]\\d{2}[\-]\\d{2})", [unicode])}
@@ -299,14 +308,19 @@ count_all(GIs, Data) ->
 	Regexes = lists:flatten(
 		[[ mydlp_mnesia:get_regexes(GI) || GI <- GIs ]] ),
 	RRMap = mydlp_api:pmap(fun(R) -> count_expr(R, Data) end, Regexes),
-	lists:sum(RRMap).
+	IndexList = lists:flatten(RRMap),
+	IndexList1 = lists:usort(IndexList),
+	{length(IndexList1), IndexList1}.
 
 -define(CNT_RE_OPTS, [global, {capture, all, index}]).
 
 count_expr(RE, Data) ->
+	%case re:run(Data, RE, ?CNT_RE_OPTS) of
+	%	nomatch -> 0;
+	%	{match, Captured} -> length(Captured) end.
 	case re:run(Data, RE, ?CNT_RE_OPTS) of
-		nomatch -> 0;
-		{match, Captured} -> length(Captured) end.
+		nomatch -> [];
+		{match, Captured} -> [I || [{I,_}|_] <- Captured] end.
 
 insert_all([{Key, Val}|Rest], Tree) -> insert_all(Rest, gb_trees:enter(Key, Val, Tree));
 insert_all([], Tree) -> Tree.
