@@ -142,9 +142,8 @@ init([]) ->
 			Pos = size(NewBuff) - 5,
 			case NewBuff of
 				<<Message:Pos/binary,13,10,46,13,10>> -> % CRLF.CRLF smtpd data end.
-					gen_fsm:send_all_state_event(self(), ok),
 					NextState1 = State#smtpd_fsm{message_bin=Message, buff= <<>>},
-					{next_state, 'PROCESS_DATA', NextState1, ?CFG(fsm_timeout)};
+					'PROCESS_DATA'(ok, NextState1);
 				_Else2 -> {next_state, 'WAIT_FOR_DATA', NextState, ?CFG(fsm_timeout)} end;
 		_Else -> {next_state, 'WAIT_FOR_DATA', NextState, ?CFG(fsm_timeout)} end.
 
@@ -240,9 +239,6 @@ archive_req(State, {{rule, RId}, {file, _}, {itype, IType}, {misc, Misc}}, Files
 %%          {stop, Reason, NewStateData}
 %% @private
 %%-------------------------------------------------------------------------
-handle_event(ok, 'PROCESS_DATA' = StateName, StateData) ->
-	fsm_call(StateName, ok, StateData);
-
 handle_event(stop, _StateName, State) ->
 	{stop, normal, State};
 
