@@ -54,7 +54,13 @@
 
 %%%%% EXTERNAL INTERFACE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-start_link() -> thrift_server:start_link(9092, mydlp_ui_thrift, ?MODULE).
+%start_link() -> thrift_server:start_link(9092, mydlp_ui_thrift, ?MODULE, [{framed,true}]).
+
+start_link() -> thrift_socket_server:start([{handler, ?MODULE},
+                                {service, mydlp_ui_thrift},
+                                {port, 9092},
+                                {framed, true},
+                                {name, mydlp_ts}]).
 
 stop(Server) -> thrift_server:stop(Server), ok.
 
@@ -106,7 +112,8 @@ generateFingerprints(DocumentId, Filename, Data) ->
 	FList = mydlp_pdm:fingerprint(Text),
 	mydlp_api:clean_files(F),
 	lists:usort(FList),
-	mydlp_mysql:save_fingerprints(DocumentId, FList).
+	mydlp_mysql:save_fingerprints(DocumentId, FList),
+	ok.
 
 requeueIncident(Incidentid) ->
 	try     case mydlp_quarantine:l(payload, Incidentid) of

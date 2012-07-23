@@ -199,8 +199,6 @@ cc_edate_match(_Conf, _Addr, File) ->
 	{Data, IndexList} = mydlp_regex:match_bin(
 		edate,
 		File#file.text),
-	erlang:display("cc:edate"),
-	erlang:display(IndexList),
 	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_cc_edate(I) end, Data, IndexList),
 	{length(WIList), WIList}.
 

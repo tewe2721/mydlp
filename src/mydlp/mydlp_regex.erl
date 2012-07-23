@@ -101,17 +101,14 @@ handle_re({match_count, GIs}, Data, _State) ->
 
 handle_re({mbin, BInKey}, Data, #state{builtin_tree=BT}) ->
 	RE = gb_trees:get(BInKey, BT),
-%	erlang:display({zort1}),
 %	Patterns = case re:run(Data, RE, [global, {capture, all, list}]) of
 %			nomatch -> [];
 %			{match, Captured} -> lists:append(Captured) 
 %		end,
-%	erlang:display({zort2}),
 %	Indexes = case length(Patterns) of
 %			0 -> [];
 %			_ -> find_indexes(Data, RE)
 %		end,
-%	erlang:display({zort3}),
 %	return_as_tuple(Patterns, Indexes);
 	IndexList = case re:run(Data, RE, [global, {capture, all, index}]) of
 			nomatch -> [];
@@ -151,11 +148,10 @@ handle_re(Call, _Data, _State) -> throw({error,{unhandled_re_call,Call}}).
 %	{match, IndexList} = re:run(Data, RE, [global, {capture, all, index}]),
 %	lists:map(fun([{I,_T}]) -> I end, IndexList).
 
-%return_as_tuple(Patterns, Indexes) when length(Patterns) == 0 -> erlang:display(zort5), [];
+%return_as_tuple(Patterns, Indexes) when length(Patterns) == 0 -> [];
 
 %return_as_tuple(Patterns, [HI|_TI])  when length(Patterns) == 1 -> 
 %	[HP|_TP] = Patterns,
-%	erlang:display({zort4}),
 %	[{HP, HI}];
 
 %return_as_tuple([HP|TP], [HI|TI]) ->
