@@ -62,9 +62,12 @@
 
 -define(S, "~P").
 
+-define(MIME_TIKA_OOXML, <<"application/x-tika-ooxml">>).
 -define(MIME_OOXML_WORD, <<"application/vnd.openxmlformats-officedocument.wordprocessingml.document">>).
 -define(MIME_OOXML_EXCEL, <<"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">>).
 -define(MIME_OOXML_POWERPOINT, <<"application/vnd.openxmlformats-officedocument.presentationml.presentation">>).
+-define(MIME_ZIP, <<"application/zip">>).
+-define(MIME_XPS, <<"application/vnd.ms-xpsdocument">>).
 
 %%%%%%%
 

@@ -1541,6 +1541,7 @@ mime_category(<<"application/x-lzma">>) -> compression;
 mime_category(<<"application/x-xz">>) -> compression;
 mime_category(<<"application/x-winzip">>) -> compression;
 mime_category(<<"application/vnd.ms-cab-compressed">>) -> compression;
+mime_category(?MIME_XPS) -> compression; % workaround
 mime_category(<<"application/x-executable">>) -> cobject;
 mime_category(<<"application/x-sharedlib">>) -> cobject;
 mime_category(<<"application/x-object">>) -> cobject;

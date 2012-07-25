@@ -30,6 +30,8 @@
 
 -include("mydlp.hrl").
 
+-include_lib("stdlib/include/zip.hrl").
+
 %% API
 -export([start_link/0,
 	pre_init/1,
@@ -86,22 +88,36 @@ get_mime(Data) when is_binary(Data) ->
 		unknown_type end,
 
 	case TRet of
-		<<"application/x-tika-ooxml">> -> get_mime_zip(Data);
+		?MIME_TIKA_OOXML -> get_mime_zip(Data);
+		?MIME_ZIP -> get_mime_zip(Data);
 		Else -> Else end.
 
 get_mime_zip(Data) ->
 	{ok, FL} = zip:list_dir(Data),
-	case 		lists:keymember("word/document.xml", 2, FL) of true -> ?MIME_OOXML_WORD;
-	false -> case	lists:keymember("xl/workbook.xml", 2, FL) of true -> ?MIME_OOXML_EXCEL;
-	false -> case	lists:keymember("ppt/presentation.xml", 2, FL) of true -> ?MIME_OOXML_POWERPOINT;
-	false -> <<"application/zip">> end end end.
+	get_mime_zip1(FL).
+
+get_mime_zip1([]) -> ?MIME_ZIP;
+get_mime_zip1([#zip_file{name=undefined}|Rest]) -> get_mime_zip1(Rest);
+get_mime_zip1([#zip_file{name="word/document.xml"}|_Rest]) -> ?MIME_OOXML_WORD;
+get_mime_zip1([#zip_file{name="xl/workbook.xml"}|_Rest]) -> ?MIME_OOXML_EXCEL;
+get_mime_zip1([#zip_file{name="ppt/presentation.xml"}|_Rest]) -> ?MIME_OOXML_POWERPOINT;
+get_mime_zip1([#zip_file{name="_rels/.rels"}|_Rest]) -> ?MIME_XPS;
+get_mime_zip1([#zip_file{name="_rels/.rels/"}|_Rest]) -> ?MIME_XPS;
+get_mime_zip1([#zip_file{name=( "_rels/.rels" ++ _RestOfFile)}|_Rest]) -> ?MIME_XPS;
+get_mime_zip1([_Else|Rest]) -> get_mime_zip1(Rest).
 
 get_text(undefined, MT, Data) -> get_text(<<>>, MT, Data);
 get_text(Filename, MT, Data) when is_list(Filename) ->
 	FilenameB = unicode:characters_to_binary(Filename),
 	get_text(FilenameB, MT, Data);
-get_text(Filename, MT, Data) ->
+get_text(Filename0, MT, Data) ->
+	Filename = modify_filename(Filename0),
 	call_pool({thrift, java, getText, [Filename, MT, Data]}).
+
+modify_filename(Filename) ->
+	case binary:part(Filename,{byte_size(Filename), -4}) of
+		<<".xps">> -> binary:part(Filename,{0, byte_size(Filename) - 4});
+		_Else -> Filename end.
 
 %%%%%%%%%%%%%% gen_server handles
 
