@@ -305,6 +305,7 @@ init([]) ->
 		{dd_by_matcher_id, <<"SELECT dd.id FROM MatcherArgument AS ma, NonCascadingArgument AS nca, DocumentDatabase AS dd WHERE ma.coupledMatcher_id=? AND ma.coupledArgument_id=nca.id AND nca.argument_id=dd.id">>},
 		{filehash_by_dd_id, <<"SELECT ddfe.id, ddfe.md5Hash FROM DocumentDatabase_DocumentDatabaseFileEntry AS dd, DocumentDatabaseFileEntry AS ddfe WHERE dd.DocumentDatabase_id=? AND dd.fileEntries_id=ddfe.id">>},
 		{filefingerprint_by_dd_id, <<"SELECT ddfe.id, df.fingerprint FROM DocumentDatabase_DocumentDatabaseFileEntry AS dd, DocumentDatabaseFileEntry AS ddfe, DocumentFingerprint AS df WHERE dd.DocumentDatabase_id=? AND dd.fileEntries_id=ddfe.id AND df.document_id=ddfe.id">>},
+		{rdbmsfingerprint_by_dd_id, <<"SELECT ddre.id, df.fingerprint FROM DocumentDatabase_DocumentDatabaseRDBMSEntry AS dd, DocumentDatabaseRDBMSEntry AS ddre, DocumentFingerprint AS df WHERE dd.DocumentDatabase_id=? AND dd.rdbmsEntries_id=ddre.id AND df.document_id=ddre.id">>},
 		%{user_by_rule_id, <<"SELECT eu.id, eu.username FROM sh_ad_entry_user AS eu, sh_ad_cross AS c, sh_ad_rule_cross AS rc WHERE rc.parent_rule_id=? AND rc.group_id=c.group_id AND c.entry_id=eu.entry_id">>},
 		{mimes_by_data_format_id, <<"SELECT m.mimeType FROM MIMEType AS m, DataFormat_MIMEType dm WHERE dm.DataFormat_id=? and dm.mimeTypes_id=m.id">>},
 		{usb_devices, <<"SELECT deviceId, action FROM USBDevice">>},
@@ -745,6 +746,8 @@ populate_match(Id, <<"document_pdm">>, IFeatureId) ->
 	[[DDId]] = DDQ,
 	{ok, FFQ} = psq(filefingerprint_by_dd_id, [DDId]),
 	populate_filefingerprints(FFQ, DDId),
+	{ok, RFQ} = psq(rdbmsfingerprint_by_dd_id, [DDId]),
+	populate_filefingerprints(RFQ, DDId),
 	FuncParams=[DDId],
 	new_match(Id, IFeatureId, Func, FuncParams);
 
