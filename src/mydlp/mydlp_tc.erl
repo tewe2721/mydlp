@@ -88,23 +88,22 @@ get_mime(Data) when is_binary(Data) ->
 		unknown_type end,
 
 	case TRet of
-		?MIME_TIKA_OOXML -> get_mime_zip(Data);
-		?MIME_ZIP -> get_mime_zip(Data);
+		?MIME_TIKA_OOXML -> get_mime_zip(Data, ?MIME_TIKA_OOXML);
+		?MIME_ZIP -> get_mime_zip(Data, ?MIME_ZIP);
 		Else -> Else end.
 
-get_mime_zip(Data) ->
+get_mime_zip(Data, Default) ->
 	{ok, FL} = zip:list_dir(Data),
-	get_mime_zip1(FL).
+	get_mime_zip1(FL, Default).
 
-get_mime_zip1([]) -> ?MIME_ZIP;
-get_mime_zip1([#zip_file{name=undefined}|Rest]) -> get_mime_zip1(Rest);
-get_mime_zip1([#zip_file{name="word/document.xml"}|_Rest]) -> ?MIME_OOXML_WORD;
-get_mime_zip1([#zip_file{name="xl/workbook.xml"}|_Rest]) -> ?MIME_OOXML_EXCEL;
-get_mime_zip1([#zip_file{name="ppt/presentation.xml"}|_Rest]) -> ?MIME_OOXML_POWERPOINT;
-get_mime_zip1([#zip_file{name="_rels/.rels"}|_Rest]) -> ?MIME_XPS;
-get_mime_zip1([#zip_file{name="_rels/.rels/"}|_Rest]) -> ?MIME_XPS;
-get_mime_zip1([#zip_file{name=( "_rels/.rels" ++ _RestOfFile)}|_Rest]) -> ?MIME_XPS;
-get_mime_zip1([_Else|Rest]) -> get_mime_zip1(Rest).
+get_mime_zip1([], Default) -> Default;
+get_mime_zip1([#zip_file{name="word/document.xml"}|_Rest], ?MIME_TIKA_OOXML) -> ?MIME_OOXML_WORD;
+get_mime_zip1([#zip_file{name="xl/workbook.xml"}|_Rest], ?MIME_TIKA_OOXML) -> ?MIME_OOXML_EXCEL;
+get_mime_zip1([#zip_file{name="ppt/presentation.xml"}|_Rest], ?MIME_TIKA_OOXML) -> ?MIME_OOXML_POWERPOINT;
+get_mime_zip1([#zip_file{name="_rels/.rels"}|_Rest], ?MIME_ZIP) -> ?MIME_XPS;
+get_mime_zip1([#zip_file{name="_rels/.rels/"}|_Rest], ?MIME_ZIP) -> ?MIME_XPS;
+get_mime_zip1([#zip_file{name=( "_rels/.rels" ++ _RestOfFile)}|_Rest], ?MIME_ZIP) -> ?MIME_XPS;
+get_mime_zip1([_Else|Rest], Default) -> get_mime_zip1(Rest, Default).
 
 get_text(undefined, MT, Data) -> get_text(<<>>, MT, Data);
 get_text(Filename, MT, Data) when is_list(Filename) ->
