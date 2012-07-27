@@ -87,11 +87,9 @@ get_mime(Data) when is_binary(Data) ->
 	catch _:_Exception ->
 		unknown_type end,
 
-	A = case TRet of
+	case TRet of
 		?MIME_TIKA_OOXML -> get_mime_zip(Data, ?MIME_TIKA_OOXML);
-		Else -> Else end,
-	erlang:display(binary_to_list(A)),
-	A.
+		Else -> Else end.
 
 get_mime_zip(Data, Default) ->
 	{ok, FL} = zip:list_dir(Data),
@@ -108,20 +106,19 @@ get_text(Filename, MT, Data) when is_list(Filename) ->
 	FilenameB = unicode:characters_to_binary(Filename),
 	get_text(FilenameB, MT, Data);
 get_text(Filename0, MT0, Data) ->
-	{MT, Filename} = pre_call(Filename0, MT0),
-	Text = case MT of
+	{Filename, MT} = pre_call(Filename0, MT0),
+	case MT of
 		?MIME_XPS ->
 			F = #file{filename=Filename, mime_type=?MIME_ZIP, dataref=?BB_C(Data)},
 			T = mydlp_api:concat_texts(F),
 			mydlp_api:clean_files(F), T;
-		_Else -> call_pool({thrift, java, getText, [Filename, MT, Data]}) end,
-	erlang:display(binary_to_list(Text)),
-	Text.
+		_Else -> call_pool({thrift, java, getText, [Filename, MT, Data]}) end.
 
 pre_call(Filename, MT) ->
-	case binary:part(Filename,{byte_size(Filename), -4}) of
-		<<".xps">> -> {?MIME_XPS, binary:part(Filename,{0, byte_size(Filename) - 4})};
-		_Else -> {MT, Filename} end.
+	case {binary:part(Filename,{byte_size(Filename), -4}), MT} of
+		{<<".xps">>, ?MIME_TIKA_OOXML} -> {?MIME_XPS, binary:part(Filename,{0, byte_size(Filename) - 4})};
+		{<<".xps">>, ?MIME_ZIP} -> {?MIME_XPS, binary:part(Filename,{0, byte_size(Filename) - 4})};
+		_Else -> {Filename, MT} end.
 
 %%%%%%%%%%%%%% gen_server handles
 
