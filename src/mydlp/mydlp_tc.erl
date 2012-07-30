@@ -115,9 +115,12 @@ get_text(Filename0, MT0, Data) ->
 		_Else -> call_pool({thrift, java, getText, [Filename, MT, Data]}) end.
 
 pre_call(Filename, MT) ->
-	case {binary:part(Filename,{byte_size(Filename), -4}), MT} of
-		{<<".xps">>, ?MIME_TIKA_OOXML} -> {?MIME_XPS, binary:part(Filename,{0, byte_size(Filename) - 4})};
-		{<<".xps">>, ?MIME_ZIP} -> {?MIME_XPS, binary:part(Filename,{0, byte_size(Filename) - 4})};
+	Ext = case byte_size(Filename) > 4 of
+		true -> binary:part(Filename,{byte_size(Filename), -4});
+		false -> <<>> end,
+	case {Ext, MT} of
+		{<<".xps">>, ?MIME_TIKA_OOXML} -> {binary:part(Filename,{0, byte_size(Filename) - 4}), ?MIME_XPS};
+		{<<".xps">>, ?MIME_ZIP} -> {binary:part(Filename,{0, byte_size(Filename) - 4}), ?MIME_XPS};
 		_Else -> {Filename, MT} end.
 
 %%%%%%%%%%%%%% gen_server handles
