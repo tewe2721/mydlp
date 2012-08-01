@@ -351,9 +351,23 @@ log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}
 		_Else -> get_user() end,
 	Channel = get_channel(Obj),
 	Time = erlang:localtime(),
+	log_req1(Time, Channel, RuleId, Action, User, IType, File, Misc).
+
+-ifdef(__MYDLP_ENDPOINT).
+
+log_req1(Time, Channel, RuleId, Action, User, IType, File, Misc) ->
 	case {Channel, Action, Misc, ?CFG(ignore_discover_max_size_exceeded)} of
 		{discovery, log, max_size_exceeded, true} -> ok;
 		_Else2 -> ?ACL_LOG(Time, Channel, RuleId, Action, nil, User, nil, IType, File, Misc) end.
+
+-endif.
+
+-ifdef(__MYDLP_NETWORK).
+
+log_req1(Time, Channel, RuleId, Action, User, IType, File, Misc) ->
+	?ACL_LOG(Time, Channel, RuleId, Action, nil, User, nil, IType, File, Misc).
+
+-endif.
 
 is_inbound(#object{prop_dict=PD}) ->
 	case dict:find("direction", PD) of
