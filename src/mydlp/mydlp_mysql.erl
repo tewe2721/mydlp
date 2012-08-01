@@ -818,6 +818,7 @@ rule_dtype_to_channel(<<"MailRule">>) -> mail;
 rule_dtype_to_channel(<<"EndpointRule">>) -> endpoint;
 rule_dtype_to_channel(<<"PrinterRule">>) -> printer;
 rule_dtype_to_channel(<<"DiscoveryRule">>) -> discovery;
+rule_dtype_to_channel(<<"ApiRule">>) -> api;
 rule_dtype_to_channel(Else) -> throw({error, unsupported_rule_type, Else}).
 
 pre_push_log(RuleId, Ip, User, Destination, Action, Channel) -> 
@@ -853,7 +854,8 @@ pre_push_log(RuleId, Ip, User, Destination, Action, Channel) ->
 		mail -> <<"M">>;
 		endpoint -> <<"E">>;
 		printer -> <<"P">>;
-		discovery -> <<"D">> 
+		discovery -> <<"D">>;
+		api -> <<"A">> 
 	end,
 	Visible = case RuleId of
 		-1 -> 0;

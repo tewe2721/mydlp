@@ -147,10 +147,16 @@ handle_call({aclq, ObjId, Timeout}, From, #state{object_tree=OT} = State) ->
 						File = object_to_file(Obj),
 						DFFiles = [File],
 						Channel = get_channel(Obj),
-						QRet = case ( ?CFG(archive_inbound) and is_inbound(Obj) ) of
-							true -> mydlp_acl:qi(Channel, DFFiles);
-							false -> mydlp_acl:qe(Channel, DFFiles) end,
-						AclRet = acl_ret(QRet, Obj, DFFiles),
+						{QRet, Obj1} = case Channel of
+							api ->	IpAddress = get_ip_address(Obj),
+								{UserName, UserHash} = mydlp_mnesia:get_user_from_address(IpAddress),
+								AclQ = #aclq{channel=Channel, src_addr=IpAddress, src_user_h=UserHash},
+								{mydlp_acl:q(AclQ, DFFiles), set_api_user(Obj, UserName)};
+							_Else -> { case ( ?CFG(archive_inbound) and is_inbound(Obj) ) of
+									true -> mydlp_acl:qi(Channel, DFFiles);
+									false -> mydlp_acl:qe(Channel, DFFiles) end,
+								Obj } end,
+						AclRet = acl_ret(QRet, Obj1, DFFiles),
 						{ok, AclRet}
 					catch	throw:{error, eacces} -> {ok, pass};
 						Class:Error ->
@@ -340,12 +346,14 @@ archive_req(Obj, {{rule, RId}, {file, _}, {itype, IType}, {misc, Misc}}, DFFiles
                 _Else -> log_req(Obj, archive, {{rule, RId}, {file, DFFiles}, {itype, IType}, {misc, Misc}}) end.
 
 log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
-	User = get_user(),
+	User = case get_channel(Obj) of
+		api -> get_api_user(Obj);
+		_Else -> get_user() end,
 	Channel = get_channel(Obj),
 	Time = erlang:localtime(),
 	case {Channel, Action, Misc, ?CFG(ignore_discover_max_size_exceeded)} of
 		{discovery, log, max_size_exceeded, true} -> ok;
-		_Else -> ?ACL_LOG(Time, Channel, RuleId, Action, nil, User, nil, IType, File, Misc) end.
+		_Else2 -> ?ACL_LOG(Time, Channel, RuleId, Action, nil, User, nil, IType, File, Misc) end.
 
 is_inbound(#object{prop_dict=PD}) ->
 	case dict:find("direction", PD) of
@@ -357,6 +365,7 @@ is_inbound(#object{prop_dict=PD}) ->
 get_channel(#object{prop_dict=PD}) ->
 	case dict:find("channel", PD) of
 		{ok, "discovery"} -> discovery;
+		{ok, "api"} -> api;
 	error -> case dict:find("printerName", PD) of
 		{ok, _} -> printer;
 		error -> endpoint end end.
@@ -367,6 +376,20 @@ get_type(#object{prop_dict=PD}) ->
 		{ok, "regular"} -> regular;
 		{ok, _Else} -> regular;
 		error -> regular  end.
+
+get_ip_address(#object{prop_dict=PD}) ->
+	case dict:find("ip_address", PD) of
+		{ok, ClientIpS} -> mydlp_api:str_to_ip(ClientIpS);
+		error -> unknown  end.
+
+set_api_user(#object{prop_dict=PD} = Obj, UserName) ->
+	PD1 = dict:store("api_user", UserName, PD),
+	Obj#object{prop_dict=PD1}.
+
+get_api_user(#object{prop_dict=PD}) ->
+	case dict:find("api_user", PD) of
+		{ok, User} -> User;
+		error -> nil  end.
 
 %get_user(#object{prop_dict=PD}) ->
 %	case dict:find("user", PD) of
@@ -380,7 +403,9 @@ object_to_file(Obj) ->
 object_to_file(regular, #object{prop_dict=PD, filepath=undefined, data=Data}) ->
 	Filename = case dict:find("filename", PD) of
 		{ok, FN} -> qp_decode(FN);
-		error -> "seap-data" end,
+		error -> case dict:find("filename_unicode", PD) of
+			{ok, UFN} -> UFN;
+			error -> "seap-data" end end,
 	#file{filename=Filename, dataref=?BB_C(Data)};
 
 object_to_file(regular, #object{prop_dict=PD, filepath=FilePath}) ->  % created with PUSHFILE

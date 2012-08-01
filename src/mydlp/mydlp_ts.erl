@@ -49,7 +49,8 @@
 	requeueIncident/1,
 	registerUserAddress/3,
 	saveLicenseKey/1,
-	getLicense/0
+	getLicense/0,
+	apiQuery/3
 	]).
 
 %%%%% EXTERNAL INTERFACE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -82,6 +83,24 @@ getRuletable(Ipaddress, Userh, Revisionid) ->
 	ClientIpS = binary_to_list(Ipaddress),
 	ClientIp = mydlp_api:str_to_ip(ClientIpS),
 	mydlp_api:generate_client_policy(ClientIp, UserHI, RevisionIdI).
+
+apiQuery(Ipaddress, Filename, Data) ->
+	{ok, Itemid} = mydlp_container:new(), 
+	ClientIpS = binary_to_list(Ipaddress),
+	try	ok = mydlp_container:setprop(Itemid, "channel", "api"),
+		ok = mydlp_container:setprop(Itemid, "filename_unicode", Filename),
+		ok = mydlp_container:setprop(Itemid, "ip_address", ClientIpS),
+		ok = mydlp_container:push(Itemid, Data),
+		ok = mydlp_container:eof(Itemid),
+		{ok, QueryRet} = mydlp_container:aclq(Itemid),
+		erlang:atom_to_binary(QueryRet, unicode)
+	catch Class:Error ->
+		?ERROR_LOG("API CALL: Error occured when processing api call: Class: ["?S"]. Error: ["?S"].~n"
+				"IPAddr: ["?S"]. ~nStack trace: "?S"~n",
+			[Class, Error,  Ipaddress, erlang:get_stacktrace()]),
+	<<"error">> end.
+	
+	
 
 receiveBegin(_Ipaddress) -> 
 	{ok, Ret} = mydlp_container:new(), 

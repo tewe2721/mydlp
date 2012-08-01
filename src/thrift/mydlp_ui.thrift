@@ -48,4 +48,6 @@ service Mydlp_ui {
 	string saveLicenseKey(1: string licenseKey)
 
 	LicenseObject getLicense()
+
+	string apiQuery(1: string Ipaddress, 2: string Filename, 3: binary Data)
 }
