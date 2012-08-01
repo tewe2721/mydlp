@@ -127,11 +127,7 @@
 
 -ifdef(__MYDLP_ENDPOINT).
 
--define(OTHER_DATA_TABLES,[
-	{fs_entry, ordered_set, 
-		fun() -> mnesia:add_table_index(fs_entry, parent_id),
-			 mnesia:add_table_index(fs_entry, entry_id) end}
-]).
+-define(OTHER_DATA_TABLES,[]).
 
 -endif.
 
@@ -159,7 +155,10 @@
 
 -define(NONDATA_FUNCTIONAL_TABLES, [
 	{rule_table, ordered_set, 
-		fun() -> mnesia:add_table_index(rule_table, head) end}
+		fun() -> mnesia:add_table_index(rule_table, head) end},
+	{fs_entry, ordered_set, 
+		fun() -> mnesia:add_table_index(fs_entry, parent_id),
+			 mnesia:add_table_index(fs_entry, entry_id) end}
 ]).
 
 -endif.
