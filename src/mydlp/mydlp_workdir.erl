@@ -72,12 +72,14 @@ raw_to_obj({regularfile, FilePath}) ->
 				Err -> throw(Err) end end;
 		false -> throw({is_not_regularfile, FilePath}) end;
 raw_to_obj({tmpfile, FilePath}) -> 
-	case filelib:file_size(FilePath) > ?CFG(maximum_memory_object) of
-		true -> cache_tmpfile(FilePath);
-		false -> case file:read_file(FilePath) of
-			{ok, Bin} -> file:delete(FilePath), 
-				{memory, Bin};
-			Err -> throw(Err) end end;
+	case filelib:is_regular(FilePath) of
+		true -> case filelib:file_size(FilePath) > ?CFG(maximum_memory_object) of
+			true -> cache_tmpfile(FilePath);
+			false -> case file:read_file(FilePath) of
+				{ok, Bin} -> file:delete(FilePath), 
+					{memory, Bin};
+				Err -> throw(Err) end end;
+		false -> throw({is_not_regularfile, FilePath}) end;
 raw_to_obj({memory, Bin}) -> raw_to_obj(Bin);
 raw_to_obj({cacheref, Ref}) -> {cacheref, Ref};
 raw_to_obj(RawData) -> 
