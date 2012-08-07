@@ -1,18 +1,34 @@
 package com.mydlp.backend.thrift;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.Reader;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.Charset;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 
 import org.apache.thrift.TException;
-import org.apache.tika.Tika;
-import org.apache.tika.io.IOUtils;
+import org.apache.tika.detect.DefaultDetector;
+import org.apache.tika.detect.Detector;
+import org.apache.tika.io.TikaInputStream;
 import org.apache.tika.metadata.Metadata;
+import org.apache.tika.mime.MediaType;
+import org.apache.tika.parser.AutoDetectParser;
+import org.apache.tika.parser.CompositeParser;
+import org.apache.tika.parser.ParseContext;
+import org.apache.tika.parser.Parser;
+import org.apache.tika.parser.ParserDecorator;
+import org.apache.tika.sax.BodyContentHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.xml.sax.ContentHandler;
 
 public class MydlpImpl implements Mydlp.Iface {
 	
@@ -25,10 +41,77 @@ public class MydlpImpl implements Mydlp.Iface {
 			.encode(CharBuffer.wrap("mydlp-internal/error"));
 	protected static final String MIME_NOT_FOUND = "mydlp-internal/not-found";
 	
-	protected Tika tika = new Tika();
+	protected Parser parser = null;
+	protected Detector detector = null;
+	protected ParseContext context = null;
 	
-	protected InputStream getInputStream(final ByteBuffer buf) {
-		return new InputStream() {
+	public MydlpImpl() {
+		context = new ParseContext();
+        detector = new DefaultDetector();
+        parser = new AutoDetectParser(detector);
+        context.set(Parser.class, parser);
+        displayParsers(true);
+	}
+	
+	/*
+     * Displays loaded parsers and their mime types
+     * If a parser is a composite parser, it will list the
+     * sub parsers and their mime-types.
+     */
+    protected void displayParsers(boolean includeMimeTypes) {
+        displayParser(parser, includeMimeTypes, 0);
+    }
+     
+    private void displayParser(Parser p, boolean includeMimeTypes, int i) {
+        boolean isComposite = (p instanceof CompositeParser);
+        String name = (p instanceof ParserDecorator) ?
+                      ((ParserDecorator) p).getWrappedParser().getClass().getName() :
+                      p.getClass().getName();
+        System.out.println(indent(i) + name + (isComposite ? " (Composite Parser):" : ""));
+        if (includeMimeTypes && !isComposite) {
+            for (MediaType mt : p.getSupportedTypes(context)) {
+                logger.info(indent(i+2) + mt);
+            }
+        }
+        
+        if (isComposite) {
+            Parser[] subParsers = sortParsers(invertMediaTypeMap(((CompositeParser) p).getParsers()));
+            for(Parser sp : subParsers) {
+                displayParser(sp, includeMimeTypes, i+2);
+            }
+        }
+    }
+    
+    private Parser[] sortParsers(Map<Parser, Set<MediaType>> parsers) {
+        // Get a nicely sorted list of the parsers
+        Parser[] sortedParsers = parsers.keySet().toArray(new Parser[parsers.size()]);
+        Arrays.sort(sortedParsers, new Comparator<Parser>() {
+            public int compare(Parser p1, Parser p2) {
+                String name1 = p1.getClass().getName();
+                String name2 = p2.getClass().getName();
+                return name1.compareTo(name2);
+            }
+        });
+        return sortedParsers;
+    }
+    
+    private Map<Parser, Set<MediaType>> invertMediaTypeMap(Map<MediaType, Parser> supported) {
+        Map<Parser,Set<MediaType>> parsers = new HashMap<Parser, Set<MediaType>>();
+        for(Entry<MediaType, Parser> e : supported.entrySet()) {
+            if (!parsers.containsKey(e.getValue())) {
+                parsers.put(e.getValue(), new HashSet<MediaType>());
+            }
+            parsers.get(e.getValue()).add(e.getKey());
+        }
+        return parsers;
+    }
+    
+    private String indent(int indent) {
+        return "                     ".substring(0, indent);
+    }
+	
+	protected TikaInputStream getInputStream(final ByteBuffer buf) {
+		return TikaInputStream.get(new InputStream() {
 			public synchronized int read() throws IOException {
 				return buf.hasRemaining() ? buf.get() : -1;
 			}
@@ -39,14 +122,17 @@ public class MydlpImpl implements Mydlp.Iface {
 				buf.get(bytes, off, rv);
 				return rv == 0 ? -1 : rv;
 			}
-		};
+		});
 	}
 
 	@Override
-	public String getMime(ByteBuffer Data) throws TException {
-		InputStream inputStream = getInputStream(Data);
+	public String getMime(String FileName, ByteBuffer Data) throws TException {
+		Metadata metadata = new Metadata();
+		if (FileName != null && FileName.length() > 0)
+			metadata.add(Metadata.RESOURCE_NAME_KEY, FileName);
+		TikaInputStream inputStream = getInputStream(Data);
 		try {
-			return tika.detect(inputStream);
+			return detector.detect(inputStream, metadata).toString();
 		} catch (IOException e) {
 			logger.error("Can not detect file type", e);
 			return MIME_NOT_FOUND;
@@ -81,8 +167,11 @@ public class MydlpImpl implements Mydlp.Iface {
 			if (FileName != null && FileName.length() > 0)
 				metadata.add(Metadata.RESOURCE_NAME_KEY, FileName);
 			metadata.add(Metadata.CONTENT_TYPE, MimeType);
-			Reader reader = tika.parse(inputStream, metadata);
-			return ByteBuffer.wrap(IOUtils.toByteArray(reader, DEFAULT_ENCODING));
+			ByteArrayOutputStream bos = new ByteArrayOutputStream();
+			ContentHandler handler = new BodyContentHandler(bos);
+			parser.parse(inputStream, handler, metadata, context);
+			bos.close();
+			return ByteBuffer.wrap(bos.toByteArray());
 		} catch (Throwable e) {
 			if (isMemoryError(e))
 			{
