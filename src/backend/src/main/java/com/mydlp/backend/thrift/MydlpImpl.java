@@ -59,10 +59,13 @@ public class MydlpImpl implements Mydlp.Iface {
      * sub parsers and their mime-types.
      */
     protected void displayParsers(boolean includeMimeTypes) {
-        displayParser(parser, includeMimeTypes, 0);
+    	StringBuffer toDisplay = new StringBuffer();
+        displayParser(parser, includeMimeTypes, 0, toDisplay);
+        logger.info("\n" + toDisplay.toString());
     }
      
-    private void displayParser(Parser p, boolean includeMimeTypes, int i) {
+    private void displayParser(Parser p, boolean includeMimeTypes, int i, StringBuffer toDisplay) {
+    	
         boolean isComposite = (p instanceof CompositeParser);
         String name = (p instanceof ParserDecorator) ?
                       ((ParserDecorator) p).getWrappedParser().getClass().getName() :
@@ -70,14 +73,14 @@ public class MydlpImpl implements Mydlp.Iface {
         System.out.println(indent(i) + name + (isComposite ? " (Composite Parser):" : ""));
         if (includeMimeTypes && !isComposite) {
             for (MediaType mt : p.getSupportedTypes(context)) {
-                logger.info(indent(i+2) + mt);
+                toDisplay.append(indent(i+2) + mt + "\n");
             }
         }
         
         if (isComposite) {
             Parser[] subParsers = sortParsers(invertMediaTypeMap(((CompositeParser) p).getParsers()));
             for(Parser sp : subParsers) {
-                displayParser(sp, includeMimeTypes, i+2);
+                displayParser(sp, includeMimeTypes, i+2, toDisplay);
             }
         }
     }
