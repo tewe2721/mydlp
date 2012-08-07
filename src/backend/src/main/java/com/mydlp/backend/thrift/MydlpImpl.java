@@ -70,7 +70,7 @@ public class MydlpImpl implements Mydlp.Iface {
         String name = (p instanceof ParserDecorator) ?
                       ((ParserDecorator) p).getWrappedParser().getClass().getName() :
                       p.getClass().getName();
-        System.out.println(indent(i) + name + (isComposite ? " (Composite Parser):" : ""));
+        toDisplay.append(indent(i) + name + (isComposite ? " (Composite Parser):" : "") + "\n");
         if (includeMimeTypes && !isComposite) {
             for (MediaType mt : p.getSupportedTypes(context)) {
                 toDisplay.append(indent(i+2) + mt + "\n");
