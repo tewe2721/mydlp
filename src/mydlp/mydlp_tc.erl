@@ -107,20 +107,15 @@ get_text(Filename, MT, Data) when is_list(Filename) ->
 	get_text(FilenameB, MT, Data);
 get_text(Filename0, MT0, Data) ->
 	{Filename, MT} = pre_call(Filename0, MT0),
-	case MT of
-		?MIME_XPS ->
-			F = #file{filename=Filename, mime_type=?MIME_ZIP, dataref=?BB_C(Data)},
-			T = mydlp_api:concat_texts(F),
-			mydlp_api:clean_files(F), T;
-		_Else -> call_pool({thrift, java, getText, [Filename, MT, Data]}) end.
+	call_pool({thrift, java, getText, [Filename, MT, Data]}).
 
 pre_call(Filename, MT) ->
 	Ext = case byte_size(Filename) > 4 of
 		true -> binary:part(Filename,{byte_size(Filename), -4});
 		false -> <<>> end,
 	case {Ext, MT} of
-		{<<".xps">>, ?MIME_TIKA_OOXML} -> {binary:part(Filename,{0, byte_size(Filename) - 4}), ?MIME_XPS};
-		{<<".xps">>, ?MIME_ZIP} -> {binary:part(Filename,{0, byte_size(Filename) - 4}), ?MIME_XPS};
+		{<<".xps">>, ?MIME_TIKA_OOXML} -> {Filename, ?MIME_XPS};
+		{<<".xps">>, ?MIME_ZIP} -> {Filename, ?MIME_XPS};
 		_Else -> {Filename, MT} end.
 
 %%%%%%%%%%%%%% gen_server handles
