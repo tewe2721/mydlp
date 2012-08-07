@@ -337,8 +337,8 @@ check_aba_modulus1([A1, A2, A3, A4, A5, A6, A7, A8, A9]) ->
 %% @end
 %%------------------------------------------------------------------------
 
-is_valid_pan([_WS, _I1, _I2, _I3, _I4, I5 | _Tail]) ->
-	case I5 of
+is_valid_pan([_WS, _I1, _I2, _I3, I4, _I5 | _Tail]) ->
+	case I4 of
 		$C -> true;
 		$P -> true;
 		$H -> true;
