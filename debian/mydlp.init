@@ -17,8 +17,11 @@ ERLANG=/usr/bin/erl
 JSVCBIN=/usr/bin/jsvc
 #JAVA_HOME=/usr/lib/jvm/java-6-sun
 JAVA_HOME=/usr/lib/jvm/java-6-openjdk
+
 CDJAR=/usr/share/java/commons-daemon.jar
-MBJAR=/usr/share/mydlp/backend/mydlp-backend-1.0-jar-with-dependencies.jar
+MBJAR=/usr/share/mydlp/backend/mydlp-backend.jar
+TXJAR=/usr/share/mydlp/backend/tika-xps.jar
+
 BERRLOG=/var/log/mydlp/backend-error.log
 BOUTLOG=/var/log/mydlp/backend.log
 BDAEMON=com.mydlp.backend.Bootstrap
@@ -60,7 +63,7 @@ fi
 
 ERLANG_OPTS="$ERLANG_NODE_NAME -noshell -detached $ERLANG_EXTRA_OPTS $ERLANG_MYDLP_OPTS"
 
-JSVC="$JSVCBIN -home $JAVA_HOME -cp $CDJAR:$MBJAR -pidfile $PIDFILE2"
+JSVC="$JSVCBIN -home $JAVA_HOME -cp $CDJAR:$MBJAR:$TXJAR -pidfile $PIDFILE2"
 JSVC_STARTOPTS="-outfile $BOUTLOG -errfile $BERRLOG $BDAEMON"
 
 check_piddir() {
