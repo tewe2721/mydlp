@@ -1,8 +1,8 @@
 package com.mydlp.backend.thrift;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.Reader;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.Charset;
@@ -15,8 +15,9 @@ import java.util.Map.Entry;
 import java.util.Set;
 
 import org.apache.thrift.TException;
-import org.apache.tika.detect.DefaultDetector;
+import org.apache.tika.config.TikaConfig;
 import org.apache.tika.detect.Detector;
+import org.apache.tika.io.IOUtils;
 import org.apache.tika.io.TikaInputStream;
 import org.apache.tika.metadata.Metadata;
 import org.apache.tika.mime.MediaType;
@@ -25,10 +26,9 @@ import org.apache.tika.parser.CompositeParser;
 import org.apache.tika.parser.ParseContext;
 import org.apache.tika.parser.Parser;
 import org.apache.tika.parser.ParserDecorator;
-import org.apache.tika.sax.BodyContentHandler;
+import org.apache.tika.parser.ParsingReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.xml.sax.ContentHandler;
 
 public class MydlpImpl implements Mydlp.Iface {
 	
@@ -43,13 +43,11 @@ public class MydlpImpl implements Mydlp.Iface {
 	
 	protected Parser parser = null;
 	protected Detector detector = null;
-	protected ParseContext context = null;
 	
 	public MydlpImpl() {
-		context = new ParseContext();
-        detector = new DefaultDetector();
-        parser = new AutoDetectParser(detector);
-        context.set(Parser.class, parser);
+		TikaConfig config = TikaConfig.getDefaultConfig();
+        detector = config.getDetector();
+        parser = new AutoDetectParser(config);
         displayParsers(true);
 	}
 	
@@ -65,13 +63,14 @@ public class MydlpImpl implements Mydlp.Iface {
     }
      
     private void displayParser(Parser p, boolean includeMimeTypes, int i, StringBuffer toDisplay) {
-    	
         boolean isComposite = (p instanceof CompositeParser);
         String name = (p instanceof ParserDecorator) ?
                       ((ParserDecorator) p).getWrappedParser().getClass().getName() :
                       p.getClass().getName();
         toDisplay.append(indent(i) + name + (isComposite ? " (Composite Parser):" : "") + "\n");
         if (includeMimeTypes && !isComposite) {
+        	ParseContext context = new ParseContext();
+	        context.set(Parser.class, parser);
             for (MediaType mt : p.getSupportedTypes(context)) {
                 toDisplay.append(indent(i+2) + mt + "\n");
             }
@@ -170,11 +169,10 @@ public class MydlpImpl implements Mydlp.Iface {
 			if (FileName != null && FileName.length() > 0)
 				metadata.add(Metadata.RESOURCE_NAME_KEY, FileName);
 			metadata.add(Metadata.CONTENT_TYPE, MimeType);
-			ByteArrayOutputStream bos = new ByteArrayOutputStream();
-			ContentHandler handler = new BodyContentHandler(bos);
-			parser.parse(inputStream, handler, metadata, context);
-			bos.close();
-			return ByteBuffer.wrap(bos.toByteArray());
+			ParseContext context = new ParseContext();
+	        context.set(Parser.class, parser);
+	        Reader reader = new ParsingReader(parser, inputStream, metadata, context);
+			return ByteBuffer.wrap(IOUtils.toByteArray(reader, DEFAULT_ENCODING));
 		} catch (Throwable e) {
 			if (isMemoryError(e))
 			{
