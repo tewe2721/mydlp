@@ -1,1 +1,1 @@
-SUBDIRS = schema thrift backend mydlp ui script
+SUBDIRS = schema thrift lib/tika-xps backend mydlp ui script

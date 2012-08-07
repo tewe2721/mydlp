@@ -1,3 +1,6 @@
 [submodule "src/ui"]
 	path = src/ui
 	url = https://github.com/mydlp/mydlp-ui
+[submodule "src/lib/tika-xps"]
+	path = src/lib/tika-xps
+	url = https://github.com/hkerem/tika-xps.git

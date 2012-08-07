@@ -21,13 +21,14 @@
 backenddir = $(datadir)/mydlp/backend
 
 backend_DATA = \
-	target/mydlp-backend-1.0-jar-with-dependencies.jar
+	target/mydlp-backend.jar
 
-target/mydlp-backend-1.0-jar-with-dependencies.jar: pom.xml
+target/mydlp-backend.jar: pom.xml
 	@$(MVN) clean compile assembly:single
+	cp -af target/mydlp-backend-1.0-jar-with-dependencies.jar target/mydlp-backend.jar
 
 run:
-	java -jar target/mydlp-backend-1.0-jar-with-dependencies.jar
+	java -cp ../lib/tika-xps/target/tika-xps-1.0.0.jar -jar target/mydlp-backend-1.0-jar-with-dependencies.jar
 
 clean-local:
 	@$(MVN) clean
