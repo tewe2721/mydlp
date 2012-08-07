@@ -162,7 +162,7 @@ process_log_files(LogId, true = IsLogData, [File|Files]) ->
 
 	Size = mydlp_api:binary_size(File1#file.data),
 	MimeType = case File1#file.mime_type of
-		undefined -> mydlp_tc:get_mime(File1#file.data);
+		undefined -> mydlp_tc:get_mime(File1#file.filename, File1#file.data);
 		Else -> Else end,
 	Filename = mydlp_api:file_to_str(File1),
 	{ok, Path} = mydlp_api:quarantine(File1),

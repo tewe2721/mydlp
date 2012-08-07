@@ -35,7 +35,7 @@
 %% API
 -export([start_link/0,
 	pre_init/1,
-	get_mime/1,
+	get_mime/2,
 	get_text/3,
 	stop/0]).
 
@@ -55,35 +55,45 @@
 
 -define(MMLEN, 4096).
 
-get_mime(Data) when is_list(Data) ->
+get_mime(undefined, Data) -> get_mime("noname", Data);
+get_mime("", Data) -> get_mime("noname", Data);
+get_mime(<<>>, Data) -> get_mime("noname", Data);
+
+get_mime(Filename, Data) when is_list(Data) ->
 	L = length(Data),
 	Data1 = case L > ?MMLEN of
 		true -> lists:sublist(Data, ?MMLEN);
 		false -> Data
 	end,
-	get_mime(list_to_binary(Data1));
+	get_mime(Filename,list_to_binary(Data1));
 
-get_mime(<<>>) -> <<"application/x-empty">>;
-get_mime(<<"Rar!", _Rest/binary>>) -> <<"application/x-rar">>; % WinRAR
+get_mime(_Filename, <<>>) -> <<"application/x-empty">>;
+get_mime(_Filename, <<"Rar!", _Rest/binary>>) -> <<"application/x-rar">>; % WinRAR
 %get_mime(<<202,254,186,190, _Rest/binary>>) -> <<"application/java-vm">>; % CAFE BABE -> java class
-get_mime(<<	16#00,16#01,16#00,16#00,
+get_mime(_Filename,
+	<<	16#00,16#01,16#00,16#00,
 		16#53,16#74,15#61,15#6E,
 		16#64,16#61,16#72,16#64,
 		16#20,16#4A,16#65,16#74,
 		16#20,16#44,16#42, _Rest/binary>>) -> <<"application/msaccess">>;
-get_mime(<<	16#00,16#01,16#00,16#00,
+get_mime(_Filename,
+	<<	16#00,16#01,16#00,16#00,
 		16#53,16#74,16#61,16#6E,
 		16#64,16#61,16#72,16#64,
 		16#20,16#41,16#43,16#45,
 		16#20,16#44,16#42, _Rest/binary>>) -> <<"application/msaccess">>;
-get_mime(Data) when is_binary(Data) ->
+get_mime(Filename, Data) when is_binary(Data) ->
 	S = size(Data),
 	Data1 = case S > ?MMLEN of
 		true -> <<D:?MMLEN/binary, _/binary>> = Data, D;
 		false -> Data
 	end,
+	Filename1 = case Filename of
+		F when is_list(F) -> unicode:characters_to_binary(Filename);
+		F when is_binary(F) -> F;
+		_Else -> unicode:characters_to_binary("noname") end,
 	TRet = try
-		call_pool({thrift, java, getMime, [Data1]})
+		call_pool({thrift, java, getMime, [Filename1, Data1]})
 	catch _:_Exception ->
 		unknown_type end,
 
@@ -107,20 +117,15 @@ get_text(Filename, MT, Data) when is_list(Filename) ->
 	get_text(FilenameB, MT, Data);
 get_text(Filename0, MT0, Data) ->
 	{Filename, MT} = pre_call(Filename0, MT0),
-	case MT of
-		?MIME_XPS ->
-			F = #file{filename=Filename, mime_type=?MIME_ZIP, dataref=?BB_C(Data)},
-			T = mydlp_api:concat_texts(F),
-			mydlp_api:clean_files(F), T;
-		_Else -> call_pool({thrift, java, getText, [Filename, MT, Data]}) end.
+	call_pool({thrift, java, getText, [Filename, MT, Data]}).
 
 pre_call(Filename, MT) ->
 	Ext = case byte_size(Filename) > 4 of
 		true -> binary:part(Filename,{byte_size(Filename), -4});
 		false -> <<>> end,
 	case {Ext, MT} of
-		{<<".xps">>, ?MIME_TIKA_OOXML} -> {binary:part(Filename,{0, byte_size(Filename) - 4}), ?MIME_XPS};
-		{<<".xps">>, ?MIME_ZIP} -> {binary:part(Filename,{0, byte_size(Filename) - 4}), ?MIME_XPS};
+		{<<".xps">>, ?MIME_TIKA_OOXML} -> {Filename, ?MIME_XPS};
+		{<<".xps">>, ?MIME_ZIP} -> {Filename, ?MIME_XPS};
 		_Else -> {Filename, MT} end.
 
 %%%%%%%%%%%%%% gen_server handles
