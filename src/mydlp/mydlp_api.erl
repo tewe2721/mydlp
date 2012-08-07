@@ -1114,7 +1114,7 @@ reconstruct_cr(#file{} = File) ->
 get_mimes(Files) -> get_mimes(Files, []).
 
 get_mimes([#file{mime_type=undefined} = File|Files], Returns) -> 
-	MT = mydlp_tc:get_mime(File#file.data),
+	MT = mydlp_tc:get_mime(File#file.filename, File#file.data),
 	get_mimes(Files, [File#file{mime_type=MT}|Returns]);
 get_mimes([File|Files], Returns) -> 
 	get_mimes(Files, [File|Returns]);

@@ -286,7 +286,7 @@ execute_itypes(ITypes, Addr, Files) ->
 
 execute_itypes_pf(ITypes, Addr, File) -> 
         File1 = case File#file.mime_type of 
-                undefined -> 	MT = mydlp_tc:get_mime(File#file.data),
+                undefined -> 	MT = mydlp_tc:get_mime(File#file.filename, File#file.data),
 				File#file{mime_type=MT};
                 _Else ->	File end,
 
