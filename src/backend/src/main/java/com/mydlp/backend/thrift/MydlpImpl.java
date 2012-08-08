@@ -6,25 +6,11 @@ import java.io.Reader;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.Charset;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
 
 import org.apache.thrift.TException;
 import org.apache.tika.Tika;
 import org.apache.tika.io.IOUtils;
-import org.apache.tika.io.TikaInputStream;
 import org.apache.tika.metadata.Metadata;
-import org.apache.tika.mime.MediaType;
-import org.apache.tika.parser.CompositeParser;
-import org.apache.tika.parser.ParseContext;
-import org.apache.tika.parser.Parser;
-import org.apache.tika.parser.ParserDecorator;
-import org.apache.tika.parser.ParsingReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,8 +27,8 @@ public class MydlpImpl implements Mydlp.Iface {
 	
 	protected Tika tika = new Tika();
 		
-	protected TikaInputStream getInputStream(final ByteBuffer buf) {
-		return TikaInputStream.get(new InputStream() {
+	protected InputStream getInputStream(final ByteBuffer buf) {
+		return new InputStream() {
 			public synchronized int read() throws IOException {
 				return buf.hasRemaining() ? buf.get() : -1;
 			}
@@ -53,7 +39,7 @@ public class MydlpImpl implements Mydlp.Iface {
 				buf.get(bytes, off, rv);
 				return rv == 0 ? -1 : rv;
 			}
-		});
+		};
 	}
 
 	@Override
@@ -61,9 +47,12 @@ public class MydlpImpl implements Mydlp.Iface {
 		Metadata metadata = new Metadata();
 		if (FileName != null && FileName.length() > 0)
 			metadata.add(Metadata.RESOURCE_NAME_KEY, FileName);
-		TikaInputStream inputStream = getInputStream(Data);
+		System.out.println(">>>> getMime: FileName: " + FileName);
+		InputStream inputStream = getInputStream(Data);
 		try {
-			return tika.detect(inputStream, metadata);
+			String mt = tika.detect(inputStream, metadata);
+			System.out.println(">>>> getMime: return " + mt);
+			return mt;
 		} catch (IOException e) {
 			logger.error("Can not detect file type", e);
 			return MIME_NOT_FOUND;
