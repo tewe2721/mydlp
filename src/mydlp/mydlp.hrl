@@ -68,6 +68,7 @@
 -define(MIME_OOXML_POWERPOINT, <<"application/vnd.openxmlformats-officedocument.presentationml.presentation">>).
 -define(MIME_ZIP, <<"application/zip">>).
 -define(MIME_XPS, <<"application/vnd.ms-xpsdocument">>).
+-define(MIME_TEXT, <<"text/plain">>).
 
 %%%%%%%
 

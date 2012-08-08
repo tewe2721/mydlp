@@ -94,7 +94,9 @@ get_mime(Filename, Data) when is_binary(Data) ->
 		_Else -> unicode:characters_to_binary("noname") end,
 	TRet = try
 		call_pool({thrift, java, getMime, [Filename1, Data1]})
-	catch _:_Exception ->
+	catch Class:Error ->
+		?ERROR_LOG("Error occured when extractiong text. Filename: "?S".~nClass: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
+				[Filename1, Class, Error, erlang:get_stacktrace()]),
 		unknown_type end,
 
 	case TRet of
@@ -115,18 +117,12 @@ get_text(undefined, MT, Data) -> get_text(<<>>, MT, Data);
 get_text(Filename, MT, Data) when is_list(Filename) ->
 	FilenameB = unicode:characters_to_binary(Filename),
 	get_text(FilenameB, MT, Data);
-get_text(Filename0, MT0, Data) ->
-	{Filename, MT} = pre_call(Filename0, MT0),
-	call_pool({thrift, java, getText, [Filename, MT, Data]}).
-
-pre_call(Filename, MT) ->
-	Ext = case byte_size(Filename) > 4 of
-		true -> binary:part(Filename,{byte_size(Filename), -4});
-		false -> <<>> end,
-	case {Ext, MT} of
-		{<<".xps">>, ?MIME_TIKA_OOXML} -> {Filename, ?MIME_XPS};
-		{<<".xps">>, ?MIME_ZIP} -> {Filename, ?MIME_XPS};
-		_Else -> {Filename, MT} end.
+get_text(Filename, MT, Data) ->
+	try	call_pool({thrift, java, getText, [Filename, MT, Data]})
+	catch Class:Error ->
+		?ERROR_LOG("Error occured when extractiong text. Filename: "?S", Mimetype: "?S".~nClass: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
+				[Filename, MT, Class, Error, erlang:get_stacktrace()]),
+		<<>> end.
 
 %%%%%%%%%%%%%% gen_server handles
 
