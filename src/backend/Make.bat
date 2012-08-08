@@ -1,4 +1,4 @@
-@set path=%path%;..\..\..\..\..\..\mydlp-development-env\apache-maven-3.0.4\bin;..\..\..\..\..\..\mydlp-development-env\jdk1.7.0_02\bin
+@set path=%path%;..\..\..\..\..\..\mydlp-development-env\apache-maven-3.0.4\bin;..\..\..\..\..\..\mydlp-development-env\jdk1.7.0_02\bin;..\..\..\..\..\..\..\mydlp-development-env\apache-maven-3.0.4\bin;..\..\..\..\..\..\..\mydlp-development-env\jdk1.7.0_02\bin
 @set BASE_JAVA_HOME=..\..\..\..\..\..\mydlp-development-env\jdk1.7.0_02
 
 @set JAVA_HOME=%BASE_JAVA_HOME%
