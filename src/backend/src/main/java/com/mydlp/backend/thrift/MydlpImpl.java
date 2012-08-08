@@ -50,9 +50,7 @@ public class MydlpImpl implements Mydlp.Iface {
 		System.out.println(">>>> getMime: FileName: " + FileName);
 		InputStream inputStream = getInputStream(Data);
 		try {
-			String mt = tika.detect(inputStream, metadata);
-			System.out.println(">>>> getMime: return " + mt);
-			return mt;
+			return tika.detect(inputStream, metadata);
 		} catch (IOException e) {
 			logger.error("Can not detect file type", e);
 			return MIME_NOT_FOUND;
