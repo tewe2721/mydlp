@@ -47,7 +47,6 @@ public class MydlpImpl implements Mydlp.Iface {
 		Metadata metadata = new Metadata();
 		if (FileName != null && FileName.length() > 0)
 			metadata.add(Metadata.RESOURCE_NAME_KEY, FileName);
-		System.out.println(">>>> getMime: FileName: " + FileName);
 		InputStream inputStream = getInputStream(Data);
 		try {
 			return tika.detect(inputStream, metadata);
