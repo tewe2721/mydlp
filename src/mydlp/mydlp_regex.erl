@@ -174,11 +174,13 @@ start_link() ->
 stop() ->
 	gen_server:call(?MODULE, stop).
 
+-define(OWS2, "\\s{0,2}").
+
 init([]) ->
 	BInREs = [
 		%{credit_card, rec("\\b(?:\\d[ -]{0,4}?){13,16}\\b")}
 		{credit_card, rec("(?:\\d[\\s-]{0,3}){13,16}", [unicode])},
-		{iban, rec("[a-zA-Z]{2}\\s{0,2}[0-9]{2}\\s{0,2}[a-zA-Z0-9]{4}\\s{0,2}[0-9]{7}\\s{0,2}[a-zA-Z0-9]{0,16}", [unicode])},
+		{iban, rec("(?:[a-zA-Z]"?OWS2"){2}"?OWS2"(?:[0-9]"?OWS2"){2}"?OWS2"(?:[a-zA-Z0-9]"?OWS2"){4}"?OWS2"(?:[0-9]"?OWS2"){7}"?OWS2"(?:[a-zA-Z0-9]"?OWS2"){0,16}", [unicode])},
 		{aba, rec("\\d{4}-?\\d{4}-?\\d", [unicode])},
 		{trid, rec("\\d{11}", [unicode])},
 		{ssn, rec("\\s(?:\\d{3}-\\d{2}-\\d{4})\\s", [unicode])},
