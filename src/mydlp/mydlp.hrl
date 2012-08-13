@@ -69,6 +69,7 @@
 -define(MIME_ZIP, <<"application/zip">>).
 -define(MIME_XPS, <<"application/vnd.ms-xpsdocument">>).
 -define(MIME_TEXT, <<"text/plain">>).
+-define(MIME_OCTET_STREAM, <<"application/octet-stream">>).
 
 %%%%%%%
 

@@ -92,12 +92,13 @@ get_mime(Filename, Data) when is_binary(Data) ->
 		F when is_list(F) -> unicode:characters_to_binary(Filename);
 		F when is_binary(F) -> F;
 		_Else -> unicode:characters_to_binary("noname") end,
+
 	TRet = try
 		call_pool({thrift, java, getMime, [Filename1, Data1]})
 	catch Class:Error ->
 		?ERROR_LOG("Error occured when extractiong text. Filename: "?S".~nClass: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
 				[Filename1, Class, Error, erlang:get_stacktrace()]),
-		unknown_type end,
+		?MIME_OCTET_STREAM end,
 
 	case TRet of
 		?MIME_TIKA_OOXML -> get_mime_zip(Data, ?MIME_TIKA_OOXML);
@@ -122,7 +123,7 @@ get_text(Filename, MT, Data) ->
 	catch Class:Error ->
 		?ERROR_LOG("Error occured when extractiong text. Filename: "?S", Mimetype: "?S".~nClass: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
 				[Filename, MT, Class, Error, erlang:get_stacktrace()]),
-		<<>> end.
+		mydlp_api:exception(Class, Error) end.
 
 %%%%%%%%%%%%%% gen_server handles
 
