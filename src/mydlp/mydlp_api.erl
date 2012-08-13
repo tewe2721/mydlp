@@ -1414,21 +1414,27 @@ parse_uenc_data(Bin) when is_binary(Bin) ->
 
 do_parse_spec(<<$%, $%, Tail/binary>>, Cur) -> do_parse_spec(<<$% , Tail/binary>>, Cur);
 
-do_parse_spec(<<$%, Hi:8, Lo:8, Tail/binary>>, Cur) when Hi /= $u ->
-	Hex = try hex2int([Hi, Lo]) catch _:_ -> $\s end,
-	do_parse_spec(Tail, [ Hex | Cur]);
-               
-do_parse_spec(<<$&, Tail/binary>>, Cur) -> do_parse_spec(Tail, [ $\n | Cur]);
-do_parse_spec(<<$+, Tail/binary>>, Cur) -> do_parse_spec(Tail, [ $\s | Cur]);
-do_parse_spec(<<$=, Tail/binary>>, Cur) -> do_parse_spec(Tail, [ <<": ">> | Cur]);
-
-do_parse_spec(<<$%, $u, A:8, B:8,C:8,D:8, Tail/binary>>, Cur) ->
+do_parse_spec(<<$%, $u, A:8, B:8,C:8,D:8, Tail/binary>>, Cur) when 
+		A >= 48, A =< 57,
+		B >= 48, B =< 57,
+		C >= 48, C =< 57,
+		D >= 48, D =< 57 ->
 	%% non-standard encoding for Unicode characters: %uxxxx,		     
 	Hex = try hex2int([A,B,C,D]) catch _:_ -> $\s end,
 	BinRep = case unicode:characters_to_binary([Hex]) of
 		<<Bin/binary>> -> Bin;
 		_Else -> $_ end,
 	do_parse_spec(Tail, [ BinRep | Cur]);
+
+do_parse_spec(<<$%, A:8, B:8, Tail/binary>>, Cur) when
+		A >= 48, A =< 57,
+		B >= 48, B =< 57 ->
+	Hex = try hex2int([A, B]) catch _:_ -> $\s end,
+	do_parse_spec(Tail, [ Hex | Cur]);
+               
+do_parse_spec(<<$&, Tail/binary>>, Cur) -> do_parse_spec(Tail, [ $\n | Cur]);
+do_parse_spec(<<$+, Tail/binary>>, Cur) -> do_parse_spec(Tail, [ $\s | Cur]);
+do_parse_spec(<<$=, Tail/binary>>, Cur) -> do_parse_spec(Tail, [ <<": ">> | Cur]);
 
 do_parse_spec(<<H:8, Tail/binary>>, Cur) -> do_parse_spec(Tail, [H|Cur]);
 do_parse_spec(<<>>, Cur) -> {ok, lists:reverse(Cur)};
