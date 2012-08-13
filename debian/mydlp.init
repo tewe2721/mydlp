@@ -367,51 +367,45 @@ stop_apache() {
 	$SERV apache2 stop 2>&1 > /dev/null
 }
 
-case "$1" in
-  start)
+appliance_stop() {
+	check_piddir
+	cleanpids
+	stop_apache
+	stop_jetty
+	stop_mydlp
+	stop_backend
+	cleanpids
+}
+
+appliance_start() {
 	check_piddir
 	cleanpids
 	start_mysql
-	start_jetty
 	start_backend
 	ensure_postfix
 	start_mydlp
+	start_jetty
 	cleanpids
 	ensure_squid
 	reload_squid
 	ensure_apache
+}
+
+case "$1" in
+  start)
+	appliance_start
 	;;
   stop)
-	check_piddir
-	cleanpids
-	stop_apache
-	stop_mydlp
-	stop_backend
-	stop_jetty
-	cleanpids
+	appliance_stop
 	;;
 
   reload|force-reload)
 	;;
 
   restart)
-	check_piddir
-	cleanpids
-	stop_apache
-	stop_mydlp
-	stop_backend
-	stop_jetty
-	cleanpids
+	appliance_stop
 	sleep 1
-	start_mysql
-	start_jetty
-	start_backend
-	ensure_postfix
-	start_mydlp
-	cleanpids
-	ensure_squid
-	reload_squid
-	ensure_apache
+	appliance_start
 	;;
 
   status)
