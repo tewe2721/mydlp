@@ -15,8 +15,11 @@ PATH=/usr/bin:/usr/sbin:/bin:/sbin
 
 ERLANG=/usr/bin/erl
 JSVCBIN=/usr/bin/jsvc
-#JAVA_HOME=/usr/lib/jvm/java-6-sun
+
 JAVA_HOME=/usr/lib/jvm/java-6-openjdk
+if [ "x86_64" == "$(uname -p)" -a -e "$JAVA_HOME""-amd64" ]; then
+	JAVA_HOME="$JAVA_HOME""-amd64"
+fi
 
 CDJAR=/usr/share/java/commons-daemon.jar
 MBJAR=/usr/share/mydlp/backend/mydlp-backend.jar
