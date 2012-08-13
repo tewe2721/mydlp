@@ -36,6 +36,21 @@
 
 -include_lib("xmerl/include/xmerl.hrl").
 
+ktest0() ->
+	[ {I, I + 1, {I+2, I+3, lists:seq(I, I+100)} } || I <- lists:seq(1,100000)].
+
+ktest1(L) ->
+	S = self(),
+	C = spawn(fun() ->
+		receive
+			{a, T} -> S ! {b, T}
+		end
+	end),
+	C ! {a, L},
+	receive
+		{b, L} -> L
+	end. 
+
 %%--------------------------------------------------------------------
 %% @doc Check if a byte is an HTTP character
 %% @end
@@ -1863,7 +1878,7 @@ pmap(Fun, ListOfArgs) -> pmap(Fun, ListOfArgs, ?CFG(spawn_timeout)).
 
 pmap(Fun, ListOfArgs, Timeout) ->
 	Self = self(),
-	Pids = lists:map(fun(I) -> mspawn_link(fun() -> pmap_f(Self, Fun, I) end) end, ListOfArgs),
+	Pids = lists:map(fun(I) -> mspawn_link(fun() -> pmap_f(Self, Fun, I) end, Timeout) end, ListOfArgs),
 	pmap_gather(Pids, Timeout).
 
 pmap_gather(Pids, Timeout) -> pmap_gather(Pids, Timeout, []).
@@ -1872,7 +1887,7 @@ pmap_gather([Pid|Rest], Timeout, Returns) ->
 	Return = receive
 		{Pid, {ierror, {Class, Error}}} -> exception(Class, Error);
 		{Pid, Ret} -> Ret
-	after Timeout ->
+	after Timeout + 1000 ->
 		exit({timeout, {pmap, Pid}})
 	end,
 	pmap_gather(Rest, Timeout, [Return|Returns]);
@@ -1905,20 +1920,20 @@ pany(Fun, ListOfArgs, Timeout) -> pany(Fun, ListOfArgs, Timeout, false).
 
 pany(Fun, ListOfArgs, Timeout, IsPAll) ->
 	Self = self(),
-	Pid = mspawn(fun() -> pany_sup_f(Self, Fun, ListOfArgs, Timeout, IsPAll) end, Timeout + 2000),
+	Pid = mspawn(fun() -> pany_sup_f(Self, Fun, ListOfArgs, Timeout, IsPAll) end, Timeout + 1500),
 	pany_gather(Pid, Timeout).
 
 pany_gather(Pid, Timeout) ->
 	receive
 		{Pid, {ierror, {Class, Error}}} -> exception(Class, Error);
 		{Pid, Ret} -> Ret
-	after Timeout + 1500 ->
+	after Timeout + 2000 ->
 		exit({timeout, {pany, Pid}})
 	end.
 
 pany_sup_f(Parent, Fun, ListOfArgs, Timeout, IsPAll) -> 
 	Self = self(),
-	Pids = lists:map(fun(I) -> mspawn_link(fun() -> pany_child_f(Self, Fun, I, Timeout) end) end, ListOfArgs),
+	Pids = lists:map(fun(I) -> mspawn_link(fun() -> pany_child_f(Self, Fun, I, Timeout) end, Timeout + 500) end, ListOfArgs),
 
 	NumberOfPids = length(Pids),
 	pany_sup_gather(NumberOfPids, Parent, Timeout, IsPAll, []).

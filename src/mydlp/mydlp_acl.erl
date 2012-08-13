@@ -278,7 +278,7 @@ apply_rules([{Id, Action, ITypes}|Rules], Addr, Files) ->
 execute_itypes([], _Addr, _Files) -> neg;
 execute_itypes(_ITypes, _Addr, []) -> neg;
 execute_itypes(ITypes, Addr, Files) ->
-	PAnyRet = mydlp_api:pany(fun(F) -> execute_itypes_pf(ITypes, Addr, F) end, Files, 180000),
+	PAnyRet = mydlp_api:pany(fun(F) -> execute_itypes_pf(ITypes, Addr, F) end, Files, 900000),
 	case PAnyRet of
 		false -> neg;
 		{ok, _File, Ret} -> Ret end.
@@ -290,7 +290,7 @@ execute_itypes_pf(ITypes, Addr, File) ->
 				File#file{mime_type=MT};
                 _Else ->	File end,
 
-	PAnyRet = mydlp_api:pany(fun(T) -> execute_itype_pf(T, Addr, File1) end, ITypes, 150000),
+	PAnyRet = mydlp_api:pany(fun(T) -> execute_itype_pf(T, Addr, File1) end, ITypes, 850000),
 	
 	case PAnyRet of
 		false -> neg;
@@ -321,7 +321,7 @@ execute_ifeatures(Distance, IFeatures, Addr, File) ->
 	
 		PAllRet = mydlp_api:pall(fun({Threshold, {Func, FuncParams}}) ->
 						apply_m(Threshold, Distance, UseDistance, Func, [FuncParams, Addr, File]) end,
-					IFeatures, 120000),
+					IFeatures, 800000),
 		%%%% TODO: Check for PAnyRet whether contains error
 		case {PAllRet, UseDistance} of
 			{false, _} -> neg;
