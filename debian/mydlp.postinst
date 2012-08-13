@@ -36,6 +36,10 @@ AWKBIN=/usr/bin/awk
 DPKGBIN=/usr/bin/dpkg
 ECHOBIN=/bin/echo
 
+if test -f /etc/default/mydlp; then
+        . /etc/default/mydlp
+fi
+
 # Generates SSL keys
 generate_keys() {
 	mkdir -p $SSLDIR || exit 1
@@ -99,17 +103,22 @@ fix_jetty_init_grep_typo() {
 }
 
 patch_mysql_schema() {
-	local PACKAGEOLDVERSION=$1
-	for p in $(/bin/ls $SCHEMADIFFDIR)
-	do
-		local PATCHVERSION=$(echo $p|/bin/sed -s 's/___.*$//g')
-		if $DPKGBIN --compare-versions "$PATCHVERSION" gt "$PACKAGEOLDVERSION"; then
-			local PATCHDB=$(echo $p|/bin/sed -sr 's/^[0-9\.-]+___//g'|/bin/sed -s 's/___.*$//g')
-			local PATCHFILE="$SCHEMADIFFDIR""$p"
-			echo "Applying database ($PATCHDB) schema patch for $PATCHVERSION : $p ..."
-			$MYSQLC $PATCHDB < $PATCHFILE
-		fi
-	done
+	if [ -n "$NOLOCALMYSQL" -a "$NOLOCALMYSQL" == "true" ]; then
+                true;
+	else
+		local PACKAGEOLDVERSION=$1
+		for p in $(/bin/ls $SCHEMADIFFDIR)
+		do
+			local PATCHVERSION=$(echo $p|/bin/sed -s 's/___.*$//g')
+			if $DPKGBIN --compare-versions "$PATCHVERSION" gt "$PACKAGEOLDVERSION"; then
+				local PATCHDB=$(echo $p|/bin/sed -sr 's/^[0-9\.-]+___//g'|/bin/sed -s 's/___.*$//g')
+				local PATCHFILE="$SCHEMADIFFDIR""$p"
+				echo "Applying database ($PATCHDB) schema patch for $PATCHVERSION : $p ..."
+				$MYSQLC $PATCHDB < $PATCHFILE
+			fi
+		done
+		true
+        fi
 }
 
 case "$1" in
