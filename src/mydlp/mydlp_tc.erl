@@ -93,26 +93,11 @@ get_mime(Filename, Data) when is_binary(Data) ->
 		F when is_binary(F) -> F;
 		_Else -> unicode:characters_to_binary("noname") end,
 
-	TRet = try
-		call_pool({thrift, java, getMime, [Filename1, Data1]})
+	try 	call_pool({thrift, java, getMime, [Filename1, Data1]})
 	catch Class:Error ->
 		?ERROR_LOG("Error occured when extractiong text. Filename: "?S".~nClass: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
 				[Filename1, Class, Error, erlang:get_stacktrace()]),
-		?MIME_OCTET_STREAM end,
-
-	case TRet of
-		?MIME_TIKA_OOXML -> get_mime_zip(Data, ?MIME_TIKA_OOXML);
-		Else -> Else end.
-
-get_mime_zip(Data, Default) ->
-	{ok, FL} = zip:list_dir(Data),
-	get_mime_zip1(FL, Default).
-
-get_mime_zip1([], Default) -> Default;
-get_mime_zip1([#zip_file{name="word/document.xml"}|_Rest], ?MIME_TIKA_OOXML) -> ?MIME_OOXML_WORD;
-get_mime_zip1([#zip_file{name="xl/workbook.xml"}|_Rest], ?MIME_TIKA_OOXML) -> ?MIME_OOXML_EXCEL;
-get_mime_zip1([#zip_file{name="ppt/presentation.xml"}|_Rest], ?MIME_TIKA_OOXML) -> ?MIME_OOXML_POWERPOINT;
-get_mime_zip1([_Else|Rest], Default) -> get_mime_zip1(Rest, Default).
+		?MIME_OCTET_STREAM end.
 
 get_text(undefined, MT, Data) -> get_text(<<>>, MT, Data);
 get_text(Filename, MT, Data) when is_list(Filename) ->
