@@ -8,7 +8,7 @@
 ERLANG_EXTRA_OPTS="+K true +P 524288 -env ERL_MAX_ETS_TABLES 32768"
 
 # Extra options for Jsvc
-JSVC_EXTRA_OPTS="-Xmx3g"
+JSVC_EXTRA_OPTS="-Xmx2g"
 
 # Set true to disable control of Jetty
 NOJETTY="false"
