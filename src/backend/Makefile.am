@@ -28,8 +28,7 @@ target/mydlp-backend.jar: pom.xml
 	cp -af target/mydlp-backend-1.0-jar-with-dependencies.jar target/mydlp-backend.jar
 
 run:
-#	java -cp ../lib/tika-xps/target/tika-xps-1.0.0.jar -jar target/mydlp-backend-1.0-jar-with-dependencies.jar
-	java -cp ../lib/tika-xps/target/tika-xps.jar:target/mydlp-backend.jar com.mydlp.backend.Main
+	java -Xmx2g -cp ../lib/tika-xps/target/tika-xps.jar:target/mydlp-backend.jar com.mydlp.backend.Main
 
 clean-local:
 	@$(MVN) clean
