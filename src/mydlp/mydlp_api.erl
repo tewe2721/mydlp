@@ -1404,17 +1404,13 @@ insert_line_feed_76(ShortLine, Acc) -> <<Acc/binary, ShortLine/binary>>.
 uenc_to_file(Bin) ->
 	case parse_uenc_data(Bin) of
 		none -> [];
-		{ok, RData} when is_list(RData) -> 
-			[ #file{name="urlencoded-data",
-			dataref=?BB_C(RData)} ] end.
+		{ok, Files} -> Files end.
 
 parse_uenc_data(Bin) when is_list(Bin) -> parse_uenc_data(list_to_binary(Bin));
 parse_uenc_data(Bin) when is_binary(Bin) ->
-	do_parse_spec(Bin, []).
+	do_parse_uenc(Bin, [], #file{}, []).
 
-do_parse_spec(<<$%, $%, Tail/binary>>, Cur) -> do_parse_spec(<<$% , Tail/binary>>, Cur);
-
-do_parse_spec(<<$%, $u, A:8, B:8,C:8,D:8, Tail/binary>>, Cur) when 
+do_parse_uenc(<<$%, $u, A:8, B:8,C:8,D:8, Tail/binary>>, CurData, CurFile, Files) when 
 		A >= 48, A =< 57,
 		B >= 48, B =< 57,
 		C >= 48, C =< 57,
@@ -1424,26 +1420,68 @@ do_parse_spec(<<$%, $u, A:8, B:8,C:8,D:8, Tail/binary>>, Cur) when
 	BinRep = case unicode:characters_to_binary([Hex]) of
 		<<Bin/binary>> -> Bin;
 		_Else -> $_ end,
-	do_parse_spec(Tail, [ BinRep | Cur]);
+	do_parse_uenc(Tail, [ BinRep | CurData], CurFile, Files);
 
-do_parse_spec(<<$%, A:8, B:8, Tail/binary>>, Cur) when
+do_parse_uenc(<<$%, A:8, B:8, Tail/binary>>, CurData, CurFile, Files) when
 		A >= 48, A =< 57,
 		B >= 48, B =< 57 ->
 	Hex = try hex2int([A, B]) catch _:_ -> $\s end,
-	do_parse_spec(Tail, [ Hex | Cur]);
+	do_parse_uenc(Tail, [ Hex | CurData], CurFile, Files);
+
+do_parse_uenc(<<$+, Tail/binary>>, CurData, CurFile, Files) ->
+	do_parse_uenc(Tail, [ $\s | CurData], CurFile, Files);
+
+do_parse_uenc(<<$=, Tail/binary>>, CurData, CurFile, Files) -> 
+	NewData = lists:reverse(CurData),
+	Name = "uenc key: " ++ unicode:characters_to_list(list_to_binary(NewData)),
+	do_parse_uenc(Tail, [], CurFile#file{name=Name}, Files);
+
+do_parse_uenc(<<$&, Tail/binary>>, CurData, CurFile, Files) ->
+	NewData = lists:reverse(CurData),
+	NewFile = CurFile#file{dataref=?BB_C(NewData)},
+	do_parse_uenc(Tail, [], #file{}, [NewFile|Files]);
+
+do_parse_uenc(<<H:8, Tail/binary>>, CurData, CurFile, Files) ->
+	do_parse_uenc(Tail, [H|CurData], CurFile, Files);
+do_parse_uenc(<<>>, CurData, CurFile, Files) -> 
+	NewData = lists:reverse(CurData),
+	NewFile = CurFile#file{dataref=?BB_C(NewData)},
+	NewFiles = [NewFile| Files],
+	{ok, lists:reverse(NewFiles)};
+do_parse_uenc(undefined, _, _, _) -> none.
+
+prettify_uenc_data(Bin) when is_list(Bin) -> prettify_uenc_data(list_to_binary(Bin));
+prettify_uenc_data(Bin) when is_binary(Bin) ->
+	do_prettify_uenc(Bin, []).
+
+do_prettify_uenc(<<$%, $%, Tail/binary>>, Cur) -> do_prettify_uenc(<<$% , Tail/binary>>, Cur);
+
+do_prettify_uenc(<<$%, $u, A:8, B:8,C:8,D:8, Tail/binary>>, Cur) when 
+		A >= 48, A =< 57,
+		B >= 48, B =< 57,
+		C >= 48, C =< 57,
+		D >= 48, D =< 57 ->
+	%% non-standard encoding for Unicode characters: %uxxxx,		     
+	Hex = try hex2int([A,B,C,D]) catch _:_ -> $\s end,
+	BinRep = case unicode:characters_to_binary([Hex]) of
+		<<Bin/binary>> -> Bin;
+		_Else -> $_ end,
+	do_prettify_uenc(Tail, [ BinRep | Cur]);
+
+do_prettify_uenc(<<$%, A:8, B:8, Tail/binary>>, Cur) when
+		A >= 48, A =< 57,
+		B >= 48, B =< 57 ->
+	Hex = try hex2int([A, B]) catch _:_ -> $\s end,
+	do_prettify_uenc(Tail, [ Hex | Cur]);
                
-do_parse_spec(<<$&, Tail/binary>>, Cur) -> do_parse_spec(Tail, [ $\n | Cur]);
-do_parse_spec(<<$+, Tail/binary>>, Cur) -> do_parse_spec(Tail, [ $\s | Cur]);
-do_parse_spec(<<$=, Tail/binary>>, Cur) -> do_parse_spec(Tail, [ <<": ">> | Cur]);
+do_prettify_uenc(<<$&, Tail/binary>>, Cur) -> do_prettify_uenc(Tail, [ $\n | Cur]);
+do_prettify_uenc(<<$+, Tail/binary>>, Cur) -> do_prettify_uenc(Tail, [ $\s | Cur]);
+do_prettify_uenc(<<$=, Tail/binary>>, Cur) -> do_prettify_uenc(Tail, [ <<": ">> | Cur]);
 
-do_parse_spec(<<H:8, Tail/binary>>, Cur) -> do_parse_spec(Tail, [H|Cur]);
-do_parse_spec(<<>>, Cur) -> {ok, lists:reverse(Cur)};
-do_parse_spec(undefined,_) -> none.
+do_prettify_uenc(<<H:8, Tail/binary>>, Cur) -> do_prettify_uenc(Tail, [H|Cur]);
+do_prettify_uenc(<<>>, Cur) -> {ok, lists:reverse(Cur)};
+do_prettify_uenc(undefined,_) -> none.
 
-parse_uenc_data1(D) ->
-	case parse_uenc_data(D) of 
-		none -> []; 
-		{ok, R} -> R end.
 
 uri_to_hr_str(Uri) when is_binary(Uri) -> uri_to_hr_str(binary_to_list(Uri));
 uri_to_hr_str(("/" ++ _Rest) = Uri) -> prettify_uri(Uri);
@@ -1473,10 +1511,15 @@ get_host(Uri) ->
 		0 -> Str;
 		I3 -> string:substr(Str, I3 + 1) end.
 
+prettify_uenc_data1(D) ->
+	case prettify_uenc_data(D) of 
+		none -> []; 
+		{ok, R} -> R end.
+
 prettify_uri("") -> "";
 prettify_uri(UriStr) -> 
 	Tokens = string:tokens(UriStr, "?=;&/"),
-	Cleans = lists:map(fun(I) -> parse_uenc_data1(I) end, Tokens),
+	Cleans = lists:map(fun(I) -> prettify_uenc_data1(I) end, Tokens),
 	string:join(Cleans, " ").
 
 uri_to_hr_file(Uri) ->
