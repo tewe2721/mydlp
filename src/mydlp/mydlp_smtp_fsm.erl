@@ -42,7 +42,9 @@
 -behaviour(gen_fsm).
 -include("mydlp_smtp.hrl").
 
--export([start_link/0]).
+-export([start_link/0,
+	requeue_msg/1
+	]).
 
 %% gen_fsm callbacks
 -export([init/1, handle_event/3,
@@ -386,11 +388,20 @@ create_smtp_msg(disconnect, {Ip1,Ip2,Ip3,Ip4}) ->
 		"Disconnected from ~w.~w.~w.~w .",
 		[Ip1,Ip2,Ip3,Ip4]
 	};
+create_smtp_msg(requeue_ok, MessageR) ->
+	From = get_from(MessageR),
+	ToList = get_dest_addresses(MessageR),
+	{
+		"Requeued message to send original destination. FROM=~s TO='~s' ",
+		[From, ToList]
+	};
 create_smtp_msg(Type, Param) ->
 	{
 		"Type=~w Param=~w",
 		[Type, Param]
 	}.
+
+requeue_msg(MessageR) -> ?SMTP_LOG(requeue_ok, MessageR).
 
 smtp_msg(Type, Param) ->
 	{Format, Args} = create_smtp_msg(Type, Param),

@@ -138,7 +138,8 @@ requeueIncident(Incidentid) ->
 	try     case mydlp_quarantine:l(payload, Incidentid) of
 			{ok, Data} -> 	MessageR = erlang:binary_to_term(Data),
 					mydlp_smtpc:mail(MessageR),
-					mydlp_mysql:requeued(Incidentid);
+					Ret = mydlp_mysql:requeued(Incidentid),
+					mydlp_smtp_fsm:requeue_msg(MessageR), Ret;
 			{ierror, _} ->	mydlp_mysql:delete_log_requeue(Incidentid), 
 					?ERROR_LOG("REQUEUE_INCIDENT: Payload cannot find. Deleting DB entry. IncidentId: ["?S"].~n", [Incidentid])
 					end
