@@ -410,7 +410,10 @@ populate_site(FilterId) ->
 	populate_usb_devices(UDQ, FilterId),
 	mydlp_mnesia:write(get(mydlp_mnesia_write)),
 	erase(mydlp_mnesia_write),
+
+	%%% post actions
 	mydlp_mnesia:compile_regex(),
+	mydlp_dynamic:load(),
 	ok.
 
 populate_configs([[Key, Value]|Rows], FilterId) ->
