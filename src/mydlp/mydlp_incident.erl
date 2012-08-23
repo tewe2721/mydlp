@@ -77,15 +77,15 @@ handle_cast({l, Item}, #state{logger_queue=Q, logger_inprog=true} = State) ->
 handle_cast(consume, #state{logger_queue=Q} = State) ->
 	case queue:out(Q) of
 		{{value, Item}, Q1} ->
-			try	process_log_tuple(Item),
-				consume(),
-				{noreply, State#state{logger_queue=Q1}}
+			try	process_log_tuple(Item)
 			catch Class:Error ->
 				?ERROR_LOG("Logger Queue Consume: Error occured: "
 						"Class: ["?S"]. Error: ["?S"].~n"
 						"Stack trace: "?S"~n.Item: "?S"~nState: "?S"~n ",	
-						[Class, Error, erlang:get_stacktrace(), Item, State]),
-					{noreply, State#state{logger_queue=Q1}} end;
+						[Class, Error, erlang:get_stacktrace(), Item, State]) end,
+				%%% TODO: for some errors we many return original queue
+			consume(),
+			{noreply, State#state{logger_queue=Q1}};
 		{empty, _} ->
 			{noreply, State#state{logger_inprog=false}}
 	end;

@@ -50,11 +50,13 @@
 
 -record(state, {quarantine_dir, quarantine_uid, quarantine_gid}).
 
-s(Data) -> gen_server:call(?MODULE, {s, Data}, 20000).
+-define(QUARANTINE_TIMEOUT, 90000).
 
-s(Cat, Id, Data) -> gen_server:call(?MODULE, {s, Cat, Id, Data}, 20000).
+s(Data) -> gen_server:call(?MODULE, {s, Data}, ?QUARANTINE_TIMEOUT).
 
-l(Cat, Id) -> gen_server:call(?MODULE, {l, Cat, Id}, 20000).
+s(Cat, Id, Data) -> gen_server:call(?MODULE, {s, Cat, Id, Data}, ?QUARANTINE_TIMEOUT).
+
+l(Cat, Id) -> gen_server:call(?MODULE, {l, Cat, Id}, ?QUARANTINE_TIMEOUT).
 
 %%%%%%%%%%%%%% gen_server handles
 
