@@ -105,7 +105,16 @@ is_uuri_char(X) -> is_digit(X) or is_alpha(X).
 %% @doc Check if a byte is defined as an Filename character.
 %% @end
 %%----------------------------------------------------------------------
-is_fn_char(X) -> is_uuri_char(X) or is_ruri_char(X).
+is_fn_char($/) -> false;
+is_fn_char($\\) -> false;
+is_fn_char($?) -> false;
+is_fn_char($%) -> false;
+is_fn_char($:) -> false;
+is_fn_char($") -> false;
+is_fn_char($<) -> false;
+is_fn_char($>) -> false;
+is_fn_char(I) when I =< 31 -> false;
+is_fn_char(_Else) -> true.
 
 %%--------------------------------------------------------------------
 %% @doc Check if a byte is defined as an HTTP URI reserved character.
