@@ -36,21 +36,6 @@
 
 -include_lib("xmerl/include/xmerl.hrl").
 
-ktest0() ->
-	[ {I, I + 1, {I+2, I+3, lists:seq(I, I+100)} } || I <- lists:seq(1,100000)].
-
-ktest1(L) ->
-	S = self(),
-	C = spawn(fun() ->
-		receive
-			{a, T} -> S ! {b, T}
-		end
-	end),
-	C ! {a, L},
-	receive
-		{b, L} -> L
-	end. 
-
 %%--------------------------------------------------------------------
 %% @doc Check if a byte is an HTTP character
 %% @end
