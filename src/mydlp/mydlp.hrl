@@ -57,6 +57,7 @@
                 filename,
                 mime_type,
                 given_type,
+		md5_hash,
                 data,
 		dataref,
 		text,

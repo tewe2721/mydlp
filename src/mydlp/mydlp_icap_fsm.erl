@@ -162,7 +162,7 @@ init([]) ->
 	{ok, {IP, _Port}} = inet:peername(Socket),
 	{next_state, 'ICAP_REQ_LINE', State#state{socket=Socket, addr=IP}, ?CFG(fsm_timeout)};
 'WAIT_FOR_SOCKET'(Other, State) ->
-	?DEBUG("ICAP FSM: 'WAIT_FOR_SOCKET'. Unexpected message: ~p\n", [Other]),
+	?DEBUG("ICAP FSM: 'WAIT_FOR_SOCKET'. Unexpected message: "?S, [Other]),
 	%% Allow to receive async messages
 	{next_state, 'WAIT_FOR_SOCKET', State}.
 
@@ -195,7 +195,7 @@ init([]) ->
 			icap_headers=#icap_headers{}, icap_mod_mode=ModMode}, ?CFG(fsm_timeout)};
 
 'ICAP_REQ_LINE'(timeout, State) ->
-	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+	?DEBUG(?S" Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
 
@@ -232,7 +232,7 @@ init([]) ->
         {next_state, 'ICAP_HEADER', State#state{username=UserName, un_hash=UserHash, icap_headers=IcapHeaders1}, ?CFG(fsm_timeout)};
 
 'ICAP_HEADER'(timeout, State) ->
-	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+	?DEBUG(?S" Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
 encap_next(#state{icap_rencap=[]} = State) -> 'READ_FILES'(State#state{http_message_type=undefined});
@@ -282,7 +282,7 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 'HTTP_REQ_LINE'({data, Line}, State) -> read_line(Line, State, 'HTTP_REQ_LINE', 'PARSE_REQ_LINE');
 
 'HTTP_REQ_LINE'(timeout, State) ->
-        ?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+        ?DEBUG(?S" Client connection timeout - closing.\n", [self()]),
         {stop, normal, State}.
 
 'PARSE_REQ_LINE'({data, ReqLine}, State) ->
@@ -316,7 +316,7 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 'HTTP_RES_LINE'({data, Line}, State) -> read_line(Line, State, 'HTTP_RES_LINE', 'PARSE_RES_LINE');
 
 'HTTP_RES_LINE'(timeout, State) ->
-        ?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+        ?DEBUG(?S" Client connection timeout - closing.\n", [self()]),
         {stop, normal, State}.
 
 'PARSE_RES_LINE'({data, ResLine}, State) ->
@@ -338,7 +338,7 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 'HTTP_HEADER'({data, Line}, State) -> read_line(Line, State, 'HTTP_HEADER', 'PARSE_HEADER');
 
 'HTTP_HEADER'(timeout, State) ->
-	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+	?DEBUG(?S" Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
 'PARSE_HEADER'({data, "\r\n"}, #state{http_headers=HttpHeaders} = State) ->
@@ -379,13 +379,13 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 	end;
 
 'HTTP_CC_LINE'(timeout, State) ->
-	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+	?DEBUG(?S" Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
 'HTTP_CC_CHUNK'({data, Line}, State) -> read_line(Line, State, 'HTTP_CC_CHUNK', 'PARSE_CC_CHUNK');
 
 'HTTP_CC_CHUNK'(timeout, State) ->
-	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+	?DEBUG(?S" Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
 'PARSE_CC_CHUNK'({data, Line}, #state{http_content=Content, tmp=CSize} = State) ->
@@ -403,7 +403,7 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 	{next_state, 'HTTP_CC_LINE', State, ?CFG(fsm_timeout)};
 
 'HTTP_CC_CRLF'(timeout, State) ->
-	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+	?DEBUG(?S" Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
 'HTTP_CC_TCRLF'({data, <<"\r\n">>}, #state{http_content=Content} = State) ->
@@ -414,7 +414,7 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 	encap_next(State1#state{http_content= <<>>});
 
 'HTTP_CC_TCRLF'(timeout, State) ->
-	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+	?DEBUG(?S" Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
 'READ_FILES'(#state{icap_request=#icap_request{method=options}} = State) -> 'REQ_OK'(State);
@@ -745,7 +745,7 @@ df_to_files(#state{icap_mod_mode=reqmod, files=Files,
 		none -> [];
 		F -> [F] end,
 	OFiles = case Files of
-		[] -> DFile = #file{name= "post-data", dataref=?BB_C(ReqData)}, [DFile];
+		[] -> DFile = ?BF_C(#file{name= "post-data"}, ReqData), [DFile];
 		_ -> Files end,
 	lists:append([UFile, OFiles]);
 df_to_files(#state{icap_mod_mode=respmod, http_res_content= <<>>}) -> [];
@@ -759,11 +759,11 @@ df_to_files(#state{icap_mod_mode=respmod,
 		CDFN -> CDFN end,
 
 	RFile = case FN of
-		none -> #file{name= "resp-data", dataref=?BB_C(ResData)};
+		none -> ?BF_C(#file{name= "resp-data"}, ResData);
 		FN -> FN1 = case string:len(FN) > ?MAX_FILENAME_LENGTH of
 				true -> string:substr(FN, 1, ?MAX_FILENAME_LENGTH);
 				false -> FN end,
-			#file{filename=FN1, dataref=?BB_C(ResData)} end,
+			?BF_C(#file{filename=FN1}, ResData) end,
 	[RFile];
 df_to_files(#state{icap_mod_mode=Else}) -> throw({error, not_implemented, Else}).
 

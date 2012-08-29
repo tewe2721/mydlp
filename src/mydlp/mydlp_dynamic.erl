@@ -188,6 +188,29 @@ load_src(Src) ->
 
 -ifdef(__MYDLP_NETWORK).
 
+-define(CONFDEF_PRESTART_DEFAULT, [
+	{syslog_acl_host, ip, "127.0.0.1"},
+	{syslog_acl_port, integer, "514"},
+	{syslog_acl_facility, syslog_facility, "local6"},
+	{syslog_diag_host, ip, "127.0.0.1"},
+	{syslog_diag_port, integer, "514"},
+	{syslog_diag_facility, syslog_facility, "local6"},
+	{syslog_report_host, ip, "127.0.0.1"},
+	{syslog_report_port, integer, "514"},
+	{syslog_report_facility, syslog_facility, "local7"}
+]).
+
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
+-define(CONFDEF_PRESTART_DEFAULT, [
+]).
+
+-endif.
+
+-ifdef(__MYDLP_NETWORK).
+
 -define(CONFDEF_FUNCTIONAL, [
 	{smtp_helo_name, string, "mydlp.com"},
 	{smtp_next_hop_host, string, "localhost"},
@@ -199,7 +222,16 @@ load_src(Src) ->
 	{icap_max_connections, integer, "0"},
 	{icap_options_ttl, integer, "0"},
 	{icap_log_pass, boolean, "false"},
-	{icap_log_pass_lower_limit, integer, "10240"}
+	{icap_log_pass_lower_limit, integer, "10240"},
+	{syslog_acl_host, ip, "127.0.0.1"},
+	{syslog_acl_port, integer, "514"},
+	{syslog_acl_facility, syslog_facility, "local6"},
+	{syslog_diag_host, ip, "127.0.0.1"},
+	{syslog_diag_port, integer, "514"},
+	{syslog_diag_facility, syslog_facility, "local6"},
+	{syslog_report_host, ip, "127.0.0.1"},
+	{syslog_report_port, integer, "514"},
+	{syslog_report_facility, syslog_facility, "local7"}
 ]).
 
 -endif.
@@ -273,7 +305,8 @@ mydlp_config_src() ->
 	ConfPath = get_mydlp_conf_path(),
 	{ok, Device} = file:open(ConfPath, [read]),
 	ConfSrc = mydlp_config_parse(Device),
-	?CONFIG_HEAD ++ ConfSrc.
+	ConfSrc2 = mydlp_config_prestart_default(),
+	?CONFIG_HEAD ++ ConfSrc ++ ConfSrc2.
 
 mydlp_config_src_full() ->
 	ConfPath = get_mydlp_conf_path(),
@@ -382,6 +415,21 @@ val_to_type_src(boolean, "false") -> "false";
 val_to_type_src(string, V) -> "\"" ++ V ++ "\"";
 val_to_type_src(integer, V) -> V;
 val_to_type_src(atom, V) -> V;
+val_to_type_src(ip, V) -> 
+	{Ip1, Ip2, Ip3, Ip4} = mydlp_api:str_to_ip(V),
+	"{" ++ 
+	integer_to_list(Ip1) ++ "," ++
+	integer_to_list(Ip2) ++ "," ++
+	integer_to_list(Ip3) ++ "," ++
+	integer_to_list(Ip4) ++ "}";
+val_to_type_src(syslog_facility, "local0") -> "128"; % 16 bsl 3
+val_to_type_src(syslog_facility, "local1") -> "136"; % 17 bsl 3
+val_to_type_src(syslog_facility, "local2") -> "144"; % 18 bsl 3
+val_to_type_src(syslog_facility, "local3") -> "152"; % 19 bsl 3
+val_to_type_src(syslog_facility, "local4") -> "160"; % 20 bsl 3
+val_to_type_src(syslog_facility, "local5") -> "168"; % 21 bsl 3
+val_to_type_src(syslog_facility, "local6") -> "176"; % 22 bsl 3
+val_to_type_src(syslog_facility, "local7") -> "184"; % 23 bsl 3
 val_to_type_src(term, V) -> V.
 
 confdef_to_src(ConfDef) -> confdef_to_src(ConfDef, "").
@@ -405,6 +453,15 @@ mydlp_config_mnesia([{Key,Type,DefaultVal}|Rest], SrcAcc) ->
 	SLine = KeyStr ++ "() -> " ++ ValSrcStr ++ ".\r\n",
 	mydlp_config_mnesia(Rest, SrcAcc ++ SLine);
 mydlp_config_mnesia([], SrcAcc) -> SrcAcc.
+
+mydlp_config_prestart_default() -> mydlp_config_prestart_default(?CONFDEF_PRESTART_DEFAULT, "").
+
+mydlp_config_prestart_default([{Key,Type,ValStr}|Rest], SrcAcc) ->
+	KeyStr = erlang:atom_to_list(Key),
+	ValSrcStr = val_to_type_src(Key, Type, ValStr),
+	SLine = KeyStr ++ "() -> " ++ ValSrcStr ++ ".\r\n",
+	mydlp_config_prestart_default(Rest, SrcAcc ++ SLine);
+mydlp_config_prestart_default([], SrcAcc) -> SrcAcc.
 
 
 -ifdef(__PLATFORM_WINDOWS).

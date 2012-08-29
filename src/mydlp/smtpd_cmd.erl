@@ -76,7 +76,7 @@ command({rcpt = _Command,_Param},#smtpd_fsm{rcpt = RcptList} = State) when is_li
 	State;
 command({rcpt = _Command,Param},#smtpd_fsm{relay = Relay} = State) ->
 	To = clean_email(Param),
-	?D({relay,Relay}),
+	?DEBUG("Relay: "?S, [Relay]),
 %	case check_user(erlmail_util:split_email(To),Relay) of
 %		true ->
 			NewRcptList = case State#smtpd_fsm.rcpt of
@@ -84,7 +84,7 @@ command({rcpt = _Command,Param},#smtpd_fsm{relay = Relay} = State) ->
 				RcptList -> [To|RcptList]
 			end,
 			send(State,250),
-			?D({rcpt,NewRcptList}),
+			?DEBUG("RCPT: "?S, [NewRcptList]),
 			State#smtpd_fsm{rcpt=NewRcptList};
 %		false ->
 %			send(State,550),

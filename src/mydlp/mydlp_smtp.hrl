@@ -25,10 +25,6 @@
 
 -include("mydlp.hrl").
 
--ifndef(D).
--define(D(X), ?DEBUG("DEBUG ~p:~p ~p~n",[?MODULE, ?LINE, X])).
--endif.
-
 -define(CRLF,[13,10]).
 -define(CRLF_BIN, <<13,10>>).
 

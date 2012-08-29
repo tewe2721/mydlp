@@ -1,4 +1,4 @@
-%%%
+%%
 %%%    Copyright (C) 2012 Huseyin Kerem Cevahir <kerem@mydlp.com>
 %%%
 %%%--------------------------------------------------------------------------
@@ -67,15 +67,15 @@ start_socket(Tag, RHost, RPort, Fac, Level) ->
 %%----------------------------------------------------------------------
 init(_) -> init().
 init() ->
-	AclHost = {127,0,0,1},
-	AclPort = 514,
-	DiagHost = {127,0,0,1},
-	DiagPort = 514,
-	AclFac = ?FAC_LOCAL6,
-	DiagFac = ?FAC_LOCAL6,
-	ReportHost = {127,0,0,1},
-	ReportPort = 514,
-	ReportFac = ?FAC_LOCAL7,
+	AclHost = ?CFG(syslog_acl_host),
+	AclPort = ?CFG(syslog_acl_port),
+	AclFac = ?CFG(syslog_acl_facility),
+	DiagHost = ?CFG(syslog_diag_host),
+	DiagPort = ?CFG(syslog_diag_port),
+	DiagFac = ?CFG(syslog_diag_facility),
+	ReportHost = ?CFG(syslog_report_host),
+	ReportPort = ?CFG(syslog_report_port),
+	ReportFac = ?CFG(syslog_report_facility),
 	{ok, AclFd} = start_socket("ACL", AclHost, AclPort, AclFac, ?LOG_INFO),
 	{ok, DiagFd} = start_socket("Diagnostic", DiagHost, DiagPort, DiagFac, ?LOG_DEBUG),
 	{ok, ReportFd} = start_socket("Report", ReportHost, ReportPort, ReportFac, ?LOG_INFO),
@@ -88,37 +88,49 @@ init() ->
 %%          remove_handler                              
 %%----------------------------------------------------------------------
 handle_event({ReportLevel, _, {FromPid, StdType, Report}}, State) when is_record(Report, report), is_atom(StdType) ->
-	RL = case {ReportLevel,StdType} of
-		{error_report, _} -> ?LOG_ERROR;
-		{warning_report, _} -> ?LOG_WARNING;
-		{info_report, _} -> ?LOG_INFO
-	end,
-	syslog_report(State,  RL,  io_lib:format ("~p: " ++ Report#report.format, [FromPid|Report#report.data])),
+	try	RL = case {ReportLevel,StdType} of
+			{error_report, _} -> ?LOG_ERROR;
+			{warning_report, _} -> ?LOG_WARNING;
+			{info_report, _} -> ?LOG_INFO
+		end,
+		syslog_report(State,  RL,  io_lib:format ("~p: " ++ Report#report.format, [FromPid|Report#report.data]))
+	catch Class:Error ->
+                        ?ERROR_LOG("Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
+                        [Class, Error, erlang:get_stacktrace()]) end,
 	{ok, State};
 
 handle_event({ReportLevel, _, {_FromPid, StdType, Report}}, State) when is_atom(StdType) ->
-	RL = case {ReportLevel,StdType} of
-		{error_report, _} -> ?LOG_ERROR;
-		{warning_report, _} -> ?LOG_WARNING;
-		{info_report, _} -> ?LOG_INFO
-	end,
-	syslog_report(State,  RL, io_lib:format ("~p", [Report])),
+	try	RL = case {ReportLevel,StdType} of
+			{error_report, _} -> ?LOG_ERROR;
+			{warning_report, _} -> ?LOG_WARNING;
+			{info_report, _} -> ?LOG_INFO
+		end,
+		syslog_report(State,  RL, io_lib:format ("~p", [Report]))
+	catch Class:Error ->
+                        ?ERROR_LOG("Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
+                        [Class, Error, erlang:get_stacktrace()]) end,
 	{ok, State};
 
 handle_event({EventLevel, _, {_FromPid, Fmt, Data}}, State) ->
-	Message = io_lib:format (Fmt, Data),
-	case EventLevel of
-		error -> syslog_err(State, Message);
-		warning_msg -> syslog_syswarn(State, Message);
-		info_msg -> syslog_debug(State, Message);
-		acl_msg -> syslog_acl(State, Message);
-		smtp -> syslog_smtp(State, Message);
-		_Else -> ok
-	end,
+	try	Message = io_lib:format (Fmt, Data),
+		case EventLevel of
+			error -> syslog_err(State, Message);
+			warning_msg -> syslog_syswarn(State, Message);
+			info_msg -> syslog_debug(State, Message);
+			acl_msg -> syslog_acl(State, Message);
+			smtp -> syslog_smtp(State, Message);
+			_Else -> ok
+		end
+	catch Class:Error ->
+                        ?ERROR_LOG("Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
+                        [Class, Error, erlang:get_stacktrace()]) end,
 	{ok, State};
 
 handle_event(Event, State) ->
-	syslog_syswarn(State, io_lib:format ("Unknown event [~p]", [Event])),
+	try	syslog_syswarn(State, io_lib:format ("Unknown event [~p]", [Event]))
+	catch Class:Error ->
+                        ?ERROR_LOG("Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
+                        [Class, Error, erlang:get_stacktrace()]) end,
 	{ok, State}.
 
 %%----------------------------------------------------------------------
@@ -138,7 +150,10 @@ handle_call(_Request, State) ->
 %%          remove_handler                              
 %%----------------------------------------------------------------------
 handle_info(Info, State) ->
-	syslog_misc(State, io_lib:format ("Info [~p]", [Info])),
+	try	syslog_misc(State, io_lib:format ("Info [~p]", [Info]))
+	catch Class:Error ->
+                        ?ERROR_LOG("Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
+                        [Class, Error, erlang:get_stacktrace()]) end,
 	{ok, State}.
 
 %%----------------------------------------------------------------------
@@ -158,21 +173,21 @@ syslog({Fd, Host, Port}, Facility, Level, Message) ->
 	gen_udp:send(Fd, Host, Port, <<"<", P/binary, ">", M/binary, "\n">>).
 
 syslog_acl(#state{syslog_acl_fd=AclFd}, Message) ->
-	AclHost = {127,0,0,1},
-	AclPort = 514,
-	AclFac = ?FAC_LOCAL6,
+	AclHost = ?CFG(syslog_acl_host),
+	AclPort = ?CFG(syslog_acl_port),
+	AclFac = ?CFG(syslog_acl_facility),
 	syslog({AclFd, AclHost, AclPort}, AclFac, ?LOG_INFO, Message).
 
 syslog_diag(#state{syslog_diag_fd=DiagFd}, Level, Message) ->
-	DiagHost = {127,0,0,1},
-	DiagPort = 514,
-	DiagFac = ?FAC_LOCAL6,
+	DiagHost = ?CFG(syslog_diag_host),
+	DiagPort = ?CFG(syslog_diag_port),
+	DiagFac = ?CFG(syslog_diag_facility),
 	syslog({DiagFd, DiagHost, DiagPort}, DiagFac, Level, Message).
 
 syslog_report(#state{syslog_report_fd=ReportFd}, Level, Message) ->
-	ReportHost = {127,0,0,1},
-	ReportPort = 514,
-	ReportFac = ?FAC_LOCAL7,
+	ReportHost = ?CFG(syslog_report_host),
+	ReportPort = ?CFG(syslog_report_port),
+	ReportFac = ?CFG(syslog_report_facility),
 	syslog({ReportFd, ReportHost, ReportPort}, ReportFac, Level, ["[MyDLP Report] " | [Message] ]).
 	
 syslog_err(State, Message) -> syslog_diag(State, ?LOG_ERROR, Message).
@@ -183,7 +198,8 @@ syslog_smtp(State, Message) -> syslog_debug(State, "SMTP", Message).
 
 syslog_misc(State, Message) -> syslog_debug(State, "Misc", Message).
 
-syslog_debug(State, Message) -> syslog_debug(State, "Debug", Message).
+%syslog_debug(State, Message) -> syslog_debug(State, "Debug", Message).
+syslog_debug(_State, _Message) -> ok.
 
 syslog_syswarn(State, Message) -> syslog_debug(State, "SysWarn", Message).
 

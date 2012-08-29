@@ -102,14 +102,13 @@ init([]) ->
 	inet:setopts(Socket, [{active, once}, {packet, line}, binary]),
 	{ok, {IP, _Port}} = inet:peername(Socket),
 %	{ok,DNSBL} = erlmail_antispam:dnsbl(IP),
-%	?D({relay,IP,smtpd_queue:checkip(IP)}),
 %	NewState = State#smtpd_fsm{socket=Socket, addr=IP, options = DNSBL, relay = smtpd_queue:checkip(IP)},
 	NewState = State#smtpd_fsm{socket=Socket, addr=IP, relay = true},
 	?SMTP_LOG(connect, IP),
 	NextState = smtpd_cmd:command({greeting,IP},NewState),
 	{next_state, 'WAIT_FOR_CMD', NextState, ?CFG(fsm_timeout)};
 'WAIT_FOR_SOCKET'(Other, State) ->
-	?DEBUG("SMTP State: 'WAIT_FOR_SOCKET'. Unexpected message: ~p\n", [Other]),
+	?DEBUG("SMTP State: 'WAIT_FOR_SOCKET'. Unexpected message: "?S, [Other]),
 	%% Allow to receive async messages
 	{next_state, 'WAIT_FOR_SOCKET', State}.
 
@@ -117,7 +116,7 @@ init([]) ->
 'WAIT_FOR_CMD'({data, Data}, State) -> read_line(Data, State, 'WAIT_FOR_CMD', 'PARSE_CMD');
 
 'WAIT_FOR_CMD'(timeout, State) ->
-	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+	?DEBUG(?S" Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
 'PARSE_CMD'({data, Data}, State) ->
@@ -133,7 +132,7 @@ init([]) ->
 'WAIT_FOR_DATA'({data, Data}, State) -> read_line(Data, State, 'WAIT_FOR_DATA', 'PARSE_DATA');
 
 'WAIT_FOR_DATA'(timeout, State) ->
-	?DEBUG("~p Client connection timeout - closing.\n", [self()]),
+	?DEBUG(?S" Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
 'PARSE_DATA'({data, Line}, #smtpd_fsm{buff = Buff} = State) ->
@@ -345,7 +344,7 @@ get_dest_addresses(MessageR) ->
 log_req(#smtpd_fsm{message_record=MessageR}, Action,
                 {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
 	Src = get_from(MessageR),
-	Dest = get_dest_addresses(MessageR),
+	Dest = {MessageR#message.rcpt_to, get_dest_addresses(MessageR)},
 	Time = erlang:localtime(),
 	Payload = case Action of
 		quarantine -> MessageR;

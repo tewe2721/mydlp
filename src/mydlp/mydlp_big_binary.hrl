@@ -26,6 +26,10 @@
 	mydlp_workdir:raw_to_obj(RawData)
 ).
 
+-define(BF_C(File, RawData),
+	mydlp_workdir:raw_to_obj(File, RawData)
+).
+
 % Big binary read
 -define(BB_R(Ref),
 	mydlp_workdir:read_obj(Ref)

@@ -420,16 +420,16 @@ object_to_file(regular, #object{prop_dict=PD, filepath=undefined, data=Data}) ->
 		error -> case dict:find("filename_unicode", PD) of
 			{ok, UFN} -> UFN;
 			error -> "seap-data" end end,
-	#file{filename=Filename, dataref=?BB_C(Data)};
+	?BF_C(#file{filename=Filename}, Data);
 
 object_to_file(regular, #object{prop_dict=PD, filepath=FilePath}) ->  % created with PUSHFILE
 	Filename = case dict:find("filename", PD) of
 		{ok, FN} -> qp_decode(FN);
 		error -> filename:basename(FilePath) end,
-	DataRef = case dict:find("burn_after_reading", PD) of
-		{ok, "true"} ->	?BB_C({tmpfile, FilePath});
-		_Else -> ?BB_C({regularfile, FilePath}) end,
-	#file{filename=Filename, dataref=DataRef};
+	URef = case dict:find("burn_after_reading", PD) of
+		{ok, "true"} ->	{tmpfile, FilePath};
+		_Else -> {regularfile, FilePath} end,
+	?BF_C(#file{filename=Filename}, URef);
 
 object_to_file(usb_device, #object{prop_dict=PD}) ->
 	DeviceId = case dict:find("device_id", PD) of

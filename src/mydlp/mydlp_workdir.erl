@@ -36,6 +36,7 @@
 -export([start_link/0,
 	tempfile/0,
 	raw_to_obj/1,
+	raw_to_obj/2,
 	read_obj/1,
 	delete_obj/1,
 	get_obj_fp/1,
@@ -62,6 +63,15 @@ tempfile() ->
 	Ref = now(),
 	FN = ref_to_fn("tmp", Ref),
 	{ok, FN}.
+
+raw_to_obj(#file{} = File, RawData) -> 
+	Ref = raw_to_obj(RawData),
+	Hash = case get_obj_size(Ref) > ?CFG(maximum_memory_object) of
+		true -> undefined;
+		false -> case RawData of
+			{_,_} -> undefined;
+			_Else -> mydlp_api:md5_hex(RawData) end end,
+	File#file{dataref=Ref, md5_hash=Hash}.
 
 raw_to_obj({regularfile, FilePath}) -> 
 	case filelib:is_regular(FilePath) of

@@ -959,9 +959,9 @@ acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="data"},
 acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name=undefined, filename=undefined}, _Misc, _Payload) -> ok;
 acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, #file{} = File, Misc, Payload) ->
 	acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, [File], Misc, Payload);
-acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc, Payload) ->
-	FileS = string:join([file_to_str(F) || F <- Files] , ", "),
-	acl_msg1(Channel, RuleId, Action, Ip, User, To, ITypeId, FileS, Misc),
+acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files0, Misc, Payload) ->
+	Files = hashify_files(Files0),
+	acl_msg_logger(Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc),
 	mydlp_incident:l({Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc, Payload}),
 	ok.
 
@@ -979,10 +979,9 @@ acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="data"},
 acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name=undefined, filename=undefined}, _Misc, _Payload) -> ok;
 acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, #file{} = File, Misc, Payload) ->
 	acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, [File], Misc, Payload);
-acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc, _Payload) ->
-	FileSs = [file_to_str(F) || F <- Files],
-	FileS = string:join(FileSs, ", "),
-	acl_msg1(Channel, RuleId, Action, Ip, User, To, ITypeId, FileS, Misc),
+acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files0, Misc, _Payload) ->
+	Files = hashify_files(Files0),
+	acl_msg_logger(Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc),
 	LogTerm = case Action of
 		pass -> 	{Time, Channel, RuleId, Action, Ip, User, To, ITypeId, 
 						[#file{name=S}||S <- FileSs], Misc};
@@ -1000,26 +999,105 @@ acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc, _Payl
 
 -endif.
 
-acl_msg1(Channel, RuleId, Action, nil, nil, To, ITypeId, FileS, Misc) ->
-	mydlp_logger:notify(acl_msg,
-		"CHANNEL: ~w , RULE: ~w , ACTION: ~w , TO: \"~s\" , ITYPE: ~w , FILE: \"~s\" , MISC: ~s ~n",
-		[Channel, RuleId, Action, To, ITypeId, FileS, Misc]);
-acl_msg1(Channel, RuleId, Action, {Ip1,Ip2,Ip3,Ip4}, nil, To, ITypeId, FileS, Misc) ->
-	mydlp_logger:notify(acl_msg,
-		"CHANNEL: ~w , RULE: ~w , ACTION: ~w , FROM: ~w.~w.~w.~w , TO: \"~s\" , ITYPE: ~w , FILE: \"~s\" , MISC: ~s ~n",
-		[Channel, RuleId, Action, Ip1,Ip2,Ip3,Ip4, To, ITypeId, FileS, Misc]);
-acl_msg1(Channel, RuleId, Action, nil, User, To, ITypeId, FileS, Misc) ->
-	mydlp_logger:notify(acl_msg,
-		"CHANNEL: ~w , RULE: ~w , ACTION: ~w , FROM: ~s , TO: \"~s\" , ITYPE: ~w , FILE: \"~s\" , MISC: ~s ~n",
-		[Channel, RuleId, Action, User, To, ITypeId, FileS, Misc]);
-acl_msg1(Channel, RuleId, Action, {Ip1,Ip2,Ip3,Ip4}, User, To, ITypeId, FileS, Misc) ->
-	mydlp_logger:notify(acl_msg,
-		"CHANNEL: ~w , RULE: ~w , ACTION: ~w , FROM: ~w.~w.~w.~w (~s) , TO: \"~s\" , ITYPE: ~w , FILE: \"~s\" , MISC: ~s ~n",
-		[Channel, RuleId, Action, Ip1,Ip2,Ip3,Ip4, User, To, ITypeId, FileS, Misc]);
-acl_msg1(_,_,_,_,_,_,_,_,_) -> ok.
 
+formatted_cur_date() ->
+	{{Year, Month, Day}, {Hours, Minutes, Seconds}} = calendar:universal_time(),
+	MonthS = case Month of
+		1 -> "Jan";
+		2 -> "Feb";
+		3 -> "Mar";
+		4 -> "Apr";
+		5 -> "May";
+		6 -> "Jun";
+		7 -> "Jul";
+		8 -> "Aug";
+		9 -> "Sep";
+		10 -> "Oct";
+		11 -> "Nov";
+		12 -> "Dec" end,
+	io_lib:format("~s ~2..0B ~4..0B ~2..0B:~2..0B:~2..0B",[MonthS, Day, Year, Hours, Minutes, Seconds]).
 
+escape_es(Str) -> escape_es(Str, []).
 
+escape_es([$=|Str], Rest) -> escape_es(Str, [$=, $\\|Rest]);
+escape_es([C|Str], Rest) -> escape_es(Str, [C|Rest]);
+escape_es([], Rest) -> lists:reverse(Rest).
+
+acl_src(nil) -> {[], []};
+acl_src({Ip1,Ip2,Ip3,Ip4}) -> {[" src=~B.~B.~B.~B"], [Ip1,Ip2,Ip3,Ip4]}.
+
+acl_suser(nil) -> {[], []};
+acl_suser(User) -> {[" suser=~s"], [escape_es(User)]}.
+
+str_channel(web) -> "Web";
+str_channel(mail) -> "Mail";
+str_channel(endpoint) -> "Endpoint";
+str_channel(printer) -> "Printer";
+str_channel(discovery) -> "Discovery";
+str_channel(api) -> "API";
+str_channel(_) -> "Unknown".
+
+acl_act(_Channel, pass) -> {[], []};
+acl_act(discovery, block) -> {[" act=~s"], ["Deleted"]};
+acl_act(_Channel, block) -> {[" act=~s"], ["Blocked"]};
+acl_act(_Channel, log) -> {[" act=~s"], ["Logged"]};
+acl_act(_Channel, quarantine) -> {[" act=~s"], ["Quarantined"]};
+acl_act(_Channel, archive) -> {[" act=~s"], ["Archived"]};
+acl_act(_Channel, _Else) -> {[], []}.
+
+acl_destination(web, Destination) ->
+	{[" dhost=~ts"], [escape_es(Destination)]};
+acl_destination(mail, {RcptTo, RcptList}) ->
+	{[" duser=~ts msg=~ts"], [escape_es(RcptTo), ("Full list of receipients: " ++ escape_es(RcptList))]};
+acl_destination(mail, RcptList) ->
+	{[" msg=~ts"], [("Full list of receipients: " ++ escape_es(RcptList))]};
+acl_destination(_Channel, _Else) -> {[], []}.
+
+acl_file_hash(undefined) -> {[], []};
+acl_file_hash(Hash) -> {[" fileHash=~s"], [Hash]}.
+
+acl_file_mt(undefined) -> {[], []};
+acl_file_mt(MT) when is_binary(MT) -> acl_file_mt(binary_to_list(MT));
+acl_file_mt(MT) when is_list(MT) -> {[" fileType=~s"], [MT]}.
+
+acl_files([]) -> {[], []};
+acl_files([#file{dataref=DataRef, md5_hash=Hash, mime_type=MT} = File]) ->
+	FormatHead =[" fname=~ts fsize=~B"], 
+	ArgsHead= [escape_es(file_to_str(File)), ?BB_S(DataRef)],
+
+	{HashF, HashA} = acl_file_hash(Hash),
+	{TypeF, TypeA} = acl_file_mt(MT),
+
+	{lists:flatten([FormatHead, HashF, TypeF]), lists:append([ArgsHead, HashA, TypeA])};
+acl_files(Files) when is_list(Files) -> 
+	FileS = string:join([file_to_str(F) || F <- Files] , ", "),
+	{[" cs5=~ts"], ["Multiple files with names: " ++ escape_es(FileS)]}.
+
+acl_misc("") -> {[], []};
+acl_misc(<<>>) -> {[], []};
+acl_misc(undefined) -> {[], []};
+acl_misc(Misc) -> {[" cs6=~ts"], [escape_es(Misc)]}.
+
+acl_msg_logger(Channel, RuleId, Action, SrcIp, SrcUser, To, ITypeId, Files, Misc) ->
+	FormatHead=["CEF:0|Medra Inc.|MyDLP|1.0|~B|~ts|~B|rt=~s cs1=~B cs2=~B proto=~s"],
+	GeneratedMessage = "Check MyDLP Logs for details.",
+	Severity = 10,
+	RTime = formatted_cur_date(),
+	ChannelS = str_channel(Channel),
+	ArgsHead = [RuleId, GeneratedMessage, Severity, RTime, RuleId, ITypeId, ChannelS],
+
+	{SrcF, SrcA} = acl_src(SrcIp),
+	{SUserF, SUserA} = acl_suser(SrcUser),
+	{ActF, ActA} = acl_act(Channel, Action),
+	{DestF, DestA} = acl_destination(Channel, To),
+	{FilesF, FilesA} = acl_files(Files),
+	{MiscF, MiscA} = acl_misc(Misc),
+
+	Format = lists:flatten([FormatHead, SrcF, SUserF, DestF, ActF, FilesF, MiscF]),
+	Args = lists:append([ArgsHead, SrcA, SUserA, DestA, ActA, FilesA, MiscA]),
+
+	mydlp_logger:notify(acl_msg, Format, Args).
+	
 files_to_str(Files) -> files_to_str(Files, []).
 
 files_to_str([File|Files], Returns) -> 
@@ -1114,7 +1192,7 @@ reconstruct_cr(#file{} = File) ->
 	File1 = load_file(File),
 	case File1#file.data of
 		undefined -> File1;
-		Data ->	File1#file{dataref=?BB_C(Data)} end.
+		Data ->	?BF_C(File1, Data) end.
 
 %%--------------------------------------------------------------------
 %% @doc Detects mimetypes of all files given, 
@@ -1195,9 +1273,8 @@ try_un7z([File|Files], Processed, New) ->
 		{error, _ShouldBeLogged} -> comp_to_files(Files, [File|Processed], New) end.
 
 ext_to_file(Ext) ->
-	[#file{name= "extracted file", 
-		filename=Filename, 
-		dataref=?BB_C(Data)} 
+	[?BF_C(#file{name= "extracted file", 
+		filename=Filename}, Data)
 		|| {Filename,Data} <- Ext].
 
 %%-----------------------------------------------------------------------
@@ -1303,7 +1380,7 @@ parse_multipart(HttpContent, H, Req) ->
 						"find no multipart/form-data",[]), []
 			end;
 		Other ->
-			?DEBUG("Can't parse multipart if get a ~p", [Other]), []
+			?DEBUG("Can't parse multipart if get a "?S, [Other]), []
 	end,
 	mime_to_files(Res).
 
@@ -1363,10 +1440,27 @@ make_parse_line_reply(Key, Value, Rest) ->
 -endif.
 
 %%-------------------------------------------------------------------------
+%% @doc If present hashes data returns file.
+%% @end
+%%-------------------------------------------------------------------------
+hashify_files(Files) -> hashify_files(Files, []).
+
+hashify_files([F|Rest], Acc) -> hashify_files(Rest, [hashify(F)|Acc]);
+hashify_files([], Acc) -> lists:reverse(Acc).
+
+hashify(#file{md5_hash=undefined, data=undefined} = File) -> File;
+hashify(#file{md5_hash=undefined, data=Data} = File) ->
+	Hash = mydlp_api:md5_hex(Data),
+	File#file{md5_hash=Hash};
+hashify(#file{} = File) -> File.
+
+%%-------------------------------------------------------------------------
 %% @doc Writes files to quarantine directory.
 %% @end
 %%-------------------------------------------------------------------------
-quarantine(#file{data=Data}) -> mydlp_quarantine:s(Data).
+	
+quarantine(#file{data=Data, md5_hash=undefined}) -> mydlp_quarantine:q(Data);
+quarantine(#file{data=Data, md5_hash=Hash}) -> mydlp_quarantine:q(Hash, Data).
 
 %%-------------------------------------------------------------------------
 %% @doc Return denied page for different formats
@@ -1432,14 +1526,14 @@ do_parse_uenc(<<$=, Tail/binary>>, CurData, CurFile, Files) ->
 
 do_parse_uenc(<<$&, Tail/binary>>, CurData, CurFile, Files) ->
 	NewData = lists:reverse(CurData),
-	NewFile = CurFile#file{dataref=?BB_C(NewData)},
+	NewFile = ?BF_C(CurFile,NewData),
 	do_parse_uenc(Tail, [], #file{}, [NewFile|Files]);
 
 do_parse_uenc(<<H:8, Tail/binary>>, CurData, CurFile, Files) ->
 	do_parse_uenc(Tail, [H|CurData], CurFile, Files);
 do_parse_uenc(<<>>, CurData, CurFile, Files) -> 
 	NewData = lists:reverse(CurData),
-	NewFile = CurFile#file{dataref=?BB_C(NewData)},
+	NewFile = ?BF_C(CurFile,NewData),
 	NewFiles = [NewFile| Files],
 	{ok, lists:reverse(NewFiles)};
 do_parse_uenc(undefined, _, _, _) -> none.
@@ -1520,7 +1614,7 @@ uri_to_hr_file(Uri) ->
 	RData = uri_to_hr_str(Uri),
 	case RData of
 		[] -> none;
-		_Else -> #file{name="uri-data", dataref=?BB_C(RData)} end.
+		_Else -> ?BF_C(#file{name="uri-data"}, RData) end.
 	
 
 %%-------------------------------------------------------------------------
@@ -1780,7 +1874,7 @@ mime_to_files([#mime{content=Content, header=Headers, body=Body}|Rest], Acc) ->
 				"Content-Transfer-Encoding: "?S"~n.Content: "?S"~n",
 				[Class, Error, CTE, erlang:get_stacktrace(), Content]),
 			Content end,
-	mime_to_files(lists:append(Body, Rest), [File#file{dataref=?BB_C(Data)}|Acc]);
+	mime_to_files(lists:append(Body, Rest), [?BF_C(File,Data)|Acc]);
 mime_to_files([], Acc) -> lists:reverse(Acc).
 
 -endif.
@@ -1869,11 +1963,11 @@ extract_all(Files, Return) ->
 %% @end
 %%-------------------------------------------------------------------------
 
-term2file(Term) when is_binary(Term) -> #file{dataref=?BB_C(Term)};
+term2file(Term) when is_binary(Term) -> ?BF_C(#file{}, Term);
 term2file(#file{} = Term) -> Term;
 term2file(Term) when is_list(Term) ->
 	{ok, Bin} = file:read_file(Term),
-	#file{dataref=?BB_C(Bin)}.
+	?BF_C(#file{}, Bin).
 
 %%-------------------------------------------------------------------------
 %% @doc Creates an empty acl result tuple with given files
