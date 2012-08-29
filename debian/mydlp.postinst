@@ -98,6 +98,10 @@ configure_solr() {
 	/bin/cp -f /usr/share/mydlp/ui/solr.schema.xml /etc/solr/conf/schema.xml
 }
 
+restart_rsyslog() {
+	/etc/init.d/rsyslog restart > /dev/null
+}
+
 fix_jetty_init_grep_typo() {
 	/bin/grep -q '\[:space:\]' /etc/init.d/jetty && /bin/sed -i -s 's/\[:space:\]/[[:space:]]/g' /etc/init.d/jetty
 }
@@ -127,9 +131,9 @@ case "$1" in
 	if [ -n "$2" ]; then
 		# update
 		patch_mysql_schema $2
-	#	if $DPKGBIN --compare-versions "0.9.15-1" gt "$2"; then
-	#		dependant work
-	#	fi
+		if $DPKGBIN --compare-versions "0.9.138-1" gt "$2"; then
+			restart_rsyslog
+		fi
 	else
 		# first install
 		generate_init_epoch
@@ -141,6 +145,7 @@ case "$1" in
 		configure_jetty
 		configure_solr
 		chown_revision
+		restart_rsyslog
 	fi
 	remove_root_webapp
 	install_webapp

@@ -11,8 +11,7 @@ SQUIDPROCNAME=squid3
 INITSCRIPT=/etc/init.d/mydlp
 POSTFIXINIT=/etc/init.d/postfix
 SQUIDINIT=/etc/init.d/squid3
-
-ERRORLOGFILE=/var/log/mydlp/error.log
+RSYSLOGINIT=/etc/init.d/rsyslog
 
 WATCHDOGLOGFILE=/var/log/mydlp/watchdog.log
 
@@ -158,15 +157,6 @@ function startPostfix {
         $POSTFIXINIT start > /dev/null 2>&1
 }
 
-function backupErrorLog {
-        echo "Backing up error log."
-        local CURRENTEPOCH=$(date +%s)
-        local NEWERRORLOGFILE="$ERRORLOGFILE.$CURRENTEPOCH"
-        mv -f $ERRORLOGFILE $NEWERRORLOGFILE
-        echo "Backed up error log. Compression process is running at background."
-        gzip $NEWERRORLOGFILE &
-}
-
 function logRestart {
         echo "$(date) -> MyDLP is not running! Restarting. " >> $WATCHDOGLOGFILE
 }
@@ -235,7 +225,6 @@ function flushMQ() {
 function restartMyDLP {
         stopPostfix
         stopMyDLP
-        backupErrorLog
         startMyDLP
         startPostfix
 	flushMQ

@@ -69,12 +69,11 @@ start(_Type, _Args) ->
 	% Prestart Load of dynamic modules
 	mydlp_dynamic:prestart_load(),
 	% Start dependencies
-	mydlp_loglevel:set(4),
 	ssl:start(),
         application:load(thrift),
         application:load(sasl),
         application:load(mydlp),
-        error_logger:add_report_handler(mydlp_logger_h, ?CFG(log_dir)),
+        error_logger:add_report_handler(mydlp_logger_syslog),
 	create_pid_file(),
 
 	Protocols = get_protocols(),

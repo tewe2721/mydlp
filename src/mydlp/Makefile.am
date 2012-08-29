@@ -41,8 +41,8 @@ dist_erl_DATA = \
 	mydlp_icap_fsm.erl \
 	mydlp_incident.erl \
 	mydlp_item_receive.erl \
-	mydlp_loglevel.erl \
-	mydlp_logger_h.erl \
+	mydlp_logger.erl \
+	mydlp_logger_syslog.erl \
 	mydlp_matchers.erl \
 	mydlp_mnesia.erl \
 	mydlp_mysql.erl \
