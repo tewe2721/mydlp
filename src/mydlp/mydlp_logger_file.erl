@@ -62,6 +62,7 @@ init() ->
 	{ok, AclFd} = fopen(LogDir ++ "/acl.log"),
 	{ok, ErrorFd} = fopen(LogDir ++ "/error.log"),
 	{ok, ReportFd} = fopen(LogDir ++ "/report.log"),
+	% TODO: close this file handle at terminate
 	{ok, #state{acl_fd=AclFd, error_fd=ErrorFd, report_fd=ReportFd}}.
 
 %%----------------------------------------------------------------------
