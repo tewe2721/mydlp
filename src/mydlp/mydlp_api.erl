@@ -960,7 +960,7 @@ acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name=undefine
 acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, #file{} = File, Misc, Payload) ->
 	acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, [File], Misc, Payload);
 acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files0, Misc, Payload) ->
-	Files = hashify_files(Files0),
+	Files = metafy_files(Files0),
 	acl_msg_logger(Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc),
 	mydlp_incident:l({Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc, Payload}),
 	ok.
@@ -980,15 +980,15 @@ acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name=undefine
 acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, #file{} = File, Misc, Payload) ->
 	acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, [File], Misc, Payload);
 acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files0, Misc, _Payload) ->
-	Files = hashify_files(Files0),
+	Files = metafy_files(Files0),
 	acl_msg_logger(Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc),
 	LogTerm = case Action of
 		pass -> 	{Time, Channel, RuleId, Action, Ip, User, To, ITypeId, 
-						[#file{name=S}||S <- FileSs], Misc};
+						[F#file{data=undefined, dataref=undefined, text=undefined}||F <- Files], Misc};
 		log -> 		{Time, Channel, RuleId, Action, Ip, User, To, ITypeId, 
-						[#file{name=S}||S <- FileSs], Misc};
+						[F#file{data=undefined, dataref=undefined, text=undefined}||F <- Files], Misc};
 		block -> 	{Time, Channel, RuleId, Action, Ip, User, To, ITypeId, 
-						[#file{name=S}||S <- FileSs], Misc};
+						[F#file{data=undefined, dataref=undefined, text=undefined}||F <- Files], Misc};
 		quarantine ->	{Time, Channel, RuleId, Action, Ip, User, To, ITypeId, 
 						[mydlp_api:remove_cr(F)||F <- Files], Misc};
 		archive -> 	{Time, Channel, RuleId, Action, Ip, User, To, ITypeId, 
@@ -1060,15 +1060,20 @@ acl_file_mt(undefined) -> {[], []};
 acl_file_mt(MT) when is_binary(MT) -> acl_file_mt(binary_to_list(MT));
 acl_file_mt(MT) when is_list(MT) -> {[" fileType=~s"], [MT]}.
 
-acl_files([]) -> {[], []};
-acl_files([#file{dataref=DataRef, md5_hash=Hash, mime_type=MT} = File]) ->
-	FormatHead =[" fname=~ts fsize=~B"], 
-	ArgsHead= [escape_es(file_to_str(File)), ?BB_S(DataRef)],
+acl_file_size(undefined) -> {[], []};
+acl_file_size(Size) -> {[" fsize=~B"], [Size]}.
 
+acl_files([]) -> {[], []};
+acl_files([#file{size=Size, md5_hash=Hash, mime_type=MT} = File]) ->
+	FormatHead =[" fname=~ts"], 
+	ArgsHead= [escape_es(file_to_str(File))],
+
+	{SizeF, SizeA} = acl_file_size(Size),
 	{HashF, HashA} = acl_file_hash(Hash),
 	{TypeF, TypeA} = acl_file_mt(MT),
 
-	{lists:flatten([FormatHead, HashF, TypeF]), lists:append([ArgsHead, HashA, TypeA])};
+	{lists:flatten([FormatHead, SizeF, HashF, TypeF]), 
+		lists:append([ArgsHead, SizeA, HashA, TypeA])};
 acl_files(Files) when is_list(Files) -> 
 	FileS = string:join([file_to_str(F) || F <- Files] , ", "),
 	{[" cs5=~ts"], ["Multiple files with names: " ++ escape_es(FileS)]}.
@@ -1200,12 +1205,14 @@ reconstruct_cr(#file{} = File) ->
 %%----------------------------------------------------------------------
 get_mimes(Files) -> get_mimes(Files, []).
 
-get_mimes([#file{mime_type=undefined} = File|Files], Returns) -> 
-	MT = mydlp_tc:get_mime(File#file.filename, File#file.data),
-	get_mimes(Files, [File#file{mime_type=MT}|Returns]);
 get_mimes([File|Files], Returns) -> 
-	get_mimes(Files, [File|Returns]);
+	get_mimes(Files, [mimefy(File)|Returns]);
 get_mimes([], Returns) -> lists:reverse(Returns).
+
+mimefy(#file{mime_type=undefined} = File) ->
+	MT = mydlp_tc:get_mime(File#file.filename, File#file.data),
+	File#file{mime_type=MT};
+mimefy(#file{} = File) -> File.
 
 %%--------------------------------------------------------------------
 %% @doc Extract all compressed files given
@@ -1439,6 +1446,17 @@ make_parse_line_reply(Key, Value, Rest) ->
 
 -endif.
 
+metafy_files(Files) -> metafy_files(Files, []).
+
+metafy_files([F|Rest], Acc) -> metafy_files(Rest, [metafy(F)|Acc]);
+metafy_files([], Acc) -> lists:reverse(Acc).
+
+metafy(#file{} = File) ->
+	File1 = hashify(File),
+	File2 = sizefy(File1),
+	File3 = mimefy(File2),
+	File3.
+
 %%-------------------------------------------------------------------------
 %% @doc If present hashes data returns file.
 %% @end
@@ -1453,6 +1471,19 @@ hashify(#file{md5_hash=undefined, data=Data} = File) ->
 	Hash = mydlp_api:md5_hex(Data),
 	File#file{md5_hash=Hash};
 hashify(#file{} = File) -> File.
+
+%%-------------------------------------------------------------------------
+%% @doc If present set file size of data and returns file.
+%% @end
+%%-------------------------------------------------------------------------
+sizefy(#file{size=undefined, dataref=undefined, data=undefined} = File) -> File;
+sizefy(#file{size=undefined, dataref=undefined, data=Data} = File) -> 
+	Size = size(Data),
+	File#file{size=Size};
+sizefy(#file{size=undefined, dataref=Ref} = File) -> 
+	Size = ?BB_S(Ref),
+	File#file{size=Size};
+sizefy(#file{} = File) -> File.
 
 %%-------------------------------------------------------------------------
 %% @doc Writes files to quarantine directory.

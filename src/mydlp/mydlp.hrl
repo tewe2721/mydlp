@@ -58,6 +58,7 @@
                 mime_type,
                 given_type,
 		md5_hash,
+		size,
                 data,
 		dataref,
 		text,

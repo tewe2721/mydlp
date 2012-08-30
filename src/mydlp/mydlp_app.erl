@@ -55,6 +55,18 @@
 
 -endif.
 
+-ifdef(__MYDLP_NETWORK).
+
+-define(LOGGER_MODULE, mydlp_logger_syslog).
+
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
+-define(LOGGER_MODULE, mydlp_logger_file).
+
+-endif.
+
 %%--------------------------------------------------------------------
 %% Function: start(Type, StartArgs) -> {ok, Pid} |
 %%                                     {ok, Pid, State} |
@@ -73,7 +85,7 @@ start(_Type, _Args) ->
         application:load(thrift),
         application:load(sasl),
         application:load(mydlp),
-        error_logger:add_report_handler(mydlp_logger_syslog),
+        error_logger:add_report_handler(?LOGGER_MODULE),
 	create_pid_file(),
 
 	Protocols = get_protocols(),

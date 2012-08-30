@@ -18,9 +18,9 @@
 %%%    along with MyDLP.  If not, see <http://www.gnu.org/licenses/>.
 %%%--------------------------------------------------------------------------
 
--ifdef(__MYDLP_NETWORK).
+-ifdef(__MYDLP_ENDPOINT).
 
--module(mydlp_logger_syslog).
+-module(mydlp_logger_file).
 -author('kerem@mydlp.com').
 
 -behaviour(gen_event).
@@ -42,26 +42,15 @@
 ]).
 
 -record(state, {
-	syslog_acl_fd,
-	syslog_diag_fd,
-	syslog_report_fd
+	acl_fd,
+	error_fd,
+	report_fd
 }).
 
 %%%----------------------------------------------------------------------
 %%% Callback functions from gen_event
 %%%----------------------------------------------------------------------
 
-%%---------------------------------------------------------------------
-%% Socket definitions
-%%---------------------------------------------------------------------
-start_socket(Tag, RHost, RPort, Fac, Level) ->
-	case gen_udp:open(0) of
-		{ok, Fd} ->
-			syslog({Fd, RHost, RPort}, Fac, Level, "MyDLP " ++ Tag ++ " logger started"),
-			{ok, Fd};
-		{error, Reason} -> {error, Reason}
-	end.
-	    
 %%----------------------------------------------------------------------
 %% Func: init/1
 %% Returns: {ok, State}          |
@@ -69,19 +58,11 @@ start_socket(Tag, RHost, RPort, Fac, Level) ->
 %%----------------------------------------------------------------------
 init(_) -> init().
 init() ->
-	AclHost = ?CFG(syslog_acl_host),
-	AclPort = ?CFG(syslog_acl_port),
-	AclFac = ?CFG(syslog_acl_facility),
-	DiagHost = ?CFG(syslog_diag_host),
-	DiagPort = ?CFG(syslog_diag_port),
-	DiagFac = ?CFG(syslog_diag_facility),
-	ReportHost = ?CFG(syslog_report_host),
-	ReportPort = ?CFG(syslog_report_port),
-	ReportFac = ?CFG(syslog_report_facility),
-	{ok, AclFd} = start_socket("ACL", AclHost, AclPort, AclFac, ?LOG_INFO),
-	{ok, DiagFd} = start_socket("Diagnostic", DiagHost, DiagPort, DiagFac, ?LOG_DEBUG),
-	{ok, ReportFd} = start_socket("Report", ReportHost, ReportPort, ReportFac, ?LOG_INFO),
-	{ok, #state{syslog_acl_fd=AclFd, syslog_diag_fd=DiagFd, syslog_report_fd=ReportFd}}.
+	LogDir = ?CFG(log_dir),
+	{ok, AclFd} = fopen(LogDir ++ "/acl.log"),
+	{ok, ErrorFd} = fopen(LogDir ++ "/error.log"),
+	{ok, ReportFd} = fopen(LogDir ++ "/report.log"),
+	{ok, #state{acl_fd=AclFd, error_fd=ErrorFd, report_fd=ReportFd}}.
 
 %%----------------------------------------------------------------------
 %% Func: handle_event/2
@@ -89,25 +70,15 @@ init() ->
 %%          {swap_handler, Args1, State1, Mod2, Args2} |
 %%          remove_handler                              
 %%----------------------------------------------------------------------
-handle_event({ReportLevel, _, {FromPid, StdType, Report}}, State) when is_record(Report, report), is_atom(StdType) ->
-	try	RL = case {ReportLevel,StdType} of
-			{error_report, _} -> ?LOG_ERROR;
-			{warning_report, _} -> ?LOG_WARNING;
-			{info_report, _} -> ?LOG_INFO
-		end,
-		syslog_report(State,  RL,  io_lib:format ("~p: " ++ Report#report.format, [FromPid|Report#report.data]))
+handle_event({_ReportLevel, _, {FromPid, StdType, Report}}, State) when is_record(Report, report), is_atom(StdType) ->
+	try	filelog_report(State, io_lib:format ("~p: " ++ Report#report.format, [FromPid|Report#report.data]))
 	catch Class:Error ->
                         ?ERROR_LOG("Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
                         [Class, Error, erlang:get_stacktrace()]) end,
 	{ok, State};
 
-handle_event({ReportLevel, _, {_FromPid, StdType, Report}}, State) when is_atom(StdType) ->
-	try	RL = case {ReportLevel,StdType} of
-			{error_report, _} -> ?LOG_ERROR;
-			{warning_report, _} -> ?LOG_WARNING;
-			{info_report, _} -> ?LOG_INFO
-		end,
-		syslog_report(State,  RL, io_lib:format ("~p", [Report]))
+handle_event({_ReportLevel, _, {_FromPid, StdType, Report}}, State) when is_atom(StdType) ->
+	try	filelog_report(State, io_lib:format ("~p", [Report]))
 	catch Class:Error ->
                         ?ERROR_LOG("Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
                         [Class, Error, erlang:get_stacktrace()]) end,
@@ -116,11 +87,8 @@ handle_event({ReportLevel, _, {_FromPid, StdType, Report}}, State) when is_atom(
 handle_event({EventLevel, _, {_FromPid, Fmt, Data}}, State) ->
 	try	Message = io_lib:format (Fmt, Data),
 		case EventLevel of
-			error -> syslog_err(State, Message);
-			warning_msg -> syslog_syswarn(State, Message);
-			info_msg -> syslog_debug(State, Message);
-			acl_msg -> syslog_acl(State, Message);
-			smtp -> syslog_smtp(State, Message);
+			error -> filelog_err(State, Message);
+			acl_msg -> filelog_acl(State, Message);
 			_Else -> ok
 		end
 	catch Class:Error ->
@@ -129,7 +97,7 @@ handle_event({EventLevel, _, {_FromPid, Fmt, Data}}, State) ->
 	{ok, State};
 
 handle_event(Event, State) ->
-	try	syslog_syswarn(State, io_lib:format ("Unknown event [~p]", [Event]))
+	try	filelog_err(State, io_lib:format ("Unknown event [~p]", [Event]))
 	catch Class:Error ->
                         ?ERROR_LOG("Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
                         [Class, Error, erlang:get_stacktrace()]) end,
@@ -152,7 +120,7 @@ handle_call(_Request, State) ->
 %%          remove_handler                              
 %%----------------------------------------------------------------------
 handle_info(Info, State) ->
-	try	syslog_misc(State, io_lib:format ("Info [~p]", [Info]))
+	try	filelog_err(State, io_lib:format ("Info [~p]", [Info]))
 	catch Class:Error ->
                         ?ERROR_LOG("Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
                         [Class, Error, erlang:get_stacktrace()]) end,
@@ -169,41 +137,29 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 %%%%%%%%%%%%%%% Internal
 
-syslog({Fd, Host, Port}, Facility, Level, Message) ->
-	M = list_to_binary([Message]),
-	P = list_to_binary(integer_to_list(Facility bor Level)),
-	gen_udp:send(Fd, Host, Port, <<"<", P/binary, ">", M/binary, "\n">>).
+write_time() ->
+	{{Y,Mo,D},{H,Mi,S}} = erlang:localtime(),
+	io_lib:format("~w-~.2.0w-~.2.0w ~.2.0w:~.2.0w:~.2.0w -> ", [Y, Mo, D, H, Mi, S]).
 
-syslog_acl(#state{syslog_acl_fd=AclFd}, Message) ->
-	AclHost = ?CFG(syslog_acl_host),
-	AclPort = ?CFG(syslog_acl_port),
-	AclFac = ?CFG(syslog_acl_facility),
-	syslog({AclFd, AclHost, AclPort}, AclFac, ?LOG_INFO, Message).
+filelog(Fd, Message) ->
+	Time = write_time(),
+	M = list_to_binary([Time, Message]),
+	HeadLen = size(M) - 1,
+	M1 = case M of
+		<<_Head:HeadLen/binary, "\n" >> -> M;
+		_Else -> <<M/binary, "\n">> end,
+	file:write(Fd, M1).
 
-syslog_diag(#state{syslog_diag_fd=DiagFd}, Level, Message) ->
-	DiagHost = ?CFG(syslog_diag_host),
-	DiagPort = ?CFG(syslog_diag_port),
-	DiagFac = ?CFG(syslog_diag_facility),
-	syslog({DiagFd, DiagHost, DiagPort}, DiagFac, Level, Message).
+filelog_acl(#state{acl_fd=AclFd}, Message) ->
+	filelog(AclFd, Message).
 
-syslog_report(#state{syslog_report_fd=ReportFd}, Level, Message) ->
-	ReportHost = ?CFG(syslog_report_host),
-	ReportPort = ?CFG(syslog_report_port),
-	ReportFac = ?CFG(syslog_report_facility),
-	syslog({ReportFd, ReportHost, ReportPort}, ReportFac, Level, ["[MyDLP Report] " | [Message] ]).
+filelog_err(#state{error_fd=ErrorFd}, Message) ->
+	filelog(ErrorFd, Message).
+
+filelog_report(#state{report_fd=ReportFd}, Message) ->
+	filelog(ReportFd, Message).
 	
-syslog_err(State, Message) -> syslog_diag(State, ?LOG_ERROR, Message).
-
-syslog_debug(State, Tag, Message) -> syslog_diag(State, ?LOG_DEBUG, ["[MyDLP ", Tag, "] " | [Message] ]).
-
-syslog_smtp(State, Message) -> syslog_debug(State, "SMTP", Message).
-
-syslog_misc(State, Message) -> syslog_debug(State, "Misc", Message).
-
-%syslog_debug(State, Message) -> syslog_debug(State, "Debug", Message).
-syslog_debug(_State, _Message) -> ok.
-
-syslog_syswarn(State, Message) -> syslog_debug(State, "SysWarn", Message).
+fopen(Filename) -> file:open(Filename, [append, raw]).
 
 -endif.
 
