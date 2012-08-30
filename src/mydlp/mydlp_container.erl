@@ -350,7 +350,7 @@ log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}
 		api -> get_api_user(Obj);
 		_Else -> get_user() end,
 	Channel = get_channel(Obj),
-	Time = erlang:localtime(),
+	Time = erlang:universaltime(),
 	log_req1(Time, Channel, RuleId, Action, User, IType, File, Misc).
 
 -ifdef(__MYDLP_ENDPOINT).

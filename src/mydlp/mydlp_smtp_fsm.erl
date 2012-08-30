@@ -345,7 +345,7 @@ log_req(#smtpd_fsm{message_record=MessageR}, Action,
                 {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
 	Src = get_from(MessageR),
 	Dest = {MessageR#message.rcpt_to, get_dest_addresses(MessageR)},
-	Time = erlang:localtime(),
+	Time = erlang:universaltime(),
 	Payload = case Action of
 		quarantine -> MessageR;
 		_Else -> none end,

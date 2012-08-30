@@ -961,7 +961,7 @@ acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, #file{} = File, Mi
 	acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, [File], Misc, Payload);
 acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files0, Misc, Payload) ->
 	Files = metafy_files(Files0),
-	acl_msg_logger(Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc),
+	acl_msg_logger(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc),
 	mydlp_incident:l({Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc, Payload}),
 	ok.
 
@@ -981,7 +981,7 @@ acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, #file{} = File, Mi
 	acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, [File], Misc, Payload);
 acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files0, Misc, _Payload) ->
 	Files = metafy_files(Files0),
-	acl_msg_logger(Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc),
+	acl_msg_logger(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc),
 	LogTerm = case Action of
 		pass -> 	{Time, Channel, RuleId, Action, Ip, User, To, ITypeId, 
 						[F#file{data=undefined, dataref=undefined, text=undefined}||F <- Files], Misc};
@@ -1012,8 +1012,9 @@ get_month_str(10) -> "Oct";
 get_month_str(11) -> "Nov";
 get_month_str(12) -> "Dec".
 
-formatted_cur_date(true) ->
-	{{Year, Month, Day}, {Hours, Minutes, Seconds}} = calendar:universal_time(),
+formatted_cur_date() -> formatted_cur_date(calendar:universal_time()).
+
+formatted_cur_date({{Year, Month, Day}, {Hours, Minutes, Seconds}}) ->
 	MonthS = get_month_str(Month),
 	io_lib:format("~s ~2..0B ~4..0B ~2..0B:~2..0B:~2..0B",[MonthS, Day, Year, Hours, Minutes, Seconds]).
 
@@ -1087,11 +1088,11 @@ acl_misc(<<>>) -> {[], []};
 acl_misc(undefined) -> {[], []};
 acl_misc(Misc) -> {[" cs6=~ts"], [escape_es(Misc)]}.
 
-acl_msg_logger(Channel, RuleId, Action, SrcIp, SrcUser, To, ITypeId, Files, Misc) ->
+acl_msg_logger(Time, Channel, RuleId, Action, SrcIp, SrcUser, To, ITypeId, Files, Misc) ->
 	FormatHead=["CEF:0|Medra Inc.|MyDLP|1.0|~B|~ts|~B|rt=~s cs1=~B cs2=~B proto=~s"],
 	GeneratedMessage = "Check MyDLP Logs for details.",
 	Severity = 10,
-	RTime = formatted_cur_date(),
+	RTime = formatted_cur_date(Time),
 	ChannelS = str_channel(Channel),
 	ArgsHead = [RuleId, GeneratedMessage, Severity, RTime, RuleId, ITypeId, ChannelS],
 
