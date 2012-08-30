@@ -152,24 +152,29 @@ process_payload(LogId, Payload) ->
 	mydlp_quarantine:s(payload, LogId, Data),
 	ok.
 
-process_log_files(LogId, false = IsLogData, [File|Files]) ->
+get_meta(#file{} = File) ->
+	Size = File#file.size,
+	Hash = File#file.md5_hash,
+	MimeType = File#file.mime_type,
 	Filename = mydlp_api:file_to_str(File),
-	mydlp_api:clean_files(File),
-	mydlp_mysql:insert_log_file(LogId, Filename),
+	{Filename, MimeType, Size, Hash}.
+
+process_log_files(LogId, false = IsLogData, [File|Files]) ->
+	File1 = mydlp_api:load_files(File),
+	{Filename, MimeType, Size, Hash} = get_meta(File1),
+	mydlp_api:clean_files(File1),
+
+	mydlp_mysql:insert_log_blueprint(LogId, Filename, MimeType, Size, Hash),
+
 	process_log_files(LogId, IsLogData, Files);
 process_log_files(LogId, true = IsLogData, [File|Files]) ->
 	File1 = mydlp_api:load_files(File),
-
-	Size = mydlp_api:binary_size(File1#file.data),
-	MimeType = case File1#file.mime_type of
-		undefined -> mydlp_tc:get_mime(File1#file.filename, File1#file.data);
-		Else -> Else end,
-	Filename = mydlp_api:file_to_str(File1),
+	{Filename, MimeType, Size, Hash} = get_meta(File1),
 	{ok, Path} = mydlp_api:quarantine(File1),
-
 	mydlp_api:clean_files(File1),
 
-	mydlp_mysql:insert_log_file(LogId, Filename, MimeType, Size, Path),
+	mydlp_mysql:insert_log_data(LogId, Filename, MimeType, Size, Hash, Path),
+
 	process_log_files(LogId, IsLogData, Files);
 process_log_files(_LogId, _IsLogData, []) -> ok.
 

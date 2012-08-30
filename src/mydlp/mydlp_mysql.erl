@@ -42,8 +42,8 @@
 	requeued/1,
 	is_multisite/0,
 	get_denied_page/0,
-	insert_log_file/5,
-	insert_log_file/2,
+	insert_log_blueprint/5,
+	insert_log_data/6,
 	insert_log_requeue/1,
 	delete_log_requeue/1,
 	repopulate_mnesia/0,
@@ -82,11 +82,11 @@ insert_log_requeue(LogId) ->
 delete_log_requeue(LogId) -> 
 	gen_server:cast(?MODULE, {delete_log_requeue, LogId}).
 
-insert_log_file(LogId, Filename) -> 
-	gen_server:cast(?MODULE, {insert_log_file, LogId, Filename}).
+insert_log_blueprint(LogId, Filename, MimeType, Size, Hash) -> 
+	gen_server:cast(?MODULE, {insert_log_blueprint, LogId, Filename, MimeType, Size, Hash}).
 
-insert_log_file(LogId, Filename, MimeType, Size, Path) -> 
-	gen_server:cast(?MODULE, {insert_log_file, LogId, Filename, MimeType, Size, Path}).
+insert_log_data(LogId, Filename, MimeType, Size, Hash, Path) -> 
+	gen_server:cast(?MODULE, {insert_log_data, LogId, Filename, MimeType, Size, Hash, Path}).
 
 save_fingerprints(DocumentId, FingerprintList) -> 
 	gen_server:call(?MODULE, {save_fingerprints, DocumentId, FingerprintList}).
@@ -164,12 +164,6 @@ handle_call(stop, _From,  State) ->
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-handle_cast({insert_log_file, LogId, Filename}, State) ->
-	?ASYNC(fun() ->
-		lpsq(insert_incident_file, [LogId, Filename, null], 30000)
-	end, 30000),
-	{noreply, State};
-
 handle_cast({insert_log_requeue, LogId}, State) ->
 	?ASYNC(fun() ->
 		lpsq(insert_incident_requeue, [LogId], 30000)
@@ -182,19 +176,35 @@ handle_cast({delete_log_requeue, LogId}, State) ->
 	end, 30000),
 	{noreply, State};
 
-handle_cast({insert_log_file, LogId, Filename, MimeType, Size, Path}, State) ->
+handle_cast({insert_log_data, LogId, Filename, MimeType, Size, Hash, Path}, State) ->
 	% Probably will create problems in multisite use.
 	?ASYNC(fun() ->
 		{atomic, DataId} = ltransaction(fun() ->
-			mysql:fetch(pl, <<"LOCK TABLE log_archive_data WRITE">>),
-			Query =  psqt(incident_data_by_path, [Path]),
-			DId = case Query of
-				{ok, [] } ->	psqt(insert_incident_data, [MimeType, Size, Path]),
+			Query = case Hash of
+				undefined -> {ok, [] };
+				_Else -> psqt(incident_data_by_hash, [Hash]) end,
+			case Query of
+				{ok, [] } ->	psqt(insert_incident_data, [MimeType, Size, Hash, Path]),
 						last_insert_id_t();
-				{ok, [[Id]|_]} -> Id end,
-			mysql:fetch(pl, <<"UNLOCK TABLES">>), DId
+				{ok, [[Id]|_]} -> Id end
 			end, 60000),
-		lpsq(insert_incident_file, [LogId, Filename, DataId], 30000)
+		lpsq(insert_incident_file_data, [LogId, Filename, DataId], 30000)
+	end, 100000),
+	{noreply, State};
+
+handle_cast({insert_log_blueprint, LogId, Filename, MimeType, Size, Hash}, State) ->
+	% Probably will create problems in multisite use.
+	?ASYNC(fun() ->
+		{atomic, BlueprintId} = ltransaction(fun() ->
+			Query = case Hash of
+				undefined -> {ok, [] };
+				_Else -> psqt(incident_blueprint_by_hash, [Hash]) end,
+			case Query of
+				{ok, [] } ->	psqt(insert_incident_blueprint, [MimeType, Size, Hash]),
+						last_insert_id_t();
+				{ok, [[Id]|_]} -> Id end
+			end, 60000),
+		lpsq(insert_incident_file_bp, [LogId, Filename, BlueprintId], 30000)
 	end, 100000),
 	{noreply, State};
 
@@ -312,12 +322,15 @@ init([]) ->
 		{insert_fingerprint, <<"INSERT INTO DocumentFingerprint (id, fingerprint, document_id) VALUES (NULL, ?, ?)">>},
 		%{customer_by_id, <<"SELECT id,static_ip FROM sh_customer WHERE id=?">>},
 		{insert_incident, <<"INSERT INTO IncidentLog (id, date, channel, ruleId, sourceIp, sourceUser, destination, informationTypeId, action, matcherMessage, visible) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)">>},
-		{insert_incident_file, <<"INSERT INTO IncidentLogFile (id, incidentLog_id, filename, content_id) VALUES (NULL, ?, ?, ?)">>},
+		{insert_incident_file_data, <<"INSERT INTO IncidentLogFile (id, incidentLog_id, filename, content_id) VALUES (NULL, ?, ?, ?)">>},
+		{insert_incident_file_bp, <<"INSERT INTO IncidentLogFile (id, incidentLog_id, filename, blueprint_id) VALUES (NULL, ?, ?, ?)">>},
 %		{insert_archive, <<"INSERT INTO log_archive (id, customer_id, rule_id, protocol, src_ip, src_user, destination, log_archive_file_id) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)">>},
 %		{new_archive_file_entry, <<"INSERT INTO log_archive_file (id) VALUES (NULL)">>},
 %		{update_archive_file, <<"UPDATE log_archive_file SET filename=?, log_archive_data_id=? WHERE id = ?">>},
-		{incident_data_by_path, <<"SELECT id FROM IncidentLogFileContent WHERE localPath = ?">>},
-		{insert_incident_data, <<"INSERT INTO IncidentLogFileContent (id, mimeType, size, localPath) VALUES (NULL, ?, ?, ?)">>},
+		{incident_data_by_hash, <<"SELECT id FROM IncidentLogFileContent WHERE md5Hash = ?">>},
+		{incident_blueprint_by_hash, <<"SELECT id FROM IncidentLogFileBlueprint WHERE md5Hash = ?">>},
+		{insert_incident_data, <<"INSERT INTO IncidentLogFileContent (id, mimeType, size, md5hash, localPath) VALUES (NULL, ?, ?, ?, ?)">>},
+		{insert_incident_blueprint, <<"INSERT INTO IncidentLogFileBlueprint (id, mimeType, size, md5hash) VALUES (NULL, ?, ?, ?)">>},
 		{insert_incident_requeue, <<"INSERT INTO IncidentLogRequeueStatus (id, incidentLog_id, isRequeued) VALUES (NULL, ?, false)">>},
 		{delete_incident_requeue, <<"DELETE FROM IncidentLogRequeueStatus WHERE incidentLog_id=?">>},
 		{update_requeue_status, <<"UPDATE IncidentLogRequeueStatus SET isRequeued=TRUE, date=now() WHERE incidentLog_id=?">>},
