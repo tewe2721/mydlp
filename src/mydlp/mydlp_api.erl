@@ -1088,32 +1088,55 @@ acl_misc(<<>>) -> {[], []};
 acl_misc(undefined) -> {[], []};
 acl_misc(Misc) -> {[" cs6=~ts"], [escape_es(Misc)]}.
 
+-ifdef(__MYDLP_NETWORK).
+
 get_message(_Channel, pass) -> "No action taken.";
 get_message(web, block) -> "Transfer of sensitive information to web has been blocked.";
 get_message(mail, block) -> "Transfer of e-mail has been blocked because of containing sensitive information.";
-get_message(endpoint, block) -> "Transfer of file to a removable storage device has been blocked because of containing sensitive information.";
-get_message(discovery, block) -> "A file containing sensitive information has been discovered and deleted from workstation file system.";
-get_message(printer, block) -> "Prevented printing of document containing sensitive information.";
+get_message(endpoint, block) -> "Transfer of file to a removable storage device on endpoint has been blocked because of containing sensitive information.";
+get_message(discovery, block) -> "A file containing sensitive information on endpoint has been discovered and deleted from endpoint file system.";
+get_message(printer, block) -> "Prevented printing of document containing sensitive information on endpoint.";
 get_message(api, block) -> "Specified file should be blocked in response to API query.";
 get_message(web, log) -> "Transfer of sensitive information to web has been logged.";
 get_message(mail, log) -> "Transfer of e-mail containing sensitive information has been logged.";
-get_message(endpoint, log) -> "Transfer of file containing sensitive information to a removable storage device has been logged.";
-get_message(discovery, log) -> "A file containing sensitive information has been discovered and logged.";
-get_message(printer, log) -> "Printing of document containing sensitive information has been logged.";
+get_message(endpoint, log) -> "Transfer of file containing sensitive information to a removable storage device on endpoint has been logged.";
+get_message(discovery, log) -> "A file containing sensitive information on endpoint has been discovered and logged.";
+get_message(printer, log) -> "Printing of document containing sensitive information on endpoint has been logged.";
 get_message(api, log) -> "Specified file should not be blocked in response to API query and logged query.";
-get_message(web, quarantined) -> "Transfer of sensitive information to web has been blocked and a copy of file has been quarantined in central data store.";
-get_message(mail, quarantine) -> "Because of containing sensitive information, transfer of e-mail has been blocked and a copy of file has been quarantined in central data store.";
-get_message(endpoint, quarantine) -> "Because of containing sensitive information, transfer of file to a removable storage device has been blocked and a copy has been sent to central data store to be quaratined.";
-get_message(discovery, quarantine) -> "A file containing sensitive information has been discovered, deleted from workstation file system and a copy has been sent to central data store to be quaratined.";
-get_message(printer, quarantine) -> "Prevented printing of document containing sensitive information and a copy has been sent to central data store to be quaratined.";
+get_message(web, quarantined) -> "Transfer of sensitive information to web has been blocked and a copy of file has been quarantined at central data store.";
+get_message(mail, quarantine) -> "Because of containing sensitive information, transfer of e-mail has been blocked and a copy of file has been quarantined at central data store.";
+get_message(endpoint, quarantine) -> "Because of containing sensitive information, transfer of file to a removable storage device on endpoint has been blocked and a copy has been quarantined at central data store.";
+get_message(discovery, quarantine) -> "A file containing sensitive information on endpoint has been discovered, deleted from endpoint file system and a copy has been quarantined at central data store.";
+get_message(printer, quarantine) -> "Prevented printing of document containing sensitive information on endpoint and a copy has been quarantined at central data store.";
 get_message(api, quarantine) -> "Specified file should be blocked in response to API query and a copy of file has been quarantined in central data store.";
 get_message(web, archive) -> "Transfer of sensitive information to web has been logged and a copy of file has been archived in central data store.";
 get_message(mail, archive) -> "Transfer of e-mail containing sensitive information has been logged and a copy of file has been archived in central data store.";
+get_message(endpoint, archive) -> "Transfer of file containing sensitive information to a removable storage devicea on endpoint has been logged and a copy has been archived in central data store.";
+get_message(discovery, archive) -> "A file containing sensitive information on endpoint has been discovered, logged and a copy has been archived in central data store.";
+get_message(printer, archive) -> "Printing of document containing sensitive information on endpoint has been logged and a copy has been archived in data store.";
+get_message(api, archive) -> "Specified file should not be blocked in response to API query, logged query and a copy of file has been archived in central data store.";
+get_message(_, _) -> "Check MyDLP Logs using management console for details.".
+
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
+get_message(_Channel, pass) -> "No action taken.";
+get_message(endpoint, block) -> "Transfer of file to a removable storage device has been blocked because of containing sensitive information.";
+get_message(discovery, block) -> "A file containing sensitive information has been discovered and deleted from file system.";
+get_message(printer, block) -> "Prevented printing of document containing sensitive information.";
+get_message(endpoint, log) -> "Transfer of file containing sensitive information to a removable storage device has been logged.";
+get_message(discovery, log) -> "A file containing sensitive information has been discovered and logged.";
+get_message(printer, log) -> "Printing of document containing sensitive information has been logged.";
+get_message(endpoint, quarantine) -> "Because of containing sensitive information, transfer of file to a removable storage device has been blocked and a copy has been sent to central data store to be quaratined.";
+get_message(discovery, quarantine) -> "A file containing sensitive information has been discovered, deleted from file system and a copy has been sent to central data store to be quaratined.";
+get_message(printer, quarantine) -> "Prevented printing of document containing sensitive information and a copy has been sent to central data store to be quaratined.";
 get_message(endpoint, archive) -> "Transfer of file containing sensitive information to a removable storage device has been logged and a copy has been sent to central data store to be archived.";
 get_message(discovery, archive) -> "A file containing sensitive information has been discovered, logged and a copy has been sent to central data store to be archived.";
 get_message(printer, archive) -> "Printing of document containing sensitive information has been logged and a copy has been sent to central data store to be archived.";
-get_message(api, archive) -> "Specified file should not be blocked in response to API query, logged query and a copy of file has been archived in central data store.";
 get_message(_, _) -> "Check MyDLP Logs using management console for details.".
+
+-endif.
 
 acl_msg_logger(Time, Channel, RuleId, Action, SrcIp, SrcUser, To, ITypeId, Files, Misc) ->
 	FormatHead=["CEF:0|Medra Inc.|MyDLP|1.0|~B|~ts|~B|rt=~s cs1=~B cs2=~B proto=~s"],
