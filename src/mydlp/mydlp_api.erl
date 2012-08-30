@@ -999,22 +999,22 @@ acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files0, Misc, _Pay
 
 -endif.
 
+get_month_str(1) -> "Jan";
+get_month_str(2) -> "Feb";
+get_month_str(3) -> "Mar";
+get_month_str(4) -> "Apr";
+get_month_str(5) -> "May";
+get_month_str(6) -> "Jun";
+get_month_str(7) -> "Jul";
+get_month_str(8) -> "Aug";
+get_month_str(9) -> "Sep";
+get_month_str(10) -> "Oct";
+get_month_str(11) -> "Nov";
+get_month_str(12) -> "Dec".
 
-formatted_cur_date() ->
+formatted_cur_date(true) ->
 	{{Year, Month, Day}, {Hours, Minutes, Seconds}} = calendar:universal_time(),
-	MonthS = case Month of
-		1 -> "Jan";
-		2 -> "Feb";
-		3 -> "Mar";
-		4 -> "Apr";
-		5 -> "May";
-		6 -> "Jun";
-		7 -> "Jul";
-		8 -> "Aug";
-		9 -> "Sep";
-		10 -> "Oct";
-		11 -> "Nov";
-		12 -> "Dec" end,
+	MonthS = get_month_str(Month),
 	io_lib:format("~s ~2..0B ~4..0B ~2..0B:~2..0B:~2..0B",[MonthS, Day, Year, Hours, Minutes, Seconds]).
 
 escape_es(Str) -> escape_es(Str, []).
@@ -1024,9 +1024,13 @@ escape_es([C|Str], Rest) -> escape_es(Str, [C|Rest]);
 escape_es([], Rest) -> lists:reverse(Rest).
 
 acl_src(nil) -> {[], []};
+acl_src(undefined) -> {[], []};
+acl_src(unknown) -> {[], []};
 acl_src({Ip1,Ip2,Ip3,Ip4}) -> {[" src=~B.~B.~B.~B"], [Ip1,Ip2,Ip3,Ip4]}.
 
 acl_suser(nil) -> {[], []};
+acl_suser(unknown) -> {[], []};
+acl_suser(undefined) -> {[], []};
 acl_suser(User) -> {[" suser=~s"], [escape_es(User)]}.
 
 str_channel(web) -> "Web";

@@ -137,13 +137,14 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 %%%%%%%%%%%%%%% Internal
 
-write_time() ->
-	{{Y,Mo,D},{H,Mi,S}} = erlang:localtime(),
-	io_lib:format("~w-~.2.0w-~.2.0w ~.2.0w:~.2.0w:~.2.0w -> ", [Y, Mo, D, H, Mi, S]).
+formatted_syslog_date() ->
+	{{_Year, Month, Day}, {Hours, Minutes, Seconds}} = calendar:universal_time(),
+	MonthS = get_month_str(Month),
+	io_lib:format("~s ~2..0B ~2..0B:~2..0B:~2..0B",[MonthS, Day, Hours, Minutes, Seconds]).
 
 filelog(Fd, Message) ->
-	Time = write_time(),
-	M = list_to_binary([Time, Message]),
+	Time = mydlp_api:formatted_cur_date(),
+	M = list_to_binary([Time, " localhost ", Message]),
 	HeadLen = size(M) - 1,
 	M1 = case M of
 		<<_Head:HeadLen/binary, "\n" >> -> M;
