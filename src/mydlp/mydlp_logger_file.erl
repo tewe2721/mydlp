@@ -139,11 +139,11 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 formatted_syslog_date() ->
 	{{_Year, Month, Day}, {Hours, Minutes, Seconds}} = calendar:universal_time(),
-	MonthS = get_month_str(Month),
+	MonthS = mydlp_api:get_month_str(Month),
 	io_lib:format("~s ~2..0B ~2..0B:~2..0B:~2..0B",[MonthS, Day, Hours, Minutes, Seconds]).
 
 filelog(Fd, Message) ->
-	Time = mydlp_api:formatted_cur_date(),
+	Time = formatted_syslog_date(),
 	M = list_to_binary([Time, " localhost ", Message]),
 	HeadLen = size(M) - 1,
 	M1 = case M of
