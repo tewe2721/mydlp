@@ -1908,7 +1908,8 @@ heads_to_file([{'content-disposition', "inline"}|Rest], #file{filename=undefined
 heads_to_file([{'content-disposition', CD}|Rest], #file{filename=undefined} = File) ->
 	case cd_to_fn(CD) of
 		none -> heads_to_file(Rest, File);
-		FN -> heads_to_file(Rest, File#file{filename=FN})
+		FN -> 	FN1 = multipart_decode_fn(FN),
+			heads_to_file(Rest, File#file{filename=FN1})
 	end;
 heads_to_file([{'content-type', "text/html"}|Rest], #file{filename=undefined, name=undefined} = File) ->
 	case lists:keysearch('content-disposition',1,Rest) of
@@ -1934,7 +1935,8 @@ heads_to_file([{'content-type', CT}|Rest], #file{filename=undefined} = F) ->
 				"\"" ++ Str -> heads_to_file_int1(Str, "\"", CT);
 				Str -> Str
 			end,
-			heads_to_file(Rest, File#file{filename=FN})
+			FN1 = multipart_decode_fn(FN),
+			heads_to_file(Rest, File#file{filename=FN1})
 	end;
 heads_to_file([{'content-id', CI}|Rest], #file{filename=undefined, name=undefined} = File) ->
 	heads_to_file(Rest, File#file{name=CI});
@@ -1943,6 +1945,54 @@ heads_to_file([{subject, Subject}|Rest], #file{filename=undefined, name=undefine
 heads_to_file([_|Rest], File) ->
 	ignore,	heads_to_file(Rest, File);
 heads_to_file([], File) -> File.
+
+find_char_in_range(Str, Range, Char) -> find_char_in_range(Str, Range, Char, 0).
+
+find_char_in_range(_Str, Range, _Char, Range = _Acc) -> not_found;
+find_char_in_range([Char|_Rest], _Range, Char, Acc) -> Acc + 1;
+find_char_in_range([_C|Rest], Range, Char, Acc) -> find_char_in_range(Rest, Range, Char, Acc + 1);
+find_char_in_range([], Range, _Char, Range) -> not_found.
+
+multipart_decode_fn(Filename) -> multipart_decode_fn_xml(Filename, []).
+
+multipart_decode_fn_xml([$&, $#, $X|Filename], Acc) -> multipart_decode_fn_xml([$&, $#, $x|Filename], Acc);
+multipart_decode_fn_xml([$&, $#, $x|Filename], Acc) -> 
+	case find_char_in_range(Filename, 9, $;) of
+		not_found -> multipart_decode_fn_xml(Filename, [$x, $#, $&|Acc]);
+		1 -> multipart_decode_fn_xml(Filename, [$x, $#, $&|Acc]);
+		I when is_integer(I) -> 
+			HexStr = string:substr(Filename, 1, I - 1),
+			Char = hex2int(HexStr),
+			Rest = string:substr(Filename, I + 1),
+			multipart_decode_fn_xml(Rest, [Char|Acc]) end;
+
+multipart_decode_fn_xml([$&, $#|Filename], Acc) -> 
+	case find_char_in_range(Filename, 9, $;) of
+		not_found -> multipart_decode_fn_xml(Filename, [$#, $&|Acc]);
+		1 -> multipart_decode_fn_xml(Filename, [$#, $&|Acc]);
+		I when is_integer(I) -> 
+			IntStr = string:substr(Filename, 1, I - 1),
+			case lists:all(fun(C) -> (($0 =< C) and (C =< $9)) end, IntStr) of
+				false -> multipart_decode_fn_xml(Filename, [$#, $&|Acc]);
+				true -> Char = list_to_integer(IntStr),
+					Rest = string:substr(Filename, I + 1),
+					multipart_decode_fn_xml(Rest, [Char|Acc]) end end;
+
+multipart_decode_fn_xml([$&|Filename], Acc) -> 
+	case find_char_in_range(Filename, 9, $;) of
+		not_found -> multipart_decode_fn_xml(Filename, [$&|Acc]);
+		1 -> multipart_decode_fn_xml(Filename, [$&|Acc]);
+		I when is_integer(I) -> 
+			XmlStr = string:substr(Filename, 1, I - 1),
+			Rest = string:substr(Filename, I + 1),
+			case mydlp_pdm:xml_char(XmlStr) of
+				Char when is_integer(Char) -> multipart_decode_fn_xml(Rest, [Char|Acc]);
+				not_found -> case mydlp_pdm:xml_char(string:to_lower(XmlStr)) of
+					Char when is_integer(Char) -> multipart_decode_fn_xml(Rest, [Char|Acc]);
+					not_found -> multipart_decode_fn_xml(Filename, [$&|Acc]) end end end;
+
+multipart_decode_fn_xml([C|Filename], Acc) -> multipart_decode_fn_xml(Filename, [C|Acc]);
+multipart_decode_fn_xml([], Acc) -> lists:reverse(Acc).
 
 mime_to_files(Mime) -> mime_to_files([Mime], []).
 
