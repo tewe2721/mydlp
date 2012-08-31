@@ -2252,7 +2252,7 @@ generate_client_policy(IpAddr, UserH, RevisionId) ->
 
 -ifdef(__MYDLP_ENDPOINT).
 
-use_client_policy(<<>>) -> ?ERROR_LOG("USE_CLIENT_POLICY: Management server returned empry response."), ok;
+use_client_policy(<<>>) -> ?ERROR_LOG("USE_CLIENT_POLICY: Management server returned empry response.", []), ok;
 use_client_policy(<<"up-to-date">>) -> ok;
 use_client_policy(CDBBin) ->
 	try	CDBObj = erlang:binary_to_term(CDBBin), % TODO: binary_to_term/2 with safe option
