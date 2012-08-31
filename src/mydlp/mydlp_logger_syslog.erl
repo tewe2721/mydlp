@@ -170,9 +170,13 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 %%%%%%%%%%%%%%% Internal
 
 syslog({Fd, Host, Port}, Facility, Level, Message) ->
-	M = list_to_binary([Message]),
+	M = unicode:characters_to_binary([Message]),
 	P = list_to_binary(integer_to_list(Facility bor Level)),
-	gen_udp:send(Fd, Host, Port, <<"<", P/binary, ">", M/binary, "\n">>).
+	HeadLen1 = size(M) - 1,
+	M1 = case M of
+		<<Head:HeadLen1/binary, "\n" >> -> M;
+		_Else -> <<M/binary, "\n">> end,
+	gen_udp:send(Fd, Host, Port, <<"<", P/binary, ">", M1/binary>>).
 
 syslog_acl(#state{syslog_acl_fd=AclFd}, Message) ->
 	AclHost = ?CFG(syslog_acl_host),

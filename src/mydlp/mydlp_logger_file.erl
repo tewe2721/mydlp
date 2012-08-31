@@ -145,11 +145,14 @@ formatted_syslog_date() ->
 
 filelog(Fd, Message) ->
 	Time = formatted_syslog_date(),
-	M = list_to_binary([Time, " localhost ", Message]),
-	HeadLen = size(M) - 1,
+	M = unicode:characters_to_binary([Time, " localhost ", Message]),
+	HeadLen1 = size(M) - 1,
+	HeadLen2 = size(M) - 2,
 	M1 = case M of
-		<<_Head:HeadLen/binary, "\n" >> -> M;
-		_Else -> <<M/binary, "\n">> end,
+		<<_Head:HeadLen2/binary, "\r\n" >> -> M;
+		<<Head:HeadLen1/binary, "\n" >> -> <<Head/binary, "\r\n">>;
+		<<Head:HeadLen1/binary, "\r" >> -> <<Head/binary, "\r\n">>;
+		_Else -> <<M/binary, "\r\n">> end,
 	file:write(Fd, M1).
 
 filelog_acl(#state{acl_fd=AclFd}, Message) ->
