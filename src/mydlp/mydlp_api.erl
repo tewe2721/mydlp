@@ -1953,7 +1953,13 @@ find_char_in_range([Char|_Rest], _Range, Char, Acc) -> Acc + 1;
 find_char_in_range([_C|Rest], Range, Char, Acc) -> find_char_in_range(Rest, Range, Char, Acc + 1);
 find_char_in_range([], Range, _Char, Range) -> not_found.
 
-multipart_decode_fn(Filename) -> multipart_decode_fn_xml(Filename, []).
+multipart_decode_fn(Filename0) -> 
+	Filename = try case unicode:characters_to_list(list_to_binary(Filename0)) of
+		[] -> [];
+		[_|_] = L -> L;
+		_ -> Filename0 end
+	catch _Class:_Error -> Filename0 end,
+	multipart_decode_fn_xml(Filename, []).
 
 multipart_decode_fn_xml([$&, $#, $X|Filename], Acc) -> multipart_decode_fn_xml([$&, $#, $x|Filename], Acc);
 multipart_decode_fn_xml([$&, $#, $x|Filename], Acc) -> 
