@@ -174,7 +174,7 @@ syslog({Fd, Host, Port}, Facility, Level, Message) ->
 	P = list_to_binary(integer_to_list(Facility bor Level)),
 	HeadLen1 = size(M) - 1,
 	M1 = case M of
-		<<Head:HeadLen1/binary, "\n" >> -> M;
+		<<_Head:HeadLen1/binary, "\n" >> -> M;
 		_Else -> <<M/binary, "\n">> end,
 	gen_udp:send(Fd, Host, Port, <<"<", P/binary, ">", M1/binary>>).
 

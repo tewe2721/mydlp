@@ -176,9 +176,10 @@ handle_cast({delete_log_requeue, LogId}, State) ->
 	end, 30000),
 	{noreply, State};
 
-handle_cast({insert_log_data, LogId, Filename, MimeType, Size, Hash, Path}, State) ->
+handle_cast({insert_log_data, LogId, Filename0, MimeType, Size, Hash, Path}, State) ->
 	% Probably will create problems in multisite use.
 	?ASYNC(fun() ->
+		{Filename} = pre_insert_log(Filename0),
 		{atomic, DataId} = ltransaction(fun() ->
 			Query = case Hash of
 				undefined -> {ok, [] };
@@ -192,9 +193,10 @@ handle_cast({insert_log_data, LogId, Filename, MimeType, Size, Hash, Path}, Stat
 	end, 100000),
 	{noreply, State};
 
-handle_cast({insert_log_blueprint, LogId, Filename, MimeType, Size, Hash}, State) ->
+handle_cast({insert_log_blueprint, LogId, Filename0, MimeType, Size, Hash}, State) ->
 	% Probably will create problems in multisite use.
 	?ASYNC(fun() ->
+		{Filename} = pre_insert_log(Filename0),
 		{atomic, BlueprintId} = ltransaction(fun() ->
 			Query = case Hash of
 				undefined -> {ok, [] };
@@ -877,6 +879,13 @@ pre_push_log(RuleId, Ip, User, Destination, Action, Channel) ->
 		-1 -> 0;
 		_Else -> 1 end,
 	{0, RuleId, Ip1, User1, Destination1, ActionS, ChannelS, Visible}.
+
+pre_insert_log(Filename) ->
+	Filename1 = case Filename of
+		F when is_list(F) -> unicode:characters_to_binary(F);
+		F when is_binary(F) -> F end,
+
+	{Filename1}.
 
 -endif.
 
