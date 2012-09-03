@@ -139,7 +139,7 @@ case "$1" in
 	if [ -n "$2" ]; then
 		# update
 		patch_mysql_schema $2
-		if $DPKGBIN --compare-versions "0.9.139-1" lt "$2"; then
+		if $DPKGBIN --compare-versions "0.9.140-1" lt "$2"; then
 			restart_rsyslog
 		fi
 	else
