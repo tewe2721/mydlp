@@ -120,7 +120,7 @@ handle_event({EventLevel, _, {_FromPid, Fmt, Data}}, State) ->
 			warning_msg -> syslog_syswarn(State, Message);
 			info_msg -> syslog_debug(State, Message);
 			acl_msg -> syslog_acl(State, Message);
-			smtp -> syslog_smtp(State, Message);
+			smtp_msg -> syslog_smtp(State, Message);
 			_Else -> ok
 		end
 	catch Class:Error ->
