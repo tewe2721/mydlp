@@ -121,7 +121,7 @@ handle_event({EventLevel, _, {_FromPid, Fmt, Data}}, State) ->
 			info_msg -> syslog_debug(State, Message);
 			acl_msg -> syslog_acl(State, Message);
 			smtp_msg -> syslog_smtp(State, Message);
-			_Else -> ok
+			Else -> syslog_err(State, io_lib:format("Unexpected event level: ~w ~nMessage: ~s~n", [Else, Message]))
 		end
 	catch Class:Error ->
                         ?ERROR_LOG("Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
