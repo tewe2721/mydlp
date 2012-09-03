@@ -210,7 +210,6 @@ to_lowerchar(C) ->
 get_text(#file{is_encrypted=true}) -> {error, encrypted};
 get_text(#file{compressed_copy=true}) -> {error, compression};
 get_text(#file{mime_type= <<"application/x-empty">>}) -> {ok, <<>>};
-get_text(#file{mime_type= <<"text/plain">>, data=Data}) -> {ok, Data};
 get_text(#file{mime_type=undefined}) -> {error, unknown_type};
 get_text(#file{mime_type=MimeType, filename=Filename, data=Data}) -> 
 	case mime_category(MimeType) of
