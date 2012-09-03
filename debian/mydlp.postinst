@@ -28,6 +28,8 @@ CHOWN=/bin/chown
 QUARANTINE_DIR=/var/lib/mydlp/quarantine/
 REVISION_DIR=/var/lib/mydlp/revision/
 
+LOG_DIR=/var/log/mydlp/
+
 LSBIN=/bin/ls
 MYSQLC=/usr/bin/mysql
 SCHEMADIFFDIR=/usr/share/mydlp/schema/diffs/
@@ -99,7 +101,13 @@ configure_solr() {
 }
 
 restart_rsyslog() {
-	/etc/init.d/rsyslog restart > /dev/null
+	for f in $(/bin/ls $LOG_DIR)
+	do
+		local LOGFILE="$LOG_DIR""$f"
+		echo "Correcting ownership of log file ($f) ..."
+		$CHOWN -f syslog.adm $LOGFILE|| true
+	done
+	/etc/init.d/rsyslog restart 2>&1 > /dev/null
 }
 
 fix_jetty_init_grep_typo() {
