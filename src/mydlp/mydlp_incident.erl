@@ -129,6 +129,8 @@ process_log_tuple({Time, web = Channel, RuleId, archive = Action, Ip, User, To, 
 		?BB_S(F#file.dataref) > ?CFG(archive_minimum_size)
 		end, Files),
 	process_log_tuple1({Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files1, Misc, Payload});
+process_log_tuple({Time, mail = Channel, RuleId, Action, Ip, User, {_RcptTo, CompleteRcpts}, ITypeId, Files, Misc, Payload}) ->
+	process_log_tuple1({Time, Channel, RuleId, Action, Ip, User, CompleteRcpts, ITypeId, Files, Misc, Payload});
 process_log_tuple({Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc, Payload}) ->
 	process_log_tuple1({Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc, Payload}).
 
