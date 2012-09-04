@@ -1958,7 +1958,86 @@ multipart_decode_fn(Filename0) ->
 		[_|_] = L -> L;
 		_ -> Filename0 end
 	catch _Class:_Error -> Filename0 end,
-	multipart_decode_fn_xml(Filename, []).
+
+	case Filename of
+		"=?" ++ _Rest -> multipart_decode_fn_rfc2047(Filename);
+		_Else -> multipart_decode_fn_xml(Filename) end.
+
+multipart_decode_fn_rfc2047("=?" ++ Rest) -> 
+	case string:chr(Rest, $?) of
+		0 -> multipart_decode_fn(Rest);
+		I -> 	Charset = string:substr(Rest, 1, I - 1),
+			case string:substr(Rest, I) of
+				[$?, Encoding, $? | Rest2 ] -> 
+					case string:chr(Rest2, $?) of
+						0 -> multipart_decode_fn(Rest);
+						I2 -> 	Data = string:substr(Rest2, 1, I2 - 1),
+							case string:substr(Rest2, I2) of
+								[$?, $=] -> multipart_decode_fn_rfc2047(Charset, Encoding, Data);
+								_Else -> multipart_decode_fn(Rest) end end;
+				_Else -> multipart_decode_fn(Rest) end end.
+
+multipart_decode_fn_rfc2047(Charset, Encoding, Data) ->
+	multipart_decode_fn_rfc2047_1(string:to_lower(Charset), string:to_lower(Encoding), Data).
+	
+multipart_decode_fn_rfc2047_1("unicode", Encoding, Data) -> multipart_decode_fn_rfc2047_2(unicode, Encoding, Data);
+multipart_decode_fn_rfc2047_1("utf-8", Encoding, Data) -> multipart_decode_fn_rfc2047_2(unicode, Encoding, Data);
+multipart_decode_fn_rfc2047_1("utf-16", Encoding, Data) -> multipart_decode_fn_rfc2047_2(utf16, Encoding, Data);
+multipart_decode_fn_rfc2047_1("utf-32", Encoding, Data) -> multipart_decode_fn_rfc2047_2(utf32, Encoding, Data);
+multipart_decode_fn_rfc2047_1("latin1", Encoding, Data) -> multipart_decode_fn_rfc2047_2(latin1, Encoding, Data);
+multipart_decode_fn_rfc2047_1("iso-8859-1", Encoding, Data) -> multipart_decode_fn_rfc2047_2(latin1, Encoding, Data);
+multipart_decode_fn_rfc2047_1("windows-1252", Encoding, Data) -> multipart_decode_fn_rfc2047_2(latin1, Encoding, Data);
+multipart_decode_fn_rfc2047_1("cp-1252", Encoding, Data) -> multipart_decode_fn_rfc2047_2(latin1, Encoding, Data);
+multipart_decode_fn_rfc2047_1(_Else , Encoding, Data) -> multipart_decode_fn_rfc2047_2(unicode, Encoding, Data).
+
+multipart_decode_fn_rfc2047_2(Charset, $Q, Data) -> multipart_decode_fn_rfc2047_3(Charset, quoted_printable, Data);
+multipart_decode_fn_rfc2047_2(Charset, $q, Data) -> multipart_decode_fn_rfc2047_3(Charset, quoted_printable, Data);
+multipart_decode_fn_rfc2047_2(Charset, $B, Data) -> multipart_decode_fn_rfc2047_3(Charset, base64, Data);
+multipart_decode_fn_rfc2047_2(Charset, $b, Data) -> multipart_decode_fn_rfc2047_3(Charset, base64, Data);
+multipart_decode_fn_rfc2047_2(Charset, _Else , Data) -> multipart_decode_fn_rfc2047_3(Charset, quoted_printable, Data).
+
+multipart_decode_fn_rfc2047_3(Charset, base64, Base64Str) ->
+	DataBin = try base64:decode(Base64Str)
+	catch 	Class:Error ->
+		?ERROR_LOG("Error occured when base64 decoding: "
+			"Class: ["?S"]. Error: ["?S"].~n"
+			"Stacktrace: "?S"~n"
+			"Base64Str: "?S"~n",
+			[Class, Error, erlang:get_stacktrace(), Base64Str]),
+		list_to_binary(Base64Str) end,
+	multipart_decode_fn_rfc2047_4(Charset, DataBin);
+multipart_decode_fn_rfc2047_3(Charset, quoted_printable, QPStr) ->
+	QPStr1 = multipart_decode_fn_rfc2047_3_1(QPStr),
+	DataBin = try quoted_to_raw(QPStr1)
+	catch 	Class:Error ->
+		?ERROR_LOG("Error occured when base64 decoding: "
+			"Class: ["?S"]. Error: ["?S"].~n"
+			"Stacktrace: "?S"~n"
+			"QPStr: "?S"~n",
+			[Class, Error, erlang:get_stacktrace(), QPStr]),
+		list_to_binary(QPStr) end,
+	multipart_decode_fn_rfc2047_4(Charset, DataBin).
+	
+multipart_decode_fn_rfc2047_4(Charset, DataBin) ->
+	try unicode:characters_to_list(DataBin, Charset)
+	catch 	Class:Error ->
+		?ERROR_LOG("Error occured when unicode decoding: "
+			"Class: ["?S"]. Error: ["?S"].~n"
+			"Stacktrace: "?S"~n"
+			"DataBin: "?S"~n",
+			[Class, Error, erlang:get_stacktrace(), DataBin]),
+		binary_to_list(DataBin) end.
+
+
+multipart_decode_fn_rfc2047_3_1(QPStr) -> multipart_decode_fn_rfc2047_3_1(QPStr, []).
+
+multipart_decode_fn_rfc2047_3_1([$_|Rest], Acc) -> multipart_decode_fn_rfc2047_3_1(Rest, [$0,$2,$=|Acc]);
+multipart_decode_fn_rfc2047_3_1([C|Rest], Acc) -> multipart_decode_fn_rfc2047_3_1(Rest, [C|Acc]);
+multipart_decode_fn_rfc2047_3_1([], Acc) -> lists:reverse(Acc).
+	
+
+
+multipart_decode_fn_xml(Filename) -> multipart_decode_fn_xml(Filename, []).
 
 multipart_decode_fn_xml([$&, $#, $X|Filename], Acc) -> multipart_decode_fn_xml([$&, $#, $x|Filename], Acc);
 multipart_decode_fn_xml([$&, $#, $x|Filename], Acc) -> 
