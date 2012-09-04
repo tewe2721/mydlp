@@ -145,7 +145,7 @@ formatted_syslog_date() ->
 
 filelog(Fd, Message) ->
 	Time = formatted_syslog_date(),
-	M = unicode:characters_to_binary([Time, " localhost ", Message]),
+	M = unicode:characters_to_binary([Time, " localhost mydlp ", Message]),
 	HeadLen1 = size(M) - 1,
 	HeadLen2 = size(M) - 2,
 	M1 = case M of

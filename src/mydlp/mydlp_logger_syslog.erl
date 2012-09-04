@@ -42,6 +42,7 @@
 ]).
 
 -record(state, {
+	beam_pid,
 	syslog_acl_fd,
 	syslog_diag_fd,
 	syslog_report_fd
@@ -54,10 +55,10 @@
 %%---------------------------------------------------------------------
 %% Socket definitions
 %%---------------------------------------------------------------------
-start_socket(Tag, RHost, RPort, Fac, Level) ->
+start_socket(BeamPid, Tag, RHost, RPort, Fac, Level) ->
 	case gen_udp:open(0) of
 		{ok, Fd} ->
-			syslog({Fd, RHost, RPort}, Fac, Level, "MyDLP " ++ Tag ++ " logger started"),
+			syslog(BeamPid, {Fd, RHost, RPort}, Fac, Level, "MyDLP " ++ Tag ++ " logger started"),
 			{ok, Fd};
 		{error, Reason} -> {error, Reason}
 	end.
@@ -78,10 +79,11 @@ init() ->
 	ReportHost = ?CFG(syslog_report_host),
 	ReportPort = ?CFG(syslog_report_port),
 	ReportFac = ?CFG(syslog_report_facility),
-	{ok, AclFd} = start_socket("ACL", AclHost, AclPort, AclFac, ?LOG_INFO),
-	{ok, DiagFd} = start_socket("Diagnostic", DiagHost, DiagPort, DiagFac, ?LOG_DEBUG),
-	{ok, ReportFd} = start_socket("Report", ReportHost, ReportPort, ReportFac, ?LOG_INFO),
-	{ok, #state{syslog_acl_fd=AclFd, syslog_diag_fd=DiagFd, syslog_report_fd=ReportFd}}.
+	BeamPid = list_to_binary(os:getpid()),
+	{ok, AclFd} = start_socket(BeamPid, "ACL", AclHost, AclPort, AclFac, ?LOG_INFO),
+	{ok, DiagFd} = start_socket(BeamPid, "Diagnostic", DiagHost, DiagPort, DiagFac, ?LOG_DEBUG),
+	{ok, ReportFd} = start_socket(BeamPid, "Report", ReportHost, ReportPort, ReportFac, ?LOG_INFO),
+	{ok, #state{beam_pid=BeamPid, syslog_acl_fd=AclFd, syslog_diag_fd=DiagFd, syslog_report_fd=ReportFd}}.
 
 %%----------------------------------------------------------------------
 %% Func: handle_event/2
@@ -169,32 +171,34 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 %%%%%%%%%%%%%%% Internal
 
-syslog({Fd, Host, Port}, Facility, Level, Message) ->
+syslog(BeamPid, {Fd, Host, Port}, Facility, Level, Message) ->
 	M = unicode:characters_to_binary([Message]),
 	P = list_to_binary(integer_to_list(Facility bor Level)),
 	HeadLen1 = size(M) - 1,
+	HeadLen2 = HeadLen1 - 1,
 	M1 = case M of
-		<<_Head:HeadLen1/binary, "\n" >> -> M;
-		_Else -> <<M/binary, "\n">> end,
-	gen_udp:send(Fd, Host, Port, <<"<", P/binary, ">", M1/binary>>).
+		<<Head:HeadLen2/binary, "\r\n" >> -> Head;
+		<<Head:HeadLen1/binary, "\n" >> -> Head;
+		_Else -> M end,
+	gen_udp:send(Fd, Host, Port, <<"<", P/binary, ">", "mydlp[", BeamPid/binary, "]: ", M1/binary>>).
 
-syslog_acl(#state{syslog_acl_fd=AclFd}, Message) ->
+syslog_acl(#state{beam_pid=BeamPid, syslog_acl_fd=AclFd}, Message) ->
 	AclHost = ?CFG(syslog_acl_host),
 	AclPort = ?CFG(syslog_acl_port),
 	AclFac = ?CFG(syslog_acl_facility),
-	syslog({AclFd, AclHost, AclPort}, AclFac, ?LOG_INFO, Message).
+	syslog(BeamPid, {AclFd, AclHost, AclPort}, AclFac, ?LOG_INFO, Message).
 
-syslog_diag(#state{syslog_diag_fd=DiagFd}, Level, Message) ->
+syslog_diag(#state{beam_pid=BeamPid, syslog_diag_fd=DiagFd}, Level, Message) ->
 	DiagHost = ?CFG(syslog_diag_host),
 	DiagPort = ?CFG(syslog_diag_port),
 	DiagFac = ?CFG(syslog_diag_facility),
-	syslog({DiagFd, DiagHost, DiagPort}, DiagFac, Level, Message).
+	syslog(BeamPid, {DiagFd, DiagHost, DiagPort}, DiagFac, Level, Message).
 
-syslog_report(#state{syslog_report_fd=ReportFd}, Level, Message) ->
+syslog_report(#state{beam_pid=BeamPid, syslog_report_fd=ReportFd}, Level, Message) ->
 	ReportHost = ?CFG(syslog_report_host),
 	ReportPort = ?CFG(syslog_report_port),
 	ReportFac = ?CFG(syslog_report_facility),
-	syslog({ReportFd, ReportHost, ReportPort}, ReportFac, Level, ["[MyDLP Report] " | [Message] ]).
+	syslog(BeamPid, {ReportFd, ReportHost, ReportPort}, ReportFac, Level, ["[MyDLP Report] " | [Message] ]).
 	
 syslog_err(State, Message) -> syslog_diag(State, ?LOG_ERROR, Message).
 
