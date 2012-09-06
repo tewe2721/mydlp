@@ -81,10 +81,11 @@ compile(Pages, _PageCount, _ProcessCount) ->
 	ok.
 
 compile1(Source) ->
-	Tempfile = mydlp_workdir:tempfile() ++ ".erl",
+	{ok, Tempfile0} = mydlp_workdir:tempfile(),
+	Tempfile = Tempfile0 ++ ".erl",
 	file:write_file(Tempfile, Source),
 	io:format("Written to file, compiling (~w)...~n", [erlang:localtime()]),
-	{ok, Mod, Code} = compile:file(Tempfile,[binary, compressed, verbose,report_errors,report_warnings] ),
+	{ok, Mod, Code} = compile:file(Tempfile ,[binary, compressed, verbose,report_errors,report_warnings] ),
 	io:format("Compiled source, now loading (~w)...~n", [erlang:localtime()]),
 	code:load_binary(Mod, "mc_dynamic.erl", Code),
 	io:format("Dynamic module compiled and loaded, ByteCodeSize: ~w (~w)...~n", [size(Code),erlang:localtime()]),
@@ -258,7 +259,7 @@ p(Term) -> lists:flatten(io_lib:format("~w", [Term])).
 -author('kerem@mydlp.com').
 
 -export([mc_search/1]).
-mc_search(Data) when is_binary(Data) -> mc_fsm(undefined, root, Data, 1, []).
+mc_search(Data) when is_binary(Data) -> mc_fsm(1, root, Data, 1, []).
 mc_fsm(_, _, <<>>, _I, A) -> lists:reverse(A);
 ").
 
