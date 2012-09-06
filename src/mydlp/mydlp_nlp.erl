@@ -34,6 +34,7 @@
 -export([to_lower/1]).
 -export([xml_char/1]).
 -export([normalize/1]).
+-export([reverse/1]).
 
 
 normalize(Bin) -> normalize(Bin, <<>>, true).
@@ -43,9 +44,21 @@ normalize(Bin, Acc, HitSpace) ->
 	case get_uchar(Bin) of
 		{C,Rest} -> case {HitSpace, normal_bin(C)} of
 				{true, <<32>>} -> normalize(Rest, Acc, true);
+				{true, <<_J:2/binary, 32>>} -> normalize(Rest, Acc, true);
 				{false, <<32>>} -> normalize(Rest, <<Acc/binary, 32>>, true);
+				{false, <<_J:2/binary, 32>>} -> normalize(Rest, <<Acc/binary, 32>>, true);
 				{_Else, CBin} -> normalize(Rest, <<Acc/binary, CBin/binary>> , false) end;
 		none -> normalize(<<>>, Acc, HitSpace) end.
+
+reverse(NormalBin) -> reverse(NormalBin, <<>>).
+
+reverse(<<>>, Acc) -> Acc;
+reverse(Bin, Acc) ->
+	case get_uchar(Bin) of
+		{C,Rest} -> 
+			CBin = normal_bin(C),
+			reverse(Rest, <<CBin/binary, Acc/binary>>);
+		none -> reverse(<<>>, Acc) end.
 
 get_uchar(<<>>) -> none;
 get_uchar(Bin) ->
@@ -57,8 +70,8 @@ get_uchar(Bin) ->
 
 normal_bin(C) when C =< 31 -> <<32>>;
 normal_bin(32) -> <<32>>;
-%normal_bin(C) when C >= 33, C =< 47 -> <<32>>; % punctuation
-%normal_bin(C) when C >= 58, C =< 64 -> <<32>>; % punctuation
+normal_bin(C) when C >= 33, C =< 47 -> <<32, C, 32>>; % punctuation
+normal_bin(C) when C >= 58, C =< 64 -> <<32, C, 32>>; % punctuation
 normal_bin(C) when C >= 91, C =< 96 -> <<32>>;
 normal_bin(C) when C >= 91, C =< 96 -> <<32>>;
 normal_bin(C) when C >= 123, C =< 127 -> <<32>>;
