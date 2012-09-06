@@ -47,6 +47,7 @@ dist_erl_DATA = \
 	mydlp_mc.erl \
 	mydlp_mnesia.erl \
 	mydlp_mysql.erl \
+	mydlp_nlp.erl \
 	mydlp_pdm.erl \
 	mydlp_pg_sup.erl \
 	mydlp_quarantine.erl \

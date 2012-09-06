@@ -29,8 +29,6 @@
 -author("kerem@mydlp.com").
 -author("ozgen@mydlp.com").
 
--include("mydlp.hrl").
-
 %% API
 -export([
 	mc_search/1,
@@ -38,26 +36,59 @@
 	readlines/1
 ]).
 
+-define(PAGE_CHUNK_NOL, 8192).
+
 mc_search(Data) -> mydlp_mc_dyn:mc_search(Data).
 
 mc_generate(ListOfKeywordGroups) ->
+	io:format("Generation started (~w)...~n", [erlang:localtime()]),
 	reset_tables(),
 
 	mc_gen_ss(ListOfKeywordGroups),
+	io:format("States and transitions have been generated (~w)...~n", [erlang:localtime()]),
 	mc_gen_ff(),
-	io:format("States: ~w~n", [ets:match(mc_states, '$1')]),
-	io:format("Success: ~w~n", [ets:match(mc_success, '$1')]),
-	io:format("Failure: ~w~n", [ets:match(mc_failure, '$1')]),
-	Src = mc_gen_source(),
-	io:format("Source: ~n~s", [Src]),
+	io:format("Failure transitions have been generated (~w)...~n", [erlang:localtime()]),
+	{DynSource, PageSources} = mc_gen_source(),
 	try
-		{Mod,Code} = dynamic_compile:from_string(Src),
-		code:load_binary(Mod, "mc_dynamic.erl", Code),
-		io:format("ByteCodeSize: ~w~n", [size(Code)])
+		io:format("Generating dyn module (~w)...~n", [erlang:localtime()]),
+		compile(DynSource),
+		compile(PageSources),
+		ok
 	catch
 		Type:Error -> throw({dyn_compile, {Type, Error}})
 	end,
 	reset_tables(),
+	io:format("Generation finished (~w)...~n", [erlang:localtime()]),
+	ok.
+
+compile(Page) when is_binary(Page) -> compile1(Page);
+compile(Pages) when is_list(Pages) ->
+	PCount = case erlang:system_info(logical_processors_available) of
+		I when I > 16 -> I - 8;
+		I when I > 8 -> I - 4;
+		I when I > 4 -> I - 2;
+		I when I > 2 -> I - 1;
+		_Else -> 1 end,
+	compile(Pages, length(Pages), PCount).
+
+compile(Pages, PageCount, ProcessCount) when PageCount > ProcessCount ->
+	Chunk = lists:sublist(Pages, 1, ProcessCount),
+	Rest = lists:sublist(Pages, ProcessCount + 1),
+	mydlp_api:pall(fun(P) -> compile(P) end, Chunk, 600000),
+	compile(Rest, PageCount - ProcessCount, ProcessCount);
+compile(Pages, _PageCount, _ProcessCount) ->
+	mydlp_api:pall(fun(P) -> compile(P) end, Pages),
+	ok.
+
+compile1(Source) ->
+	Tempfile = mydlp_workdir:tempfile() ++ ".erl",
+	file:write_file(Tempfile, Source),
+	io:format("Written to file, compiling (~w)...~n", [erlang:localtime()]),
+	{ok, Mod, Code} = compile:file(Tempfile,[binary, compressed, verbose,report_errors,report_warnings] ),
+	io:format("Compiled source, now loading (~w)...~n", [erlang:localtime()]),
+	code:load_binary(Mod, "mc_dynamic.erl", Code),
+	io:format("Dynamic module compiled and loaded, ByteCodeSize: ~w (~w)...~n", [size(Code),erlang:localtime()]),
+	file:delete(Tempfile),
 	ok.
 
 reset_tables() ->
@@ -129,19 +160,23 @@ mc_gen_ss([{file, FilePath, MatcherConf} = _KeywordGroup|RestOfKeywordGroups]) -
 mc_gen_ss([{list, Keywords, MatcherConf} = _KeywordGroup|RestOfKeywordGroups]) -> 
 	StartState = start_state(),
 	new_state(StartState),
-	mc_gen_ss_ks(StartState, Keywords, MatcherConf),
+	mc_gen_ss_ks(StartState, Keywords, MatcherConf, false),
 	mc_gen_ss(RestOfKeywordGroups);
 mc_gen_ss([]) -> ok.
 	
 
-mc_gen_ss_ks(_State, [], _MatcherConf) -> ok;
-mc_gen_ss_ks(State, [<<>>|OtherKeywords], MatcherConf) ->
+mc_gen_ss_ks(_State, [], _MatcherConf, _IsNormalized) -> ok;
+mc_gen_ss_ks(State, [<<>>|OtherKeywords], MatcherConf, _IsNormalized) ->
 	set_accept(State, MatcherConf),
 	StartState = start_state(),
-	mc_gen_ss_ks(StartState, OtherKeywords, MatcherConf);
-mc_gen_ss_ks(State, [<<Keyword/binary>>|OtherKeywords], MatcherConf) ->
+	mc_gen_ss_ks(StartState, OtherKeywords, MatcherConf, false);
+mc_gen_ss_ks(State, [Keyword|OtherKeywords], MatcherConf, false = _IsNormalized) ->
+	NormalizedKeyword = mydlp_nlp:normalize(Keyword),
+	io:format("SS Keyword: ~ts~n", [NormalizedKeyword]),
+	mc_gen_ss_ks(State, [NormalizedKeyword|OtherKeywords], MatcherConf, true);
+mc_gen_ss_ks(State, [Keyword|OtherKeywords], MatcherConf, true = IsNormalized) ->
 	case get_uchar(Keyword) of
-		none -> mc_gen_ss_ks(State, [<<>>|OtherKeywords], MatcherConf);
+		none -> mc_gen_ss_ks(State, [<<>>|OtherKeywords], MatcherConf, IsNormalized);
 		{Char, RestOfKeyword} ->
 			NS = case get_transition(State, Char) of
 				not_found -> 	NextState = next_state(State, Char),
@@ -149,7 +184,7 @@ mc_gen_ss_ks(State, [<<Keyword/binary>>|OtherKeywords], MatcherConf) ->
 						add_transition(State, Char, NextState),
 						NextState;
 				NextState -> 	NextState end,
-			mc_gen_ss_ks(NS, [<<RestOfKeyword/binary>>|OtherKeywords], MatcherConf) end.
+			mc_gen_ss_ks(NS, [<<RestOfKeyword/binary>>|OtherKeywords], MatcherConf, IsNormalized) end.
 	
 mc_gen_ff() ->
 	Q = queue:new(),
@@ -157,6 +192,9 @@ mc_gen_ff() ->
 	mc_gen_ff(Q1, undefined, []).
 
 mc_gen_ff(Q, _ExState, []) -> 
+	%case ExState of
+	%	root -> io:format("FF State: <<root>>~n", []);
+	%	S -> io:format("FF State: ~ts~n", [S]) end,
 	case queue:out(Q) of
 		{empty, _EmptyQ} -> ok;
 		{{value, State}, Q1 } ->
@@ -196,26 +234,68 @@ get_uchar(Bin) ->
 p(Term) when is_integer(Term) -> integer_to_list(Term);
 p(Term) -> lists:flatten(io_lib:format("~w", [Term])).
 
--define(SOURCE_HEAD, 
+-define(PAGE_MODNAME(PageNum), "mydlp_mc_dyn_p" ++ p(PageNum)).
+
+-define(PAGE_HEADER(PageNum), 
+"-module(" ++ ?PAGE_MODNAME(PageNum) ++").
+").
+
+-define(PAGE_HEAD, 
+"-author('ozgen@mydlp.com').
+-author('kerem@mydlp.com').
+
+-export([mc_fsm/4]).
+
+").
+
+-define(PAGE_TAIL, 
+"mc_fsm(S, D, I, A) -> {continue, S, D, I, A}.
+").
+
+-define(DYN_HEAD, 
 "-module(mydlp_mc_dyn).
 -author('ozgen@mydlp.com').
 -author('kerem@mydlp.com').
 
 -export([mc_search/1]).
-
-mc_search(Data) when is_binary(Data) -> mc_fsm(root, Data, 1, []).
-mc_fsm(_, <<>>, _I, A) -> lists:reverse(A);
+mc_search(Data) when is_binary(Data) -> mc_fsm(undefined, root, Data, 1, []).
+mc_fsm(_, _, <<>>, _I, A) -> lists:reverse(A);
 ").
 
--define(SOURCE_TAIL, 
-"mc_fsm(_, <<_C/utf8, R/binary>>, I, A) -> mc_fsm(root, R, I+1, A).
+-define(DYN_PAGEDEF(PageNum), 
+"mc_fsm(" ++ p(PageNum) ++ ", S, D, I, A) -> mc_fsm_handle(" ++ p(PageNum) ++ ", " ++ ?PAGE_MODNAME(PageNum) ++ ":mc_fsm(S, D, I, A));
 ").
+
+-define(DYN_TAIL, 
+"mc_fsm(_, _, <<_C/utf8, R/binary>>, I, A) -> mc_fsm(1, root, R, I+1, A).
+mc_fsm_handle(P, {continue, S, D, I, A}) -> mc_fsm(P+1, S, D, I, A).
+").
+
+mc_gen_pages(Lines) -> 
+	io:format("Total number of lines: ~w~n", [length(Lines)]),
+	mc_gen_pages(Lines, length(Lines), []).
+
+mc_gen_pages(Lines, NumberOfLines, Acc) when NumberOfLines > ?PAGE_CHUNK_NOL ->
+	Page = lists:sublist(Lines, 1, ?PAGE_CHUNK_NOL),
+	Rest = lists:sublist(Lines, ?PAGE_CHUNK_NOL + 1),
+	PageBin = list_to_binary(Page),
+	mc_gen_pages(Rest, NumberOfLines - ?PAGE_CHUNK_NOL, [PageBin|Acc]);
+mc_gen_pages(LastPage, _NumberOfLines, Acc) ->
+	PageBin = list_to_binary(LastPage),
+	[PageBin|Acc].
+
+mc_gen_dyn(Pages) ->
+	NumberOfPages = length(Pages),
+	DynSource = list_to_binary([?DYN_HEAD, [?DYN_PAGEDEF(N)||N <- lists:seq(1, NumberOfPages)], ?DYN_TAIL]),
+	PageSources = [list_to_binary([?PAGE_HEADER(N), ?PAGE_HEAD, lists:nth(N, Pages), ?PAGE_TAIL])||N <- lists:seq(1, NumberOfPages)],
+	{DynSource, PageSources}.
 
 mc_gen_source() ->
-	MCFSMSource = case ets:match(mc_states, '$1') of
+	MCFSMLines = case ets:match(mc_states, '$1') of
 		[] -> "";
 		States -> mc_gen_source(States, []) end,
-	lists:flatten([?SOURCE_HEAD, MCFSMSource, ?SOURCE_TAIL]).
+	Pages = mc_gen_pages(MCFSMLines),
+	mc_gen_dyn(Pages).
 
 mc_gen_source([], Acc) -> lists:flatten(Acc);
 mc_gen_source([[{State, Acceptance}]|Rest], Acc) -> 
@@ -233,23 +313,25 @@ mc_gen_source_s([], _State, _IsAccept, Acc) -> Acc;
 mc_gen_source_s([[Char, NextState]|Rest], State, false = _IsAccept, Acc) ->
 	SD = "mc_fsm(" ++ p(State) ++ ", <<" ++ p(Char) ++ "/utf8, R/binary>>, I, A) ->",
 	SB = "mc_fsm(" ++ p(NextState) ++ ", R, I+1, A);",
-	SLine = SD ++ SB ++ [10],
+	SLine = list_to_binary(SD ++ SB ++ [10]),
 	mc_gen_source_s(Rest, State, false = _IsAccept, [SLine|Acc]);
 mc_gen_source_s([[Char, NextState]|Rest], State, {ok, MC} = _IsAccept, Acc) ->
 	SD = "mc_fsm(" ++ p(State) ++ ", <<" ++ p(Char) ++ "/utf8, R/binary>>, I, A) ->",
-	SB = "mc_fsm(" ++ p(NextState) ++ ", R, I+1, [{I, " ++ p(MC) ++ "}|A]);",
-	SLine = SD ++ SB ++ [10],
+	SB = "mc_fsm(" ++ p(NextState) ++ ", R, I+1, [{I, " ++ p(State) ++ ", " ++ p(MC) ++ "}|A]);",
+	%SB = "mc_fsm(" ++ p(NextState) ++ ", R, I+1, [{I, " ++ p(MC) ++ "}|A]);",
+	SLine = list_to_binary(SD ++ SB ++ [10]),
 	mc_gen_source_s(Rest, State, {ok, MC} = _IsAccept, [SLine|Acc]).
 
 mc_gen_source_f(FailureState, State, false = _IsAccept, Acc) ->
 	FD = "mc_fsm(" ++ p(State) ++ ", D, I, A) ->",
 	FB = "mc_fsm(" ++ p(FailureState) ++ ", D, I, A);",
-	FLine = FD ++ FB ++ [10],
+	FLine = list_to_binary(FD ++ FB ++ [10]),
 	[FLine|Acc];
 mc_gen_source_f(FailureState, State, {ok, MC} = _IsAccept, Acc) ->
 	FD = "mc_fsm(" ++ p(State) ++ ", D, I, A) ->",
-	FB = "mc_fsm(" ++ p(FailureState) ++ ", D, I, [{I, " ++ p(MC) ++ "}|A]);",
-	FLine = FD ++ FB ++ [10],
+	FB = "mc_fsm(" ++ p(FailureState) ++ ", D, I, [{I, " ++ p(State) ++ ", " ++ p(MC) ++ "}|A]);",
+	%FB = "mc_fsm(" ++ p(FailureState) ++ ", D, I, [{I, " ++ p(MC) ++ "}|A]);",
+	FLine = list_to_binary(FD ++ FB ++ [10]),
 	[FLine|Acc].
 
 

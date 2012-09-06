@@ -1745,7 +1745,7 @@ normalize_fn([], Acc) -> lists:reverse(Acc).
 %%-------------------------------------------------------------------------
 
 hash_un(UN) when is_list(UN) ->
-	UN1 = mydlp_pdm:to_lower_str(UN),
+	UN1 = mydlp_nlp:to_lower_str(UN),
 	UN2 = normalize_fn(UN1),
 	erlang:phash2(UN2);
 hash_un(UN) when is_binary(UN) ->
@@ -2069,9 +2069,9 @@ multipart_decode_fn_xml([$&|Filename], Acc) ->
 		I when is_integer(I) -> 
 			XmlStr = string:substr(Filename, 1, I - 1),
 			Rest = string:substr(Filename, I + 1),
-			case mydlp_pdm:xml_char(XmlStr) of
+			case mydlp_nlp:xml_char(XmlStr) of
 				Char when is_integer(Char) -> multipart_decode_fn_xml(Rest, [Char|Acc]);
-				not_found -> case mydlp_pdm:xml_char(string:to_lower(XmlStr)) of
+				not_found -> case mydlp_nlp:xml_char(string:to_lower(XmlStr)) of
 					Char when is_integer(Char) -> multipart_decode_fn_xml(Rest, [Char|Acc]);
 					not_found -> multipart_decode_fn_xml(Filename, [$&|Acc]) end end end;
 
