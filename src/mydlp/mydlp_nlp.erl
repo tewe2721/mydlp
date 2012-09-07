@@ -34,31 +34,42 @@
 -export([to_lower/1]).
 -export([xml_char/1]).
 -export([normalize/1]).
+-export([normalize/2]).
 -export([reverse/1]).
+-export([reverse/2]).
 
 
-normalize(Bin) -> normalize(Bin, <<>>, true).
+normalize(Bin) -> normalize(Bin, true).
 
-normalize(<<>>, Acc, _HitSpace) -> <<Acc/binary>>;
-normalize(Bin, Acc, HitSpace) -> 
-	case get_uchar(Bin) of
-		{C,Rest} -> case {HitSpace, normal_bin(C)} of
-				{true, <<32>>} -> normalize(Rest, Acc, true);
-				{true, <<_J:2/binary, 32>>} -> normalize(Rest, Acc, true);
-				{false, <<32>>} -> normalize(Rest, <<Acc/binary, 32>>, true);
-				{false, <<_J:2/binary, 32>>} -> normalize(Rest, <<Acc/binary, 32>>, true);
-				{_Else, CBin} -> normalize(Rest, <<Acc/binary, CBin/binary>> , false) end;
-		none -> normalize(<<>>, Acc, HitSpace) end.
+normalize(Bin, IgnoreCase) -> normalize(Bin, IgnoreCase, <<>>, true).
 
-reverse(NormalBin) -> reverse(NormalBin, <<>>).
+normalize(<<>>, _IgnoreCase, Acc, _HitSpace) -> <<Acc/binary>>;
+normalize(Bin, IgnoreCase, Acc, HitSpace) -> 
+	case { get_uchar(Bin), IgnoreCase } of
+		{{C,Rest}, false} 
+				when C >= 65, C =< 90 -> 
+			normalize(Rest, IgnoreCase, <<Acc/binary, C>> , false);
+		{{C,Rest}, _} -> case {HitSpace, normal_bin(C)} of
+				{true, <<32>>} -> normalize(Rest, IgnoreCase, Acc, true);
+				{true, <<_J:2/binary, 32>>} -> normalize(Rest, IgnoreCase, Acc, true);
+				{false, <<32>>} -> normalize(Rest, IgnoreCase, <<Acc/binary, 32>>, true);
+				{false, <<_J:2/binary, 32>>} -> normalize(Rest, IgnoreCase, <<Acc/binary, 32>>, true);
+				{_Else, CBin} -> normalize(Rest, IgnoreCase, <<Acc/binary, CBin/binary>> , false) end;
+		{none, _} -> normalize(<<>>, IgnoreCase, Acc, HitSpace) end.
 
-reverse(<<>>, Acc) -> Acc;
-reverse(Bin, Acc) ->
-	case get_uchar(Bin) of
-		{C,Rest} -> 
+reverse(NormalBin) -> reverse(NormalBin, true).
+
+reverse(NormalBin, IgnoreCase) -> reverse(NormalBin, IgnoreCase, <<>>).
+
+reverse(<<>>, _IgnoreCase, Acc) -> Acc;
+reverse(Bin, IgnoreCase, Acc) ->
+	case { get_uchar(Bin), IgnoreCase } of
+		{{C,Rest}, false} when C >= 65, C =< 90 -> 
+			reverse(Rest, IgnoreCase, <<C, Acc/binary>>);
+		{{C,Rest}, _} -> 
 			CBin = normal_bin(C),
-			reverse(Rest, <<CBin/binary, Acc/binary>>);
-		none -> reverse(<<>>, Acc) end.
+			reverse(Rest, IgnoreCase, <<CBin/binary, Acc/binary>>);
+		{none, _} -> reverse(<<>>, IgnoreCase,  Acc) end.
 
 get_uchar(<<>>) -> none;
 get_uchar(Bin) ->
@@ -72,8 +83,7 @@ normal_bin(C) when C =< 31 -> <<32>>;
 normal_bin(32) -> <<32>>;
 normal_bin(C) when C >= 33, C =< 47 -> <<32, C, 32>>; % punctuation
 normal_bin(C) when C >= 58, C =< 64 -> <<32, C, 32>>; % punctuation
-normal_bin(C) when C >= 91, C =< 96 -> <<32>>;
-normal_bin(C) when C >= 91, C =< 96 -> <<32>>;
+normal_bin(C) when C >= 91, C =< 96 -> <<32, C, 32>>; % punctuation
 normal_bin(C) when C >= 123, C =< 127 -> <<32>>;
 normal_bin(C) when C >= 8192, C =< 8303 -> <<32>>; %% Unicode General Punctuation Block	U+2000	U+206F
 normal_bin(C) when C >= 11776, C =< 11903 -> <<32>>; %% Unicode Supplemental Punctuation	U+2E00	U+2E7F

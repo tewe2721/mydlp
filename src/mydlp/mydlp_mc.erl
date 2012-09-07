@@ -60,7 +60,7 @@ mc_generate(ListOfKeywordGroups) ->
 	ok.
 
 reset_tables() ->
-	reset_table(mc_states, set), %% {state, acceptance}
+	reset_table(mc_states, ordered_set), %% {state, acceptance}
 	reset_table(mc_success), %% {{state, char}, next_state}
 	reset_table(mc_suffix), %% {state, root_state, is_last}
 	reset_table(mc_suffix_root, bag), %% {root_state, state}
@@ -76,6 +76,13 @@ reset_table(TableName, Type) ->
 
 set_accept(State, MatcherConf) -> 
 	ets:insert(mc_states, {State, MatcherConf}).
+
+is_accept_rec(root) -> false;
+is_accept_rec(not_found) -> false;
+is_accept_rec(State) ->
+	case is_accept(State) of
+		{ok, MC} -> {ok, MC};
+		false -> is_accept_rec(get_failure(State)) end.
 
 is_accept(State) -> 
 	case ets:match(mc_states, {State, '$1'}) of
@@ -119,8 +126,8 @@ is_suffix_end(Suffix) ->
 
 get_failure(root) -> not_found;
 get_failure(State) -> 
-	F = get_failure1(mydlp_nlp:reverse(State)),
-%%	io:format("FF: ~ts -> ~ts ~n", [State, F]),
+	F = get_failure1(mydlp_nlp:reverse(State, false)),
+	io:format("FF: ~ts -> ~ts ~n", [State, F]),
 	F.
 
 get_failure1(ReversedState) ->
@@ -130,7 +137,7 @@ get_failure1(ReversedState) ->
 get_failure2(root) -> not_found;
 get_failure2(SuffixRoot) ->
 	case is_suffix_end(SuffixRoot) of
-		true -> mydlp_nlp:reverse(SuffixRoot);
+		true -> mydlp_nlp:reverse(SuffixRoot, false);
 		false -> get_failure1(SuffixRoot) end.
 
 add_transition(State, Char, NextState) -> ets:insert(mc_success, {{State, Char}, NextState}).
@@ -187,7 +194,8 @@ mc_gen_ss_ks(State, [<<>>|OtherKeywords], MatcherConf, _IsNormalized) ->
 	StartState = start_state(),
 	mc_gen_ss_ks(StartState, OtherKeywords, MatcherConf, false);
 mc_gen_ss_ks(State, [Keyword|OtherKeywords], MatcherConf, false = _IsNormalized) ->
-	NormalizedKeyword = mydlp_nlp:normalize(Keyword),
+	NormalizedKeyword = mydlp_nlp:normalize(Keyword,false),
+	NormalizedKeyword = Keyword,
 	mc_gen_ss_ks(State, [NormalizedKeyword|OtherKeywords], MatcherConf, true);
 mc_gen_ss_ks(State, [Keyword|OtherKeywords], MatcherConf, true = IsNormalized) ->
 	case get_uchar(Keyword) of
@@ -218,8 +226,8 @@ mc_gen_sf(Keywords)  ->
 
 mc_gen_sf_ks(_State, [], []) -> ok;
 mc_gen_sf_ks(State, [], [Keyword|OtherKeywords]) ->
-	NormalizedKeyword = mydlp_nlp:normalize(Keyword),
-	ReversedKeyword = mydlp_nlp:reverse(NormalizedKeyword),
+	NormalizedKeyword = mydlp_nlp:normalize(Keyword, false),
+	ReversedKeyword = mydlp_nlp:reverse(NormalizedKeyword, false),
 	Suffixes = get_suffixes(ReversedKeyword),
 	mc_gen_sf_ks(State, Suffixes, OtherKeywords);
 mc_gen_sf_ks(State, [<<>>|OtherSuffixes], OtherKeywords) ->
@@ -280,7 +288,8 @@ mc_fsm(_, _, <<>>, _I, A) -> lists:reverse(A);
 ").
 
 -define(DYN_TAIL, 
-"mc_fsm(_, _, <<_C/utf8, R/binary>>, I, A) -> mc_fsm(1, root, R, I+1, A).
+"mc_fsm(_, root, <<_C/utf8, R/binary>>, I, A) -> mc_fsm(1, root, R, I+1, A);
+mc_fsm(_, _, D, I, A) -> mc_fsm(1, root, D, I, A).
 mc_fsm_handle(P, {continue, S, D, I, A}) -> mc_fsm(P+1, S, D, I, A).
 ").
 
@@ -301,7 +310,7 @@ mc_gen_state_chunks() ->
 		'$end_of_table' -> [];
 		Key -> mc_gen_state_chunks(Key, 1, 1, []) end.
 
-mc_gen_state_chunks('$end_of_table', KeyIndex, _PageNum, Acc) -> Acc;
+mc_gen_state_chunks('$end_of_table', _KeyIndex, _PageNum, Acc) -> Acc;
 mc_gen_state_chunks(Key, KeyIndex, PageNum, Acc) ->
 	case ( KeyIndex rem ?STATE_CHUNK ) of
 		1 -> mc_gen_state_chunks(ets:next(mc_states, Key), KeyIndex + 1, PageNum + 1, [{PageNum, Key}| Acc]);
@@ -310,27 +319,50 @@ mc_gen_state_chunks(Key, KeyIndex, PageNum, Acc) ->
 mc_gen_source(FirstKey) -> mc_gen_source(FirstKey, [], 1).
 
 mc_gen_source(_Key, Acc, Count) when Count > ?STATE_CHUNK -> lists:flatten(Acc);
-mc_gen_source('$end_of_table', Acc, Count) -> lists:flatten(Acc);
+mc_gen_source('$end_of_table', Acc, _Count) -> lists:flatten(Acc);
 mc_gen_source(Key, Acc, Count) -> 
 	[{State, _Acceptance}] = ets:lookup(mc_states, Key),
+	IsAcceptRec = is_accept_rec(State),
 	Acc1 = case get_failure(State) of
 		not_found -> Acc;
 		FailureState -> 
-			FailureIsAccept = is_accept(FailureState),
-			mc_gen_source_f(FailureState, State, FailureIsAccept, Acc) end,
+			IsAccept = is_accept(State),
+			mc_gen_source_f(FailureState, State, IsAccept, Acc) end,
 	Leafs = get_leafs(State),
-	Acc2 = mc_gen_source_s(Leafs, State, Acc1),
+	Acc2 = mc_gen_source_s(Leafs, State, IsAcceptRec, Acc1),
 	mc_gen_source(ets:next(mc_states, Key), Acc2, Count + 1).
 
-mc_gen_source_s([], _State, Acc) -> Acc;
-mc_gen_source_s([[Char, NextState]|Rest], State, Acc) ->
-	SD = "mc_fsm(" ++ p(State) ++ ", <<" ++ p(Char) ++ "/utf8, R/binary>>, I, A) ->",
-	SB = case is_accept(NextState) of
-		false -> "mc_fsm(" ++ p(NextState) ++ ", R, I+1, A);";
-		{ok, MC} -> "mc_fsm(root, R, I+1, [{I, " ++ p(NextState) ++ ", " ++ p(MC) ++ "}|A]);" end,
-	%	{ok, MC} -> "mc_fsm(" ++ p(NextState) ++ ", R, I+1, [{I, " ++ p(MC) ++ "}|A]);" end,
+mc_gen_source_s([], _State, _IsAccept, Acc) -> Acc;
+mc_gen_source_s([[$A, NextState]|Rest], State, {ok, MC} = IsAccept, Acc) -> %% Alpha special char handle
+	SD = "mc_fsm(" ++ p(State) ++ ", <<C:8/integer, R/binary>>, I, A) when C >= 97, C =< 122 ->",
+	SB = "mc_fsm(" ++ p(NextState) ++ ", R, I+1, [{I, " ++ p(State) ++ ", " ++ p(MC) ++ "}|A]);", %% for predefined we do nested matchings
 	SLine = list_to_binary(SD ++ SB ++ [10]),
-	mc_gen_source_s(Rest, State, [SLine|Acc]).
+	mc_gen_source_s(Rest, State, IsAccept, [SLine|Acc]);
+mc_gen_source_s([[$A, NextState]|Rest], State, false = IsAccept, Acc) -> %% Alpha special char handle
+	SD = "mc_fsm(" ++ p(State) ++ ", <<C:8/integer, R/binary>>, I, A) when C >= 97, C =< 122 ->",
+	SB = "mc_fsm(" ++ p(NextState) ++ ", R, I+1, A);",
+	SLine = list_to_binary(SD ++ SB ++ [10]),
+	mc_gen_source_s(Rest, State, IsAccept, [SLine|Acc]);
+mc_gen_source_s([[$N, NextState]|Rest], State, {ok, MC} = IsAccept, Acc) -> %% Alpha special char handle
+	SD = "mc_fsm(" ++ p(State) ++ ", <<C:8/integer, R/binary>>, I, A) when C >= 48, C =< 57 ->",
+	SB = "mc_fsm(" ++ p(NextState) ++ ", R, I+1, [{I, " ++ p(State) ++ ", " ++ p(MC) ++ "}|A]);", %% for predefined we do nested matchings
+	SLine = list_to_binary(SD ++ SB ++ [10]),
+	mc_gen_source_s(Rest, State, IsAccept, [SLine|Acc]);
+mc_gen_source_s([[$N, NextState]|Rest], State, false = IsAccept, Acc) -> %% Alpha special char handle
+	SD = "mc_fsm(" ++ p(State) ++ ", <<C:8/integer, R/binary>>, I, A) when C >= 48, C =< 57 ->",
+	SB = "mc_fsm(" ++ p(NextState) ++ ", R, I+1, A);",
+	SLine = list_to_binary(SD ++ SB ++ [10]),
+	mc_gen_source_s(Rest, State, IsAccept, [SLine|Acc]);
+mc_gen_source_s([[Char, NextState]|Rest], State, {ok, MC} = IsAccept, Acc) ->
+	SD = "mc_fsm(" ++ p(State) ++ ", <<" ++ p(Char) ++ "/utf8, R/binary>>, I, A) ->",
+	SB = "mc_fsm(" ++ p(NextState) ++ ", R, I+1, [{I, " ++ p(State) ++ ", " ++ p(MC) ++ "}|A]);", %% for predefined we do nested matchings
+	SLine = list_to_binary(SD ++ SB ++ [10]),
+	mc_gen_source_s(Rest, State, IsAccept, [SLine|Acc]);
+mc_gen_source_s([[Char, NextState]|Rest], State, false = IsAccept, Acc) ->
+	SD = "mc_fsm(" ++ p(State) ++ ", <<" ++ p(Char) ++ "/utf8, R/binary>>, I, A) ->",
+	SB = "mc_fsm(" ++ p(NextState) ++ ", R, I+1, A);",
+	SLine = list_to_binary(SD ++ SB ++ [10]),
+	mc_gen_source_s(Rest, State, IsAccept, [SLine|Acc]).
 
 mc_gen_source_f(FailureState, State, false = _IsAccept, Acc) ->
 	FD = "mc_fsm(" ++ p(State) ++ ", D, I, A) ->",
@@ -339,8 +371,7 @@ mc_gen_source_f(FailureState, State, false = _IsAccept, Acc) ->
 	[FLine|Acc];
 mc_gen_source_f(FailureState, State, {ok, MC} = _IsAccept, Acc) ->
 	FD = "mc_fsm(" ++ p(State) ++ ", D, I, A) ->",
-	FB = "mc_fsm(" ++ p(FailureState) ++ ", D, I, [{I, " ++ p(FailureState) ++ ", " ++ p(MC) ++ "}|A]);",
-	%FB = "mc_fsm(" ++ p(FailureState) ++ ", D, I, [{I, " ++ p(MC) ++ "}|A]);",
+	FB = "mc_fsm(" ++ p(FailureState) ++ ", D, I, [{I, " ++ p(State) ++ ", " ++ p(MC) ++ "}|A]);",
 	FLine = list_to_binary(FD ++ FB ++ [10]),
 	[FLine|Acc].
 
@@ -377,7 +408,7 @@ compile1(Source) ->
 	io:format("Compiled source, now loading (~w)...~n", [erlang:localtime()]),
 	code:load_binary(Mod, "mc_dynamic.erl", Code),
 	io:format("Dynamic module compiled and loaded, ByteCodeSize: ~w (~w)...~n", [size(Code),erlang:localtime()]),
-	file:delete(Tempfile),
+	%file:delete(Tempfile),
 	ok.
 
 
