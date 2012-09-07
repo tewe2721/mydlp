@@ -57,19 +57,17 @@ normalize(Bin, IgnoreCase, Acc, HitSpace) ->
 				{_Else, CBin} -> normalize(Rest, IgnoreCase, <<Acc/binary, CBin/binary>> , false) end;
 		{none, _} -> normalize(<<>>, IgnoreCase, Acc, HitSpace) end.
 
-reverse(NormalBin) -> reverse(NormalBin, true).
+reverse(NormalBin) -> reverse(NormalBin, <<>>).
 
-reverse(NormalBin, IgnoreCase) -> reverse(NormalBin, IgnoreCase, <<>>).
-
-reverse(<<>>, _IgnoreCase, Acc) -> Acc;
-reverse(Bin, IgnoreCase, Acc) ->
-	case { get_uchar(Bin), IgnoreCase } of
-		{{C,Rest}, false} when C >= 65, C =< 90 -> 
-			reverse(Rest, IgnoreCase, <<C, Acc/binary>>);
-		{{C,Rest}, _} -> 
+reverse(<<>>, Acc) -> Acc;
+reverse(Bin, Acc) ->
+	case get_uchar(Bin) of
+		{C,Rest} when C >= 65, C =< 90 -> 
+			reverse(Rest, <<C, Acc/binary>>);
+		{C,Rest} ->
 			CBin = normal_bin(C),
-			reverse(Rest, IgnoreCase, <<CBin/binary, Acc/binary>>);
-		{none, _} -> reverse(<<>>, IgnoreCase,  Acc) end.
+			reverse(Rest, <<CBin/binary, Acc/binary>>);
+		none -> reverse(<<>>, Acc) end.
 
 get_uchar(<<>>) -> none;
 get_uchar(Bin) ->

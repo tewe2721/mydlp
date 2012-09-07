@@ -31,8 +31,9 @@
 
 %% API
 -export([
-	mc_search/1,
-	mc_generate/1,
+	mc_print/2,
+	mc_search/2,
+	mc_generate/2,
 	readlines/1
 ]).
 
@@ -40,15 +41,24 @@
 
 -define(STATE_CHUNK, 8192).
 
-mc_search(Data) -> mydlp_mc_dyn:mc_search(Data).
+mc_print(Engine, Data) ->
+	Results = mc_search(Engine, Data),
+	Str = unicode:characters_to_list(Data),
+	[io:format("R: ~ts~n", [lists:sublist(Str, I - L, L)]) || {I, {L, _}} <- Results], ok.
 
-mc_generate(ListOfKeywordGroups) ->
+mc_search(kw, Data) -> mydlp_mc_kw_dyn:mc_search(Data);
+mc_search(pd, Data) -> mydlp_mc_pd_dyn:mc_search(Data).
+
+mc_generate(kw, L) -> mc_generate1(kw, L);
+mc_generate(pd, L) -> mc_generate1(pd, L).
+
+mc_generate1(Engine, ListOfKeywordGroups) ->
 	io:format("Generation started (~w)...~n", [erlang:localtime()]),
 	reset_tables(),
-	mc_gen(ListOfKeywordGroups),
+	mc_gen(ListOfKeywordGroups, Engine),
 	io:format("States have been generated (~w)...~n", [erlang:localtime()]),
 	try
-		mc_gen_compile(),
+		mc_gen_compile(Engine),
 		ok
 	catch
 		Type:Error -> 
@@ -88,7 +98,10 @@ is_accept(State) ->
 	case ets:match(mc_states, {State, '$1'}) of
 		[] -> state_not_found;
 		[[undefined]] -> false;
-		[[MatcherConf]] -> {ok, MatcherConf} end.
+		[[MatcherConf]] -> {ok, {get_ulength(State), MatcherConf}} end.
+
+get_ulength(root) -> throw({error, root_can_not_be_accepted});
+get_ulength(State) -> length(unicode:characters_to_list(State)).
 
 new_state(State) -> 
 	ets:insert(mc_states, {State, undefined}).
@@ -125,10 +138,10 @@ is_suffix_end(Suffix) ->
 %		[[_S1],[_S2]|_R] -> true end.
 
 get_failure(root) -> not_found;
-get_failure(State) -> 
-	F = get_failure1(mydlp_nlp:reverse(State, false)),
-	io:format("FF: ~ts -> ~ts ~n", [State, F]),
-	F.
+get_failure(State) -> get_failure1(mydlp_nlp:reverse(State)).
+	%F = get_failure1(mydlp_nlp:reverse(State)),
+	%io:format("FF: ~ts -> ~ts ~n", [State, F]),
+	%F.
 
 get_failure1(ReversedState) ->
 	SuffixRoot = get_suffix_root(ReversedState),
@@ -137,7 +150,7 @@ get_failure1(ReversedState) ->
 get_failure2(root) -> not_found;
 get_failure2(SuffixRoot) ->
 	case is_suffix_end(SuffixRoot) of
-		true -> mydlp_nlp:reverse(SuffixRoot, false);
+		true -> mydlp_nlp:reverse(SuffixRoot);
 		false -> get_failure1(SuffixRoot) end.
 
 add_transition(State, Char, NextState) -> ets:insert(mc_success, {{State, Char}, NextState}).
@@ -173,33 +186,35 @@ get_all_lines(Device, Acc) ->
 			get_all_lines(Device, [Line1|Acc])
 	end.
 
-mc_gen([{file, FilePath, MatcherConf} = _KeywordGroup|RestOfKeywordGroups]) -> 
+mc_gen([{file, FilePath, MatcherConf} = _KeywordGroup|RestOfKeywordGroups], Engine) -> 
 	Keywords = readlines(FilePath),
-	mc_gen([{list, Keywords, MatcherConf}|RestOfKeywordGroups]);
-mc_gen([{list, Keywords, MatcherConf} = _KeywordGroup|RestOfKeywordGroups]) -> 
-	mc_gen_ss(Keywords, MatcherConf),
-	mc_gen_sf(Keywords),
-	mc_gen(RestOfKeywordGroups);
-mc_gen([]) -> ok.
+	mc_gen([{list, Keywords, MatcherConf}|RestOfKeywordGroups], Engine);
+mc_gen([{list, Keywords, MatcherConf} = _KeywordGroup|RestOfKeywordGroups], Engine) -> 
+	mc_gen_ss(Keywords, MatcherConf, Engine),
+	mc_gen_sf(Keywords, Engine),
+	mc_gen(RestOfKeywordGroups, Engine);
+mc_gen([], _Engine) -> ok.
 	
 
-mc_gen_ss(Keywords, MatcherConf)  ->
+mc_gen_ss(Keywords, MatcherConf, Engine)  ->
 	StartState = start_state(),
 	new_state(StartState),
-	mc_gen_ss_ks(StartState, Keywords, MatcherConf, false).
+	mc_gen_ss_ks(StartState, Keywords, MatcherConf, Engine, false).
 
-mc_gen_ss_ks(_State, [], _MatcherConf, _IsNormalized) -> ok;
-mc_gen_ss_ks(State, [<<>>|OtherKeywords], MatcherConf, _IsNormalized) ->
+mc_gen_ss_ks(_State, [], _MatcherConf, _Engine, _IsNormalized) -> ok;
+mc_gen_ss_ks(State, [<<>>|OtherKeywords], MatcherConf, Engine, _IsNormalized) ->
 	set_accept(State, MatcherConf),
 	StartState = start_state(),
-	mc_gen_ss_ks(StartState, OtherKeywords, MatcherConf, false);
-mc_gen_ss_ks(State, [Keyword|OtherKeywords], MatcherConf, false = _IsNormalized) ->
-	NormalizedKeyword = mydlp_nlp:normalize(Keyword,false),
-	NormalizedKeyword = Keyword,
-	mc_gen_ss_ks(State, [NormalizedKeyword|OtherKeywords], MatcherConf, true);
-mc_gen_ss_ks(State, [Keyword|OtherKeywords], MatcherConf, true = IsNormalized) ->
+	mc_gen_ss_ks(StartState, OtherKeywords, MatcherConf, Engine, false);
+mc_gen_ss_ks(State, [Keyword|OtherKeywords], MatcherConf, kw = Engine, false = _IsNormalized) ->
+	NormalizedKeyword = mydlp_nlp:normalize(Keyword, true),
+	mc_gen_ss_ks(State, [NormalizedKeyword|OtherKeywords], MatcherConf, Engine, true);
+mc_gen_ss_ks(State, [Keyword|OtherKeywords], MatcherConf, pd = Engine, false = _IsNormalized) ->
+	NormalizedKeyword = mydlp_nlp:normalize(Keyword, false),
+	mc_gen_ss_ks(State, [NormalizedKeyword|OtherKeywords], MatcherConf, Engine, true);
+mc_gen_ss_ks(State, [Keyword|OtherKeywords], MatcherConf, Engine, true = IsNormalized) ->
 	case get_uchar(Keyword) of
-		none -> mc_gen_ss_ks(State, [<<>>|OtherKeywords], MatcherConf, IsNormalized);
+		none -> mc_gen_ss_ks(State, [<<>>|OtherKeywords], MatcherConf, Engine, IsNormalized);
 		{Char, RestOfKeyword} ->
 			NS = case get_transition(State, Char) of
 				not_found -> 	NextState = next_state(State, Char),
@@ -207,7 +222,7 @@ mc_gen_ss_ks(State, [Keyword|OtherKeywords], MatcherConf, true = IsNormalized) -
 						add_transition(State, Char, NextState),
 						NextState;
 				NextState -> 	NextState end,
-			mc_gen_ss_ks(NS, [<<RestOfKeyword/binary>>|OtherKeywords], MatcherConf, IsNormalized) end.
+			mc_gen_ss_ks(NS, [<<RestOfKeyword/binary>>|OtherKeywords], MatcherConf, Engine, IsNormalized) end.
 
 get_suffixes(root) -> [root];
 get_suffixes(Keyword) -> get_suffixes(Keyword, []).
@@ -218,29 +233,34 @@ get_suffixes(Keyword, Acc) ->
 		none -> get_suffixes(<<>>, Acc);
 		{_Char, RestOfKeyword} -> get_suffixes(RestOfKeyword, [Keyword|Acc]) end.
 
-mc_gen_sf(Keywords)  ->
+mc_gen_sf(Keywords, Engine)  ->
 	StartState = start_state(),
 	new_suffix(StartState, StartState),
 	set_suffix_end(StartState),
-	mc_gen_sf_ks(StartState, [], Keywords).
+	mc_gen_sf_ks(StartState, [], Keywords, Engine).
 
-mc_gen_sf_ks(_State, [], []) -> ok;
-mc_gen_sf_ks(State, [], [Keyword|OtherKeywords]) ->
-	NormalizedKeyword = mydlp_nlp:normalize(Keyword, false),
-	ReversedKeyword = mydlp_nlp:reverse(NormalizedKeyword, false),
+mc_gen_sf_ks(_State, [], [], _Engine) -> ok;
+mc_gen_sf_ks(State, [], [Keyword|OtherKeywords], kw = Engine) ->
+	NormalizedKeyword = mydlp_nlp:normalize(Keyword, true),
+	ReversedKeyword = mydlp_nlp:reverse(NormalizedKeyword),
 	Suffixes = get_suffixes(ReversedKeyword),
-	mc_gen_sf_ks(State, Suffixes, OtherKeywords);
-mc_gen_sf_ks(State, [<<>>|OtherSuffixes], OtherKeywords) ->
+	mc_gen_sf_ks(State, Suffixes, OtherKeywords, Engine);
+mc_gen_sf_ks(State, [], [Keyword|OtherKeywords], pd = Engine) ->
+	NormalizedKeyword = mydlp_nlp:normalize(Keyword, false),
+	ReversedKeyword = mydlp_nlp:reverse(NormalizedKeyword),
+	Suffixes = get_suffixes(ReversedKeyword),
+	mc_gen_sf_ks(State, Suffixes, OtherKeywords, Engine);
+mc_gen_sf_ks(State, [<<>>|OtherSuffixes], OtherKeywords, Engine) ->
 	set_suffix_end(State),
 	StartState = start_state(),
-	mc_gen_sf_ks(StartState, OtherSuffixes, OtherKeywords);
-mc_gen_sf_ks(State, [Suffix|OtherSuffixes], OtherKeywords) ->
+	mc_gen_sf_ks(StartState, OtherSuffixes, OtherKeywords, Engine);
+mc_gen_sf_ks(State, [Suffix|OtherSuffixes], OtherKeywords, Engine) ->
 	case get_uchar(Suffix) of
-		none -> mc_gen_sf_ks(State, [<<>>|OtherSuffixes], OtherKeywords);
+		none -> mc_gen_sf_ks(State, [<<>>|OtherSuffixes], OtherKeywords, Engine);
 		{Char, RestOfSuffix} ->
 			NextSuffix = next_state(State, Char),
 			new_suffix(NextSuffix, State),
-			mc_gen_sf_ks(NextSuffix, [<<RestOfSuffix/binary>>|OtherSuffixes], OtherKeywords) end.
+			mc_gen_sf_ks(NextSuffix, [<<RestOfSuffix/binary>>|OtherSuffixes], OtherKeywords, Engine) end.
 	
 
 get_uchar(<<>>) -> none;
@@ -255,10 +275,10 @@ get_uchar(Bin) ->
 p(Term) when is_integer(Term) -> integer_to_list(Term);
 p(Term) -> lists:flatten(io_lib:format("~w", [Term])).
 
--define(PAGE_MODNAME(PageNum), "mydlp_mc_dyn_p" ++ p(PageNum)).
+-define(PAGE_MODNAME(Engine, PageNum), "mydlp_mc_" ++ p(Engine) ++  "_dyn_p" ++ p(PageNum)).
 
--define(PAGE_HEADER(PageNum), 
-"-module(" ++ ?PAGE_MODNAME(PageNum) ++").
+-define(PAGE_HEADER(Engine, PageNum), 
+"-module(" ++ ?PAGE_MODNAME(Engine, PageNum) ++").
 ").
 
 -define(PAGE_HEAD, 
@@ -273,36 +293,44 @@ p(Term) -> lists:flatten(io_lib:format("~w", [Term])).
 "mc_fsm(S, D, I, A) -> {continue, S, D, I, A}.
 ").
 
--define(DYN_HEAD, 
-"-module(mydlp_mc_dyn).
+-define(DYN_HEAD(Engine), 
+"-module(mydlp_mc_" ++ p(Engine) ++ "_dyn).
 -author('ozgen@mydlp.com').
 -author('kerem@mydlp.com').
 
 -export([mc_search/1]).
-mc_search(Data) when is_binary(Data) -> mc_fsm(1, root, Data, 1, []).
-mc_fsm(_, _, <<>>, _I, A) -> lists:reverse(A);
+mc_search(Data) when is_binary(Data) -> mc_fsm(dict:new(), 1, root, Data, 1, []).
+mc_fsm(_, _, _, <<>>, _I, A) -> lists:reverse(A);
 ").
 
--define(DYN_PAGEDEF(PageNum), 
-"mc_fsm(" ++ p(PageNum) ++ ", S, D, I, A) -> mc_fsm_handle(" ++ p(PageNum) ++ ", " ++ ?PAGE_MODNAME(PageNum) ++ ":mc_fsm(S, D, I, A));
+-define(DYN_PAGEDEF(Engine, PageNum), 
+"mc_fsm(PD, " ++ p(PageNum) ++ ", S, D, I, A) -> mc_fsm_handle(PD, " ++ p(PageNum) ++ ", " ++ ?PAGE_MODNAME(Engine, PageNum) ++ ":mc_fsm(S, D, I, A));
 ").
 
--define(DYN_TAIL, 
-"mc_fsm(_, root, <<_C/utf8, R/binary>>, I, A) -> mc_fsm(1, root, R, I+1, A);
-mc_fsm(_, _, D, I, A) -> mc_fsm(1, root, D, I, A).
-mc_fsm_handle(P, {continue, S, D, I, A}) -> mc_fsm(P+1, S, D, I, A).
+-define(DYN_TAIL(NumberOfPages), 
+%"mc_fsm(PD, _, root, <<_C/utf8, R/binary>>, I, A) -> mc_fsm(PD, 1, root, R, I+1, A);
+"mc_fsm(PD, _, S, D, I, A) -> mc_fsm(PD, 1, S, D, I, A).
+mc_fsm_handle(_PD, _P, {continue, _S, <<>>, _I, A}) -> lists:reverse(A);
+mc_fsm_handle(PD, P, {continue, S, <<_C/utf8, R/binary>> = D, I, A}) -> 
+	NP = case P of
+		" ++ p(NumberOfPages) ++ " -> 1;
+		_ElseI -> P+1 end,
+	case dict:find(NP, PD) of
+		{ok, I} -> mc_fsm(dict:new(), 1, root, R, I + 1, A);
+		_Else -> PD1 = dict:store(P, I, PD),
+			mc_fsm(PD1, NP, S, D, I, A) end.
 ").
 
-mc_gen_compile() ->
+mc_gen_compile(Engine) ->
 	StateChunks = mc_gen_state_chunks(),
-	compile(StateChunks),
+	compile(Engine, StateChunks),
 	case StateChunks of
 		[] -> ok;
-		[{MaxNum, _}|_] -> mc_compile_dyn(MaxNum) end,
+		[{MaxNum, _}|_] -> mc_compile_dyn(Engine, MaxNum) end,
 	ok.
 
-mc_compile_dyn(MaxNum) ->
-	PageBin = list_to_binary([?DYN_HEAD, [?DYN_PAGEDEF(N)||N <- lists:seq(1, MaxNum)], ?DYN_TAIL]),
+mc_compile_dyn(Engine, MaxNum) ->
+	PageBin = list_to_binary([?DYN_HEAD(Engine), [?DYN_PAGEDEF(Engine, N)||N <- lists:seq(1, MaxNum)], ?DYN_TAIL(MaxNum)]),
 	compile(PageBin).
 
 mc_gen_state_chunks() -> 
@@ -322,40 +350,48 @@ mc_gen_source(_Key, Acc, Count) when Count > ?STATE_CHUNK -> lists:flatten(Acc);
 mc_gen_source('$end_of_table', Acc, _Count) -> lists:flatten(Acc);
 mc_gen_source(Key, Acc, Count) -> 
 	[{State, _Acceptance}] = ets:lookup(mc_states, Key),
-	IsAcceptRec = is_accept_rec(State),
-	Acc1 = case get_failure(State) of
-		not_found -> Acc;
+	{Acc1, HasFailure} = case get_failure(State) of
+		not_found -> {Acc, false};
 		FailureState -> 
 			IsAccept = is_accept(State),
-			mc_gen_source_f(FailureState, State, IsAccept, Acc) end,
-	Leafs = get_leafs(State),
-	Acc2 = mc_gen_source_s(Leafs, State, IsAcceptRec, Acc1),
+			{mc_gen_source_f(FailureState, State, IsAccept, Acc), true} end,
+	IsAcceptRec = is_accept_rec(State),
+	Acc2 = case {get_leafs(State), HasFailure} of
+		{[], false} -> mc_gen_source_s(State, IsAcceptRec, Acc1);
+		{Leafs, _} -> mc_gen_source_s(Leafs, State, IsAcceptRec, Acc1) end,
 	mc_gen_source(ets:next(mc_states, Key), Acc2, Count + 1).
 
+mc_gen_source_s(State, {ok, MC} = _IsAccept, Acc) ->
+	SD = "mc_fsm(" ++ p(State) ++ ", D, I, A) ->",
+	SB = "mc_fsm(root, D, I, [{I, " ++ p(State) ++ ", " ++ p(MC) ++ "}|A]);", %% for predefined we do nested matchings
+	SLine = list_to_binary(SD ++ SB ++ [10]),
+	[SLine|Acc];
+mc_gen_source_s(_State, false = _IsAccept, Acc) -> Acc.
+
 mc_gen_source_s([], _State, _IsAccept, Acc) -> Acc;
-mc_gen_source_s([[$A, NextState]|Rest], State, {ok, MC} = IsAccept, Acc) -> %% Alpha special char handle
+mc_gen_source_s([[$A, NextState]|Rest], State, {ok, MC} = IsAccept, Acc) -> %% alpha special char handle
 	SD = "mc_fsm(" ++ p(State) ++ ", <<C:8/integer, R/binary>>, I, A) when C >= 97, C =< 122 ->",
-	SB = "mc_fsm(" ++ p(NextState) ++ ", R, I+1, [{I, " ++ p(State) ++ ", " ++ p(MC) ++ "}|A]);", %% for predefined we do nested matchings
+	SB = "mc_fsm(" ++ p(NextState) ++ ", R, I+1, [{I, " ++ p(MC) ++ "}|A]);", %% for predefined we do nested matchings
 	SLine = list_to_binary(SD ++ SB ++ [10]),
 	mc_gen_source_s(Rest, State, IsAccept, [SLine|Acc]);
-mc_gen_source_s([[$A, NextState]|Rest], State, false = IsAccept, Acc) -> %% Alpha special char handle
+mc_gen_source_s([[$A, NextState]|Rest], State, false = IsAccept, Acc) -> %% alpha special char handle
 	SD = "mc_fsm(" ++ p(State) ++ ", <<C:8/integer, R/binary>>, I, A) when C >= 97, C =< 122 ->",
 	SB = "mc_fsm(" ++ p(NextState) ++ ", R, I+1, A);",
 	SLine = list_to_binary(SD ++ SB ++ [10]),
 	mc_gen_source_s(Rest, State, IsAccept, [SLine|Acc]);
-mc_gen_source_s([[$N, NextState]|Rest], State, {ok, MC} = IsAccept, Acc) -> %% Alpha special char handle
+mc_gen_source_s([[$N, NextState]|Rest], State, {ok, MC} = IsAccept, Acc) -> %% Number special char handle
 	SD = "mc_fsm(" ++ p(State) ++ ", <<C:8/integer, R/binary>>, I, A) when C >= 48, C =< 57 ->",
-	SB = "mc_fsm(" ++ p(NextState) ++ ", R, I+1, [{I, " ++ p(State) ++ ", " ++ p(MC) ++ "}|A]);", %% for predefined we do nested matchings
+	SB = "mc_fsm(" ++ p(NextState) ++ ", R, I+1, [{I, " ++ p(MC) ++ "}|A]);", %% for predefined we do nested matchings
 	SLine = list_to_binary(SD ++ SB ++ [10]),
 	mc_gen_source_s(Rest, State, IsAccept, [SLine|Acc]);
-mc_gen_source_s([[$N, NextState]|Rest], State, false = IsAccept, Acc) -> %% Alpha special char handle
+mc_gen_source_s([[$N, NextState]|Rest], State, false = IsAccept, Acc) -> %% Number special char handle
 	SD = "mc_fsm(" ++ p(State) ++ ", <<C:8/integer, R/binary>>, I, A) when C >= 48, C =< 57 ->",
 	SB = "mc_fsm(" ++ p(NextState) ++ ", R, I+1, A);",
 	SLine = list_to_binary(SD ++ SB ++ [10]),
 	mc_gen_source_s(Rest, State, IsAccept, [SLine|Acc]);
 mc_gen_source_s([[Char, NextState]|Rest], State, {ok, MC} = IsAccept, Acc) ->
 	SD = "mc_fsm(" ++ p(State) ++ ", <<" ++ p(Char) ++ "/utf8, R/binary>>, I, A) ->",
-	SB = "mc_fsm(" ++ p(NextState) ++ ", R, I+1, [{I, " ++ p(State) ++ ", " ++ p(MC) ++ "}|A]);", %% for predefined we do nested matchings
+	SB = "mc_fsm(" ++ p(NextState) ++ ", R, I+1, [{I, " ++ p(MC) ++ "}|A]);", %% for predefined we do nested matchings
 	SLine = list_to_binary(SD ++ SB ++ [10]),
 	mc_gen_source_s(Rest, State, IsAccept, [SLine|Acc]);
 mc_gen_source_s([[Char, NextState]|Rest], State, false = IsAccept, Acc) ->
@@ -371,32 +407,33 @@ mc_gen_source_f(FailureState, State, false = _IsAccept, Acc) ->
 	[FLine|Acc];
 mc_gen_source_f(FailureState, State, {ok, MC} = _IsAccept, Acc) ->
 	FD = "mc_fsm(" ++ p(State) ++ ", D, I, A) ->",
-	FB = "mc_fsm(" ++ p(FailureState) ++ ", D, I, [{I, " ++ p(State) ++ ", " ++ p(MC) ++ "}|A]);",
+	FB = "mc_fsm(" ++ p(FailureState) ++ ", D, I, [{I, " ++ p(MC) ++ "}|A]);",
 	FLine = list_to_binary(FD ++ FB ++ [10]),
 	[FLine|Acc].
 
-compile({PageNum,FirstKey}) ->
+
+compile(Page) when is_binary(Page) -> compile1(Page).
+
+compile(Engine, {PageNum,FirstKey}) ->
 	Source = mc_gen_source(FirstKey),
-	PageBin = list_to_binary([?PAGE_HEADER(PageNum), ?PAGE_HEAD, Source, ?PAGE_TAIL]),
+	PageBin = list_to_binary([?PAGE_HEADER(Engine, PageNum), ?PAGE_HEAD, Source, ?PAGE_TAIL]),
 	compile(PageBin);
-compile(Page) when is_binary(Page) -> compile1(Page);
-compile(Pages) when is_list(Pages) ->
+compile(Engine, Pages) when is_list(Pages) ->
 	PCount = case erlang:system_info(logical_processors_available) of
 		I when I > 16 -> I - 8;
 		I when I > 8 -> I - 4;
 		I when I > 4 -> I - 2;
 		I when I > 2 -> I - 1;
 		_Else -> 1 end,
-	compile(Pages, length(Pages), PCount).
+	compile(Engine, Pages, length(Pages), PCount).
 
-compile(Pages, PageCount, ProcessCount) when PageCount > ProcessCount ->
+compile(Engine, Pages, PageCount, ProcessCount) when PageCount > ProcessCount ->
 	Chunk = lists:sublist(Pages, 1, ProcessCount),
 	Rest = lists:sublist(Pages, ProcessCount + 1, PageCount),
-	erlang:display(length(Chunk)),
-	mydlp_api:pall(fun(P) -> compile(P) end, Chunk, 600000),
-	compile(Rest, PageCount - ProcessCount, ProcessCount);
-compile(Pages, _PageCount, _ProcessCount) ->
-	mydlp_api:pall(fun(P) -> compile(P) end, Pages, 600000),
+	mydlp_api:pall(fun(P) -> compile(Engine, P) end, Chunk, 600000),
+	compile(Engine, Rest, PageCount - ProcessCount, ProcessCount);
+compile(Engine, Pages, _PageCount, _ProcessCount) ->
+	mydlp_api:pall(fun(P) -> compile(Engine, P) end, Pages, 600000),
 	ok.
 
 compile1(Source) ->
@@ -408,7 +445,7 @@ compile1(Source) ->
 	io:format("Compiled source, now loading (~w)...~n", [erlang:localtime()]),
 	code:load_binary(Mod, "mc_dynamic.erl", Code),
 	io:format("Dynamic module compiled and loaded, ByteCodeSize: ~w (~w)...~n", [size(Code),erlang:localtime()]),
-	%file:delete(Tempfile),
+	file:delete(Tempfile),
 	ok.
 
 
