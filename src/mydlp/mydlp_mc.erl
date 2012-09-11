@@ -32,8 +32,10 @@
 %% API
 -export([
 	mc_print/2,
+	mc_search/1,
 	mc_search/2,
 	mc_generate/2,
+	mc_generate/3,
 	readlines/1
 ]).
 
@@ -41,33 +43,52 @@
 
 -define(STATE_CHUNK, 8192).
 
+-define(MODFILENAME, "mydlp_mc_dynamic.erl").
+
+mc_load(ModCodeTupleList) ->
+	LoadedMods = get_loaded_mc_mod_names(),
+	ModNames = get_mod_names(ModCodeTupleList),
+	UnloadList = lists:subtract(LoadedMods, ModNames),
+	lists:foreach(fun({M,C}) -> code:load_binary(M, ?MODFILENAME, C) end, ModCodeTupleList),
+	lists:foreach(fun(M) -> unload_code(M) end, UnloadList),
+	ok.
+
 mc_print(Engine, Data) ->
 	Results = mc_search(Engine, Data),
 	Str = unicode:characters_to_list(Data),
-	[io:format("R: ~ts~n", [lists:sublist(Str, I - L, L)]) || {I, {L, _}} <- Results], ok.
+	[io:format("R: ~w ~ts~n", [BI, lists:sublist(Str, CI - L, L)]) || {CI, BI, {L, _}} <- Results], ok.
 
 mc_search(kw, Data) -> mydlp_mc_kw_dyn:mc_search(Data);
 mc_search(pd, Data) -> mydlp_mc_pd_dyn:mc_search(Data).
 
+mc_search(Data) -> 
+	KWL = mc_search(kw, Data),
+	PDL = mc_search(pd, Data),
+	lists:keymerge(1, KWL, PDL).
+
 mc_generate(kw, L) -> mc_generate1(kw, L);
 mc_generate(pd, L) -> mc_generate1(pd, L).
 
-mc_generate1(Engine, ListOfKeywordGroups) ->
-	io:format("Generation started (~w)...~n", [erlang:localtime()]),
+mc_generate(kw, L, JustReturnCode) -> mc_generate1(kw, L, JustReturnCode);
+mc_generate(pd, L, JustReturnCode) -> mc_generate1(pd, L, JustReturnCode).
+
+mc_generate1(Engine, ListOfKeywordGroups) -> mc_generate1(Engine, ListOfKeywordGroups, false).
+
+mc_generate1(Engine, ListOfKeywordGroups, JustReturnCode) ->
+	%io:format("Generation started (~w)...~n", [erlang:localtime()]),
 	reset_tables(),
 	mc_gen(ListOfKeywordGroups, Engine),
-	io:format("States have been generated (~w)...~n", [erlang:localtime()]),
-	try
-		mc_gen_compile(Engine),
-		ok
+	%io:format("States have been generated (~w)...~n", [erlang:localtime()]),
+	Codes = try
+		mc_gen_compile(Engine, JustReturnCode)
 	catch
 		Type:Error -> 
-			io:format("Exception (~w:~w) ~w...~n", [Type, Error, erlang:get_stacktrace()]),
-			throw({dyn_compile, {Type, Error}})
+			%io:format("Exception (~w:~w) ~w...~n", [Type, Error, erlang:get_stacktrace()]),
+			throw({mc_compile, {Type, Error}})
 	end,
 	reset_tables(),
-	io:format("Generation finished (~w)...~n", [erlang:localtime()]),
-	ok.
+	%io:format("Generation finished (~w)...~n", [erlang:localtime()]),
+	Codes.
 
 reset_tables() ->
 	reset_table(mc_states, ordered_set), %% {state, acceptance}
@@ -85,7 +106,11 @@ reset_table(TableName, Type) ->
 		_Else -> ets:delete_all_objects(TableName) end.
 
 set_accept(State, MatcherConf) -> 
-	ets:insert(mc_states, {State, MatcherConf}).
+	MCL = case ets:match(mc_states, {State, '$1'}) of
+                [] -> [MatcherConf];
+                [[undefined]] -> [MatcherConf];
+                [[MC]] -> lists:umerge(MC, [MatcherConf]) end,
+	ets:insert(mc_states, {State, MCL}).
 
 is_accept_rec(root) -> false;
 is_accept_rec(not_found) -> false;
@@ -308,7 +333,6 @@ mc_fsm(_, _, _, <<>>, _I, A) -> lists:reverse(A);
 ").
 
 -define(DYN_TAIL(NumberOfPages), 
-%"mc_fsm(PD, _, root, <<_C/utf8, R/binary>>, I, A) -> mc_fsm(PD, 1, root, R, I+1, A);
 "mc_fsm(PD, _, S, D, I, A) -> mc_fsm(PD, 1, S, D, I, A).
 mc_fsm_handle(_PD, _P, {continue, _S, <<>>, _I, A}) -> lists:reverse(A);
 mc_fsm_handle(PD, P, {continue, S, <<_C/utf8, R/binary>> = D, I, A}) -> 
@@ -321,17 +345,19 @@ mc_fsm_handle(PD, P, {continue, S, <<_C/utf8, R/binary>> = D, I, A}) ->
 			mc_fsm(PD1, NP, S, D, I, A) end.
 ").
 
-mc_gen_compile(Engine) ->
-	StateChunks = mc_gen_state_chunks(),
-	compile(Engine, StateChunks),
-	case StateChunks of
-		[] -> ok;
-		[{MaxNum, _}|_] -> mc_compile_dyn(Engine, MaxNum) end,
-	ok.
+mc_gen_compile(Engine) -> mc_gen_compile(Engine, false).
 
-mc_compile_dyn(Engine, MaxNum) ->
+mc_gen_compile(Engine, JustReturnCode) ->
+	StateChunks = mc_gen_state_chunks(),
+	PageCodes = compile(Engine, StateChunks, JustReturnCode),
+	DynCode = case StateChunks of
+		[] -> ok;
+		[{MaxNum, _}|_] -> mc_compile_dyn(Engine, MaxNum, JustReturnCode) end,
+	PageCodes ++ DynCode.
+
+mc_compile_dyn(Engine, MaxNum, JustReturnCode) ->
 	PageBin = list_to_binary([?DYN_HEAD(Engine), [?DYN_PAGEDEF(Engine, N)||N <- lists:seq(1, MaxNum)], ?DYN_TAIL(MaxNum)]),
-	compile(PageBin).
+	compile(PageBin, JustReturnCode).
 
 mc_gen_state_chunks() -> 
 	case ets:first(mc_states) of
@@ -371,7 +397,7 @@ mc_gen_source_s(_State, false = _IsAccept, Acc) -> Acc.
 mc_gen_source_s([], _State, _IsAccept, Acc) -> Acc;
 mc_gen_source_s([[$A, NextState]|Rest], State, {ok, MC} = IsAccept, Acc) -> %% alpha special char handle
 	SD = "mc_fsm(" ++ p(State) ++ ", <<C:8/integer, R/binary>>, I, A) when C >= 97, C =< 122 ->",
-	SB = "mc_fsm(" ++ p(NextState) ++ ", R, I+1, [{I, " ++ p(MC) ++ "}|A]);", %% for predefined we do nested matchings
+	SB = "mc_fsm(" ++ p(NextState) ++ ", R, I+1, [{I, -1-size(R), " ++ p(MC) ++ "}|A]);", %% for predefined we do nested matchings
 	SLine = list_to_binary(SD ++ SB ++ [10]),
 	mc_gen_source_s(Rest, State, IsAccept, [SLine|Acc]);
 mc_gen_source_s([[$A, NextState]|Rest], State, false = IsAccept, Acc) -> %% alpha special char handle
@@ -381,7 +407,7 @@ mc_gen_source_s([[$A, NextState]|Rest], State, false = IsAccept, Acc) -> %% alph
 	mc_gen_source_s(Rest, State, IsAccept, [SLine|Acc]);
 mc_gen_source_s([[$N, NextState]|Rest], State, {ok, MC} = IsAccept, Acc) -> %% Number special char handle
 	SD = "mc_fsm(" ++ p(State) ++ ", <<C:8/integer, R/binary>>, I, A) when C >= 48, C =< 57 ->",
-	SB = "mc_fsm(" ++ p(NextState) ++ ", R, I+1, [{I, " ++ p(MC) ++ "}|A]);", %% for predefined we do nested matchings
+	SB = "mc_fsm(" ++ p(NextState) ++ ", R, I+1, [{I, -1-size(R), " ++ p(MC) ++ "}|A]);", %% for predefined we do nested matchings
 	SLine = list_to_binary(SD ++ SB ++ [10]),
 	mc_gen_source_s(Rest, State, IsAccept, [SLine|Acc]);
 mc_gen_source_s([[$N, NextState]|Rest], State, false = IsAccept, Acc) -> %% Number special char handle
@@ -391,7 +417,7 @@ mc_gen_source_s([[$N, NextState]|Rest], State, false = IsAccept, Acc) -> %% Numb
 	mc_gen_source_s(Rest, State, IsAccept, [SLine|Acc]);
 mc_gen_source_s([[Char, NextState]|Rest], State, {ok, MC} = IsAccept, Acc) ->
 	SD = "mc_fsm(" ++ p(State) ++ ", <<" ++ p(Char) ++ "/utf8, R/binary>>, I, A) ->",
-	SB = "mc_fsm(" ++ p(NextState) ++ ", R, I+1, [{I, " ++ p(MC) ++ "}|A]);", %% for predefined we do nested matchings
+	SB = "mc_fsm(" ++ p(NextState) ++ ", R, I+1, [{I, -1-size(R), " ++ p(MC) ++ "}|A]);", %% for predefined we do nested matchings
 	SLine = list_to_binary(SD ++ SB ++ [10]),
 	mc_gen_source_s(Rest, State, IsAccept, [SLine|Acc]);
 mc_gen_source_s([[Char, NextState]|Rest], State, false = IsAccept, Acc) ->
@@ -407,46 +433,68 @@ mc_gen_source_f(FailureState, State, false = _IsAccept, Acc) ->
 	[FLine|Acc];
 mc_gen_source_f(FailureState, State, {ok, MC} = _IsAccept, Acc) ->
 	FD = "mc_fsm(" ++ p(State) ++ ", D, I, A) ->",
-	FB = "mc_fsm(" ++ p(FailureState) ++ ", D, I, [{I, " ++ p(MC) ++ "}|A]);",
+	FB = "mc_fsm(" ++ p(FailureState) ++ ", D, I, [{I, -size(D), " ++ p(MC) ++ "}|A]);",
 	FLine = list_to_binary(FD ++ FB ++ [10]),
 	[FLine|Acc].
 
 
-compile(Page) when is_binary(Page) -> compile1(Page).
+compile(Page, JustReturnCode) when is_binary(Page) -> compile1(Page, JustReturnCode).
 
-compile(Engine, {PageNum,FirstKey}) ->
+compile(Engine, {PageNum,FirstKey}, JustReturnCode) ->
 	Source = mc_gen_source(FirstKey),
 	PageBin = list_to_binary([?PAGE_HEADER(Engine, PageNum), ?PAGE_HEAD, Source, ?PAGE_TAIL]),
-	compile(PageBin);
-compile(Engine, Pages) when is_list(Pages) ->
+	compile(PageBin, JustReturnCode);
+compile(_Engine, [], _JustReturnCode) -> [];
+compile(Engine, Pages, JustReturnCode) when is_list(Pages) ->
 	PCount = case erlang:system_info(logical_processors_available) of
 		I when I > 16 -> I - 8;
 		I when I > 8 -> I - 4;
 		I when I > 4 -> I - 2;
 		I when I > 2 -> I - 1;
 		_Else -> 1 end,
-	compile(Engine, Pages, length(Pages), PCount).
+	compile(Engine, Pages, length(Pages), PCount, JustReturnCode, []).
 
-compile(Engine, Pages, PageCount, ProcessCount) when PageCount > ProcessCount ->
+compile(Engine, Pages, PageCount, ProcessCount, JustReturnCode, Acc) when PageCount > ProcessCount ->
 	Chunk = lists:sublist(Pages, 1, ProcessCount),
 	Rest = lists:sublist(Pages, ProcessCount + 1, PageCount),
-	mydlp_api:pall(fun(P) -> compile(Engine, P) end, Chunk, 600000),
-	compile(Engine, Rest, PageCount - ProcessCount, ProcessCount);
-compile(Engine, Pages, _PageCount, _ProcessCount) ->
-	mydlp_api:pall(fun(P) -> compile(Engine, P) end, Pages, 600000),
-	ok.
+	{ok, Codes} = mydlp_api:pall(fun(P) -> compile(Engine, P, JustReturnCode) end, Chunk, 600000),
+	Acc1 = Acc ++ Codes,
+	compile(Engine, Rest, PageCount - ProcessCount, ProcessCount, JustReturnCode, Acc1);
+compile(Engine, Pages, _PageCount, _ProcessCount, JustReturnCode, Acc) ->
+	{ok, Codes} = mydlp_api:pall(fun(P) -> compile(Engine, P, JustReturnCode) end, Pages, 600000),
+	lists:flatten(Acc ++ Codes).
 
-compile1(Source) ->
+compile1(Source, JustReturnCode) ->
 	{ok, Tempfile0} = mydlp_workdir:tempfile(),
 	Tempfile = Tempfile0 ++ ".erl",
 	file:write_file(Tempfile, Source),
-	io:format("Written to file, compiling (~w)...~n", [erlang:localtime()]),
+	% io:format("Written to file, compiling (~w)...~n", [erlang:localtime()]),
 	{ok, Mod, Code} = compile:file(Tempfile ,[binary, compressed, verbose,report_errors,report_warnings] ),
-	io:format("Compiled source, now loading (~w)...~n", [erlang:localtime()]),
-	code:load_binary(Mod, "mc_dynamic.erl", Code),
-	io:format("Dynamic module compiled and loaded, ByteCodeSize: ~w (~w)...~n", [size(Code),erlang:localtime()]),
+	% io:format("Compiled source, now loading (~w)...~n", [erlang:localtime()]),
+	case JustReturnCode of
+		false -> code:load_binary(Mod, ?MODFILENAME, Code);
+		true -> ok end,
+	% io:format("Dynamic module compiled and loaded, ByteCodeSize: ~w (~w)...~n", [size(Code),erlang:localtime()]),
 	file:delete(Tempfile),
-	ok.
+	[{Mod, Code}].
+
+unload_code(ModName) -> unload_code(ModName, 10).
+
+unload_code(ModName, 0) -> 
+	code:purge(ModName), ok;
+unload_code(ModName, TryCount) -> 
+	case code:soft_purge(ModName) of
+		false -> timer:sleep(TryCount*TryCount*10 + 100),
+			unload_code(ModName, TryCount - 1);
+		true -> unload_code(ModName, 0) end.
+
+get_loaded_mc_mod_names() -> get_loaded_mc_mod_names(code:all_loaded(), []).
+
+get_loaded_mc_mod_names([{Mod, ?MODFILENAME}|Rest], Acc) -> get_loaded_mc_mod_names(Rest, [Mod|Acc]);
+get_loaded_mc_mod_names([_|Rest], Acc) -> get_loaded_mc_mod_names(Rest, Acc);
+get_loaded_mc_mod_names([], Acc) -> Acc.
+
+get_mod_names(ModCodeList) -> [Mod || {Mod, _Code} <- ModCodeList].
 
 
 
