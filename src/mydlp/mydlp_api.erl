@@ -345,7 +345,10 @@ check_aba_modulus1([A1, A2, A3, A4, A5, A6, A7, A8, A9]) ->
 %% @end
 %%------------------------------------------------------------------------
 
-is_valid_pan([_WS, _I1, _I2, _I3, I4, _I5 | _Tail]) ->
+%is_valid_pan([_WS, _I1, _I2, _I3, I4, _I5 | _Tail]) ->
+is_valid_pan(PanStr) ->
+	Clean = remove_chars(PanStr, ?WS),
+	[_I1, _I2, _I3, I4|_Tail] = Clean,
 	case I4 of
 		$C -> true;
 		$P -> true;
@@ -436,7 +439,8 @@ is_valid_cc_edate(EdateStr) ->
 %%--------------------------------------------------------------------
 
 is_valid_date(DateStr) ->
-	{Year, Month, Day} = split_date_string(DateStr),
+	Clean = remove_chars(DateStr, ?WS),
+	{Year, Month, Day} = split_date_string(Clean),
 	(is_valid_year(Year) and is_valid_month(Month)) and is_valid_day(Day).
 
 is_valid_year(Year) ->
@@ -449,7 +453,8 @@ is_valid_year(Year) ->
 %%--------------------------------------------------------------------
 
 is_valid_birthdate(BirthdateStr) ->
-	{Year, Month, Day} = split_date_string(BirthdateStr),
+	Clean = remove_chars(BirthdateStr, ?WS),
+	{Year, Month, Day} = split_date_string(Clean),
 	(is_valid_birthdate_year(Year) and is_valid_month(Month)) and is_valid_day(Day).
 
 split_date_string(BirthdateStr) ->
@@ -534,9 +539,10 @@ is_valid_trid1(TrIdStr) ->
 %% @doc Checks whether string is a valid SSN number
 %% @end
 %%----------------------------------------------------------------------
-is_valid_ssn([_WS|SSNStr]) ->
-	SSNStr1 = string:substr(SSNStr, 1, string:len(SSNStr) - 1),
-	Clean = remove_chars(SSNStr1, ?WS_WITH_DASH),
+%is_valid_ssn([_WS|SSNStr]) ->
+is_valid_ssn(SSNStr) ->
+	%SSNStr1 = string:substr(SSNStr, 1, string:len(SSNStr) - 1),
+	Clean = remove_chars(SSNStr, ?WS_WITH_DASH),
 	case string:len(Clean) of 
 		9 ->
 			AreaN = list_to_integer(string:substr(Clean,1,3)),
