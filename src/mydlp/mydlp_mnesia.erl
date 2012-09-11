@@ -31,6 +31,7 @@
 
 -include("mydlp.hrl").
 -include("mydlp_schema.hrl").
+-include("mydlp_acl.hrl").
 
 %% API
 -export([start_link/0,
@@ -932,30 +933,58 @@ resolve_all(Rules, FilterId) ->
 		[FilterKey] -> 	
 			Rules1 = lists:usort(Rules),
 			RRules = resolve_rules(Rules1),
-			TextExtraction = predict_need4te(RRules),
-			{{TextExtraction}, FilterKey, RRules};
+			Req = get_mining_req(RRules),
+			{Req, FilterKey, RRules};
 		_Else -> {{false}, {0, pass}, []} end.
 
-predict_need4te([{_RId, _RAction, ITypes}|Rules]) ->
-	case predict_need4te_1(ITypes) of
-		true -> true;
-		false -> predict_need4te(Rules) end;
-predict_need4te([]) -> false.
+get_mining_req(Rules) -> predict_req_rules(#mining_req{}, Rules).
 
-predict_need4te_1([{_ITId, _DataFormats, _Distance, IFeatures}|ITypes]) ->
-	case predict_need4te_2(IFeatures) of
-		true -> true;
-		false -> predict_need4te_1(ITypes) end;
-predict_need4te_1([]) -> false.
+predict_req_rules(Req, [{_RId, _RAction, ITypes}|Rules]) ->
+	Req1 = predict_req_itypes(Req, ITypes),
+	predict_req(Req1, Rules).
 
-predict_need4te_2([{_Threshold, {all, _FuncParams}}|IFeatures]) ->
-	predict_need4te_2(IFeatures);
-predict_need4te_2([{_Threshold, {Func, _FuncParams}}|IFeatures]) ->
+predict_req_itypes(Req, [{_ITId, _DataFormats, _Distance, IFeatures}|ITypes]) ->
+	Req1 = predict_req_ifeatures(Req, IFeatures),
+	predict_req_itypes(Req1, ITypes).
+
+predict_req_ifeatures(Req, [{_Threshold, {_Id, all, _FuncParams}}|IFeatures]) ->
+	predict_req_ifeatures(Req, IFeatures);
+predict_req_ifeatures(Req, [{_Threshold, {_Id, Func, _FuncParams}}|IFeatures]) ->
+	Req1 = predict_req(Req, Func),
+	predict_req_ifeatures(Req1, IFeatures).
+
+predict_req(#mining_req{} = Req, Func) ->
+	Req1 = predict_req1(Req, Func),
+	Req2 = predict_req2(Req1, Func),
+	Req3 = predict_req3(Req2, Func),
+	Req3.
+
+predict_req1(#mining_req{raw_text=undefined} = Req, Func) -> predict_req1(Req#mining_req{raw_text=false}, Func);
+predict_req1(#mining_req{raw_text=false} = Req, Func) -> predict_req_te(Req, Func);
+predict_req1(#mining_req{normal_text=undefined} = Req, Func) -> predict_req1(Req#mining_req{normal_text=false}, Func);
+predict_req1(#mining_req{normal_text=false} = Req, Func) -> predict_req_te(Req, Func).
+
+predict_req3(#mining_req{mc_pd=undefined} = Req, Func) -> predict_req3(Req#mining_req{mc_pd=false}, Func);
+predict_req3(#mining_req{mc_pd=false} = Req, Func) -> predict_req_mc_pd(Req, Func).
+
+predict_req2(#mining_req{mc_kw=undefined} = Req, Func) -> predict_req2(Req#mining_req{mc_kw=false}, Func);
+predict_req2(#mining_req{mc_kw=false} = Req, Func) -> predict_req_mc_kw(Req, Func).
+
+predict_req_te(#mining_req{} = Req, Func) ->
 	case get_matcher_req(Func) of
-                {raw, _} -> predict_need4te_2(IFeatures);
-                {analyzed, _} -> true;
-                {text, _} -> true end;
-predict_need4te_2([]) -> false.
+		{raw, _} -> Req;
+		{analyzed, _} -> Req#mining_req{raw_text=true};
+		{text, _} -> Req#mining_req{raw_text=true};
+		{normalized, _} -> Req#mining_req{raw_text=true, normal_text=true} end.
+
+predict_req_mc_pd(#mining_req{} = Req, _Func) ->
+	% TODO: implement this
+	Req#mining_req{mc_pd=true}.
+
+predict_req_mc_kw(#mining_req{} = Req, _Func) ->
+	% TODO: implement this
+	Req#mining_req{mc_kw=true}.
+
 
 get_matcher_req(Func) -> apply(mydlp_matchers, Func, []).
 
@@ -979,7 +1008,7 @@ find_ifeatures(ITypeId) ->
 	?QLCE(QM).
 
 find_func(IFeatureId) ->
-	QM = ?QLCQ([{M#match.func, M#match.func_params} ||
+	QM = ?QLCQ([{M#match.id, M#match.func, M#match.func_params} ||
 			M <- mnesia:table(match),
 			M#match.ifeature_id == IFeatureId
 		]),

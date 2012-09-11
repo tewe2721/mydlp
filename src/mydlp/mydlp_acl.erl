@@ -30,6 +30,7 @@
 -behaviour(gen_server).
 
 -include("mydlp.hrl").
+-include("mydlp_acl.hrl").
 
 %% API
 -export([start_link/0,
@@ -114,59 +115,67 @@ acl_call1(Query, Files, Timeout) -> gen_server:call(?MODULE, {acl, Query, Files,
 
 -ifdef(__MYDLP_NETWORK).
 
-acl_exec(none, _Source, []) -> pass;
-acl_exec(_RuleTables, _Source, []) -> pass;
-acl_exec(RuleTables, Source, Files) ->
-	acl_exec2(RuleTables, Source, Files).
+acl_exec(none, []) -> pass;
+acl_exec(_RuleTables, []) -> pass;
+acl_exec(RuleTables, Files) ->
+	acl_exec2(RuleTables, Files).
 
 -endif.
 
-acl_exec2(none, _Source, _Files) -> pass;
-acl_exec2({ACLOpts, {_Id, DefaultAction}, Rules}, Source, Files) ->
-	case { DefaultAction, acl_exec3(ACLOpts, Rules, Source, Files) } of
+acl_exec2(none, _Files) -> pass;
+acl_exec2({ACLOpts, {_Id, DefaultAction}, Rules}, Files) ->
+	case { DefaultAction, acl_exec3(ACLOpts, Rules, Files) } of
 		{DefaultAction, return} -> DefaultAction;
 		{_DefaultAction, Action} -> Action end.
 
-acl_exec3(_ACLOpts, [], _Source, _Files) -> return;
-acl_exec3(_ACLOpts, _AllRules, _Source, []) -> return;
-acl_exec3(ACLOpts, AllRules, Source, Files) ->
-	acl_exec3(ACLOpts, AllRules, Source, Files, [], false).
+acl_exec3(_ACLOpts, [], _Files) -> return;
+acl_exec3(_ACLOpts, _AllRules, []) -> return;
+acl_exec3(ACLOpts, AllRules, Files) ->
+	acl_exec3(ACLOpts, AllRules, Files, [], false).
 
-acl_exec3(_ACLOpts, _AllRules, _Source, [], [], _CleanFiles) -> return;
+acl_exec3(_ACLOpts, _AllRules, [], [], _CleanFiles) -> return;
 
-acl_exec3(ACLOpts, AllRules, Source, [], ExNewFiles, false) ->
-	acl_exec3(ACLOpts, AllRules, Source, [], ExNewFiles, true);
+acl_exec3(ACLOpts, AllRules, [], ExNewFiles, false) ->
+	acl_exec3(ACLOpts, AllRules, [], ExNewFiles, true);
 
-acl_exec3(ACLOpts, AllRules, Source, [], ExNewFiles, CleanFiles) ->
-	acl_exec3(ACLOpts, AllRules, Source, ExNewFiles, [], CleanFiles);
+acl_exec3(ACLOpts, AllRules, [], ExNewFiles, CleanFiles) ->
+	acl_exec3(ACLOpts, AllRules, ExNewFiles, [], CleanFiles);
 	
-acl_exec3({TextExtraction} = ACLOpts, AllRules, Source, Files, ExNewFiles, CleanFiles) ->
+acl_exec3({Req} = ACLOpts, AllRules, Files, ExNewFiles, CleanFiles) ->
 	{InChunk, RestOfFiles} = mydlp_api:get_chunk(Files),
 	Files1 = mydlp_api:load_files(InChunk),
-	
-	Files3 = drop_whitefile(Files1),
+	Files2 = drop_whitefile(Files1),
 
-	{PFiles, NewFiles} = mydlp_api:analyze(Files3),
+	{PFiles, NewFiles} = mydlp_api:analyze(Files2),
 	PFiles1 = case CleanFiles of
 		true -> mydlp_api:clean_files(PFiles); % Cleaning newly created files.
 		false -> PFiles end,
 
 	PFiles2 = drop_nodata(PFiles1),
-	FFiles = case TextExtraction of
-		true -> pl_text(PFiles2);
-		false -> PFiles2 end,
+	PFiles3 = case Req of
+		#mining_req{normal_text = true} -> pl_text(PFiles2, normalized);
+		#mining_req{raw_text = true} -> pl_text(PFiles2, raw_text);
+		_Else2 -> PFiles2 end,
 
-	case apply_rules(AllRules, Source, FFiles) of
-		return -> acl_exec3(ACLOpts, AllRules, Source, RestOfFiles,
+	PFiles4 = case Req of 
+		#mining_req{mc_pd = true, mc_kw = true} -> mc_text(PFiles3, all);
+		#mining_req{mc_pd = true} -> mc_text(PFiles3, pd);
+		#mining_req{mc_kw = true} -> mc_text(PFiles3, kw);
+		_Else3 -> mc_text(PFiles3, none) end,
+
+	FFiles = PFiles4,
+
+	case apply_rules(AllRules, FFiles) of
+		return -> acl_exec3(ACLOpts, AllRules, RestOfFiles,
 				lists:append(ExNewFiles, NewFiles), CleanFiles);
 		Else -> Else end.
 
 -ifdef(__MYDLP_NETWORK).
 
-handle_acl({q, #aclq{src_addr=Addr} = AclQ}, Files, _State) ->
+handle_acl({q, #aclq{} = AclQ}, Files, _State) ->
 	CustomerId = mydlp_mnesia:get_dfid(),
 	Rules = mydlp_mnesia:get_rules(CustomerId, AclQ),
-	acl_exec(Rules, [{cid, CustomerId}, {addr, Addr}], Files);
+	acl_exec(Rules, Files);
 
 handle_acl({get_remote_rule_tables, Addr, UserH}, _Files, _State) ->
 	CustomerId = mydlp_mnesia:get_dfid(),
@@ -189,12 +198,11 @@ handle_acl({qe, _Channel}, [#file{mime_type= <<"mydlp-internal/usb-device;id=", 
 
 handle_acl({qe, Channel}, Files, _State) ->
 	Rules = mydlp_mnesia:get_rule_table(Channel),
-	acl_exec2(Rules, [{cid, mydlp_mnesia:get_dfid()}], Files);
+	acl_exec2(Rules, Files);
 
 handle_acl(Q, _Files, _State) -> throw({error, {undefined_query, Q}}).
 
 -endif.
-
 
 handle_call({acl, Query, Files, Timeout}, From, State) ->
 	Worker = self(),
@@ -264,63 +272,63 @@ code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 
 %%%%%%%%%%%%%%% helper func
-apply_rules([], _Addr, _Files) -> return;
-apply_rules(_Rules, _Addr, []) -> return;
-apply_rules([{Id, Action, ITypes}|Rules], Addr, Files) ->
-	case execute_itypes(ITypes, Addr, Files) of
-		neg -> apply_rules(Rules, Addr, Files);
+apply_rules([], _Files) -> return;
+apply_rules(_Rules, []) -> return;
+apply_rules([{Id, Action, ITypes}|Rules], Files) ->
+	case execute_itypes(ITypes, Files) of
+		neg -> apply_rules(Rules, Files);
 		{pos, {file, File}, {itype, ITypeOrigId}, {misc, Misc}} -> 
 			{Action, {{rule, Id}, {file, File}, {itype, ITypeOrigId}, {misc, Misc}}};
 		{error, {file, File}, {itype, ITypeOrigId}, {misc, Misc}} -> 
 			{?CFG(error_action), {{rule, Id}, {file, File}, {itype, ITypeOrigId}, {misc, Misc}}}
 	end.
 
-execute_itypes([], _Addr, _Files) -> neg;
-execute_itypes(_ITypes, _Addr, []) -> neg;
-execute_itypes(ITypes, Addr, Files) ->
-	PAnyRet = mydlp_api:pany(fun(F) -> execute_itypes_pf(ITypes, Addr, F) end, Files, 900000),
+execute_itypes([], _Files) -> neg;
+execute_itypes(_ITypes, []) -> neg;
+execute_itypes(ITypes, Files) ->
+	PAnyRet = mydlp_api:pany(fun(F) -> execute_itypes_pf(ITypes, F) end, Files, 900000),
 	case PAnyRet of
 		false -> neg;
 		{ok, _File, Ret} -> Ret end.
 
 
-execute_itypes_pf(ITypes, Addr, File) -> 
+execute_itypes_pf(ITypes, File) -> 
         File1 = case File#file.mime_type of 
                 undefined -> 	MT = mydlp_tc:get_mime(File#file.filename, File#file.data),
 				File#file{mime_type=MT};
                 _Else ->	File end,
 
-	PAnyRet = mydlp_api:pany(fun(T) -> execute_itype_pf(T, Addr, File1) end, ITypes, 850000),
+	PAnyRet = mydlp_api:pany(fun(T) -> execute_itype_pf(T, File1) end, ITypes, 850000),
 	
 	case PAnyRet of
 		false -> neg;
 		{ok, _IType, Ret} -> Ret end.
 
-execute_itype_pf({ITypeOrigId, all, Distance, IFeatures}, Addr, File) ->
-	execute_itype_pf1(ITypeOrigId, Distance, IFeatures, Addr, File);
-execute_itype_pf({ITypeOrigId, DataFormats, Distance, IFeatures}, Addr, 
+execute_itype_pf({ITypeOrigId, all, Distance, IFeatures}, File) ->
+	execute_itype_pf1(ITypeOrigId, Distance, IFeatures, File);
+execute_itype_pf({ITypeOrigId, DataFormats, Distance, IFeatures},
 		#file{mime_type=MT} = File) ->
         case mydlp_mnesia:is_mime_of_dfid(MT, DataFormats) of
                 false -> neg;
-		true -> execute_itype_pf1(ITypeOrigId, Distance, IFeatures, Addr, File) end.
+		true -> execute_itype_pf1(ITypeOrigId, Distance, IFeatures, File) end.
 
-execute_itype_pf1(ITypeOrigId, Distance, IFeatures, Addr, File) ->
-	case execute_ifeatures(Distance, IFeatures, Addr, File) of
+execute_itype_pf1(ITypeOrigId, Distance, IFeatures, File) ->
+	case execute_ifeatures(Distance, IFeatures, File) of
 		neg -> neg;
 		pos -> {pos, {file, File}, {itype, ITypeOrigId}, {misc, ""}};
 		{error, {file, File}, {misc, Misc}} ->
 				{error, {file, File}, {itype, ITypeOrigId}, {misc, Misc}};
 		E -> E end.
 
-execute_ifeatures(_Distance, [], _Addr, _File) -> 0;
-execute_ifeatures(Distance, IFeatures, Addr, File) ->
+execute_ifeatures(_Distance, [], _File) -> 0;
+execute_ifeatures(Distance, IFeatures, File) ->
 	try	UseDistance = case Distance of
 			undefined -> false;
-			_Else -> lists:all(fun({_Threshold, {Func, _FuncParams}}) ->
+			_Else -> lists:all(fun({_Threshold, {_MId, Func, _FuncParams}}) ->
 						is_distance_applicable(Func) end, IFeatures) end,
 	
-		PAllRet = mydlp_api:pall(fun({Threshold, {Func, FuncParams}}) ->
-						apply_m(Threshold, Distance, UseDistance, Func, [FuncParams, Addr, File]) end,
+		PAllRet = mydlp_api:pall(fun({Threshold, {MId, Func, FuncParams}}) ->
+						apply_m(Threshold, Distance, UseDistance, {MId, Func, FuncParams, File}) end,
 					IFeatures, 800000),
 		%%%% TODO: Check for PAnyRet whether contains error
 		case {PAllRet, UseDistance} of
@@ -418,8 +426,8 @@ is_early_distance_satisfied([Head|Tail], Threshold, Distance)->
 		false -> is_early_distance_satisfied(Tail, Threshold, Distance)
 	end.
 
-apply_m(_Threshold, _Distance, _IsDistanceApplicable,all, [_FuncParams, _Addr, _File]) -> pos; %% match directly.
-apply_m(Threshold, Distance, IsDistanceApplicable, Func, [FuncParams, Addr, File]) ->
+apply_m(_Threshold, _Distance, _IsDistanceApplicable, {_MatcherId, all, _FuncParams, _File}) -> pos; %% match directly.
+apply_m(Threshold, Distance, IsDistanceApplicable, {MatcherId, Func, FuncParams, File}) ->
 	EarlyNeg = case get_matcher_req(Func) of
 		{raw, _} -> false;
 		{analyzed, _} -> false;
@@ -427,7 +435,9 @@ apply_m(Threshold, Distance, IsDistanceApplicable, Func, [FuncParams, Addr, File
 	case EarlyNeg of
 		true -> neg;
 		false -> FuncOpts = get_func_opts(Func, FuncParams),
-			IndexRet = apply(mydlp_matchers, Func, [FuncOpts, Addr, File]),
+			IndexRet = case is_mc_func(Func) of
+				true -> apply(mydlp_matchers, mc_match, [MatcherId, Func, FuncOpts, File]);
+				false -> apply(mydlp_matchers, Func, [FuncOpts, File]) end,
 			case IndexRet of
 				{Score, IndexList} ->
 						EarlyNegForDistance = case IsDistanceApplicable of
@@ -446,12 +456,15 @@ apply_m(Threshold, Distance, IsDistanceApplicable, Func, [FuncParams, Addr, File
 			end
 	end.
 
+is_mc_func(Func) -> true. % TODO: implement this.
+
 get_matcher_req(Func) -> apply(mydlp_matchers, Func, []).
 
 get_func_opts(Func, FuncParams) -> apply(mydlp_matchers, Func, [FuncParams]).
 
-pl_text(Files) -> pl_text(Files, []).
-pl_text([#file{text=undefined} = File|Files], Rets) -> 
+pl_text(Files, Opts) -> lists:map(fun(F) -> pl_text_f(F, Opts) end, Files). % TODO: may be pmap used, should check thrift client high load conc
+
+pl_text_f(#file{text=undefined} = File, Opts) -> 
 	File1 = case mydlp_api:get_text(File) of
 		{ok, Text} -> File#file{text = Text};
 		{error, compression} -> File;
@@ -460,9 +473,22 @@ pl_text([#file{text=undefined} = File|Files], Rets) ->
 		{error, image} -> File;
 		_Else -> File#file{is_encrypted=true}
 	end,
-	pl_text(Files, [ File1 |Rets]);
-pl_text([File|Files], Rets) -> pl_text(Files, [File|Rets]);
-pl_text([], Rets) -> lists:reverse(Rets).
+	File2 = case {File1#file.text, Opts} of
+		{_, raw_text} -> File1;
+		{undefined, _} -> File1;
+		{RawText, normalized} ->
+			NormalText = mydlp_nlp:normalize(RawText),
+			File1#file{normal_text=NormalText};
+		_Else2 -> File1 end,
+	File2.
+
+mc_text(Files, Opts) -> lists:map(fun(F) -> F#file{mc_table=mc_text_f(F, Opts)} end, Files). % TODO: may be pmap used, should check thrift client high load conc
+
+mc_text_f(_, none) -> [];
+mc_text_f(#file{normal_text=undefined}, _Opts) -> [];
+mc_text_f(#file{normal_text=NormalText}, all) -> mydlp_mc:mc_search(NormalText);
+mc_text_f(#file{normal_text=NormalText}, kw) -> mydlp_mc:mc_search(kw, NormalText);
+mc_text_f(#file{normal_text=NormalText}, pd) -> mydlp_mc:mc_search(pd, NormalText).
 
 is_whitefile(_File) ->
 	%Hash = erlang:md5(File#file.data),

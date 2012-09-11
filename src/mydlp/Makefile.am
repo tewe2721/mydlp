@@ -71,6 +71,7 @@ mydlp_erl = \
 
 dist_hrl_DATA = \
 	mydlp.hrl \
+	mydlp_acl.hrl \
 	mydlp_big_binary.hrl \
 	mydlp_http.hrl \
 	mydlp_logger.hrl \

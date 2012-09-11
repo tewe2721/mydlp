@@ -31,6 +31,7 @@
 
 %% API
 -export([
+	mc_match/4,
 	md5_match/0,
 	md5_match/1,
 	md5_match/3,
@@ -103,6 +104,22 @@
 ]).
 
 -include_lib("eunit/include/eunit.hrl").
+
+mc_is_apply(Func) -> true.
+
+mc_match(MatcherId, Func, FuncOpts, #file{mc_table=MCTable, normal_text=NT}) ->
+	Matched = lists:filter(fun({_I, _CI, {_L, ML}}) -> lists:member(MatcherId, ML) end, MCTable),
+	MatchedIndex = case mc_is_apply(Func) of
+		true -> lists:map(fun({I, CI, {L, _ML}}) ->
+				Head = size(NT) + CI - L,
+				<<_:Head/binary, Phrase:L/binary, _/binary>> = NT,
+				case Func(FuncOpts, Phrase) of
+					true -> [I];
+					false -> [] end
+			end, Matched);
+		false -> lists:map(fun({{I, {_L, _ML}}}) -> I end, Matched) end,
+	MI = lists:flatten(MatchedIndex),
+	{length(MI), MI}.
 
 regex_match() -> {text, da}.
 

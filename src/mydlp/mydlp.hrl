@@ -59,11 +59,13 @@
                 given_type,
 		md5_hash,
 		size,
+		compressed_copy = false,
+		is_encrypted = false,
                 data,
 		dataref,
 		text,
-		compressed_copy = false,
-		is_encrypted = false
+		normal_text,
+		mc_table
         }).
 
 -record(aclq, {

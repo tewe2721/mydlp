@@ -983,11 +983,11 @@ acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files0, Misc, _Pay
 	acl_msg_logger(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc),
 	LogTerm = case Action of
 		pass -> 	{Time, Channel, RuleId, Action, Ip, User, To, ITypeId, 
-						[F#file{data=undefined, dataref=undefined, text=undefined}||F <- Files], Misc};
+						[F#file{data=undefined, dataref=undefined, text=undefined, normal_text=undefined, mc_table=undefined}||F <- Files], Misc};
 		log -> 		{Time, Channel, RuleId, Action, Ip, User, To, ITypeId, 
-						[F#file{data=undefined, dataref=undefined, text=undefined}||F <- Files], Misc};
+						[F#file{data=undefined, dataref=undefined, text=undefined, normal_text=undefined, mc_table=undefined}||F <- Files], Misc};
 		block -> 	{Time, Channel, RuleId, Action, Ip, User, To, ITypeId, 
-						[F#file{data=undefined, dataref=undefined, text=undefined}||F <- Files], Misc};
+						[F#file{data=undefined, dataref=undefined, text=undefined, normal_text=undefined, mc_table=undefined}||F <- Files], Misc};
 		quarantine ->	{Time, Channel, RuleId, Action, Ip, User, To, ITypeId, 
 						[mydlp_api:remove_cr(F)||F <- Files], Misc};
 		archive -> 	{Time, Channel, RuleId, Action, Ip, User, To, ITypeId, 
@@ -1237,7 +1237,7 @@ remove_crs(Files) when is_list(Files) ->
 
 remove_cr(#file{} = File) -> 
 	File1 = load_file(File),
-	File1#file{dataref=undefined}.
+	File1#file{dataref=undefined, text=undefined, normal_text=undefined, mc_table=undefined}.
 
 %%--------------------------------------------------------------------
 %% @doc Reconstructs cache references.
