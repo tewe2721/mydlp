@@ -685,6 +685,65 @@ is_valid_said2([O1,E1,O2,E2,O3,E3,O4,E4,O5,E5,O6,E6,CS]) ->
 	CSI == 10 - (Sum rem 10).
 
 %%--------------------------------------------------------------------
+%% @doc Generates matcher patterns
+%% @end
+%%----------------------------------------------------------------------
+
+generate_patterns({PatternList, Opts}) ->
+	PurePattern= generate_pattern1(PatternList, [[]]),
+	PatternWithOpts = lists:map(fun(I) -> apply_opts(I, Opts) end, PurePattern),
+	lists:map(fun(H) -> lists:flatten(H) end, PatternWithOpts).
+
+generate_pattern1([], Acc) -> lists:map(fun(H) -> lists:reverse(H) end, Acc);
+generate_pattern1([Head|Tail], Acc) ->
+	Acc1 = generate_pattern2(Head, Acc),
+	generate_pattern1(Tail, Acc1).
+
+generate_pattern2({special, Specials}, Acc) -> generate_patterns_with_specials(Specials, Acc, []);
+	
+generate_pattern2({Group, {Min, Max}}, Acc) ->
+	Acc1 = generate_pattern2({Group, Min}, Acc),
+	Acc2 = generate_cartesian_patterns({Group, {Min+1, Max}}, Acc, []),
+	lists:append(Acc2, Acc1);
+generate_pattern2({alpha, L}, Acc) -> add_character_all_patterns("A", L, Acc);
+generate_pattern2({numeric, L}, Acc) -> add_character_all_patterns("N", L, Acc);
+generate_pattern2(ws, Acc) ->  add_character_all_patterns(" ", 1, Acc).
+
+generate_cartesian_patterns({Group, {Min, Max = Min}}, OldPatterns, Acc)->
+	Acc1 = generate_pattern2({Group, Max}, OldPatterns),
+	lists:append(Acc, Acc1);
+generate_cartesian_patterns({Group, {Min, Max}}, OldPatterns, Acc) ->
+	Acc1 = generate_pattern2({Group, Min}, OldPatterns),
+	generate_cartesian_patterns({Group, {Min+1, Max}}, OldPatterns, lists:append(Acc, Acc1)).
+
+generate_patterns_with_specials([], _OldPatterns, Acc) -> Acc;
+generate_patterns_with_specials([Head|Tail], OldPatterns, Acc) ->
+	Acc1 = add_character_all_patterns(Head, 1, OldPatterns),
+	Acc2 = lists:append(Acc, Acc1),
+	generate_patterns_with_specials(Tail, OldPatterns, Acc2).
+
+add_character(C, Acc) -> add_character(C, 1, Acc).
+add_character(_C, _L = 0, Acc) -> Acc;
+add_character(C, L, Acc) -> add_character(C, L-1, [C|Acc]).
+
+add_character_all_patterns(C, L, Patterns) -> add_character_all_patterns(C, L, Patterns, []).
+add_character_all_patterns(_C, _L, [], Acc ) -> Acc;
+add_character_all_patterns(C, L, [Head|Tail], Acc) ->
+	Acc1 = add_character(C, L, Head),
+	Acc2 = lists:flatten(Acc1),
+	add_character_all_patterns(C, L, Tail, [Acc2|Acc]).
+
+apply_opts(PurePattern, none) -> PurePattern;
+apply_opts(PurePattern, encap_ws) -> " " ++ PurePattern ++ " ";
+apply_opts(PurePattern, join_ws) ->
+	PurePattern1 = remove_chars(lists:flatten(PurePattern), " "),
+	join_ws(PurePattern1, []).
+
+join_ws([], Acc) -> [" "|lists:reverse(Acc)];
+join_ws([Head|Tail], Acc) -> join_ws(Tail, [" ",Head|Acc]).
+	
+
+%%--------------------------------------------------------------------
 %% @doc Gets response from ports
 %% @end
 %%----------------------------------------------------------------------
