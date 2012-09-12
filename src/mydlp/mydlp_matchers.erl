@@ -277,12 +277,7 @@ gdate_match({pd_patterns, "wide"}) ->
 	?P({[{numeric, 2}, {special, "/-"}, {numeric, 2}, {special, "/-"}, {numeric, 4}], none}) ++
 	?P({[{numeric, 2}, {special, "/-"}, {alpha, 3}, {special, "/-"}, {numeric, 4}], none}) ++
 	?P({[{numeric, 2}, ws, {alpha, 3}, ws, {numeric, 4}], none}) ++
-	?P({[{alpha, 3}, ws, {numeric, {1, 2}}, {special, ","}, ws, {numeric, 4}], none}) ++
-	?P({[{numeric, 4}, {special, "/-"}, {numeric, 2}, {special, "/-"}, {numeric, 2}], join_ws}) ++
-	?P({[{numeric, 2}, {special, "/-"}, {alpha, 3}, {special, "/-"}, {numeric, 4}], join_ws}) ++
-	?P({[{numeric, 2}, ws, {alpha, 3}, ws, {numeric, 4}], join_ws}) ++
-	?P({[{alpha, 3}, ws, {numeric, {1, 2}}, {special, ","}, ws, {numeric, 4}], join_ws}) ++
-	?P({[{numeric, 4}, {special, "/-"}, {numeric, 2}, {special, "/-"}, {numeric, 2}], join_ws}).
+	?P({[{alpha, 3}, ws, {numeric, {1, 2}}, {special, ","}, ws, {numeric, 4}], none}).
 
 gdate_match(_Conf, Phrase) -> mydlp_api:is_valid_date(Phrase).
 
@@ -291,28 +286,23 @@ birthdate_match() -> {normalized, {distance, true}, {pd, true}, {kw, false}}.
 birthdate_match({conf, _Conf}) -> none;
 
 birthdate_match({pd_patterns, "narrow"}) -> 
-	?P({[{numeric, 2}, {special, "/-"}, {numeric, 2}, {special, "/-"}, {numeric, 4}], encap_ws}),
-	?P({[{numeric, 2}, {special, "/-"}, {alpha, 3}, {special, "/-"}, {numeric, 4}], encap_ws}),
-	?P({[{numeric, 2}, ws, {alpha, 3}, ws, {numeric, 4}], encap_ws}),
-	?P({[{alpha, 3}, ws, {numeric, {1, 2}}, {special, ","}, ws, {numeric, 4}], encap_ws}),
+	?P({[{numeric, 2}, {special, "/-"}, {numeric, 2}, {special, "/-"}, {numeric, 4}], encap_ws}) ++
+	?P({[{numeric, 2}, {special, "/-"}, {alpha, 3}, {special, "/-"}, {numeric, 4}], encap_ws}) ++
+	?P({[{numeric, 2}, ws, {alpha, 3}, ws, {numeric, 4}], encap_ws}) ++
+	?P({[{alpha, 3}, ws, {numeric, {1, 2}}, {special, ","}, ws, {numeric, 4}], encap_ws}) ++
 	?P({[{numeric, 4}, {special, "/-"}, {numeric, 2}, {special, "/-"}, {numeric, 2}], encap_ws});
 birthdate_match({pd_patterns, "normal"}) ->
-	?P({[{numeric, 2}, {special, "/-"}, {numeric, 2}, {special, "/-"}, {numeric, 4}], encap_ws}),
-	?P({[{numeric, 2}, {special, "/-"}, {alpha, 3}, {special, "/-"}, {numeric, 4}], encap_ws}),
-	?P({[{numeric, 2}, ws, {alpha, 3}, ws, {numeric, 4}], encap_ws}),
-	?P({[{alpha, 3}, ws, {numeric, {1, 2}}, {special, ","}, ws, {numeric, 4}], encap_ws}),
+	?P({[{numeric, 2}, {special, "/-"}, {numeric, 2}, {special, "/-"}, {numeric, 4}], encap_ws}) ++
+	?P({[{numeric, 2}, {special, "/-"}, {alpha, 3}, {special, "/-"}, {numeric, 4}], encap_ws}) ++
+	?P({[{numeric, 2}, ws, {alpha, 3}, ws, {numeric, 4}], encap_ws}) ++
+	?P({[{alpha, 3}, ws, {numeric, {1, 2}}, {special, ","}, ws, {numeric, 4}], encap_ws}) ++
 	?P({[{numeric, 4}, {special, "/-"}, {numeric, 2}, {special, "/-"}, {numeric, 2}], encap_ws});
 birthdate_match({pd_patterns, "wide"}) ->
-	?P({[{numeric, 2}, {special, "/-"}, {numeric, 2}, {special, "/-"}, {numeric, 4}], none}),
-	?P({[{numeric, 2}, {special, "/-"}, {numeric, 2}, {special, "/-"}, {numeric, 4}], none}),
-	?P({[{numeric, 2}, {special, "/-"}, {alpha, 3}, {special, "/-"}, {numeric, 4}], none}),
-	?P({[{numeric, 2}, ws, {alpha, 3}, ws, {numeric, 4}], none}),
-	?P({[{alpha, 3}, ws, {numeric, {1, 2}}, {special, ","}, ws, {numeric, 4}], none}),
-	?P({[{numeric, 4}, {special, "/-"}, {numeric, 2}, {special, "/-"}, {numeric, 2}], join_ws}),
-	?P({[{numeric, 2}, {special, "/-"}, {alpha, 3}, {special, "/-"}, {numeric, 4}], join_ws}),
-	?P({[{numeric, 2}, ws, {alpha, 3}, ws, {numeric, 4}], join_ws}),
-	?P({[{alpha, 3}, ws, {numeric, {1, 2}}, {special, ","}, ws, {numeric, 4}], join_ws}),
-	?P({[{numeric, 4}, {special, "/-"}, {numeric, 2}, {special, "/-"}, {numeric, 2}], join_ws}).
+	?P({[{numeric, 2}, {special, "/-"}, {numeric, 2}, {special, "/-"}, {numeric, 4}], none}) ++
+	?P({[{numeric, 2}, {special, "/-"}, {numeric, 2}, {special, "/-"}, {numeric, 4}], none}) ++
+	?P({[{numeric, 2}, {special, "/-"}, {alpha, 3}, {special, "/-"}, {numeric, 4}], none}) ++
+	?P({[{numeric, 2}, ws, {alpha, 3}, ws, {numeric, 4}], none}) ++
+	?P({[{alpha, 3}, ws, {numeric, {1, 2}}, {special, ","}, ws, {numeric, 4}], none}).
 
 birthdate_match(_Conf, Phrase) -> mydlp_api:is_valid_birthdate(Phrase).
 
