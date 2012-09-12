@@ -123,25 +123,25 @@ acl_exec(RuleTables, Files) ->
 -endif.
 
 acl_exec2(none, _Files) -> pass;
-acl_exec2({ACLOpts, {_Id, DefaultAction}, Rules}, Files) ->
-	case { DefaultAction, acl_exec3(ACLOpts, Rules, Files) } of
+acl_exec2({Req, {_Id, DefaultAction}, Rules}, Files) ->
+	case { DefaultAction, acl_exec3(Req, Rules, Files) } of
 		{DefaultAction, return} -> DefaultAction;
 		{_DefaultAction, Action} -> Action end.
 
-acl_exec3(_ACLOpts, [], _Files) -> return;
-acl_exec3(_ACLOpts, _AllRules, []) -> return;
-acl_exec3(ACLOpts, AllRules, Files) ->
-	acl_exec3(ACLOpts, AllRules, Files, [], false).
+acl_exec3(_Req, [], _Files) -> return;
+acl_exec3(_Req, _AllRules, []) -> return;
+acl_exec3(Req, AllRules, Files) ->
+	acl_exec3(Req, AllRules, Files, [], false).
 
-acl_exec3(_ACLOpts, _AllRules, [], [], _CleanFiles) -> return;
+acl_exec3(_Req, _AllRules, [], [], _CleanFiles) -> return;
 
-acl_exec3(ACLOpts, AllRules, [], ExNewFiles, false) ->
-	acl_exec3(ACLOpts, AllRules, [], ExNewFiles, true);
+acl_exec3(Req, AllRules, [], ExNewFiles, false) ->
+	acl_exec3(Req, AllRules, [], ExNewFiles, true);
 
-acl_exec3(ACLOpts, AllRules, [], ExNewFiles, CleanFiles) ->
-	acl_exec3(ACLOpts, AllRules, ExNewFiles, [], CleanFiles);
+acl_exec3(Req, AllRules, [], ExNewFiles, CleanFiles) ->
+	acl_exec3(Req, AllRules, ExNewFiles, [], CleanFiles);
 	
-acl_exec3({Req} = ACLOpts, AllRules, Files, ExNewFiles, CleanFiles) ->
+acl_exec3(Req, AllRules, Files, ExNewFiles, CleanFiles) ->
 	{InChunk, RestOfFiles} = mydlp_api:get_chunk(Files),
 	Files1 = mydlp_api:load_files(InChunk),
 	Files2 = drop_whitefile(Files1),
@@ -166,7 +166,7 @@ acl_exec3({Req} = ACLOpts, AllRules, Files, ExNewFiles, CleanFiles) ->
 	FFiles = PFiles4,
 
 	case apply_rules(AllRules, FFiles) of
-		return -> acl_exec3(ACLOpts, AllRules, RestOfFiles,
+		return -> acl_exec3(Req, AllRules, RestOfFiles,
 				lists:append(ExNewFiles, NewFiles), CleanFiles);
 		Else -> Else end.
 
@@ -339,10 +339,7 @@ execute_ifeatures(Distance, IFeatures, File) ->
 
 %% Controls information feature is applicable for distance property.
 is_distance_applicable(Func) ->
-	case get_matcher_req(Func) of
-		{_, dna} -> false;
-		{_, da} -> true end.
-
+	{_, {distance, IsDistance}, {pd, _}, {kw, _}} = apply(Func, []), IsDistance.
 
 is_distance_satisfied(Results, Distance) ->
 	[ListOfIndexes, ListOfThresholds] = regulate_results(Results),
@@ -428,16 +425,15 @@ is_early_distance_satisfied([Head|Tail], Threshold, Distance)->
 
 apply_m(_Threshold, _Distance, _IsDistanceApplicable, {_MatcherId, all, _FuncParams, _File}) -> pos; %% match directly.
 apply_m(Threshold, Distance, IsDistanceApplicable, {MatcherId, Func, FuncParams, File}) ->
-	EarlyNeg = case get_matcher_req(Func) of
-		{raw, _} -> false;
-		{analyzed, _} -> false;
-		{text, _} -> not mydlp_api:has_text(File) end,
+	EarlyNeg = case is_text_func(Func) of
+		false -> false;
+		true -> not mydlp_api:has_text(File) end,
 	case EarlyNeg of
 		true -> neg;
 		false -> FuncOpts = get_func_opts(Func, FuncParams),
 			IndexRet = case is_mc_func(Func) of
 				true -> apply(mydlp_matchers, mc_match, [MatcherId, Func, FuncOpts, File]);
-				false -> apply(mydlp_matchers, Func, [FuncOpts, File]) end,
+				false -> apply(mydlp_matchers, Func, [{FuncOpts, File}]) end,
 			case IndexRet of
 				{Score, IndexList} ->
 						EarlyNegForDistance = case IsDistanceApplicable of
@@ -456,11 +452,20 @@ apply_m(Threshold, Distance, IsDistanceApplicable, {MatcherId, Func, FuncParams,
 			end
 	end.
 
-is_mc_func(Func) -> true. % TODO: implement this.
+is_mc_func(Func) ->
+	case apply(mydlp_matchers, Func, []) of
+		{_, {distance, _}, {pd, true}, {kw, _}} -> true;
+		{_, {distance, _}, {pd, _}, {kw, true}} -> true;
+		{_, {distance, _}, {pd, _}, {kw, _}} -> false end.
 
-get_matcher_req(Func) -> apply(mydlp_matchers, Func, []).
+is_text_func(Func) ->
+	case apply(mydlp_matchers, Func, []) of
+		{raw, {distance, _}, {pd, _}, {kw, _}} -> false;
+		{analyzed, {distance, _}, {pd, _}, {kw, _}} -> false;
+		{text, {distance, _}, {pd, _}, {kw, _}} -> true;
+		{normalized, {distance, _}, {pd, _}, {kw, _}} -> true end.
 
-get_func_opts(Func, FuncParams) -> apply(mydlp_matchers, Func, [FuncParams]).
+get_func_opts(Func, FuncParams) -> apply(mydlp_matchers, Func, [{conf, FuncParams}]).
 
 pl_text(Files, Opts) -> lists:map(fun(F) -> pl_text_f(F, Opts) end, Files). % TODO: may be pmap used, should check thrift client high load conc
 

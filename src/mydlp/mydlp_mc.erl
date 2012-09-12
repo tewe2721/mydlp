@@ -1,4 +1,4 @@
-%%%
+%%
 %%%    Copyright (C) 2012 Ozgen Muzac <ozgen@mydlp.com>
 %%%    Copyright (C) 2012 Huseyin Kerem Cevahir <kerem@mydlp.com>
 %%%
@@ -29,9 +29,14 @@
 -author("kerem@mydlp.com").
 -author("ozgen@mydlp.com").
 
+-include("mydlp.hrl").
+-include("mydlp_schema.hrl").
+
 %% API
 -export([
 	mc_print/2,
+	mc_load_mnesia/0,
+	mc_load/1,
 	mc_search/1,
 	mc_search/2,
 	mc_generate/2,
@@ -45,6 +50,16 @@
 
 -define(MODFILENAME, "mydlp_mc_dynamic.erl").
 
+mc_persist() ->
+	Matchers = mydlp_mnesia:get_matchers(),
+	PDPatterns = get_pd_patterns(Matchers),
+	KWPatterns = get_kw_patterns(Matchers),
+	PDCodes = mc_generate(pd, PDPatterns, true),
+	KWCodes = mc_generate(kw, KWPatterns, true),
+	Codes = PDCodes ++ KWCodes,
+	MC = #mc_module{target=local, modules=Codes},
+	mydlp_mnesia:write(MC).
+
 mc_load(ModCodeTupleList) ->
 	LoadedMods = get_loaded_mc_mod_names(),
 	ModNames = get_mod_names(ModCodeTupleList),
@@ -52,6 +67,10 @@ mc_load(ModCodeTupleList) ->
 	lists:foreach(fun({M,C}) -> code:load_binary(M, ?MODFILENAME, C) end, ModCodeTupleList),
 	lists:foreach(fun(M) -> unload_code(M) end, UnloadList),
 	ok.
+
+mc_load_mnesia() ->
+	Mods = mydlp_mnesia:get_mc_module(),
+	mc_load(Mods).
 
 mc_print(Engine, Data) ->
 	Results = mc_search(Engine, Data),
@@ -75,19 +94,20 @@ mc_generate(pd, L, JustReturnCode) -> mc_generate1(pd, L, JustReturnCode).
 mc_generate1(Engine, ListOfKeywordGroups) -> mc_generate1(Engine, ListOfKeywordGroups, false).
 
 mc_generate1(Engine, ListOfKeywordGroups, JustReturnCode) ->
-	%io:format("Generation started (~w)...~n", [erlang:localtime()]),
+	?DEBUG("Generation started...~n", []),
 	reset_tables(),
 	mc_gen(ListOfKeywordGroups, Engine),
-	%io:format("States have been generated (~w)...~n", [erlang:localtime()]),
+	?DEBUG("States have been generated...~n", []),
 	Codes = try
 		mc_gen_compile(Engine, JustReturnCode)
 	catch
-		Type:Error -> 
-			%io:format("Exception (~w:~w) ~w...~n", [Type, Error, erlang:get_stacktrace()]),
-			throw({mc_compile, {Type, Error}})
+		Class:Error -> 
+			?ERROR_LOG("Exception at mc generation,~nClass: "?S", Error: "?S"~nStackTrace: "?S, 
+					[Class, Error, erlang:get_stacktrace()]),
+			throw({mc_compile, {Class, Error}})
 	end,
 	reset_tables(),
-	%io:format("Generation finished (~w)...~n", [erlang:localtime()]),
+	?DEBUG("Generation finished...~n", []),
 	Codes.
 
 reset_tables() ->
@@ -164,9 +184,6 @@ is_suffix_end(Suffix) ->
 
 get_failure(root) -> not_found;
 get_failure(State) -> get_failure1(mydlp_nlp:reverse(State)).
-	%F = get_failure1(mydlp_nlp:reverse(State)),
-	%io:format("FF: ~ts -> ~ts ~n", [State, F]),
-	%F.
 
 get_failure1(ReversedState) ->
 	SuffixRoot = get_suffix_root(ReversedState),
@@ -214,7 +231,12 @@ get_all_lines(Device, Acc) ->
 mc_gen([{file, FilePath, MatcherConf} = _KeywordGroup|RestOfKeywordGroups], Engine) -> 
 	Keywords = readlines(FilePath),
 	mc_gen([{list, Keywords, MatcherConf}|RestOfKeywordGroups], Engine);
-mc_gen([{list, Keywords, MatcherConf} = _KeywordGroup|RestOfKeywordGroups], Engine) -> 
+mc_gen([{list, Keywords0, MatcherConf} = _KeywordGroup|RestOfKeywordGroups], Engine) -> 
+	Keywords = lists:map(fun(I) ->
+			case I of
+				I when is_binary(I) -> I;
+				I when is_list(I) -> unicode:characters_to_binary(I) end
+		end, Keywords0),
 	mc_gen_ss(Keywords, MatcherConf, Engine),
 	mc_gen_sf(Keywords, Engine),
 	mc_gen(RestOfKeywordGroups, Engine);
@@ -293,8 +315,8 @@ get_uchar(Bin) ->
 	try 	<<C/utf8, Rest/binary>> = Bin,
 		{C, Rest}
 	catch _:_ -> 
-		%% TODO: log this case
-		<<_:1/binary, Rest2/binary>> = Bin,
+		<<NUC:1/binary, Rest2/binary>> = Bin,
+		?ERROR_LOG("Encountered a non-unicode Character at MC generation. Character: '"?S"'", [NUC]),
 		get_uchar(Rest2) end.
 
 p(Term) when is_integer(Term) -> integer_to_list(Term);
@@ -316,6 +338,15 @@ p(Term) -> lists:flatten(io_lib:format("~w", [Term])).
 
 -define(PAGE_TAIL, 
 "mc_fsm(S, D, I, A) -> {continue, S, D, I, A}.
+").
+
+-define(DYN_NONE(Engine), 
+"-module(mydlp_mc_" ++ p(Engine) ++ "_dyn).
+-author('ozgen@mydlp.com').
+-author('kerem@mydlp.com').
+
+-export([mc_search/1]).
+mc_search(Data) when is_binary(Data) -> [].
 ").
 
 -define(DYN_HEAD(Engine), 
@@ -351,10 +382,13 @@ mc_gen_compile(Engine, JustReturnCode) ->
 	StateChunks = mc_gen_state_chunks(),
 	PageCodes = compile(Engine, StateChunks, JustReturnCode),
 	DynCode = case StateChunks of
-		[] -> ok;
+		[] -> mc_compile_dyn(Engine, 0, JustReturnCode);
 		[{MaxNum, _}|_] -> mc_compile_dyn(Engine, MaxNum, JustReturnCode) end,
 	PageCodes ++ DynCode.
 
+mc_compile_dyn(Engine, 0, JustReturnCode) -> %% generate place holder for none
+	PageBin = list_to_binary([?DYN_NONE(Engine)]),
+	compile(PageBin, JustReturnCode);
 mc_compile_dyn(Engine, MaxNum, JustReturnCode) ->
 	PageBin = list_to_binary([?DYN_HEAD(Engine), [?DYN_PAGEDEF(Engine, N)||N <- lists:seq(1, MaxNum)], ?DYN_TAIL(MaxNum)]),
 	compile(PageBin, JustReturnCode).
@@ -468,13 +502,11 @@ compile1(Source, JustReturnCode) ->
 	{ok, Tempfile0} = mydlp_workdir:tempfile(),
 	Tempfile = Tempfile0 ++ ".erl",
 	file:write_file(Tempfile, Source),
-	% io:format("Written to file, compiling (~w)...~n", [erlang:localtime()]),
 	{ok, Mod, Code} = compile:file(Tempfile ,[binary, compressed, verbose,report_errors,report_warnings] ),
-	% io:format("Compiled source, now loading (~w)...~n", [erlang:localtime()]),
 	case JustReturnCode of
 		false -> code:load_binary(Mod, ?MODFILENAME, Code);
 		true -> ok end,
-	% io:format("Dynamic module compiled and loaded, ByteCodeSize: ~w (~w)...~n", [size(Code),erlang:localtime()]),
+	?DEBUG("Dynamic module compiled and loaded, ByteCodeSize: "?S"...~n", [size(Code)]),
 	file:delete(Tempfile),
 	[{Mod, Code}].
 
@@ -496,7 +528,35 @@ get_loaded_mc_mod_names([], Acc) -> Acc.
 
 get_mod_names(ModCodeList) -> [Mod || {Mod, _Code} <- ModCodeList].
 
+is_func_pd(Func) ->
+        {_, {distance, _}, {pd, IsPD}, {kw, _}} = apply(mydlp_matchers, Func, []), IsPD.
 
+is_func_kw(Func) ->
+        {_, {distance, _}, {pd, _}, {kw, IsKW}} = apply(mydlp_matchers, Func, []), IsKW.
 
+get_pd_patterns(Matchers) -> get_pd_patterns(Matchers, []).
+
+get_pd_patterns([{Id, Func, FuncParam}|Rest], Acc) ->
+	case is_func_pd(Func) of
+		true -> get_pd_patterns(Rest, [{list, func_pd_pattern(Func, FuncParam), Id}|Acc]);
+		false -> get_pd_patterns(Rest, Acc) end;
+get_pd_patterns([], Acc) -> lists:reverse(Acc).
+
+func_pd_pattern(Func, _FuncParam) ->
+	% TODO: implement this using FuncParam
+        apply(mydlp_matchers, Func, [{pd_patterns, "normal"}]).
+
+get_kw_patterns(Matchers) -> get_kw_patterns(Matchers, []).
+
+get_kw_patterns([{Id, Func, FuncParam}|Rest], Acc) ->
+	case is_func_kw(Func) of
+		true -> get_kw_patterns(Rest, [{list, func_kw_pattern(Func, FuncParam), Id}|Acc]);
+		false -> get_kw_patterns(Rest, Acc) end;
+get_kw_patterns([], Acc) -> lists:reverse(Acc).
+
+func_kw_pattern(keyword_match, KGIs) ->
+	lists:append([mydlp_mnesia:get_keywords(GI) || GI <- KGIs]);
+func_kw_pattern(Func, FuncParam) -> 
+	?ERROR_LOG("Unexpected matcher definition, F: "?S" FP: "?S, [Func, FuncParam]), [].
 
 

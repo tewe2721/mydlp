@@ -48,6 +48,7 @@
 	get_drid/0,
 	wait_for_tables/0,
 	get_regexes/1,
+	get_mc_module/0,
 	get_config_value/1,
 	is_mime_of_dfid/2,
 	is_hash_of_gid/2,
@@ -75,7 +76,10 @@
 	add_fhash/3,
 	save_user_address/3,
 	remove_old_user_address/0,
-	get_user_from_address/1
+	get_user_from_address/1,
+	get_keywords/1,
+	get_matchers/0,
+	get_matchers/1
 	]).
 
 -endif.
@@ -145,6 +149,8 @@
 	itype,
 	ifeature,
 	match, 
+	{keyword, ordered_set, 
+		fun() -> mnesia:add_table_index(keyword, group_id) end},
 	site_desc,
 	{user_address, ordered_set, 
 		fun() -> mnesia:add_table_index(user_address, last_seen) end}
@@ -166,6 +172,7 @@
 
 -define(NONDATA_COMMON_TABLES, [
 	config,
+	mc_module, 
 	{mime_type, ordered_set, 
 		fun() -> mnesia:add_table_index(mime_type, mime) end},
 	{regex, ordered_set, 
@@ -193,6 +200,7 @@ get_record_fields_common(Record) ->
 		file_fingerprint -> record_info(fields, file_fingerprint);
 		mime_type -> record_info(fields, mime_type);
 		regex -> record_info(fields, regex);
+		mc_module -> record_info(fields, mc_module);
 		_Else -> not_found
 	end.
 
@@ -207,6 +215,7 @@ get_record_fields_functional(Record) ->
 		itype -> record_info(fields, itype);
 		ifeature -> record_info(fields, ifeature);
 		match -> record_info(fields, match);
+		keyword -> record_info(fields, keyword);
 		site_desc -> record_info(fields, site_desc);
 		user_address -> record_info(fields,user_address);
 		_Else -> not_found
@@ -280,6 +289,12 @@ remove_old_user_address() -> aqc(remove_old_user_address, nocache, dirty).
 
 get_user_from_address(IpAddress) -> aqc({get_user_from_address, IpAddress}, nocache, dirty).
 
+get_keywords(GroupId) -> aqc({get_keywords, GroupId}, nocache).
+
+get_matchers() -> get_matchers(all).
+
+get_matchers(Source) -> aqc({get_matchers, Source}, nocache).
+
 -endif.
 
 -ifdef(__MYDLP_ENDPOINT).
@@ -304,6 +319,8 @@ dump_tables(Table) -> dump_tables([Table]).
 dump_client_tables() -> dump_tables(?CLIENT_TABLES).
 
 get_regexes(GroupId) ->	aqc({get_regexes, GroupId}, cache).
+
+get_mc_module() -> aqc(get_mc_module, nocache).
 
 get_config_value(KeyB) -> aqc({get_config_value, KeyB}, nocache).
 
@@ -330,6 +347,8 @@ flush_cache() -> cache_clean0().
 %%%%%%%%%%%%%% gen_server handles
 
 -ifdef(__MYDLP_NETWORK).
+
+handle_result({get_matchers, _Source}, {atomic, Result}) -> lists:usort(Result);
 
 handle_result({get_user_from_address, _IpAddress}, {atomic, Result}) -> 
 	case Result of
@@ -380,6 +399,11 @@ handle_result_common({get_config_value, _}, {atomic, Result}) ->
 	case Result of
 		[] -> none;
 		[ValB] -> ValB end;
+
+handle_result_common(get_mc_module, {atomic, Result}) -> 
+	case Result of
+		[] -> [];
+		[#mc_module{modules=Mods}] -> Mods end;
 
 handle_result_common(_Query, {atomic, Objects}) -> Objects.
 
@@ -440,6 +464,20 @@ handle_query({get_rules, FilterId, #aclq{channel=Channel} = AclQ}) ->
 			lists:append([RulesD, RulesI, RulesU])),
 
 	resolve_all(Rules, FilterId);
+
+
+handle_query({get_matchers, all}) ->
+	Q = ?QLCQ([{M#match.id, M#match.func, M#match.func_params} ||
+		M <- mnesia:table(match)
+		]),
+	?QLCE(Q);
+
+handle_query({get_keywords, GroupId}) ->
+	Q = ?QLCQ([ K#keyword.keyword ||
+		K <- mnesia:table(keyword),
+		K#keyword.group_id == GroupId
+		]),
+	?QLCE(Q);
 
 handle_query({get_fid, SIpAddr}) ->
 	Q = ?QLCQ([S#site_desc.filter_id ||
@@ -565,6 +603,13 @@ handle_query_common({get_regexes, GroupId}) ->
 	Q = ?QLCQ([ R#regex.compiled ||
 		R <- mnesia:table(regex),
 		R#regex.group_id == GroupId
+		]),
+	?QLCE(Q);
+
+handle_query_common(get_mc_module) ->
+	Q = ?QLCQ([M ||
+		M <- mnesia:table(mc_module),
+		M#mc_module.target == local
 		]),
 	?QLCE(Q);
 
@@ -939,14 +984,17 @@ resolve_all(Rules, FilterId) ->
 
 get_mining_req(Rules) -> predict_req_rules(#mining_req{}, Rules).
 
+predict_req_rules(Req, []) -> Req;
 predict_req_rules(Req, [{_RId, _RAction, ITypes}|Rules]) ->
 	Req1 = predict_req_itypes(Req, ITypes),
-	predict_req(Req1, Rules).
+	predict_req_rules(Req1, Rules).
 
+predict_req_itypes(Req, []) -> Req;
 predict_req_itypes(Req, [{_ITId, _DataFormats, _Distance, IFeatures}|ITypes]) ->
 	Req1 = predict_req_ifeatures(Req, IFeatures),
 	predict_req_itypes(Req1, ITypes).
 
+predict_req_ifeatures(Req, []) -> Req;
 predict_req_ifeatures(Req, [{_Threshold, {_Id, all, _FuncParams}}|IFeatures]) ->
 	predict_req_ifeatures(Req, IFeatures);
 predict_req_ifeatures(Req, [{_Threshold, {_Id, Func, _FuncParams}}|IFeatures]) ->
@@ -972,21 +1020,21 @@ predict_req2(#mining_req{mc_kw=false} = Req, Func) -> predict_req_mc_kw(Req, Fun
 
 predict_req_te(#mining_req{} = Req, Func) ->
 	case get_matcher_req(Func) of
-		{raw, _} -> Req;
-		{analyzed, _} -> Req#mining_req{raw_text=true};
-		{text, _} -> Req#mining_req{raw_text=true};
-		{normalized, _} -> Req#mining_req{raw_text=true, normal_text=true} end.
+		raw -> Req;
+		analyzed -> Req#mining_req{raw_text=true};
+		text -> Req#mining_req{raw_text=true};
+		normalized -> Req#mining_req{raw_text=true, normal_text=true} end.
 
-predict_req_mc_pd(#mining_req{} = Req, _Func) ->
-	% TODO: implement this
-	Req#mining_req{mc_pd=true}.
+predict_req_mc_pd(#mining_req{} = Req, Func) ->
+	{_, {distance, _}, {pd, IsPD}, {kw, _}} = apply(mydlp_matchers, Func, []),
+	Req#mining_req{mc_pd=IsPD}.
 
-predict_req_mc_kw(#mining_req{} = Req, _Func) ->
-	% TODO: implement this
-	Req#mining_req{mc_kw=true}.
+predict_req_mc_kw(#mining_req{} = Req, Func) ->
+	{_, {distance, _}, {pd, _}, {kw, IsKW}} = apply(mydlp_matchers, Func, []),
+	Req#mining_req{mc_kw=IsKW}.
 
-
-get_matcher_req(Func) -> apply(mydlp_matchers, Func, []).
+get_matcher_req(Func) -> 
+	{MReq, {distance, _}, {pd, _}, {kw, _}} = apply(mydlp_matchers, Func, []), MReq.
 
 resolve_rules(PS) -> resolve_rules(PS, []).
 resolve_rules([{RId, ROrigId,RAction}|PS], Rules) -> 

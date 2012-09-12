@@ -303,8 +303,7 @@ preregex(Data, #state{u304=U304}) ->
 	re:replace(Data, U304, <<"i">>, [global, {return, binary}]).
 
 count_all(GIs, Data) ->
-	Regexes = lists:flatten(
-		[[ mydlp_mnesia:get_regexes(GI) || GI <- GIs ]] ),
+	Regexes = lists:flatten([ mydlp_mnesia:get_regexes(GI) || GI <- GIs ] ),
 	RRMap = mydlp_api:pmap(fun(R) -> count_expr(R, Data) end, Regexes),
 	IndexList = lists:flatten(RRMap),
 	IndexList1 = lists:usort(IndexList),

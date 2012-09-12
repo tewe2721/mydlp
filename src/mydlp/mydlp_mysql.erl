@@ -429,6 +429,8 @@ populate_site(FilterId) ->
 	%%% post actions
 	mydlp_mnesia:compile_regex(),
 	mydlp_dynamic:load(),
+	mydlp_mc:mc_persist(),
+	mydlp_mc:mc_load_mnesia(),
 	ok.
 
 populate_configs([[Key, Value]|Rows], FilterId) ->
@@ -630,6 +632,11 @@ write_regex(RegexGroupId, RegexS) ->
 	R = #regex{id=RegexId, group_id=RegexGroupId, plain=RegexS},
 	mydlp_mnesia_write(R).
 
+write_keyword(KeywordGroupId, KeywordS) ->
+	KeywordId = mydlp_mnesia:get_unique_id(keyword),
+	K = #keyword{id=KeywordId, group_id=KeywordGroupId, keyword=KeywordS},
+	mydlp_mnesia_write(K).
+
 write_matches(Matches) ->
 	Matches1 = [ M#match{id=mydlp_mnesia:get_unique_id(match)} || M <- Matches ],
 	mydlp_mnesia_write(Matches1).
@@ -715,29 +722,26 @@ populate_match(Id, <<"all">>, IFeatureId) ->
 	new_match(Id, IFeatureId, Func);
 
 populate_match(Id, <<"keyword">>, IFeatureId) ->
-	Func = regex_match,
+	Func = keyword_match,
 	{ok, REQ} = psq(regex_by_matcher_id, [Id]),
-	[[RegexS]] = REQ,
-	RegexGroupId = mydlp_mnesia:get_unique_id(regex_group_id),
-	Regex1 = list_to_binary(mydlp_api:escape_regex(binary_to_list(RegexS))),
-	write_regex(RegexGroupId, Regex1),
-	FuncParams=[RegexGroupId],
+	[[KeywordS]] = REQ,
+	KeywordGroupId = mydlp_mnesia:get_unique_id(keyword_group_id),
+	write_keyword(KeywordGroupId, KeywordS),
+	FuncParams=[KeywordGroupId],
 	new_match(Id, IFeatureId, Func, FuncParams);
 
 populate_match(Id, <<"keyword_group">>, IFeatureId) ->
-	Func = regex_match,
-	RegexGroupId = mydlp_mnesia:get_unique_id(regex_group_id),
+	Func = keyword_match,
+	KeywordGroupId = mydlp_mnesia:get_unique_id(keyword_group_id),
 	{ok, REQ} = psq(kg_regexes_by_matcher_id, [Id]),
-	lists:foreach(fun([RegexS]) ->
-		Regex1 = list_to_binary(mydlp_api:escape_regex(binary_to_list(RegexS))),
-		write_regex(RegexGroupId, Regex1)
+	lists:foreach(fun([KeywordS]) ->
+		write_keyword(KeywordGroupId, KeywordS)
 	end, REQ),
 	{ok, REREQ} = psq(kg_rdbms_regexes_by_matcher_id, [Id]),
-	lists:foreach(fun([RegexS]) ->
-		Regex2 = list_to_binary(mydlp_api:escape_regex(binary_to_list(RegexS))),
-		write_regex(RegexGroupId, Regex2)
+	lists:foreach(fun([KeywordS]) ->
+		write_keyword(KeywordGroupId, KeywordS)
 	end, REREQ),
-	FuncParams=[RegexGroupId],
+	FuncParams=[KeywordGroupId],
 	new_match(Id, IFeatureId, Func, FuncParams);
 
 populate_match(Id, <<"regex">>, IFeatureId) ->

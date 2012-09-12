@@ -97,7 +97,8 @@ start(_Type, _Args) ->
 		{ok, _} -> 
 			% If everything is allright,
 			% Load dynamic modules
-			mydlp_dynamic:load();
+			mydlp_dynamic:load(),
+			mydlp_mc:mc_load_mnesia();
 		_Else -> ok end,
 	SRet.
 

@@ -41,6 +41,7 @@
 	regex_match/0,
 	regex_match/1,
 	regex_match/2,
+	keyword_match/0,
 	iban_match/0,
 	iban_match/1,
 	iban_match/2,
@@ -107,7 +108,8 @@
 
 -define(P(Pattern), mydlp_api:generate_patterns(Pattern)).
 
-mc_is_apply(Func) -> true.
+mc_is_apply(Func) ->
+	{_, {distance, _}, {pd, IsApply}, {kw, _}} = apply(mydlp_matchers, Func, []), IsApply.
 
 mc_match(MatcherId, Func, FuncOpts, #file{mc_table=MCTable, normal_text=NT}) ->
 	Matched = lists:filter(fun({_I, _CI, {_L, ML}}) -> lists:member(MatcherId, ML) end, MCTable),
@@ -115,7 +117,8 @@ mc_match(MatcherId, Func, FuncOpts, #file{mc_table=MCTable, normal_text=NT}) ->
 		true -> lists:map(fun({I, CI, {L, _ML}}) ->
 				Head = size(NT) + CI - L,
 				<<_:Head/binary, Phrase:L/binary, _/binary>> = NT,
-				case Func(FuncOpts, Phrase) of
+				PhraseS = unicode:characters_to_list(Phrase),
+				case apply(mydlp_matchers, Func, [FuncOpts, PhraseS]) of
 					true -> [I];
 					false -> [] end
 			end, Matched);
@@ -129,6 +132,8 @@ regex_match({conf, RGIs}) -> RGIs.
 
 regex_match(RGIs, File) ->
 	mydlp_regex:match_count(RGIs, File#file.text).
+
+keyword_match() -> {normalized, {distance, true}, {pd, false}, {kw, true}}.
 
 cc_match() -> {normalized, {distance, true}, {pd, true}, {kw, false}}.
 
@@ -155,12 +160,7 @@ cc_match({pd_patterns, "wide"}) ->
 	?P({[{numeric, 4}, ws, {numeric, 6}, ws, {numeric, 4}], none}) ++
 	?P({[{numeric, {13,16}}], none}).
 
-cc_match(_Conf, File) ->
-	{Data, IndexList} = mydlp_regex:match_bin(
-	 	credit_card, 
-		File#file.text),
-	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_cc(I) end, Data, IndexList),
-	{length(WIList), WIList}.	
+cc_match(_Conf, Phrase) -> mydlp_api:is_valid_cc(Phrase).
 
 iban_match() -> {normalized, {distance, true}, {pd, false}, {kw, false}}. 
 
@@ -188,12 +188,7 @@ aba_match({pd_patterns, "wide"}) ->
 	?P({[{numeric, 4}, {special, "-"}, {numeric, 4}, {special, "-"}, {numeric, 1}], join_ws}) ++
 	?P({[{numeric, 9}], join_ws}).
 
-aba_match(_Conf, File) ->
-	{Data, IndexList} = mydlp_regex:match_bin(
-	 	aba, 
-		File#file.text),
-	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_aba(I) end, Data, IndexList),
-	{length(WIList), WIList}.
+aba_match(_Conf, Phrase) -> mydlp_api:is_valid_aba(Phrase).
 
 trid_match() -> {normalized, {distance, true}, {pd, true}, {kw, false}}.
 
@@ -205,12 +200,7 @@ trid_match({pd_patterns, "wide"}) ->
 	?P({[{numeric, 11}], none}),
 	?P({[{numeric, 11}], join_ws}).
 
-trid_match(_Conf, File) ->
-	{Data, IndexList} = mydlp_regex:match_bin(
-	 	trid, 
-		File#file.text),
-	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_trid(I) end, Data, IndexList),
-	{length(WIList), WIList}.
+trid_match(_Conf, Phrase) -> mydlp_api:is_valid_trid(Phrase).
 
 pan_match() -> {normalized, {distance, true}, {pd, true}, {kw, false}}.
 
@@ -222,13 +212,7 @@ pan_match({pd_patterns, "wide"}) ->
 	?P({[{alpha, 5}, {numeric, 4}, {alpha, 1}], none}) ++ 
 	?P({[{alpha, 5}, {numeric, 4}, {alpha, 1}], join_ws}).
 
-pan_match(_Conf, File) ->
-	{Data, IndexList} = mydlp_regex:match_bin(
-		pan,
-		File#file.text),
-
-	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_pan(I) end, Data, IndexList),
-	{length(WIList), WIList}.
+pan_match(_Conf, Phrase) -> mydlp_api:is_valid_pan(Phrase).
 
 cpf_match() -> {normalized, {distance, true}, {pd, true}, {kw, false}}.
 
@@ -242,13 +226,7 @@ cpf_match({pd_patterns, "wide"}) ->
 	?P({[{numeric, 3}, {special, "."}, {numeric, 3}, {special, "."}, {numeric, 3}, {special, "-"}, {numeric, 2}], none}) ++
 	?P({[{numeric, 3}, {special, "."}, {numeric, 3}, {special, "."}, {numeric, 3}, {special, "-"}, {numeric, 2}], join_ws}).
 
-cpf_match(_Conf, File) ->
-	{Data, IndexList} = mydlp_regex:match_bin(
-		cpf,
-		File#file.text),
-
-	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_cpf(I) end, Data, IndexList),
-	{length(WIList), WIList}.
+cpf_match(_Conf, Phrase) -> mydlp_api:is_valid_cpf(Phrase).
 
 china_icn_match() -> {normalized, {distance, true}, {pd, true}, {kw, false}}.
 
@@ -264,13 +242,7 @@ china_icn_match({pd_patterns, "wide"}) ->
 	?P({[{numeric, 18}], none}) ++
 	?P({[{numeric, 17}, {alpha, 1}], join_ws}).
 
-china_icn_match(_Conf, File) ->
-	{Data, IndexList} = mydlp_regex:match_bin(
-		icn,
-		File#file.text),
-
-	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_china_icn(I) end, Data, IndexList),
-	{length(WIList), WIList}.
+china_icn_match(_Conf, Phrase) -> mydlp_api:is_valid_china_icn(Phrase).
 
 cc_edate_match() -> {normalized, {distance, true}, {pd, true}, {kw, false}}.
 
@@ -282,12 +254,7 @@ cc_edate_match({pd_patterns, "wide"}) ->
 	 ?P({[{numeric, 2}, {special, "-/"}, {numeric, 2}], none}) ++
 	 ?P({[{numeric, 2}, {special, "-/"}, {numeric, 2}], join_ws}).
 
-cc_edate_match(_Conf, File) ->
-	{Data, IndexList} = mydlp_regex:match_bin(
-		edate,
-		File#file.text),
-	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_cc_edate(I) end, Data, IndexList),
-	{length(WIList), WIList}.
+cc_edate_match(_Conf, Phrase) -> mydlp_api:is_valid_cc_edate(Phrase).
 
 gdate_match() -> {normalized, {distance, true}, {pd, true}, {kw, false}}.
 
@@ -317,13 +284,7 @@ gdate_match({pd_patterns, "wide"}) ->
 	?P({[{alpha, 3}, ws, {numeric, {1, 2}}, {special, ","}, ws, {numeric, 4}], join_ws}) ++
 	?P({[{numeric, 4}, {special, "/-"}, {numeric, 2}, {special, "/-"}, {numeric, 2}], join_ws}).
 
-gdate_match(_Conf, File) ->
-	{Data, IndexList} = mydlp_regex:match_bin(
-		birthdate,
-		File#file.text),
-
-	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_date(I) end, Data, IndexList),
-	{length(WIList), WIList}.
+gdate_match(_Conf, Phrase) -> mydlp_api:is_valid_date(Phrase).
 
 birthdate_match() -> {normalized, {distance, true}, {pd, true}, {kw, false}}.
 
@@ -353,13 +314,7 @@ birthdate_match({pd_patterns, "wide"}) ->
 	?P({[{alpha, 3}, ws, {numeric, {1, 2}}, {special, ","}, ws, {numeric, 4}], join_ws}),
 	?P({[{numeric, 4}, {special, "/-"}, {numeric, 2}, {special, "/-"}, {numeric, 2}], join_ws}).
 
-birthdate_match(_Conf, File) ->
-	{Data, IndexList} = mydlp_regex:match_bin(
-		birthdate,
-		File#file.text),
-
-	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_birthdate(I) end, Data, IndexList),
-	{length(WIList), WIList}.
+birthdate_match(_Conf, Phrase) -> mydlp_api:is_valid_birthdate(Phrase).
 
 ssn_match() -> {normalized, {distance, true}, {pd, true}, {kw, false}}.
 
@@ -371,12 +326,7 @@ ssn_match({pd_patterns, "wide"}) ->
 	?P({[{numeric, 3}, {special, "-"}, {numeric, 2}, {special, "-"}, {numeric, 4}], none}) ++
 	?P({[{numeric, 3}, {special, "-"}, {numeric, 2}, {special, "-"}, {numeric, 4}], join_ws}).
 
-ssn_match(_Conf, File) ->
-	{Data, IndexList} = mydlp_regex:match_bin(
-	 	ssn, 
-		File#file.text),
-	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_ssn(I) end, Data, IndexList),
-	{length(WIList), WIList}.
+ssn_match(_Conf, Phrase) -> mydlp_api:is_valid_ssn(Phrase).
 
 canada_sin_match() -> {normalized, {distance, true}, {pd, true}, {kw, false}}.
 
@@ -392,12 +342,7 @@ canada_sin_match({pd_patterns, "wide"}) ->
 	?P({[{numeric, 3}, {special, "-"}, {numeric, 2}, {special, "-"}, {numeric, 4}], join_ws}) ++
 	?P({[{numeric, 3}, ws, {numeric, 2}, ws, {numeric, 4}], join_ws}).	
 
-canada_sin_match(_Conf, File) ->
-	{Data, IndexList} = mydlp_regex:match_bin(
-	 	sin, 
-		File#file.text),
-	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_sin(I) end, Data, IndexList),
-	{length(WIList), WIList}.
+canada_sin_match(_Conf, Phrase) -> mydlp_api:is_valid_sin(Phrase).
 
 france_insee_match() -> {normalized, {distance, true}, {pd, true}, {kw, false}}.
 
@@ -421,12 +366,7 @@ france_insee_match({pd_patterns, "wide"}) ->
 	?P({[{numeric, 13}], join_ws}) ++
 	?P({[{numeric, 15}], join_ws}). 
 
-france_insee_match(_Conf, File) ->
-	{Data, IndexList} = mydlp_regex:match_bin(
-	 	insee, 
-		File#file.text),
-	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_insee(I) end, Data, IndexList),
-	{length(WIList), WIList}.
+france_insee_match(_Conf, Phrase) -> mydlp_api:is_valid_insee(Phrase).
 
 uk_nino_match() -> {normalized, {distance, true}, {pd, true}, {kw, false}}.
 
@@ -438,12 +378,7 @@ uk_nino_match({pd_patterns, "wide"}) ->
 	?P({[{alpha, 2}, {numeric, 6}, {alpha, {0, 1}}], none}) ++
 	?P({[{alpha, 2}, {numeric, 6}, {alpha, {0, 1}}], join_ws}).
 
-uk_nino_match(_Conf, File) ->
-	{Data, IndexList} = mydlp_regex:match_bin(
-	 	nino, 
-		File#file.text),
-	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_nino(I) end, Data, IndexList),
-	{length(WIList), WIList}.
+uk_nino_match(_Conf, Phrase) -> mydlp_api:is_valid_nino(Phrase).
 
 said_match() -> {normalized, {distance, true}, {pd, true}, {kw, false}}.
 
@@ -455,12 +390,7 @@ said_match({pd_patterns, "wide"}) ->
 	?P({[{numeric, 13}], none}) ++
 	?P({[{numeric, 13}], join_ws}).
 
-said_match(_Conf, File) ->
-	{Data, IndexList} = mydlp_regex:match_bin(
-	 	said, 
-		File#file.text),
-	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_said(I) end, Data, IndexList),
-	{length(WIList), WIList}.
+said_match(_Conf, Phrase) -> mydlp_api:is_valid_said(Phrase).
 
 -define(CFILE_MINSIZE, 128).
 

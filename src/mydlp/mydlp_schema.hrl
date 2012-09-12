@@ -1,4 +1,4 @@
-%%%
+%%
 %%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@medra.com.tr>
 %%%
 %%%--------------------------------------------------------------------------
@@ -125,6 +125,17 @@
 	plain,
 	compiled,
 	error
+}).
+
+-record(keyword, {
+	id,
+	group_id,
+	keyword
+}).
+
+-record(mc_module, {
+	target,
+	modules
 }).
 
 %% refine match_object statements after any change
