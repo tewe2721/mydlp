@@ -526,24 +526,6 @@ compile1(Source, JustReturnCode) ->
 	file:delete(Tempfile),
 	[{Mod, Code}].
 
-unload_code(ModName) -> unload_code(ModName, 10).
-
-unload_code(ModName, 0) -> 
-	code:purge(ModName), ok;
-unload_code(ModName, TryCount) -> 
-	case code:soft_purge(ModName) of
-		false -> timer:sleep(TryCount*TryCount*10 + 100),
-			unload_code(ModName, TryCount - 1);
-		true -> unload_code(ModName, 0) end.
-
-get_loaded_mc_mod_names() -> get_loaded_mc_mod_names(code:all_loaded(), []).
-
-get_loaded_mc_mod_names([{Mod, ?MODFILENAME}|Rest], Acc) -> get_loaded_mc_mod_names(Rest, [Mod|Acc]);
-get_loaded_mc_mod_names([_|Rest], Acc) -> get_loaded_mc_mod_names(Rest, Acc);
-get_loaded_mc_mod_names([], Acc) -> Acc.
-
-get_mod_names(ModCodeList) -> [Mod || {Mod, _Code} <- ModCodeList].
-
 is_func_pd(Func) ->
         {_, {distance, _}, {pd, IsPD}, {kw, _}} = apply(mydlp_matchers, Func, []), IsPD.
 
@@ -576,4 +558,22 @@ func_kw_pattern(Func, FuncParam) ->
 	?ERROR_LOG("Unexpected matcher definition, F: "?S" FP: "?S, [Func, FuncParam]), [].
 
 -endif.
+
+unload_code(ModName) -> unload_code(ModName, 10).
+
+unload_code(ModName, 0) -> 
+	code:purge(ModName), ok;
+unload_code(ModName, TryCount) -> 
+	case code:soft_purge(ModName) of
+		false -> timer:sleep(TryCount*TryCount*10 + 100),
+			unload_code(ModName, TryCount - 1);
+		true -> unload_code(ModName, 0) end.
+
+get_loaded_mc_mod_names() -> get_loaded_mc_mod_names(code:all_loaded(), []).
+
+get_loaded_mc_mod_names([{Mod, ?MODFILENAME}|Rest], Acc) -> get_loaded_mc_mod_names(Rest, [Mod|Acc]);
+get_loaded_mc_mod_names([_|Rest], Acc) -> get_loaded_mc_mod_names(Rest, Acc);
+get_loaded_mc_mod_names([], Acc) -> Acc.
+
+get_mod_names(ModCodeList) -> [Mod || {Mod, _Code} <- ModCodeList].
 
