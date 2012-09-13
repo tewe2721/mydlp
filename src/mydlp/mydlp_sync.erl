@@ -35,6 +35,7 @@
 
 %% API
 -export([start_link/0,
+	set_policy_id/1,
 	stop/0]).
 
 %% gen_server callbacks
@@ -48,9 +49,11 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -record(state, {
+	policy_id
 	}).
 
 %%%% API
+set_policy_id(PolicyId) -> gen_server:cast(?MODULE, {set_policy_id, PolicyId}).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -60,6 +63,9 @@ handle_call(stop, _From, State) ->
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
+handle_cast({set_policy_id, PolicyId}, State) ->
+        {noreply, State#state{policy_id=PolicyId}};
+
 handle_cast(_Msg, State) ->
 	{noreply, State}.
 
@@ -67,8 +73,8 @@ handle_info({async_reply, Reply, From}, State) ->
 	gen_server:reply(From, Reply),
 	{noreply, State};
 
-handle_info(sync_now, State) ->
-	sync(),
+handle_info(sync_now, #state{policy_id=PolicyId} = State) ->
+	sync(PolicyId),
 	call_timer(),
         {noreply, State};
 
@@ -87,9 +93,10 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
+	PolicyId = mydlp_api:get_client_policy_revision_id(),
 	inets:start(),
 	call_timer(15000),
-	{ok, #state{}}.
+	{ok, #state{policy_id=PolicyId}}.
 
 terminate(_Reason, _State) ->
 	ok.
@@ -101,9 +108,8 @@ call_timer() -> call_timer(?CFG(sync_interval)).
 
 call_timer(Interval) -> timer:send_after(Interval, sync_now).
 
-sync() ->
-	RevisionI = mydlp_api:get_client_policy_revision_id(),
-	RevisionS = integer_to_list(RevisionI),
+sync(PolicyId) ->
+	RevisionS = integer_to_list(PolicyId),
 	User = mydlp_container:get_user(),
 	UserHI = mydlp_api:hash_un(User),
 	UserHS = integer_to_list(UserHI),

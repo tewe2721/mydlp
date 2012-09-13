@@ -293,7 +293,7 @@ get_remote_user_rule_ids() -> aqc(get_remote_user_rule_ids, nocache, dirty).
 
 get_remote_ipr_rule_ids() -> aqc(get_remote_ipr_rule_ids, nocache, dirty).
 
-get_remote_default_rule_ids() -> aqc(get_remote_default_rule_ids, cache).
+get_remote_default_rule_ids() -> aqc(get_remote_default_rule_ids, nocache, dirty).
 
 get_remote_mc_module(FilterId, Addr, UserH) -> 
 	RuleIDs = get_remote_rule_ids(FilterId, Addr, UserH),

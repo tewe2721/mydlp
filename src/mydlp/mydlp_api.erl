@@ -2462,15 +2462,21 @@ use_client_policy(CDBBin) ->
 		( catch mydlp_mnesia:write(ItemDump) ),
 		( catch mydlp_mnesia:write([ MCModule ]) ),
 		( catch mydlp_mnesia:write([ #rule_table{channel=C, table = RT} || {C, RT} <- RuleTables ]) ),
+
 		mydlp_dynamic:load(),
 		mydlp_dynamic:populate_win32reg(),
 		mydlp_mc:mc_load_mnesia(),
-		mydlp_container:schedule_confupdate()
+		mydlp_container:schedule_confupdate(),
 
+		NewRevisionId = erlang:phash2(CDBObj),
+		mydlp_sync:set_policy_id(NewRevisionId)
 	catch Class:Error ->
 		?ERROR_LOG("USE_CLIENT_POLICY: Error occured: Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~nCDBBin: ["?S"].~n",
-			[Class, Error, erlang:get_stacktrace(), CDBBin])
-	end, ok.
+			[Class, Error, erlang:get_stacktrace(), CDBBin]),
+		RevisionId = get_client_policy_revision_id(),
+		mydlp_sync:set_policy_id(RevisionId)
+	end,
+	ok.
 
 get_client_policy_revision_id() ->
 	% sequence should be same with mydlp_mnesia:get_remote_rule_tables
