@@ -439,7 +439,7 @@ mc_gen_source(Key, Acc, Count) ->
 
 mc_gen_source_s(State, {ok, MC} = _IsAccept, Acc) ->
 	SD = "mc_fsm(" ++ p(State) ++ ", D, I, A) ->",
-	SB = "mc_fsm(root, D, I, [{I, " ++ p(State) ++ ", " ++ p(MC) ++ "}|A]);", %% for predefined we do nested matchings
+	SB = "mc_fsm(root, D, I, [{I, -size(D), " ++ p(MC) ++ "}|A]);", %% for predefined we do nested matchings
 	SLine = list_to_binary(SD ++ SB ++ [10]),
 	[SLine|Acc];
 mc_gen_source_s(_State, false = _IsAccept, Acc) -> Acc.
@@ -525,6 +525,9 @@ compile1(Source, JustReturnCode) ->
 	?DEBUG("Dynamic module compiled and loaded, ByteCodeSize: "?S"...~n", [size(Code)]),
 	file:delete(Tempfile),
 	[{Mod, Code}].
+
+
+%%%%% integration stuff
 
 is_func_pd(Func) ->
         {_, {distance, _}, {pd, IsPD}, {kw, _}} = apply(mydlp_matchers, Func, []), IsPD.

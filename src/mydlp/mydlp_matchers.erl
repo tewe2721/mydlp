@@ -42,6 +42,7 @@
 	regex_match/1,
 	regex_match/2,
 	keyword_match/0,
+	keyword_match/1,
 	iban_match/0,
 	iban_match/1,
 	iban_match/2,
@@ -122,7 +123,7 @@ mc_match(MatcherId, Func, FuncOpts, #file{mc_table=MCTable, normal_text=NT}) ->
 					true -> [I];
 					false -> [] end
 			end, Matched);
-		false -> lists:map(fun({{I, {_L, _ML}}}) -> I end, Matched) end,
+		false -> lists:map(fun({I, _CI, {_L, _ML}}) -> I end, Matched) end,
 	MI = lists:flatten(MatchedIndex),
 	{length(MI), MI}.
 
@@ -132,6 +133,8 @@ regex_match({conf, RGIs}) -> RGIs.
 
 regex_match(RGIs, File) ->
 	mydlp_regex:match_count(RGIs, File#file.text).
+
+keyword_match({conf, _Conf}) -> none.
 
 keyword_match() -> {normalized, {distance, true}, {pd, false}, {kw, true}}.
 

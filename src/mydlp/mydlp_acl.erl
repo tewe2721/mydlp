@@ -454,9 +454,10 @@ apply_func(Threshold, Distance, IsDistanceApplicable, {MatcherId, Func, FuncPara
 		true -> not mydlp_api:has_text(File) end,
 	case EarlyNeg of
 		true -> neg;
-		false -> FuncOpts = get_func_opts(Func, FuncParams),
+		false ->
+			FuncOpts = get_func_opts(Func, FuncParams),
 			IndexRet = case is_mc_func(Func) of
-				true -> apply(mydlp_matchers, mc_match, [MatcherId, Func, FuncOpts, File]);
+				true ->  apply(mydlp_matchers, mc_match, [MatcherId, Func, FuncOpts, File]);
 				false -> apply(mydlp_matchers, Func, [{FuncOpts, File}]) end,
 			case IndexRet of
 				{Score, IndexList} ->
