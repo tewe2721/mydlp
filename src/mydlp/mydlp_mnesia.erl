@@ -77,6 +77,7 @@
 	get_remote_default_rule_ids/0,
 	get_remote_rule_tables/3,
 	get_remote_rule_ids/3,
+	get_remote_mc_module/3,
 	get_fid/1,
 	remove_site/1,
 	add_fhash/3,
@@ -293,6 +294,14 @@ get_remote_user_rule_ids() -> aqc(get_remote_user_rule_ids, nocache, dirty).
 get_remote_ipr_rule_ids() -> aqc(get_remote_ipr_rule_ids, nocache, dirty).
 
 get_remote_default_rule_ids() -> aqc(get_remote_default_rule_ids, cache).
+
+get_remote_mc_module(FilterId, Addr, UserH) -> 
+	RuleIDs = get_remote_rule_ids(FilterId, Addr, UserH),
+	Mods = case get_mc_module(RuleIDs) of
+		[] -> ?ERROR_LOG("Cannot find mc module for remote. Addr: "?S", UserH: "?S", Rule Ids: "?S , 
+			[Addr, UserH, RuleIDs]), [];
+		ML -> ML end,
+	#mc_module{target=local, modules=Mods}.
 
 get_fid(SIpAddr) -> aqc({get_fid, SIpAddr}, cache).
 
