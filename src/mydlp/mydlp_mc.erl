@@ -34,31 +34,29 @@
 
 %% API
 -export([
-	mc_print/2,
 	mc_load_mnesia/0,
 	mc_load/1,
 	mc_search/1,
-	mc_search/2,
-	mc_generate/2,
-	mc_generate/3,
-	readlines/1
+	mc_search/2
 ]).
 
--compile([export_all]).
+-ifdef(__MYDLP_NETWORK).
+-export([
+	mc_module/1,
+	mc_print/2,
+	mc_generate/2,
+	mc_generate/3
+]).
 
--define(STATE_CHUNK, 8192).
+-endif.
 
 -define(MODFILENAME, "mydlp_mc_dynamic.erl").
 
-mc_persist() ->
-	Matchers = mydlp_mnesia:get_matchers(),
-	PDPatterns = get_pd_patterns(Matchers),
-	KWPatterns = get_kw_patterns(Matchers),
-	PDCodes = mc_generate(pd, PDPatterns, true),
-	KWCodes = mc_generate(kw, KWPatterns, true),
-	Codes = PDCodes ++ KWCodes,
-	MC = #mc_module{target=local, modules=Codes},
-	mydlp_mnesia:write(MC).
+-ifdef(__MYDLP_NETWORK).
+
+-define(STATE_CHUNK, 8192).
+
+-endif.
 
 mc_load(ModCodeTupleList) ->
 	LoadedMods = get_loaded_mc_mod_names(),
@@ -72,11 +70,6 @@ mc_load_mnesia() ->
 	Mods = mydlp_mnesia:get_mc_module(),
 	mc_load(Mods).
 
-mc_print(Engine, Data) ->
-	Results = mc_search(Engine, Data),
-	Str = unicode:characters_to_list(Data),
-	[io:format("R: ~w ~ts~n", [BI, lists:sublist(Str, CI - L, L)]) || {CI, BI, {L, _}} <- Results], ok.
-
 mc_search(kw, Data) -> mydlp_mc_kw_dyn:mc_search(Data);
 mc_search(pd, Data) -> mydlp_mc_pd_dyn:mc_search(Data).
 
@@ -84,6 +77,29 @@ mc_search(Data) ->
 	KWL = mc_search(kw, Data),
 	PDL = mc_search(pd, Data),
 	lists:keymerge(1, KWL, PDL).
+
+-ifdef(__MYDLP_NETWORK).
+
+mc_module(local) ->
+	Matchers = mydlp_mnesia:get_matchers(),
+	mc_module1(local, Matchers);
+mc_module(RuleIds) ->
+	Matchers = mydlp_mnesia:get_matchers(RuleIds),
+	mc_module1(RuleIds, Matchers).
+
+mc_module1(Target, Matchers) ->
+	PDPatterns = get_pd_patterns(Matchers),
+	KWPatterns = get_kw_patterns(Matchers),
+	PDCodes = mc_generate(pd, PDPatterns, true),
+	KWCodes = mc_generate(kw, KWPatterns, true),
+	Codes = PDCodes ++ KWCodes,
+	#mc_module{target=Target, modules=Codes}.
+
+
+mc_print(Engine, Data) ->
+	Results = mc_search(Engine, Data),
+	Str = unicode:characters_to_list(Data),
+	[io:format("R: ~w ~ts~n", [BI, lists:sublist(Str, CI - L, L)]) || {CI, BI, {L, _}} <- Results], ok.
 
 mc_generate(kw, L) -> mc_generate1(kw, L);
 mc_generate(pd, L) -> mc_generate1(pd, L).
@@ -376,7 +392,7 @@ mc_fsm_handle(PD, P, {continue, S, <<_C/utf8, R/binary>> = D, I, A}) ->
 			mc_fsm(PD1, NP, S, D, I, A) end.
 ").
 
-mc_gen_compile(Engine) -> mc_gen_compile(Engine, false).
+% mc_gen_compile(Engine) -> mc_gen_compile(Engine, false).
 
 mc_gen_compile(Engine, JustReturnCode) ->
 	StateChunks = mc_gen_state_chunks(),
@@ -559,4 +575,5 @@ func_kw_pattern(keyword_match, KGIs) ->
 func_kw_pattern(Func, FuncParam) -> 
 	?ERROR_LOG("Unexpected matcher definition, F: "?S" FP: "?S, [Func, FuncParam]), [].
 
+-endif.
 

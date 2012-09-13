@@ -446,7 +446,7 @@ apply_m_cached(CTX, Threshold, Distance, IsDistanceApplicable, {MatcherId, Func,
 						{ok, Result} -> Result;
 						{error, process_down} -> apply_m_cached(CTX, Threshold, Distance, IsDistanceApplicable, {MatcherId, Func, FuncParams, File})
 					end;
-		{error, result, Result} -> erlang:display(c_direct_result), Result end.
+		{error, result, Result} -> Result end.
 
 apply_func(Threshold, Distance, IsDistanceApplicable, {MatcherId, Func, FuncParams, File}) ->
 	EarlyNeg = case is_text_func(Func) of

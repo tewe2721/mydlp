@@ -69,8 +69,14 @@
 -export([
 	new_authority/1,
 	get_mnesia_nodes/0,
+	get_rule_table/2,
 	get_rules/2,
+	get_rule_ids/2,
+	get_remote_user_rule_ids/0,
+	get_remote_ipr_rule_ids/0,
+	get_remote_default_rule_ids/0,
 	get_remote_rule_tables/3,
+	get_remote_rule_ids/3,
 	get_fid/1,
 	remove_site/1,
 	add_fhash/3,
@@ -248,6 +254,8 @@ get_copy_media(_Else) -> disc_copies.
 
 -define(QLCQ(ListC), qlc:q(ListC)).
 
+-define(QLCQU(ListC), qlc:q(ListC, {unique,true})).
+
 -define(QLCE(Query), qlc:e(Query)).
 
 %%%%%%%%%%%%% MyDLP Mnesia API
@@ -270,9 +278,21 @@ wait_for_tables() ->
 
 -ifdef(__MYDLP_NETWORK).
 
-get_rules(Channel, AclQ) -> aqc({get_rules, Channel, AclQ}, cache).
+get_rules(FilterId, AclQ) -> RuleIDs = get_rule_ids(FilterId, AclQ), get_rule_table(FilterId, RuleIDs).
+
+get_rule_ids(FilterId, AclQ) -> aqc({get_rule_ids, FilterId, AclQ}, cache).
+
+get_rule_table(FilterId, RuleIDs) -> aqc({get_rule_table, FilterId, RuleIDs}, cache).
 
 get_remote_rule_tables(FilterId, Addr, UserH) -> aqc({get_remote_rule_tables, FilterId, Addr, UserH}, cache).
+
+get_remote_rule_ids(FilterId, Addr, UserH) -> aqc({get_remote_rule_ids, FilterId, Addr, UserH}, cache).
+
+get_remote_user_rule_ids() -> aqc(get_remote_user_rule_ids, nocache, dirty).
+
+get_remote_ipr_rule_ids() -> aqc(get_remote_ipr_rule_ids, nocache, dirty).
+
+get_remote_default_rule_ids() -> aqc(get_remote_default_rule_ids, cache).
 
 get_fid(SIpAddr) -> aqc({get_fid, SIpAddr}, cache).
 
@@ -320,7 +340,9 @@ dump_client_tables() -> dump_tables(?CLIENT_TABLES).
 
 get_regexes(GroupId) ->	aqc({get_regexes, GroupId}, cache).
 
-get_mc_module() -> aqc(get_mc_module, nocache).
+get_mc_module() -> get_mc_module(local).
+
+get_mc_module(Target) -> aqc({get_mc_module, Target}, nocache).
 
 get_config_value(KeyB) -> aqc({get_config_value, KeyB}, nocache).
 
@@ -400,7 +422,7 @@ handle_result_common({get_config_value, _}, {atomic, Result}) ->
 		[] -> none;
 		[ValB] -> ValB end;
 
-handle_result_common(get_mc_module, {atomic, Result}) -> 
+handle_result_common({get_mc_module, _Target}, {atomic, Result}) -> 
 	case Result of
 		[] -> [];
 		[#mc_module{modules=Mods}] -> Mods end;
@@ -411,21 +433,25 @@ handle_result_common(_Query, {atomic, Objects}) -> Objects.
 
 handle_query({get_remote_rule_tables, FilterId, Addr, UserH}) ->
 	AclQ = #aclq{src_addr=Addr, src_user_h=UserH},
-	WebRuleTable = get_rules(FilterId, AclQ#aclq{channel=web}),
-	MailRuleTable = get_rules(FilterId, AclQ#aclq{channel=mail}),
 	EndpointRuleTable = get_rules(FilterId, AclQ#aclq{channel=endpoint}),
 	PrinterRuleTable = get_rules(FilterId, AclQ#aclq{channel=printer}),
 	DiscoveryRuleTable = get_rules(FilterId, AclQ#aclq{channel=discovery}),
 	[
-		{web, WebRuleTable},
-		{mail, MailRuleTable},
 		{endpoint, EndpointRuleTable},
 		{printer, PrinterRuleTable},
 		{discovery, DiscoveryRuleTable}
 	];
 
-handle_query({get_rules, FilterId, #aclq{channel=Channel} = AclQ}) ->
-	Q0 = ?QLCQ([{R#rule.id, R#rule.orig_id, R#rule.action} || 
+handle_query({get_remote_rule_ids, FilterId, Addr, UserH}) ->
+	AclQ = #aclq{src_addr=Addr, src_user_h=UserH},
+	EndpointRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=endpoint}),
+	PrinterRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=printer}),
+	DiscoveryRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=discovery}),
+	R = lists:flatten([EndpointRuleIds, PrinterRuleIds, DiscoveryRuleIds]),
+	lists:usort(R);
+
+handle_query({get_rule_ids, FilterId, #aclq{channel=Channel} = AclQ}) ->
+	Q0 = ?QLCQ([R#rule.id || 
 		R <- mnesia:table(rule),
 		I <- mnesia:table(ipr),
 		R#rule.filter_id == FilterId,
@@ -438,7 +464,7 @@ handle_query({get_rules, FilterId, #aclq{channel=Channel} = AclQ}) ->
 
 	RulesI = case AclQ#aclq.src_addr of
 		unknown -> [];
-		Addr -> Q = ?QLCQ([{R#rule.id, R#rule.orig_id, R#rule.action} || 
+		Addr -> Q = ?QLCQ([R#rule.id || 
 				R <- mnesia:table(rule),
 				I <- mnesia:table(ipr),
 				R#rule.filter_id == FilterId,
@@ -451,7 +477,7 @@ handle_query({get_rules, FilterId, #aclq{channel=Channel} = AclQ}) ->
 
 	RulesU = case AclQ#aclq.src_user_h of
 		unknown -> [];
-		UserH -> Q2 = ?QLCQ([{R#rule.id, R#rule.orig_id, R#rule.action} || 
+		UserH -> Q2 = ?QLCQ([R#rule.id || 
 				R <- mnesia:table(rule),
 				U <- mnesia:table(m_user),
 				R#rule.filter_id == FilterId,
@@ -460,17 +486,98 @@ handle_query({get_rules, FilterId, #aclq{channel=Channel} = AclQ}) ->
 				U#m_user.un_hash == UserH
 				]), ?QLCE(Q2) end,
 
-	Rules = lists:usort(fun({FId,_,_},{SId,_,_}) -> FId =< SId end,
-			lists:append([RulesD, RulesI, RulesU])),
+	lists:usort(lists:append([RulesD, RulesI, RulesU]));
 
-	resolve_all(Rules, FilterId);
+handle_query({get_rule_table, FilterId, RuleIDs}) ->
+	Rules = lists:map(fun(I) ->
+			[R] = mnesia:read(rule, I),
+			{R#rule.id, R#rule.orig_id, R#rule.action}
+		end, RuleIDs),
+	Rules1 = lists:usort(fun({FId,_,_},{SId,_,_}) -> FId =< SId end, Rules),
+	resolve_all(Rules1, FilterId);
 
+handle_query(get_remote_user_rule_ids) ->
+	Q1 = ?QLCQU([U#m_user.un_hash || 
+		U <- mnesia:table(m_user)
+		]),
+	UniqUserHList = ?QLCE(Q1),
+
+	PUSRL = lists:map(fun(UH) -> 
+			Q2 = ?QLCQ([R#rule.id || 
+				R <- mnesia:table(rule),
+				U <- mnesia:table(m_user),
+				R#rule.channel /= api,
+				R#rule.channel /= web,
+				R#rule.channel /= mail,
+				U#m_user.rule_id == R#rule.id,
+				U#m_user.un_hash == UH
+				]),
+			RL = ?QLCE(Q2),
+			lists:usort(RL) end, UniqUserHList),
+
+	lists:usort([[]|PUSRL]);
+
+handle_query(get_remote_ipr_rule_ids) ->
+	Q1 = ?QLCQU([I#ipr.ipbase || 
+		I <- mnesia:table(ipr)
+		]),
+	UniqIPBaseList = ?QLCE(Q1),
+
+	PIPRL = lists:map(fun(A) -> 
+			Q2 = ?QLCQ([R#rule.id || 
+				R <- mnesia:table(rule),
+				I <- mnesia:table(ipr),
+				R#rule.channel /= api,
+				R#rule.channel /= web,
+				R#rule.channel /= mail,
+				I#ipr.rule_id == R#rule.id,
+				I#ipr.ipbase /= {0,0,0,0}, 
+				I#ipr.ipmask /= {0,0,0,0},
+				ip_band(I#ipr.ipbase, I#ipr.ipmask) == ip_band(A, I#ipr.ipmask)
+				]),
+			RL = ?QLCE(Q2),
+			lists:usort(RL) end, UniqIPBaseList),
+
+	lists:usort([[]|PIPRL]);
+
+handle_query(get_remote_default_rule_ids) ->
+	Q0 = ?QLCQ([R#rule.id || 
+		R <- mnesia:table(rule),
+		I <- mnesia:table(ipr),
+		R#rule.channel /= api,
+		R#rule.channel /= web,
+		R#rule.channel /= mail,
+		I#ipr.rule_id == R#rule.id,
+		I#ipr.ipbase == {0,0,0,0}, 
+		I#ipr.ipmask == {0,0,0,0}
+	]),
+	RulesD = ?QLCE(Q0),
+	lists:usort(RulesD);
 
 handle_query({get_matchers, all}) ->
 	Q = ?QLCQ([{M#match.id, M#match.func, M#match.func_params} ||
 		M <- mnesia:table(match)
 		]),
 	?QLCE(Q);
+
+handle_query({get_matchers, RuleIDs}) ->
+	ML = lists:map(fun(RId) ->
+		Q1 = ?QLCQ([F#ifeature.id ||
+			F <- mnesia:table(ifeature),
+			T <- mnesia:table(itype),
+			T#itype.rule_id == RId,
+			F#ifeature.itype_id == T#itype.id
+			]),
+		IFIds = ?QLCE(Q1),
+		lists:map(fun(IFId) ->
+			Q2 = ?QLCQ([{M#match.id, M#match.func, M#match.func_params} ||
+				M <- mnesia:table(match),
+				M#match.ifeature_id ==  IFId
+				]),
+			?QLCE(Q2) 
+		end, IFIds)
+	end, RuleIDs),
+	lists:usort(lists:flatten(ML));
 
 handle_query({get_keywords, GroupId}) ->
 	Q = ?QLCQ([ K#keyword.keyword ||
@@ -506,11 +613,17 @@ handle_query({remove_site, FI}) ->
 		]),
 	UDIs = ?QLCE(Q7),
 
+	Q8 = ?QLCQ([M#mc_module.target ||	
+		M <- mnesia:table(mc_module)
+		]),
+	MCTs = ?QLCE(Q8),
+
 	case RQ4 of
 		[] -> ok;
 		[SDI] -> mnesia:delete({site_desc, SDI}) end,
 
 	remove_filters([FI]),
+	lists:foreach(fun(T) -> mnesia:delete({mc_module, T}) end, MCTs),
 	lists:foreach(fun(Id) -> mnesia:delete({config, Id}) end, CIs),
 	lists:foreach(fun(Id) -> mnesia:delete({usb_device, Id}) end, UDIs);
 
@@ -606,10 +719,10 @@ handle_query_common({get_regexes, GroupId}) ->
 		]),
 	?QLCE(Q);
 
-handle_query_common(get_mc_module) ->
+handle_query_common({get_mc_module, Target}) ->
 	Q = ?QLCQ([M ||
 		M <- mnesia:table(mc_module),
-		M#mc_module.target == local
+		M#mc_module.target == Target
 		]),
 	?QLCE(Q);
 
