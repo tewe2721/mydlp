@@ -1010,13 +1010,17 @@ predict_req(#mining_req{} = Req, Func) ->
 predict_req1(#mining_req{raw_text=undefined} = Req, Func) -> predict_req1(Req#mining_req{raw_text=false}, Func);
 predict_req1(#mining_req{raw_text=false} = Req, Func) -> predict_req_te(Req, Func);
 predict_req1(#mining_req{normal_text=undefined} = Req, Func) -> predict_req1(Req#mining_req{normal_text=false}, Func);
-predict_req1(#mining_req{normal_text=false} = Req, Func) -> predict_req_te(Req, Func).
-
-predict_req3(#mining_req{mc_pd=undefined} = Req, Func) -> predict_req3(Req#mining_req{mc_pd=false}, Func);
-predict_req3(#mining_req{mc_pd=false} = Req, Func) -> predict_req_mc_pd(Req, Func).
+predict_req1(#mining_req{normal_text=false} = Req, Func) -> predict_req_te(Req, Func);
+predict_req1(#mining_req{} = Req, _Func) -> Req.
 
 predict_req2(#mining_req{mc_kw=undefined} = Req, Func) -> predict_req2(Req#mining_req{mc_kw=false}, Func);
-predict_req2(#mining_req{mc_kw=false} = Req, Func) -> predict_req_mc_kw(Req, Func).
+predict_req2(#mining_req{mc_kw=false} = Req, Func) -> predict_req_mc_kw(Req, Func);
+predict_req2(#mining_req{} = Req, _Func) -> Req.
+
+predict_req3(#mining_req{mc_pd=undefined} = Req, Func) -> predict_req3(Req#mining_req{mc_pd=false}, Func);
+predict_req3(#mining_req{mc_pd=false} = Req, Func) -> predict_req_mc_pd(Req, Func);
+predict_req3(#mining_req{} = Req, _Func) -> Req.
+
 
 predict_req_te(#mining_req{} = Req, Func) ->
 	case get_matcher_req(Func) of

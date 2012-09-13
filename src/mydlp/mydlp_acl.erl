@@ -165,10 +165,13 @@ acl_exec3(Req, AllRules, Files, ExNewFiles, CleanFiles) ->
 
 	FFiles = PFiles4,
 
-	case apply_rules(AllRules, FFiles) of
+	CTX = ctx_cache(),
+	AclR = case apply_rules(CTX, AllRules, FFiles) of
 		return -> acl_exec3(Req, AllRules, RestOfFiles,
 				lists:append(ExNewFiles, NewFiles), CleanFiles);
-		Else -> Else end.
+		Else -> Else end,
+	ctx_cache_stop(CTX),
+	AclR.
 
 -ifdef(__MYDLP_NETWORK).
 
@@ -272,63 +275,64 @@ code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 
 %%%%%%%%%%%%%%% helper func
-apply_rules([], _Files) -> return;
-apply_rules(_Rules, []) -> return;
-apply_rules([{Id, Action, ITypes}|Rules], Files) ->
-	case execute_itypes(ITypes, Files) of
-		neg -> apply_rules(Rules, Files);
+apply_rules(_CTX, [], _Files) -> return;
+apply_rules(_CTX, _Rules, []) -> return;
+apply_rules(CTX, [{Id, Action, ITypes}|Rules], Files) ->
+	case execute_itypes(CTX, ITypes, Files) of
+		neg -> apply_rules(CTX, Rules, Files);
 		{pos, {file, File}, {itype, ITypeOrigId}, {misc, Misc}} -> 
 			{Action, {{rule, Id}, {file, File}, {itype, ITypeOrigId}, {misc, Misc}}};
 		{error, {file, File}, {itype, ITypeOrigId}, {misc, Misc}} -> 
 			{?CFG(error_action), {{rule, Id}, {file, File}, {itype, ITypeOrigId}, {misc, Misc}}}
 	end.
 
-execute_itypes([], _Files) -> neg;
-execute_itypes(_ITypes, []) -> neg;
-execute_itypes(ITypes, Files) ->
-	PAnyRet = mydlp_api:pany(fun(F) -> execute_itypes_pf(ITypes, F) end, Files, 900000),
+
+execute_itypes(_CTX, [], _Files) -> neg;
+execute_itypes(_CTX, _ITypes, []) -> neg;
+execute_itypes(CTX, ITypes, Files) ->
+	PAnyRet = mydlp_api:pany(fun(F) -> execute_itypes_pf(CTX, ITypes, F) end, Files, 900000),
 	case PAnyRet of
 		false -> neg;
 		{ok, _File, Ret} -> Ret end.
 
 
-execute_itypes_pf(ITypes, File) -> 
+execute_itypes_pf(CTX, ITypes, File) -> 
         File1 = case File#file.mime_type of 
                 undefined -> 	MT = mydlp_tc:get_mime(File#file.filename, File#file.data),
 				File#file{mime_type=MT};
                 _Else ->	File end,
 
-	PAnyRet = mydlp_api:pany(fun(T) -> execute_itype_pf(T, File1) end, ITypes, 850000),
+	PAnyRet = mydlp_api:pany(fun(T) -> execute_itype_pf(CTX, T, File1) end, ITypes, 850000),
 	
 	case PAnyRet of
 		false -> neg;
 		{ok, _IType, Ret} -> Ret end.
 
-execute_itype_pf({ITypeOrigId, all, Distance, IFeatures}, File) ->
-	execute_itype_pf1(ITypeOrigId, Distance, IFeatures, File);
-execute_itype_pf({ITypeOrigId, DataFormats, Distance, IFeatures},
+execute_itype_pf(CTX, {ITypeOrigId, all, Distance, IFeatures}, File) ->
+	execute_itype_pf1(CTX, ITypeOrigId, Distance, IFeatures, File);
+execute_itype_pf(CTX, {ITypeOrigId, DataFormats, Distance, IFeatures},
 		#file{mime_type=MT} = File) ->
         case mydlp_mnesia:is_mime_of_dfid(MT, DataFormats) of
                 false -> neg;
-		true -> execute_itype_pf1(ITypeOrigId, Distance, IFeatures, File) end.
+		true -> execute_itype_pf1(CTX, ITypeOrigId, Distance, IFeatures, File) end.
 
-execute_itype_pf1(ITypeOrigId, Distance, IFeatures, File) ->
-	case execute_ifeatures(Distance, IFeatures, File) of
+execute_itype_pf1(CTX, ITypeOrigId, Distance, IFeatures, File) ->
+	case execute_ifeatures(CTX, Distance, IFeatures, File) of
 		neg -> neg;
 		pos -> {pos, {file, File}, {itype, ITypeOrigId}, {misc, ""}};
 		{error, {file, File}, {misc, Misc}} ->
 				{error, {file, File}, {itype, ITypeOrigId}, {misc, Misc}};
 		E -> E end.
 
-execute_ifeatures(_Distance, [], _File) -> 0;
-execute_ifeatures(Distance, IFeatures, File) ->
+execute_ifeatures(_CTX, _Distance, [], _File) -> 0;
+execute_ifeatures(CTX, Distance, IFeatures, File) ->
 	try	UseDistance = case Distance of
 			undefined -> false;
 			_Else -> lists:all(fun({_Threshold, {_MId, Func, _FuncParams}}) ->
 						is_distance_applicable(Func) end, IFeatures) end,
 	
 		PAllRet = mydlp_api:pall(fun({Threshold, {MId, Func, FuncParams}}) ->
-						apply_m(Threshold, Distance, UseDistance, {MId, Func, FuncParams, File}) end,
+						apply_m(CTX, Threshold, Distance, UseDistance, {MId, Func, FuncParams, File}) end,
 					IFeatures, 800000),
 		%%%% TODO: Check for PAnyRet whether contains error
 		case {PAllRet, UseDistance} of
@@ -423,8 +427,28 @@ is_early_distance_satisfied([Head|Tail], Threshold, Distance)->
 		false -> is_early_distance_satisfied(Tail, Threshold, Distance)
 	end.
 
-apply_m(_Threshold, _Distance, _IsDistanceApplicable, {_MatcherId, all, _FuncParams, _File}) -> pos; %% match directly.
-apply_m(Threshold, Distance, IsDistanceApplicable, {MatcherId, Func, FuncParams, File}) ->
+apply_m(_CTX, _Threshold, _Distance, _IsDistanceApplicable, {_MatcherId, all, _FuncParams, _File}) -> pos; %% match directly.
+apply_m(CTX, Threshold, Distance, IsDistanceApplicable, {MatcherId, Func, FuncParams, File}) ->
+	IsCachable = case File of
+		#file{md5_hash=undefined} -> false;
+		#file{md5_hash=_Else} -> true;
+		_Else -> false end,
+	case IsCachable of
+		true -> apply_m_cached(CTX, Threshold, Distance, IsDistanceApplicable, {MatcherId, Func, FuncParams, File});
+		false -> apply_func(Threshold, Distance, IsDistanceApplicable, {MatcherId, Func, FuncParams, File}) end.
+
+apply_m_cached(CTX, Threshold, Distance, IsDistanceApplicable, {MatcherId, Func, FuncParams, File}) ->
+	CacheKey = {File#file.md5_hash, Func, FuncParams},
+	case ctx_start(CTX, CacheKey) of
+		{ok, reserved} ->	Result = apply_func(Threshold, Distance, IsDistanceApplicable, {MatcherId, Func, FuncParams, File}),
+					ctx_finish(CTX, CacheKey, Result), Result;
+		{error, wait} ->	case ctx_wait(CTX, CacheKey) of
+						{ok, Result} -> Result;
+						{error, process_down} -> apply_m_cached(CTX, Threshold, Distance, IsDistanceApplicable, {MatcherId, Func, FuncParams, File})
+					end;
+		{error, result, Result} -> erlang:display(c_direct_result), Result end.
+
+apply_func(Threshold, Distance, IsDistanceApplicable, {MatcherId, Func, FuncParams, File}) ->
 	EarlyNeg = case is_text_func(Func) of
 		false -> false;
 		true -> not mydlp_api:has_text(File) end,
@@ -509,3 +533,109 @@ has_data(Else) -> throw({error, unexpected_obj, Else}).
 
 drop_nodata(Files) -> lists:filter(fun(F) -> has_data(F) end, Files).
 
+%%%%%%%%%%%%%%%%%%%%% CTX Cache Start
+
+-define(CTX_TIMEOUT, 900000).
+
+ctx_cache() -> ctx_cache(?CTX_TIMEOUT).
+
+ctx_cache(Timeout) -> mydlp_api:mspawn(fun() -> ctx_cache_func(Timeout) end, Timeout + 1000).
+
+ctx_cache_stop(CTX) -> ok = ctx_query(CTX, stop).
+
+ctx_cache_func(Timeout) ->
+	receive
+                {From, {start, Key}} -> ctx_cache_func_start(Timeout, From, Key);
+                {From, {finish, Key, Result}} -> ctx_cache_func_finish(Timeout, From, Key, Result);
+                {From, {wait, Key}} -> ctx_cache_func_wait(Timeout, From, Key);
+		{'DOWN', _MonitorRef, process, Pid, _Info} -> ctx_cache_func_down(Timeout, Pid);
+                {From, stop} -> ctx_cache_func_reply(From, ok);
+		Else -> exit({error, unexpected_message_for_cache_main, Else})
+        after Timeout + 500 ->
+                exit({timeout, ctx_cache})
+        end.
+
+ctx_cache_func_reply(From, Message) -> From ! Message.
+
+ctx_cache_func_down(Timeout, Pid) ->
+	case get_keys({processing, Pid}) of
+		[] -> ok;
+		KeyList -> [ctx_cache_func_notify_down(K) || K <- KeyList] end,
+	ctx_cache_func(Timeout).
+
+ctx_cache_func_notify_down(Key) ->
+	QueueList = case get({queue, Key}) of
+		undefined -> 	[];
+		L ->		L end,
+	erase({queue, Key}),
+	erase(Key),
+	[P ! process_down || P <- QueueList], ok.
+	
+
+ctx_cache_func_start(Timeout, From, Key) ->
+	case get(Key) of
+		undefined -> 		monitor(process, From),
+					put(Key, {processing, From}),
+					ctx_cache_func_reply(From, {ok, reserved});
+		{processing, _From} -> 	ctx_cache_func_reply(From, {error, wait});
+		{result, Result} -> 	ctx_cache_func_reply(From, {error, result, Result}) end,
+	ctx_cache_func(Timeout).
+
+ctx_cache_func_notify_waiting(Key, Result) ->
+	QueueList = case get({queue, Key}) of
+		undefined -> 	[];
+		L ->		L end,
+	erase({queue, Key}),
+	[P ! {finished, Result} || P <- QueueList], ok.
+		
+ctx_cache_func_finish(Timeout, From, Key, Result) ->
+	case get(Key) of
+		undefined -> 		exit({error, finishing_non_present_key});
+		{processing, From} ->	put(Key, {result, Result}),
+					ctx_cache_func_notify_waiting(Key, Result),
+					ctx_cache_func_reply(From, ok);
+		{processing, _Else} ->	exit({error, finishing_some_other_processes_key});
+		{result, _Result} -> 	exit({error, finishing_alrady_finished_key}) end,
+	ctx_cache_func(Timeout).
+
+ctx_cache_func_add_queue(Key, From) ->
+	case get({queue, Key}) of
+		undefined -> 	put({queue, Key}, [From]);
+		QueueList ->	put({queue, Key}, [From|QueueList]) end.
+	
+ctx_cache_func_wait(Timeout, From, Key) ->
+	case get(Key) of
+		undefined -> 		exit({error, waiting_for_non_present_key});
+		{processing, _From} ->	ctx_cache_func_add_queue(Key, From),
+					ctx_cache_func_reply(From, ok);
+		{result, Result} -> 	ctx_cache_func_reply(From, {error, result, Result}) end,
+	ctx_cache_func(Timeout).
+
+
+ctx_start(CTX, Key) -> ctx_query(CTX, {start, Key}).
+
+ctx_wait(CTX, Key) -> 
+	case ctx_query(CTX, {wait, Key}) of
+		{error, result, Result} -> {ok, Result};
+		ok ->	receive
+				{finished, Result} -> {ok, Result};
+				process_down -> {error, process_down};
+				Else -> exit({error, unexpected_message_when_waiting, Else})
+			after ?CTX_TIMEOUT ->
+				exit({timeout, ctx_query_wait})
+			end
+	end.
+
+ctx_finish(CTX, Key, Result) -> ok = ctx_query(CTX, {finish, Key, Result}).
+
+ctx_query(CTX, Message) -> ctx_query(CTX, Message, ?CTX_TIMEOUT).
+
+ctx_query(CTX, Message, Timeout) ->
+	CTX ! {self(), Message},
+	receive
+		Reply -> Reply
+        after Timeout ->
+                exit({timeout, ctx_query})
+        end.
+
+%%%%%%%%%%%%%%%%%%% CTX Cache end
