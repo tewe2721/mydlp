@@ -172,7 +172,7 @@ iban_match({conf, _Conf}) -> none.
 iban_match(_Conf, File) ->
 	{Data, IndexList} = mydlp_regex:match_bin(
 	 	iban, 
-		File#file.text),
+		File#file.normal_text),
 	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_iban(I) end, Data, IndexList),
 	{length(WIList), WIList}.
 
