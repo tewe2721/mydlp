@@ -46,6 +46,15 @@
 	iban_match/0,
 	iban_match/1,
 	iban_match/2,
+	cc_track1_match/0,
+	cc_track1_match/1,
+	cc_track1_match/2,
+	cc_track2_match/0,
+	cc_track2_match/1,
+	cc_track2_match/2,
+	cc_track3_match/0,
+	cc_track3_match/1,
+	cc_track3_match/2,
 	aba_match/0,
 	aba_match/1,
 	aba_match/2,
@@ -164,6 +173,46 @@ cc_match({pd_patterns, "wide"}) ->
 	?P({[{numeric, {13,16}}], none}).
 
 cc_match(_Conf, Phrase) -> mydlp_api:is_valid_cc(Phrase).
+%cc_match(_Conf, File) ->
+%	{Data, IndexList} = mydlp_regex:match_bin(
+%	 	credit_card, 
+%		File#file.text),
+%	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_cc(I) end, Data, IndexList),
+%	{length(WIList), WIList}.
+
+cc_track1_match() -> {normalized, {distance, true}, {pd, false}, {kw, false}}.	
+
+cc_track1_match({conf, _Conf}) -> none.
+
+cc_track1_match(_Conf, File) ->
+	{Data, IndexList} = mydlp_regex:match_bin(
+		cc_track1,
+		File#file.text),
+	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_cc_track(I) end, Data, IndexList),
+	{length(WIList), WIList}.
+
+cc_track2_match() -> {normalized, {distance, true}, {pd, false}, {kw, false}}.	
+
+cc_track2_match({conf, _Conf}) -> none.
+
+cc_track2_match(_Conf, File) ->
+	{Data, IndexList} = mydlp_regex:match_bin(
+		cc_track2,
+		File#file.text),
+	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_cc_track(I) end, Data, IndexList),
+	{length(WIList), WIList}.
+
+
+cc_track3_match() -> {normalized, {distance, true}, {pd, false}, {kw, false}}.	
+
+cc_track3_match({conf, _Conf}) -> none.
+
+cc_track3_match(_Conf, File) ->
+	{Data, IndexList} = mydlp_regex:match_bin(
+		cc_track3,
+		File#file.text),
+	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_cc_track(I) end, Data, IndexList),
+	{length(WIList), WIList}.
 
 iban_match() -> {normalized, {distance, true}, {pd, false}, {kw, false}}. 
 

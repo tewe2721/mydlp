@@ -290,7 +290,24 @@ is_valid_cc([$6,$0,$1,$1|_Rest], 16) -> true; % Discover
 is_valid_cc(_,_) -> false.
 
 %%--------------------------------------------------------------------
-%% @doc Checks whether string is a valid IBAN accoun number
+%% @doc Checks whether string is a valid credit card track 1
+%% @end
+%%----------------------------------------------------------------------
+
+is_valid_cc_track([I1|Rest]) -> 
+	CcStr = case I1 of
+			$% -> [_|Rest2] = Rest,
+				string:sub_word(Rest2, 1, $^);
+			$; -> string:sub_word(Rest, 1, $=)
+		end,
+	case is_valid_cc(CcStr) of 
+		true -> true;
+		false -> [_, _|SCcStr] = CcStr, 
+			is_valid_cc(SCcStr)
+	end.		 
+
+%%--------------------------------------------------------------------
+%% @doc Checks whether string is a valid IBAN account number
 %% @end
 %%----------------------------------------------------------------------
 is_valid_iban(IbanStr) ->
@@ -439,8 +456,7 @@ is_valid_cc_edate(EdateStr) ->
 %%--------------------------------------------------------------------
 
 is_valid_date(DateStr) ->
-	Clean = remove_chars(DateStr, ?WS),
-	{Year, Month, Day} = split_date_string(Clean),
+	{Year, Month, Day} = split_date_string(DateStr),
 	(is_valid_year(Year) and is_valid_month(Month)) and is_valid_day(Day).
 
 is_valid_year(Year) ->
@@ -453,8 +469,7 @@ is_valid_year(Year) ->
 %%--------------------------------------------------------------------
 
 is_valid_birthdate(BirthdateStr) ->
-	Clean = remove_chars(BirthdateStr, ?WS),
-	{Year, Month, Day} = split_date_string(Clean),
+	{Year, Month, Day} = split_date_string(BirthdateStr),
 	(is_valid_birthdate_year(Year) and is_valid_month(Month)) and is_valid_day(Day).
 
 split_date_string(BirthdateStr) ->

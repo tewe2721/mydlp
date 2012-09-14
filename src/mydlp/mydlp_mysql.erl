@@ -673,6 +673,18 @@ populate_match(Id, <<"cc">>, IFeatureId) ->
 	Func = cc_match,
 	new_match(Id, IFeatureId, Func);
 
+populate_match(Id, <<"cc_track1">>, IFeatureId) ->
+	Func = cc_track1_match,
+	new_match(Id, IFeatureId, Func);
+
+populate_match(Id, <<"cc_track2">>, IFeatureId) ->
+	Func = cc_track2_match,
+	new_match(Id, IFeatureId, Func);
+
+populate_match(Id, <<"cc_track3">>, IFeatureId) ->
+	Func = cc_track3_match,
+	new_match(Id, IFeatureId, Func);
+
 populate_match(Id, <<"canada_sin">>, IFeatureId) ->
 	Func = canada_sin_match,
 	new_match(Id, IFeatureId, Func);
