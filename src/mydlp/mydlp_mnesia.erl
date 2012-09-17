@@ -824,8 +824,10 @@ handle_info({async_reply, Reply, From}, State) ->
 	{noreply, State};
 
 handle_info(cleanup_now, State) ->
-	cache_cleanup_handle(),
-	call_timer(),
+	?ASYNC(fun() ->
+		cache_cleanup_handle(),
+		call_timer()
+	end, 15000),
 	{noreply, State};
 
 handle_info(_Info, State) ->
