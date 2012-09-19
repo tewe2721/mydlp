@@ -55,6 +55,9 @@
 	cc_track3_match/0,
 	cc_track3_match/1,
 	cc_track3_match/2,
+	dna_match/0,
+	dna_match/1,
+	dna_match/2,
 	aba_match/0,
 	aba_match/1,
 	aba_match/2,
@@ -179,12 +182,6 @@ cc_match({pd_patterns, "wide"}) ->
 	?P({[{numeric, {13,16}}], none}).
 
 cc_match(_Conf, Phrase) -> mydlp_api:is_valid_cc(Phrase).
-%cc_match(_Conf, File) ->
-%	{Data, IndexList} = mydlp_regex:match_bin(
-%	 	credit_card, 
-%		File#file.text),
-%	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_cc(I) end, Data, IndexList),
-%	{length(WIList), WIList}.
 
 cc_track1_match() -> {normalized, {distance, true}, {pd, false}, {kw, false}}.	
 
@@ -221,6 +218,14 @@ cc_track3_match(_Conf, File) ->
 		File#file.text),
 	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_cc_track(I) end, Data, IndexList),
 	{length(WIList), WIList}.
+
+dna_match() -> {normalized, {distance, true}, {pd, false}, {kw, false}}.
+
+dna_match({conf, _Conf}) -> none.
+
+dna_match(_Conf, File) ->
+	IndexList = mydlp_api:valid_dna_patterns(File#file.normal_text),
+	{length(IndexList), IndexList}.
 
 iban_match() -> {normalized, {distance, true}, {pd, false}, {kw, false}}. 
 

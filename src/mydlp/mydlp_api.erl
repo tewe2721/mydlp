@@ -307,6 +307,22 @@ is_valid_cc_track([I1|Rest]) ->
 	end.		 
 
 %%--------------------------------------------------------------------
+%% @doc Finds valid and applicable DNA patterns in given binary data 
+%% @end
+%%----------------------------------------------------------------------
+valid_dna_patterns(Data) ->
+	dna_fsm(root, Data, 0, 0,[]).%State, Data, Index, Length, Acc
+
+dna_fsm(_, <<>>, I, L, Acc) when L > 50 -> lists:reverse([(I-L)|Acc]);
+dna_fsm(_, <<>>, _I, _L, Acc) -> lists:reverse(Acc);
+dna_fsm(root, <<C/utf8, Rest/binary>>, I, L, Acc) when C==97;C==99;C==103;C==116 -> dna_fsm(dna_accept, Rest, I+1, L+1, Acc); % 0 represents the length of the DNA sequence. 
+dna_fsm(root, <<_C/utf8, Rest/binary>>, I, L, Acc) -> dna_fsm(root, Rest, I+1, L, Acc);
+dna_fsm(dna_accept, <<C/utf8, Rest/binary>>, I, L, Acc) when C==97;C==99;C==103;C==116;C==32 -> dna_fsm(dna_accept, Rest, I+1, L+1, Acc);
+dna_fsm(dna_accept, <<_C/utf8, Rest/binary>>, I, L, Acc) when L >= 50 -> dna_fsm(root, Rest, I+1, 0, [(I-L)|Acc]);
+dna_fsm(dna_accept, <<_C/utf8, Rest/binary>>, I, _L, Acc)  -> dna_fsm(root, Rest, I+1, 0, Acc).
+
+
+%%--------------------------------------------------------------------
 %% @doc Checks whether string is a valid IBAN account number
 %% @end
 %%----------------------------------------------------------------------

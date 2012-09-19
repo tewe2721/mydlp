@@ -705,6 +705,10 @@ populate_match(Id, <<"spain_dni">>, IFeatureId) ->
 	Func = spain_dni_match,
 	new_match(Id, IFeatureId, Func);
 
+populate_match(Id, <<"dna">>, IFeatureId) ->
+	Func = dna_match,
+	new_match(Id, IFeatureId, Func);
+
 populate_match(Id, <<"said">>, IFeatureId) ->
 	Func = said_match,
 	new_match(Id, IFeatureId, Func);
