@@ -58,6 +58,7 @@
 
 -endif.
 
+mc_load([]) -> ok;
 mc_load(ModCodeTupleList) ->
 	LoadedMods = get_loaded_mc_mod_names(),
 	ModNames = get_mod_names(ModCodeTupleList),
@@ -67,8 +68,9 @@ mc_load(ModCodeTupleList) ->
 	ok.
 
 mc_load_mnesia() ->
-	Mods = mydlp_mnesia:get_mc_module(),
-	mc_load(Mods).
+	case mydlp_mnesia:get_mc_module() of
+		[] -> mc_generate_empty();
+		Mods -> mc_load(Mods) end.
 
 mc_search(kw, Data) -> mydlp_mc_kw_dyn:mc_search(Data);
 mc_search(pd, Data) -> mydlp_mc_pd_dyn:mc_search(Data).
@@ -100,6 +102,11 @@ mc_print(Engine, Data) ->
 	Results = mc_search(Engine, Data),
 	Str = unicode:characters_to_list(Data),
 	[io:format("R: ~w ~ts~n", [BI, lists:sublist(Str, CI - L, L)]) || {CI, BI, {L, _}} <- Results], ok.
+
+mc_generate_empty() -> 
+	mc_generate(kw, []),
+	mc_generate(pd, []),
+	ok.
 
 mc_generate(kw, L) -> mc_generate1(kw, L);
 mc_generate(pd, L) -> mc_generate1(pd, L).
@@ -537,6 +544,7 @@ is_func_kw(Func) ->
 
 get_pd_patterns(Matchers) -> get_pd_patterns(Matchers, []).
 
+get_pd_patterns([{_Id, all, _FuncParam}|Rest], Acc) -> get_pd_patterns(Rest, Acc);
 get_pd_patterns([{Id, Func, FuncParam}|Rest], Acc) ->
 	case is_func_pd(Func) of
 		true -> get_pd_patterns(Rest, [{list, func_pd_pattern(Func, FuncParam), Id}|Acc]);
@@ -549,6 +557,7 @@ func_pd_pattern(Func, _FuncParam) ->
 
 get_kw_patterns(Matchers) -> get_kw_patterns(Matchers, []).
 
+get_kw_patterns([{_Id, all, _FuncParam}|Rest], Acc) -> get_kw_patterns(Rest, Acc);
 get_kw_patterns([{Id, Func, FuncParam}|Rest], Acc) ->
 	case is_func_kw(Func) of
 		true -> get_kw_patterns(Rest, [{list, func_kw_pattern(Func, FuncParam), Id}|Acc]);
