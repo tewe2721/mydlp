@@ -697,6 +697,14 @@ populate_match(Id, <<"uk_nino">>, IFeatureId) ->
 	Func = uk_nino_match,
 	new_match(Id, IFeatureId, Func);
 
+populate_match(Id, <<"italy_fc">>, IFeatureId) ->
+	Func = italy_fc_match,
+	new_match(Id, IFeatureId, Func);
+
+populate_match(Id, <<"spain_dni">>, IFeatureId) ->
+	Func = spain_dni_match,
+	new_match(Id, IFeatureId, Func);
+
 populate_match(Id, <<"said">>, IFeatureId) ->
 	Func = said_match,
 	new_match(Id, IFeatureId, Func);

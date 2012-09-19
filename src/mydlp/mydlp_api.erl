@@ -509,18 +509,18 @@ is_valid_month(MonthStr) ->
 		true -> ((list_to_integer(MonthStr) > 0) and (list_to_integer(MonthStr) < 13));
 		false ->
 			case MonthStr of
-				"Jan" -> true;
-				"Feb" -> true;
-				"Mar" -> true;
-				"Apr" -> true;
-				"May" -> true;
-				"Jun" -> true;
-				"Jul" -> true;
-				"Aug" -> true;
-				"Sep" -> true;
-				"Oct" -> true;
-				"Nov" -> true;
-				"Dec" -> true;
+				"jan" -> true;
+				"feb" -> true;
+				"mar" -> true;
+				"apr" -> true;
+				"may" -> true;
+				"jun" -> true;
+				"jul" -> true;
+				"aug" -> true;
+				"sep" -> true;
+				"oct" -> true;
+				"nov" -> true;
+				"dec" -> true;
 				_ -> false
 			end
 	end.
@@ -679,6 +679,85 @@ is_valid_nino1([_, _ |Rest]) ->
 				( $d >= LastChar );
 		_Else -> false end.
 
+%%--------------------------------------------------------------------
+%% @doc Checks whether string is a valid Spain DNI. 
+%% @end
+%%----------------------------------------------------------------------
+is_valid_dni(DNIStr) ->
+	Clean = remove_chars(DNIStr, ?WS),
+	case length(Clean) of
+		9 -> is_valid_dni1(Clean);
+		10 -> is_valid_dni1(remove_chars(Clean, ?WS_WITH_DASH));
+		_ -> false
+	end.
+
+is_valid_dni1(Str)->
+	ChecksumList = "trwagmyfpdxbnjzsqvhlcke",
+	Checksum = lists:last(Str),
+	[I1,I2,I3,I4,I5,I6,I7,I8,_I9] = lists:map(fun(I) -> I - $0 end, Str),
+	Sum = I1*10000000+I2*1000000+I3*100000+I4*10000+I5*1000+I6*100+I7*10+I8,
+	Rem = (Sum rem 23) + 1,
+	RealChecksum = lists:nth(Rem, ChecksumList),
+	RealChecksum == Checksum.
+
+%%--------------------------------------------------------------------
+%% @doc Checks whether string is a valid Italian Fiscal Code. 
+%% @end
+%%----------------------------------------------------------------------
+is_valid_fc(FcStr) ->
+	Clean = remove_chars(FcStr, ?WS),
+	erlang:display(Clean),
+	SumEven = fc_partial_sum(Clean, 2, 0, fc_even_value),
+	SumOdd = fc_partial_sum(Clean, 1, 0, fc_odd_value),
+	RealChecksum = (SumEven + SumOdd) rem 26,
+	Checksum = lists:last(Clean),
+	Checksum == RealChecksum + 97.
+
+fc_partial_sum(List, Index, Sum, Func) ->
+	case Index >= length(List) of
+		true -> Sum;
+		false -> Value = ?MODULE:Func(lists:nth(Index, List)),
+			 fc_partial_sum(List, Index+2, Sum+Value, Func)
+	end.
+
+fc_even_value(C) when C >= 48, C =< 57 -> C-48;
+fc_even_value(C) -> C - 97.
+
+fc_odd_value(C) when C >= 48, C =< 57 ->
+	IntValue = C - 48,
+	TempValue = case IntValue < 5 of
+			true -> IntValue*2 + 1;
+			false -> IntValue*2 + 3
+		end,
+	case TempValue of
+		3 -> 0;
+		_ -> TempValue
+	end;
+fc_odd_value(C) when C >= 97, C =< 101 ->
+	TempValue = (C - 97)*2 + 1,
+	case TempValue of
+		3 -> 0;
+		_ -> TempValue
+	end;
+fc_odd_value(C) when C >= 102, C =< 106 -> (C-97)*2 + 3;
+fc_odd_value(_C=107) -> 2;
+fc_odd_value(_C=108) -> 4;
+fc_odd_value(_C=109) -> 18;
+fc_odd_value(_C=110) -> 20;
+fc_odd_value(_C=111) -> 11;
+fc_odd_value(_C=112) -> 3;
+fc_odd_value(_C=113) -> 6;
+fc_odd_value(_C=114) -> 8;
+fc_odd_value(_C=115) -> 12;
+fc_odd_value(_C=116) -> 14;
+fc_odd_value(_C=117) -> 16;
+fc_odd_value(_C=118) -> 10;
+fc_odd_value(_C=119) -> 22;
+fc_odd_value(_C=120) -> 25;
+fc_odd_value(_C=121) -> 24;
+fc_odd_value(_C=122) -> 23;
+fc_odd_value(_C) -> -1.
+	
 %%--------------------------------------------------------------------
 %% @doc Checks whether string is a valid South Africa Identity Document number. 
 %% @end
@@ -1680,6 +1759,24 @@ do_parse_uenc(<<$%, $u, A:8, B:8,C:8,D:8, Tail/binary>>, CurData, CurFile, Files
 do_parse_uenc(<<$%, A:8, B:8, Tail/binary>>, CurData, CurFile, Files) when
 		A >= 48, A =< 57,
 		B >= 48, B =< 57 ->
+	Hex = try hex2int([A, B]) catch _:_ -> $\s end,
+	do_parse_uenc(Tail, [ Hex | CurData], CurFile, Files);
+
+do_parse_uenc(<<$%, A:8, B:8, Tail/binary>>, CurData, CurFile, Files) when
+		A >= 48, A =< 57,
+		B >= 65, B =< 70 ->
+	Hex = try hex2int([A, B]) catch _:_ -> $\s end,
+	do_parse_uenc(Tail, [ Hex | CurData], CurFile, Files);
+
+do_parse_uenc(<<$%, A:8, B:8, Tail/binary>>, CurData, CurFile, Files) when
+		A >= 65, A =< 70,
+		B >= 48, B =< 57 ->
+	Hex = try hex2int([A, B]) catch _:_ -> $\s end,
+	do_parse_uenc(Tail, [ Hex | CurData], CurFile, Files);
+
+do_parse_uenc(<<$%, A:8, B:8, Tail/binary>>, CurData, CurFile, Files) when
+		A >= 65, A =< 70,
+		B >= 65, B =< 70 ->
 	Hex = try hex2int([A, B]) catch _:_ -> $\s end,
 	do_parse_uenc(Tail, [ Hex | CurData], CurFile, Files);
 

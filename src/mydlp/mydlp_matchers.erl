@@ -73,6 +73,12 @@
 	uk_nino_match/0,
 	uk_nino_match/1,
 	uk_nino_match/2,
+	spain_dni_match/0,
+	spain_dni_match/1,
+	spain_dni_match/2,
+	italy_fc_match/0,
+	italy_fc_match/1,
+	italy_fc_match/2,
 	said_match/0,
 	said_match/1,
 	said_match/2,
@@ -134,6 +140,7 @@ mc_match(MatcherId, Func, FuncOpts, #file{mc_table=MCTable, normal_text=NT}) ->
 			end, Matched);
 		false -> lists:map(fun({I, _CI, {_L, _ML}}) -> I end, Matched) end,
 	MI = lists:flatten(MatchedIndex),
+	erlang:display(MI),
 	{length(MI), MI}.
 
 regex_match() -> {normalized, {distance, true}, {pd, false}, {kw, false}}.
@@ -188,6 +195,7 @@ cc_track1_match(_Conf, File) ->
 	{Data, IndexList} = mydlp_regex:match_bin(
 		cc_track1,
 		File#file.text),
+	io:format("~ts~n",[File#file.text]),
 	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_cc_track(I) end, Data, IndexList),
 	{length(WIList), WIList}.
 
@@ -199,6 +207,7 @@ cc_track2_match(_Conf, File) ->
 	{Data, IndexList} = mydlp_regex:match_bin(
 		cc_track2,
 		File#file.text),
+	io:format("~ts~n",[File#file.text]),
 	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_cc_track(I) end, Data, IndexList),
 	{length(WIList), WIList}.
 
@@ -421,6 +430,36 @@ uk_nino_match({pd_patterns, "wide"}) ->
 	?P({[{alpha, 2}, {numeric, 6}, {alpha, {0, 1}}], join_ws}).
 
 uk_nino_match(_Conf, Phrase) -> mydlp_api:is_valid_nino(Phrase).
+
+spain_dni_match() -> {normalized, {distance, true}, {pd, true}, {kw, false}}.
+
+spain_dni_match({conf, _Conf}) -> none;
+
+spain_dni_match({pd_patterns, "narrow"}) -> ?P({[{numeric, 8}, {special, "-"}, {alpha, 1}], encap_ws});
+spain_dni_match({pd_patterns, "normal"}) -> ?P({[{numeric, 8}, {special, "-"}, {alpha, 1}], encap_ws});
+spain_dni_match({pd_patterns, "wide"}) -> 
+	?P({[{numeric, 8}, {alpha, 1}], none}) ++
+	?P({[{numeric, 8}, {alpha, 1}], join_ws}) ++
+	?P({[{numeric, 8}, {special, "-"}, {alpha, 1}], none}) ++
+	?P({[{numeric, 8}, {special, "-"}, {alpha, 1}], join_ws}).
+
+spain_dni_match(_Conf, Phrase) -> mydlp_api:is_valid_dni(Phrase).
+
+italy_fc_match() -> {normalized, {distance, true}, {pd, true}, {kw, false}}.
+
+italy_fc_match({conf, _Conf}) -> none;
+
+italy_fc_match({pd_patterns, "narrow"}) -> ?P({[{alpha, 3}, ws, {alpha, 3}, ws, {numeric, 2}, {alpha, 1}, {numeric, 2}, ws, {alpha, 1}, {numeric, 3}, {alpha, 1}], encap_ws});
+italy_fc_match({pd_patterns, "normal"}) -> 
+	?P({[{alpha, 3}, ws, {alpha, 3}, ws, {numeric, 2}, {alpha, 1}, {numeric, 2}, ws, {alpha, 1}, {numeric, 3}, {alpha, 1}], encap_ws}) ++
+	?P({[{alpha, 3}, {alpha, 3}, {numeric, 2}, {alpha, 1}, {numeric, 2}, {alpha, 1}, {numeric, 3}, {alpha, 1}], encap_ws});
+italy_fc_match({pd_patterns, "wide"}) -> 
+	?P({[{alpha, 3}, ws, {alpha, 3}, ws, {numeric, 2}, {alpha, 1}, {numeric, 2}, ws, {alpha, 1}, {numeric, 3}, {alpha, 1}], nonne}) ++
+	?P({[{alpha, 3}, {alpha, 3}, {numeric, 2}, {alpha, 1}, {numeric, 2}, {alpha, 1}, {numeric, 3}, {alpha, 1}], none}) ++
+	?P({[{alpha, 3}, ws, {alpha, 3}, ws, {numeric, 2}, {alpha, 1}, {numeric, 2}, ws, {alpha, 1}, {numeric, 3}, {alpha, 1}], join_ws}) ++
+	?P({[{alpha, 3}, {alpha, 3}, {numeric, 2}, {alpha, 1}, {numeric, 2}, {alpha, 1}, {numeric, 3}, {alpha, 1}], join_ws}).
+
+italy_fc_match(_Conf, Phrase) -> mydlp_api:is_valid_fc(Phrase).
 
 said_match() -> {normalized, {distance, true}, {pd, true}, {kw, false}}.
 

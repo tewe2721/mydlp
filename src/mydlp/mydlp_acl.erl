@@ -458,7 +458,7 @@ apply_func(Threshold, Distance, IsDistanceApplicable, {MatcherId, Func, FuncPara
 			FuncOpts = get_func_opts(Func, FuncParams),
 			IndexRet = case is_mc_func(Func) of
 				true ->  apply(mydlp_matchers, mc_match, [MatcherId, Func, FuncOpts, File]);
-				false -> apply(mydlp_matchers, Func, [{FuncOpts, File}]) end,
+				false -> apply(mydlp_matchers, Func, [FuncOpts, File]) end,
 			case IndexRet of
 				{Score, IndexList} ->
 						EarlyNegForDistance = case IsDistanceApplicable of
