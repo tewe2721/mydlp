@@ -299,7 +299,7 @@ get_remote_mc_module(FilterId, Addr, UserH) ->
 	RuleIDs = get_remote_rule_ids(FilterId, Addr, UserH),
 	Mods = case get_mc_module(RuleIDs) of
 		[] -> ?ERROR_LOG("Cannot find mc module for remote. Addr: "?S", UserH: "?S", Rule Ids: "?S , 
-			[Addr, UserH, RuleIDs]), [];
+			[Addr, UserH, RuleIDs]), get_mc_module();
 		ML -> ML end,
 	#mc_module{target=local, modules=Mods}.
 
@@ -824,8 +824,10 @@ handle_info({async_reply, Reply, From}, State) ->
 	{noreply, State};
 
 handle_info(cleanup_now, State) ->
-	cache_cleanup_handle(),
-	call_timer(),
+	?ASYNC(fun() ->
+		cache_cleanup_handle(),
+		call_timer()
+	end, 15000),
 	{noreply, State};
 
 handle_info(_Info, State) ->

@@ -1097,7 +1097,9 @@ formatted_cur_date({{Year, Month, Day}, {Hours, Minutes, Seconds}}) ->
 	MonthS = get_month_str(Month),
 	io_lib:format("~s ~2..0B ~4..0B ~2..0B:~2..0B:~2..0B",[MonthS, Day, Year, Hours, Minutes, Seconds]).
 
-escape_es(Str) -> escape_es(Str, []).
+escape_es(Bin) when is_binary(Bin) -> escape_es(binary_to_list(Bin));
+escape_es(Atom) when is_atom(Atom) -> escape_es(atom_to_list(Atom));
+escape_es(Str) when is_list(Str) -> escape_es(Str, []).
 
 escape_es([$=|Str], Rest) -> escape_es(Str, [$=, $\\|Rest]);
 escape_es([C|Str], Rest) -> escape_es(Str, [C|Rest]);
