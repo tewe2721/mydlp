@@ -706,7 +706,6 @@ is_valid_dni1(Str)->
 %%----------------------------------------------------------------------
 is_valid_fc(FcStr) ->
 	Clean = remove_chars(FcStr, ?WS),
-	erlang:display(Clean),
 	SumEven = fc_partial_sum(Clean, 2, 0, fc_even_value),
 	SumOdd = fc_partial_sum(Clean, 1, 0, fc_odd_value),
 	RealChecksum = (SumEven + SumOdd) rem 26,

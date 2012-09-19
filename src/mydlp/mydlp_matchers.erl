@@ -140,7 +140,6 @@ mc_match(MatcherId, Func, FuncOpts, #file{mc_table=MCTable, normal_text=NT}) ->
 			end, Matched);
 		false -> lists:map(fun({I, _CI, {_L, _ML}}) -> I end, Matched) end,
 	MI = lists:flatten(MatchedIndex),
-	erlang:display(MI),
 	{length(MI), MI}.
 
 regex_match() -> {normalized, {distance, true}, {pd, false}, {kw, false}}.
