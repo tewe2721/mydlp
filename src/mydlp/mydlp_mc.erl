@@ -80,6 +80,11 @@ mc_search(Data) ->
 	PDL = mc_search(pd, Data),
 	lists:keymerge(1, KWL, PDL).
 
+mc_generate_empty() -> 
+	mc_generate(kw, []),
+	mc_generate(pd, []),
+	ok.
+
 -ifdef(__MYDLP_NETWORK).
 
 mc_module(local) ->
@@ -102,11 +107,6 @@ mc_print(Engine, Data) ->
 	Results = mc_search(Engine, Data),
 	Str = unicode:characters_to_list(Data),
 	[io:format("R: ~w ~ts~n", [BI, lists:sublist(Str, CI - L, L)]) || {CI, BI, {L, _}} <- Results], ok.
-
-mc_generate_empty() -> 
-	mc_generate(kw, []),
-	mc_generate(pd, []),
-	ok.
 
 mc_generate(kw, L) -> mc_generate1(kw, L);
 mc_generate(pd, L) -> mc_generate1(pd, L).
