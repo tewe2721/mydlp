@@ -848,7 +848,7 @@ populate_usb_devices([], _FilterId) -> ok.
 get_user_ipr_rid(UserRIds, IprRIds) -> get_user_ipr_rid(UserRIds, IprRIds, []).
 
 get_user_ipr_rid([RIds|UserRIds], IprRIds, Acc) ->
-	A = lists:map(fun(I) -> I ++ RIds end, IprRIds),
+	A = lists:map(fun(I) -> lists:usort(RIds ++ I) end, IprRIds),
 	get_user_ipr_rid(UserRIds, IprRIds, Acc ++ A);
 get_user_ipr_rid([], _IprRIds, Acc) -> lists:usort(Acc).
 
@@ -856,8 +856,9 @@ populate_mc_modules() ->
 	RDRIs = mydlp_mnesia:get_remote_default_rule_ids(),
 	RURIs = mydlp_mnesia:get_remote_user_rule_ids(),
 	RIRIs = mydlp_mnesia:get_remote_ipr_rule_ids(),
-	RIDSs0 = get_user_ipr_rid(RURIs, RIRIs),
-	RIDSs = lists:map(fun(I) -> lists:usort(RDRIs ++ I) end, RIDSs0),
+	RIDSs1 = get_user_ipr_rid(RURIs, RIRIs),
+	RIDSs2 = [[]|RIDSs1], %% for default rule ids
+	RIDSs = lists:map(fun(I) -> lists:usort(RDRIs ++ I) end, RIDSs2),
 	populate_mc_modules([local|RIDSs]).
 	
 populate_mc_modules([T|Rest]) ->
