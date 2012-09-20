@@ -406,7 +406,7 @@ is_valid_china_icn(IcnStr) ->
 	is_valid_china_icn1(Clean).
 
 is_valid_china_icn1(IcnStr) ->
-	CheckSumList = "10X98765432",
+	CheckSumList = "10x98765432",
 	[I1,I2,I3,I4,I5,I6,I7,I8,I9,I10,I11,I12,I13,I14,I15,I16,I17,_I18] =
 		lists:map(fun(I) -> I - $0 end, IcnStr),
 	S1 = (I1*7 + I2*9 + I3*10 + I4*5 + I5*8 + I6*4 + I7*2 + I8*1 +

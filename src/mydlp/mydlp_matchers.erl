@@ -305,6 +305,8 @@ china_icn_match({pd_patterns, "normal"}) ->
 	?P({[{numeric, 17}, {alpha, 1}], encap_ws});
 china_icn_match({pd_patterns, "wide"}) ->
 	?P({[{numeric, 18}], none}) ++
+	?P({[{numeric, 18}], join_ws}) ++
+	?P({[{numeric, 17}, {alpha, 1}], none})++
 	?P({[{numeric, 17}, {alpha, 1}], join_ws}).
 
 china_icn_match(_Conf, Phrase) -> mydlp_api:is_valid_china_icn(Phrase).
