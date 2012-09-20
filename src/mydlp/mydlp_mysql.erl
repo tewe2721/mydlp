@@ -685,6 +685,26 @@ populate_match(Id, <<"cc_track3">>, IFeatureId) ->
 	Func = cc_track3_match,
 	new_match(Id, IFeatureId, Func);
 
+populate_match(Id, <<"ten_digit">>, IFeatureId) ->
+	Func = ten_digit_match,
+	new_match(Id, IFeatureId, Func);
+
+populate_match(Id, <<"nine_digit">>, IFeatureId) ->
+	Func = nine_digit_match,
+	new_match(Id, IFeatureId, Func);
+
+populate_match(Id, <<"fe_digit">>, IFeatureId) ->
+	Func = fe_digit_match,
+	new_match(Id, IFeatureId, Func);
+
+populate_match(Id, <<"ip">>, IFeatureId) ->
+	Func = ip_match,
+	new_match(Id, IFeatureId, Func);
+
+populate_match(Id, <<"mac">>, IFeatureId) ->
+	Func = mac_match,
+	new_match(Id, IFeatureId, Func);
+
 populate_match(Id, <<"canada_sin">>, IFeatureId) ->
 	Func = canada_sin_match,
 	new_match(Id, IFeatureId, Func);
