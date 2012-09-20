@@ -41,7 +41,7 @@
 
 normalize(Bin) -> normalize(Bin, true).
 
-normalize(Bin, IgnoreCase) -> normalize(Bin, IgnoreCase, <<>>, true).
+normalize(Bin, IgnoreCase) -> normalize(Bin, IgnoreCase, <<>>, false).
 
 normalize(<<>>, _IgnoreCase, Acc, _HitSpace) -> <<Acc/binary>>;
 normalize(Bin, IgnoreCase, Acc, HitSpace) -> 

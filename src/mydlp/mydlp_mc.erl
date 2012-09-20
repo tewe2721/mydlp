@@ -274,10 +274,10 @@ mc_gen_ss_ks(State, [<<>>|OtherKeywords], MatcherConf, Engine, _IsNormalized) ->
 	StartState = start_state(),
 	mc_gen_ss_ks(StartState, OtherKeywords, MatcherConf, Engine, false);
 mc_gen_ss_ks(State, [Keyword|OtherKeywords], MatcherConf, kw = Engine, false = _IsNormalized) ->
-	NormalizedKeyword = mydlp_nlp:normalize(Keyword, true),
+	NormalizedKeyword = mydlp_nlp:normalize(Keyword, _IgnoreCases = true),
 	mc_gen_ss_ks(State, [NormalizedKeyword|OtherKeywords], MatcherConf, Engine, true);
 mc_gen_ss_ks(State, [Keyword|OtherKeywords], MatcherConf, pd = Engine, false = _IsNormalized) ->
-	NormalizedKeyword = mydlp_nlp:normalize(Keyword, false),
+	NormalizedKeyword = mydlp_nlp:normalize(Keyword, _IgnoreCases = false),
 	mc_gen_ss_ks(State, [NormalizedKeyword|OtherKeywords], MatcherConf, Engine, true);
 mc_gen_ss_ks(State, [Keyword|OtherKeywords], MatcherConf, Engine, true = IsNormalized) ->
 	case get_uchar(Keyword) of
