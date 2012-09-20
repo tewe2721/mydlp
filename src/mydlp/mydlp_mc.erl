@@ -52,11 +52,7 @@
 
 -define(MODFILENAME, "mydlp_mc_dynamic.erl").
 
--ifdef(__MYDLP_NETWORK).
-
 -define(STATE_CHUNK, 8192).
-
--endif.
 
 mc_load([]) -> ok;
 mc_load(ModCodeTupleList) ->
@@ -102,17 +98,18 @@ mc_module1(Target, Matchers) ->
 	Codes = PDCodes ++ KWCodes,
 	#mc_module{target=Target, modules=Codes}.
 
-
 mc_print(Engine, Data) ->
 	Results = mc_search(Engine, Data),
 	Str = unicode:characters_to_list(Data),
 	[io:format("R: ~w ~ts~n", [BI, lists:sublist(Str, CI - L, L)]) || {CI, BI, {L, _}} <- Results], ok.
 
-mc_generate(kw, L) -> mc_generate1(kw, L);
-mc_generate(pd, L) -> mc_generate1(pd, L).
-
 mc_generate(kw, L, JustReturnCode) -> mc_generate1(kw, L, JustReturnCode);
 mc_generate(pd, L, JustReturnCode) -> mc_generate1(pd, L, JustReturnCode).
+
+-endif.
+
+mc_generate(kw, L) -> mc_generate1(kw, L);
+mc_generate(pd, L) -> mc_generate1(pd, L).
 
 mc_generate1(Engine, ListOfKeywordGroups) -> mc_generate1(Engine, ListOfKeywordGroups, false).
 
@@ -535,6 +532,8 @@ compile1(Source, JustReturnCode) ->
 
 
 %%%%% integration stuff
+
+-ifdef(__MYDLP_NETWORK).
 
 is_func_pd(Func) ->
         {_, {distance, _}, {pd, IsPD}, {kw, _}} = apply(mydlp_matchers, Func, []), IsPD.
