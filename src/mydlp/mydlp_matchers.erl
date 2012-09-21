@@ -206,7 +206,6 @@ cc_track1_match(_Conf, File) ->
 	{Data, IndexList} = mydlp_regex:match_bin(
 		cc_track1,
 		File#file.text),
-	io:format("~ts~n",[File#file.text]),
 	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_cc_track(I) end, Data, IndexList),
 	{length(WIList), WIList}.
 
@@ -218,7 +217,6 @@ cc_track2_match(_Conf, File) ->
 	{Data, IndexList} = mydlp_regex:match_bin(
 		cc_track2,
 		File#file.text),
-	io:format("~ts~n",[File#file.text]),
 	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_cc_track(I) end, Data, IndexList),
 	{length(WIList), WIList}.
 
