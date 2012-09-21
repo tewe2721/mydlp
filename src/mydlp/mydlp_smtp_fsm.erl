@@ -181,30 +181,25 @@ process_aclret(AclRet, #smtpd_fsm{files=Files} = State) ->
 		{block, _AR} = T -> T;
 		{quarantine, _AR} = T -> T
 	end of
-		{pass, AclR} ->		post_query(State, AclR, Files),
+		{pass, _AclR} ->	post_query(State, Files),
 					'CONNECT_REMOTE'(connect, State);
 		{log, AclR} -> 		log_req(State, log, AclR),
-					post_query(State, AclR, Files),
+					post_query(State, Files),
 					'CONNECT_REMOTE'(connect, State);
-		{archive, AclR} -> 	archive_req(State, AclR, Files),
+		{archive, AclR} -> 	log_req(State, archive, AclR),
 					'CONNECT_REMOTE'(connect, State);
 		{block, AclR} -> 	log_req(State, block, AclR),
-					post_query(State, AclR, Files),
+					post_query(State, Files),
 					'BLOCK_REQ'(block, State);
 		{quarantine, AclR} -> 	log_req(State, quarantine, AclR),
-					post_query(State, AclR, Files),
+					post_query(State, Files),
 					'BLOCK_REQ'(block, State)
 	end.
 
-post_query(State, AclR, Files) ->
+post_query(State, Files) ->
 	case ?CFG(mail_archive) of
-		true -> archive_req(State, AclR, Files);
+		true -> log_req(State, archive, mydlp_api:empty_aclr(Files, mail_archive));
 		false -> ok end.
-
-archive_req(State, {{rule, RId}, {file, _}, {itype, IType}, {misc, Misc}}, Files) ->
-	case Files of
-		[] -> ok;
-		_Else -> log_req(State, archive, {{rule, RId}, {file, Files}, {itype, IType}, {misc, Misc}}) end.
 
 % refined this
 'BLOCK_REQ'(block, #smtpd_fsm{spool_ref=Ref, message_record=MessageR} = State) ->

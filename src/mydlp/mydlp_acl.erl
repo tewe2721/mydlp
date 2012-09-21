@@ -105,9 +105,9 @@ acl_call(Query, Files, Timeout) ->
 		false -> acl_call1(Query, Files, Timeout) end.
 
 % no need to call acl server for inbound requests.
-acl_call1({qi, _Channel}, _Files, _Timeout) -> 
+acl_call1({qi, _Channel}, Files, _Timeout) -> 
 	case ?CFG(archive_inbound) of
-		true -> {archive, mydlp_api:empty_aclr(none, archive_inbound)};
+		true -> {archive, mydlp_api:empty_aclr(Files, archive_inbound)};
 		false -> pass end;
 acl_call1(Query, Files, Timeout) -> gen_server:call(?MODULE, {acl, Query, Files, Timeout}, Timeout).
 

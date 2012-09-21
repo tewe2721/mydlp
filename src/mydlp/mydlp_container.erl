@@ -328,18 +328,13 @@ acl_ret(QRet, Obj, DFFiles) ->
 					pass; 
 		{log, AclR} -> 		log_req(Obj, log, AclR),
 					pass; 
-		{archive, AclR} -> 	archive_req(Obj, AclR, DFFiles),
+		{archive, AclR} -> 	log_req(Obj, archive, AclR),
 					pass;
 		{block, AclR} -> 	log_req(Obj, block, AclR),
 					block;
 		{quarantine, AclR} -> 	log_req(Obj, quarantine, AclR),
 					block
 	end.
-
-archive_req(Obj, {{rule, RId}, {file, _}, {itype, IType}, {misc, Misc}}, DFFiles) ->
-        case DFFiles of
-                [] -> ok;
-                _Else -> log_req(Obj, archive, {{rule, RId}, {file, DFFiles}, {itype, IType}, {misc, Misc}}) end.
 
 log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
 	User = case get_channel(Obj) of

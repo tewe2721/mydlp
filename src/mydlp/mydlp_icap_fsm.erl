@@ -457,18 +457,13 @@ acl_ret(QRet, DFFiles, State) ->
 		{pass, _AclR} -> 'REPLY_OK'(State); 
 		{log, AclR} -> log_req(State, log, AclR),
 					'REPLY_OK'(State); 
-		{archive, AclR} -> archive_req(State, AclR, DFFiles),
+		{archive, AclR} -> log_req(State, archive, AclR),
 					'REPLY_OK'(State);
 		{block, AclR} -> log_req(State, block, AclR),
 					'BLOCK_REQ'(block, State);
 		{quarantine, AclR} -> log_req(State, quarantine, AclR),
 					'BLOCK_REQ'(block, State)
 	end.
-
-archive_req(State, {{rule, RId}, {file, _}, {itype, IType}, {misc, Misc}}, DFFiles) ->
-	case DFFiles of
-		[] -> ok;
-		_Else -> log_req(State, archive, {{rule, RId}, {file, DFFiles}, {itype, IType}, {misc, Misc}}) end.
 
 'REPLY_OK'(State) -> reply(ok, State).
 
