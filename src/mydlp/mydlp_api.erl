@@ -323,6 +323,22 @@ dna_fsm(dna_accept, <<_C/utf8, Rest/binary>>, I, _L, Acc)  -> dna_fsm(root, Rest
 
 
 %%--------------------------------------------------------------------
+%% @doc Checks whether string is a valid IP
+%% @end
+%%----------------------------------------------------------------------
+is_valid_ip(IpStr) ->
+	Clean = remove_chars(IpStr, ?WS),
+	SplitList = string:tokens(Clean, "."),
+	IntegerList = lists:map(fun(I) -> list_to_integer(I) end, SplitList),
+	lists:all(fun(C) -> C =< 255 end, IntegerList).
+
+%%--------------------------------------------------------------------
+%% @doc Checks whether string is a valid MAC
+%% @end
+%%----------------------------------------------------------------------
+is_valid_mac(_MacStr) -> true. % For a applicable validation, Organizationally Unique Identifier List must be used.
+
+%%--------------------------------------------------------------------
 %% @doc Checks whether string is a valid IBAN account number
 %% @end
 %%----------------------------------------------------------------------

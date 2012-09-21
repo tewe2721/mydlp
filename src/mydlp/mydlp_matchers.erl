@@ -55,6 +55,21 @@
 	cc_track3_match/0,
 	cc_track3_match/1,
 	cc_track3_match/2,
+	ten_digit_match/0,
+	ten_digit_match/1,
+	ten_digit_match/2,
+	nine_digit_match/0,
+	nine_digit_match/1,
+	nine_digit_match/2,
+	fe_digit_match/0,
+	fe_digit_match/1,
+	fe_digit_match/2,
+	ip_match/0,
+	ip_match/1,
+	ip_match/2,
+	mac_match/0,
+	mac_match/1,
+	mac_match/2,
 	dna_match/0,
 	dna_match/1,
 	dna_match/2,
@@ -236,6 +251,73 @@ iban_match(_Conf, File) ->
 	 	iban, 
 		File#file.normal_text),
 	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_iban(I) end, Data, IndexList),
+	{length(WIList), WIList}.
+
+ten_digit_match() -> {normalized, {distance, true}, {pd, true}, {kw, false}}.
+
+ten_digit_match({conf, _Conf}) -> none;
+
+ten_digit_match({pd_patterns, "narrow"}) -> ?P({[{numeric, 10}], encap_ws});
+ten_digit_match({pd_patterns, "normal"}) -> ?P({[{numeric, 10}], encap_ws});
+ten_digit_match({pd_patterns, "wide"}) -> 
+	?P({[{numeric, 10}], none}) ++
+	 ?P({[{numeric, 10}], join_ws}).
+
+ten_digit_match(_Conf, _Phrase) -> true. % Validation is not required now.
+ 
+nine_digit_match() -> {normalized, {distance, true}, {pd, true}, {kw, false}}.
+
+nine_digit_match({conf, _Conf}) -> none;
+
+nine_digit_match({pd_patterns, "narrow"}) -> ?P({[{numeric, 9}], encap_ws});
+nine_digit_match({pd_patterns, "normal"}) -> ?P({[{numeric, 9}], encap_ws});
+nine_digit_match({pd_patterns, "wide"}) -> 
+	?P({[{numeric, 9}], none}) ++
+	 ?P({[{numeric, 9}], join_ws}).
+
+nine_digit_match(_Conf, _Phrase) -> true. % Validation is not required now.
+
+fe_digit_match() -> {normalized, {distance, true}, {pd, true}, {kw, false}}.
+
+fe_digit_match({conf, _Conf}) -> none;
+
+fe_digit_match({pd_patterns, "narrow"}) -> ?P({[{numeric, {5, 8}}], encap_ws});
+fe_digit_match({pd_patterns, "normal"}) -> ?P({[{numeric, {5, 8}}], encap_ws});
+fe_digit_match({pd_patterns, "wide"}) -> 
+	?P({[{numeric, {5, 8}}], none}) ++
+	 ?P({[{numeric, {5, 8}}], join_ws}).
+
+fe_digit_match(_Conf, _Phrase) -> true. % Validation is not required now.
+
+ip_match() -> {normalized, {distance, true}, {pd, true}, {kw, false}}.
+
+ip_match({conf, _Conf}) -> none;
+
+ip_match({pd_patterns, "narrow"}) -> ?P({[{numeric, {1, 3}}, {special, "."}, {numeric, {1, 3}}, {special, "."}, {numeric, {1, 3}}, {special, "."}, {numeric, {1, 3}}], encap_ws});
+ip_match({pd_patterns, "normal"}) -> ?P({[{numeric, {1, 3}}, {special, "."}, {numeric, {1, 3}}, {special, "."}, {numeric, {1, 3}}, {special, "."}, {numeric, {1, 3}}], encap_ws});
+ip_match({pd_patterns, "wide"}) ->
+	?P({[{numeric, {1, 3}}, {special, "."}, {numeric, {1, 3}}, {special, "."}, {numeric, {1, 3}}, {special, "."}, {numeric, {1, 3}}], none})++
+	?P({[{numeric, {1, 3}}, {special, "."}, {numeric, {1, 3}}, {special, "."}, {numeric, {1, 3}}, {special, "."}, {numeric, {1, 3}}], join_ws}).
+
+ip_match(_Conf, Phrase) -> erlang:display(Phrase),mydlp_api:is_valid_ip(Phrase).
+
+mac_match() -> {normalized, {distance, true}, {pd, false}, {kw, false}}.
+
+mac_match({conf, _Conf}) -> none.
+
+%mac_match({pd_patterns, "narrow"}) -> 
+%	?P({[{numeric, 2}, {special, ":"}, {numeric, 2}, {special, ":"}, {numeric, 2}, {special, ":"}, {numeric, 2}, {special, ":"}, {numeric, 2}, {special, ":"}, {numeric, 2}], encap_ws});
+%mac_match({pd_patterns, "normal"}) ->
+%	?P({[{numeric, 2}, {special, ":"}, {numeric, 2}, {special, ":"}, {numeric, 2}, {special, ":"}, {numeric, 2}, {special, ":"}, {numeric, 2}, {special, ":"}, {numeric, 2}], encap_ws});
+%mac_match({pd_patterns, "wide"}) ->
+%	?P({[{numeric, 2}, {special, ":"}, {numeric, 2}, {special, ":"}, {numeric, 2}, {special, ":"}, {numeric, 2}, {special, ":"}, {numeric, 2}, {special, ":"}, {numeric, 2}], none})++
+%	?P({[{numeric, 2}, {special, ":"}, {numeric, 2}, {special, ":"}, {numeric, 2}, {special, ":"}, {numeric, 2}, {special, ":"}, {numeric, 2}, {special, ":"}, {numeric, 2}], join_ws}).
+
+mac_match(_Conf, File) -> 
+	{Data, IndexList} = mydlp_regex:match_bin(
+	 	mac, 
+		File#file.text),
+	WIList = mydlp_api:regex_filter_map(fun(I) -> mydlp_api:is_valid_mac(I) end, Data, IndexList),
 	{length(WIList), WIList}.
 
 aba_match() -> {normalized, {distance, true}, {pd, true}, {kw, false}}.

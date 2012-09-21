@@ -185,6 +185,7 @@ init([]) ->
 		{cc_track3, rec(";(?:\\d{3,22})=(?:[^=]{27,49})=(?:[^\?]{1,64})\\?", [unicode])},
 		{iban, rec("(?:[a-zA-Z]"?OWS2"){2}"?OWS2"(?:[0-9]"?OWS2"){2}"?OWS2"(?:[a-zA-Z0-9]"?OWS2"){4}"?OWS2"(?:[0-9]"?OWS2"){7}"?OWS2"(?:[a-zA-Z0-9]"?OWS2"){0,16}", [unicode])},
 		{aba, rec("\\d{4}-?\\d{4}-?\\d", [unicode])},
+		{mac, rec("\\s(?:[A-Fa-f0-9]{2}:){5}(?:[A-Za-z0-9]{2})\\s", [unicode])},
 		{trid, rec("\\d{11}", [unicode])},
 		{ssn, rec("\\s(?:\\d{3}-\\d{2}-\\d{4})\\s", [unicode])},
 		%{ssn, rec("(?:\\d{3} ?-? ?\\d{2} ?-? ?\\d{4})")},
