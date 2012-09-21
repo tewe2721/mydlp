@@ -755,16 +755,11 @@ uri_to_fn(Uri) ->
 				I2 -> string:substr(LC, 1, I2 - 1) end end.
 
 log_req(#state{icap_headers=#icap_headers{x_client_ip=Addr},
-		http_req_headers=(#http_headers{host=DestHost}), username=UserName}, Action,
+		http_request=#http_request{path=Uri},
+		username=UserName}, Action,
 		{{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
 	Time = erlang:universaltime(),
-	?ACL_LOG(Time, web, RuleId, Action, Addr, UserName, DestHost, IType, File, Misc);
-
-log_req(#state{icap_headers=#icap_headers{x_client_ip=Addr},
-		http_res_headers=(#http_headers{host=DestHost}), username=UserName}, Action, 
-		{{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
-	Time = erlang:universaltime(),
-	?ACL_LOG(Time, web, RuleId, Action, Addr, UserName, DestHost, IType, File, Misc).
+	?ACL_LOG(Time, web, RuleId, Action, Addr, UserName, Uri, IType, File, Misc).
 
 get_path(("/" ++ _Str) = Uri) -> Uri;
 get_path("icap://" ++ Str) ->

@@ -342,21 +342,24 @@ log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}
 		_Else -> get_user() end,
 	Channel = get_channel(Obj),
 	Time = erlang:universaltime(),
-	log_req1(Time, Channel, RuleId, Action, User, IType, File, Misc).
+	Destination = case get_destination(Obj) of
+		undefined -> nil;
+		Else -> Else end,
+	log_req1(Time, Channel, RuleId, Action, User, Destination, IType, File, Misc).
 
 -ifdef(__MYDLP_ENDPOINT).
 
-log_req1(Time, Channel, RuleId, Action, User, IType, File, Misc) ->
+log_req1(Time, Channel, RuleId, Action, User, Destination, IType, File, Misc) ->
 	case {Channel, Action, Misc, ?CFG(ignore_discover_max_size_exceeded)} of
 		{discovery, log, max_size_exceeded, true} -> ok;
-		_Else2 -> ?ACL_LOG(Time, Channel, RuleId, Action, nil, User, nil, IType, File, Misc) end.
+		_Else2 -> ?ACL_LOG(Time, Channel, RuleId, Action, nil, User, Destination, IType, File, Misc) end.
 
 -endif.
 
 -ifdef(__MYDLP_NETWORK).
 
-log_req1(Time, Channel, RuleId, Action, User, IType, File, Misc) ->
-	?ACL_LOG(Time, Channel, RuleId, Action, nil, User, nil, IType, File, Misc).
+log_req1(Time, Channel, RuleId, Action, User, Destination, IType, File, Misc) ->
+	?ACL_LOG(Time, Channel, RuleId, Action, nil, User, Destination, IType, File, Misc).
 
 -endif.
 
@@ -381,6 +384,13 @@ get_type(#object{prop_dict=PD}) ->
 		{ok, "regular"} -> regular;
 		{ok, _Else} -> regular;
 		error -> regular  end.
+
+get_destination(#object{filepath=undefined}) -> undefined;
+get_destination(#object{filepath=FP} = Obj) ->
+	case get_channel(Obj) of
+		discovery -> FP;
+		endpoint -> FP;
+		_Else -> undefined end.
 
 get_ip_address(#object{prop_dict=PD}) ->
 	case dict:find("ip_address", PD) of
