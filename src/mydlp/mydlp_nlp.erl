@@ -66,7 +66,9 @@ reverse(Bin, Acc) ->
 		{C,Rest} when C >= 65, C =< 90 -> 
 			reverse(Rest, <<C, Acc/binary>>);
 		{C,Rest} ->
-			CBin = normal_bin(C),
+			CBin = case normal_bin(C) of
+				<<32, C1:1/binary, 32>> -> C1;
+				C1 -> C1 end,
 			reverse(Rest, <<CBin/binary, Acc/binary>>);
 		none -> reverse(<<>>, Acc) end.
 

@@ -299,7 +299,7 @@ ip_match({pd_patterns, "wide"}) ->
 	?P({[{numeric, {1, 3}}, {special, "."}, {numeric, {1, 3}}, {special, "."}, {numeric, {1, 3}}, {special, "."}, {numeric, {1, 3}}], none})++
 	?P({[{numeric, {1, 3}}, {special, "."}, {numeric, {1, 3}}, {special, "."}, {numeric, {1, 3}}, {special, "."}, {numeric, {1, 3}}], join_ws}).
 
-ip_match(_Conf, Phrase) -> erlang:display(Phrase),mydlp_api:is_valid_ip(Phrase).
+ip_match(_Conf, Phrase) -> mydlp_api:is_valid_ip(Phrase).
 
 mac_match() -> {normalized, {distance, true}, {pd, false}, {kw, false}}.
 
