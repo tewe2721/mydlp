@@ -50,10 +50,11 @@ normalize(Bin, IgnoreCase, Acc, HitSpace) ->
 				when C >= 65, C =< 90 -> 
 			normalize(Rest, IgnoreCase, <<Acc/binary, C>> , false);
 		{{C,Rest}, _} -> case {HitSpace, normal_bin(C)} of
+				{_, <<32, 32, 32>>} -> throw({error, cannot_receive_concat_space});
 				{true, <<32>>} -> normalize(Rest, IgnoreCase, Acc, true);
-				{true, <<_J:2/binary, 32>>} -> normalize(Rest, IgnoreCase, Acc, true);
+				{true, <<32, B:1/binary, 32>>} -> normalize(Rest, IgnoreCase, <<Acc/binary, B/binary, 32>>, true);
 				{false, <<32>>} -> normalize(Rest, IgnoreCase, <<Acc/binary, 32>>, true);
-				{false, <<_J:2/binary, 32>>} -> normalize(Rest, IgnoreCase, <<Acc/binary, 32>>, true);
+				{false, <<32, B:1/binary, 32>>} -> normalize(Rest, IgnoreCase, <<Acc/binary, 32, B/binary, 32>>, true);
 				{_Else, CBin} -> normalize(Rest, IgnoreCase, <<Acc/binary, CBin/binary>> , false) end;
 		{none, _} -> normalize(<<>>, IgnoreCase, Acc, HitSpace) end.
 
