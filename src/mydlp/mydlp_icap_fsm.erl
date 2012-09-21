@@ -85,7 +85,6 @@
 	ch_res_b=false,
 	ch_data_res_h= <<>>,
 	ch_data_res_b= <<>>,
-	log_pass=false,
 	tmp
 }).
 
@@ -140,15 +139,8 @@ init([]) ->
 	MC = ?CFG(icap_max_connections),
 	OT = ?CFG(icap_options_ttl),
 
-	LogPassEnable = ?CFG(icap_log_pass),
-	LogPassLowerLimit = ?CFG(icap_log_pass_lower_limit),
-
-	LogPass = case LogPassEnable of
-		false -> false;
-		true -> LogPassLowerLimit end,
-
 	{ok, 'WAIT_FOR_SOCKET', #state{max_connections=MC, 
-		path_reqmod=P, path_respmod=PR, options_ttl=OT, log_pass=LogPass}}.
+		path_reqmod=P, path_respmod=PR, options_ttl=OT}}.
 
 %%-------------------------------------------------------------------------
 %% Func: StateName/2
@@ -462,20 +454,14 @@ acl_ret(QRet, DFFiles, State) ->
 		{block, _AR} = T -> T;
 		{quarantine, _AR} = T -> T
 	end of
-		{pass, _AclR} -> pass_req(State, DFFiles),
-					mydlp_api:clean_files(DFFiles),
-					'REPLY_OK'(State); 
+		{pass, _AclR} -> 'REPLY_OK'(State); 
 		{log, AclR} -> log_req(State, log, AclR),
-					mydlp_api:clean_files(DFFiles),
 					'REPLY_OK'(State); 
 		{archive, AclR} -> archive_req(State, AclR, DFFiles),
-					% mydlp_incident will clean files.
 					'REPLY_OK'(State);
 		{block, AclR} -> log_req(State, block, AclR),
-					mydlp_api:clean_files(DFFiles),
 					'BLOCK_REQ'(block, State);
 		{quarantine, AclR} -> log_req(State, quarantine, AclR),
-					mydlp_api:clean_files(DFFiles),
 					'BLOCK_REQ'(block, State)
 	end.
 
@@ -483,14 +469,6 @@ archive_req(State, {{rule, RId}, {file, _}, {itype, IType}, {misc, Misc}}, DFFil
 	case DFFiles of
 		[] -> ok;
 		_Else -> log_req(State, archive, {{rule, RId}, {file, DFFiles}, {itype, IType}, {misc, Misc}}) end.
-
-pass_req(#state{log_pass=false}, _Files) -> ok;
-pass_req(#state{log_pass=LogPassLL, icap_mod_mode=reqmod} = State, Files) -> 
-	UTLFiles = lists:filter(fun(#file{dataref=Ref}) -> ?BB_S(Ref) > LogPassLL end, Files),
-	case UTLFiles of
-		[] -> ok;
-		_Else -> log_req(State, pass, {-1, {file, UTLFiles}, {itype, -1}, {misc,""}}) end;
-pass_req(_State, _Files) -> ok.
 
 'REPLY_OK'(State) -> reply(ok, State).
 

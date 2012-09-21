@@ -136,10 +136,7 @@ process_log_tuple({Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, 
 
 process_log_tuple1({_Time, _Channel, _RuleId, _Action, _Ip, _User, _To, _ITypeId, [], _Misc, _Payload}) -> ok;
 process_log_tuple1({Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc, Payload}) ->
-	IsLogData = case Action of
-		quarantine -> true;
-		archive -> true;
-		_Else -> false end,
+	IsLogData = mydlp_api:is_store_action(Action),
 	LogId = mydlp_mysql:push_log(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc),
 	process_log_files(LogId, IsLogData, Files),
 	case {Channel, Action} of

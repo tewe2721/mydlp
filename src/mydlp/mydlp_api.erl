@@ -321,7 +321,6 @@ dna_fsm(dna_accept, <<C/utf8, Rest/binary>>, I, L, Acc) when C==97;C==99;C==103;
 dna_fsm(dna_accept, <<_C/utf8, Rest/binary>>, I, L, Acc) when L >= 50 -> dna_fsm(root, Rest, I+1, 0, [(I-L)|Acc]);
 dna_fsm(dna_accept, <<_C/utf8, Rest/binary>>, I, _L, Acc)  -> dna_fsm(root, Rest, I+1, 0, Acc).
 
-
 %%--------------------------------------------------------------------
 %% @doc Checks whether string is a valid IP
 %% @end
@@ -1131,6 +1130,12 @@ rr_files([FN|FNs], WorkDir, Ret) ->
 					rr_files(FNs, WorkDir, Ret) end end end;
 rr_files([], _WorkDir, Ret) -> lists:flatten(lists:reverse(Ret)).
 
+is_store_action(pass) -> false;
+is_store_action(block) -> false;
+is_store_action(log) -> false;
+is_store_action(quarantine) -> true;
+is_store_action(archive) -> true.
+
 %%--------------------------------------------------------------------
 %% @doc Logs acl messages
 %% @end
@@ -1148,8 +1153,11 @@ acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="data"},
 acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name=undefined, filename=undefined}, _Misc, _Payload) -> ok;
 acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, #file{} = File, Misc, Payload) ->
 	acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, [File], Misc, Payload);
-acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files0, Misc, Payload) ->
-	Files = metafy_files(Files0),
+acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, PreFiles, Misc, Payload) ->
+	PreFiles1 = metafy_files(PreFiles),
+	Files = case is_store_action(Action) of
+		false -> remove_all_data(PreFiles1);
+		true -> remove_mem_data(PreFiles1) end,
 	acl_msg_logger(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc),
 	mydlp_incident:l({Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc, Payload}),
 	ok.
@@ -1168,21 +1176,13 @@ acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="data"},
 acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name=undefined, filename=undefined}, _Misc, _Payload) -> ok;
 acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, #file{} = File, Misc, Payload) ->
 	acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, [File], Misc, Payload);
-acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files0, Misc, _Payload) ->
-	Files = metafy_files(Files0),
+acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, PreFiles, Misc, _Payload) ->
+	PreFiles1 = metafy_files(PreFiles),
+	Files = case is_store_action(Action) of
+		false -> remove_all_data(PreFiles1);
+		true -> remove_crs(PreFiles1) end,
+	LogTerm = {Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc},
 	acl_msg_logger(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc),
-	LogTerm = case Action of
-		pass -> 	{Time, Channel, RuleId, Action, Ip, User, To, ITypeId, 
-						[F#file{data=undefined, dataref=undefined, text=undefined, normal_text=undefined, mc_table=undefined}||F <- Files], Misc};
-		log -> 		{Time, Channel, RuleId, Action, Ip, User, To, ITypeId, 
-						[F#file{data=undefined, dataref=undefined, text=undefined, normal_text=undefined, mc_table=undefined}||F <- Files], Misc};
-		block -> 	{Time, Channel, RuleId, Action, Ip, User, To, ITypeId, 
-						[F#file{data=undefined, dataref=undefined, text=undefined, normal_text=undefined, mc_table=undefined}||F <- Files], Misc};
-		quarantine ->	{Time, Channel, RuleId, Action, Ip, User, To, ITypeId, 
-						[mydlp_api:remove_cr(F)||F <- Files], Misc};
-		archive -> 	{Time, Channel, RuleId, Action, Ip, User, To, ITypeId, 
-						[mydlp_api:remove_cr(F)||F <- Files], Misc}
-		end,
 	mydlp_item_push:p({endpoint_log, LogTerm}),
 	ok.
 
@@ -1429,7 +1429,34 @@ remove_crs(Files) when is_list(Files) ->
 
 remove_cr(#file{} = File) -> 
 	File1 = load_file(File),
-	File1#file{dataref=undefined, text=undefined, normal_text=undefined, mc_table=undefined}.
+	case File#file.dataref of
+		undefined -> ok;
+		DataRef -> ?BB_D(DataRef) end,
+	remove_text(File1#file{dataref=undefined}).
+
+remove_all_data([]) -> [];
+remove_all_data([_|_] = ListOfFiles) ->
+	[remove_all_data(F) || F <- ListOfFiles];
+
+remove_all_data(#file{dataref=undefined} = File) ->
+	File#file{data=undefined, dataref=undefined, text=undefined, normal_text=undefined, mc_table=undefined};
+remove_all_data(#file{dataref=_DataRef} = File) ->
+	File1 = clean_file(File),
+	remove_all_data(File1).
+
+remove_mem_data([]) -> [];
+remove_mem_data([_|_] = ListOfFiles) ->
+	[remove_mem_data(F) || F <- ListOfFiles];
+
+remove_mem_data(#file{data=undefined, dataref=undefined} = File) -> remove_text(File);
+remove_mem_data(#file{data=undefined} = File) -> remove_text(File);
+remove_mem_data(#file{dataref=undefined, data=Data} = File) ->
+	DataRef = ?BB_C(Data),
+	remove_text(File#file{data=undefined, dataref=DataRef});
+remove_mem_data(#file{} = File) -> remove_text(File#file{data=undefined}).
+
+remove_text(#file{} = File) -> File#file{text=undefined, normal_text=undefined, mc_table=undefined}.
+
 
 %%--------------------------------------------------------------------
 %% @doc Reconstructs cache references.
@@ -1455,6 +1482,7 @@ get_mimes([File|Files], Returns) ->
 	get_mimes(Files, [mimefy(File)|Returns]);
 get_mimes([], Returns) -> lists:reverse(Returns).
 
+mimefy(#file{mime_type=undefined, data=undefined} = File) -> File;
 mimefy(#file{mime_type=undefined} = File) ->
 	MT = mydlp_tc:get_mime(File#file.filename, File#file.data),
 	File#file{mime_type=MT};
@@ -1698,10 +1726,11 @@ metafy_files([F|Rest], Acc) -> metafy_files(Rest, [metafy(F)|Acc]);
 metafy_files([], Acc) -> lists:reverse(Acc).
 
 metafy(#file{} = File) ->
-	File1 = hashify(File),
-	File2 = sizefy(File1),
-	File3 = mimefy(File2),
-	File3.
+	File1 = load_file(File),
+	File2 = hashify(File1),
+	File3 = sizefy(File2),
+	File4 = mimefy(File3),
+	File4.
 
 %%-------------------------------------------------------------------------
 %% @doc If present hashes data returns file.

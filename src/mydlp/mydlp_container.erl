@@ -327,16 +327,12 @@ acl_ret(QRet, Obj, DFFiles) ->
 		{pass, _AclR} -> 	mydlp_api:clean_files(DFFiles),
 					pass; 
 		{log, AclR} -> 		log_req(Obj, log, AclR),
-					mydlp_api:clean_files(DFFiles),
 					pass; 
 		{archive, AclR} -> 	archive_req(Obj, AclR, DFFiles),
-					% mydlp_incident will clean files.
 					pass;
 		{block, AclR} -> 	log_req(Obj, block, AclR),
-					mydlp_api:clean_files(DFFiles),
 					block;
 		{quarantine, AclR} -> 	log_req(Obj, quarantine, AclR),
-					mydlp_api:clean_files(DFFiles),
 					block
 	end.
 
