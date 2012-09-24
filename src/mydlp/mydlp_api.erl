@@ -338,6 +338,23 @@ is_valid_ip(IpStr) ->
 is_valid_mac(_MacStr) -> true. % For a applicable validation, Organizationally Unique Identifier List must be used.
 
 %%--------------------------------------------------------------------
+%% @doc Checks whether string is a valid ICD10-Code
+%% @end
+%%----------------------------------------------------------------------
+is_valid_icd10(IcdStr) ->
+	Clean = remove_chars(IcdStr, ?WS),
+	Numeric = list_to_integer(string:substr(Clean, 2, length(Clean) -  1)),
+	case lists:nth(1, Clean) of
+		$d -> Numeric =< 89;
+		$e -> Numeric =< 90;
+		$k -> Numeric =< 93;
+		$p -> Numeric =< 96;
+		$t -> Numeric =< 98;
+		$y -> Numeric =< 98;
+		_  -> Numeric =< 99
+	end.
+
+%%--------------------------------------------------------------------
 %% @doc Checks whether string is a valid IBAN account number
 %% @end
 %%----------------------------------------------------------------------

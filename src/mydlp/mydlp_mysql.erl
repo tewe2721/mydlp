@@ -705,6 +705,10 @@ populate_match(Id, <<"mac">>, IFeatureId) ->
 	Func = mac_match,
 	new_match(Id, IFeatureId, Func);
 
+populate_match(Id, <<"icd10">>, IFeatureId) ->
+	Func = icd10_match,
+	new_match(Id, IFeatureId, Func);
+
 populate_match(Id, <<"canada_sin">>, IFeatureId) ->
 	Func = canada_sin_match,
 	new_match(Id, IFeatureId, Func);
