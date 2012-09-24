@@ -53,7 +53,7 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
--record(state, {builtin_tree, builtin_suite_tree, u304}).
+-record(state, {builtin_tree, builtin_suite_tree}).
 
 %%%%%%%%%%%%% MyDLP Thrift RPC API
 
@@ -80,8 +80,7 @@ handle_call({async_re, Call, Data, Timeout}, From, State) ->
 	Worker = self(),
 	mydlp_api:mspawn(fun() -> 
 			Return = try 
-				Data1 = preregex(Data, State),
-				handle_re(Call, Data1, State)
+				handle_re(Call, Data, State)
 			catch Class:Error ->
 				?ERROR_LOG("Error occured on REGEX call: ["?S"]. Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
 					[Call, Class, Error, erlang:get_stacktrace()]),
@@ -290,9 +289,7 @@ init([]) ->
 	],
 	BST = insert_all(BInS, gb_trees:empty()),
 
-	U304 = rec("\x{0130}", [unicode]),
-
-	{ok, #state{builtin_tree=BT, builtin_suite_tree=BST, u304=U304}}.
+	{ok, #state{builtin_tree=BT, builtin_suite_tree=BST}}.
 
 handle_cast(_Msg, State) ->
 	{noreply, State}.
@@ -302,9 +299,6 @@ terminate(_Reason, _State) ->
 
 code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
-
-preregex(Data, #state{u304=U304}) ->
-	re:replace(Data, U304, <<"i">>, [global, {return, binary}]).
 
 count_all(GIs, Data) ->
 	Regexes = lists:flatten([ mydlp_mnesia:get_regexes(GI) || GI <- GIs ] ),
