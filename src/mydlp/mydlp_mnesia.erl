@@ -373,6 +373,8 @@ truncate_all() -> gen_server:call(?MODULE, truncate_all, 15000).
 
 truncate_nondata() -> gen_server:call(?MODULE, truncate_nondata, 15000).
 
+mnesia_dir_cleanup() -> gen_server:call(?MODULE, mnesia_dir_cleanup, 180000).
+
 flush_cache() -> cache_clean0().
 
 %%%%%%%%%%%%%% gen_server handles
@@ -813,6 +815,20 @@ handle_call({new_authority, AuthorNode}, _From, State) ->
 		true -> ok end,
 	{reply, ok, State};
 
+handle_call(mnesia_dir_cleanup, _From, State) ->
+	try 	(catch mnesia:stop()),
+		{ok, MnesiaDir} = application_controller:get_env(mnesia, dir),
+		{ok, MnesiaFiles} = file:list_dir(MnesiaDir),
+		lists:foreach(fun(FN) ->
+				AbsFileName = filename:absname(FN, MnesiaDir),
+				file:delete(AbsFileName) end
+			, MnesiaFiles),
+		init([])
+	catch  	Class:Error ->
+		?ERROR_LOG("MNESIA_CLEANUP: Error occured: Class: ["?S"]. Error: ["?S"].~n"
+			"Stack trace: "?S"~n", [Class, Error, erlang:get_stacktrace()]) end,
+	{reply, ok, State};
+
 handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
 
@@ -937,12 +953,14 @@ is_mnesia_distributed() ->
 		DBNodeList -> lists:member(ThisNode, DBNodeList) end.
 
 cache_start() ->
-	ets:new(query_cache, [
-			public,
-			named_table,
-			{write_concurrency, true}
-			%{read_concurrency, true}
-		]).
+	case ets:info(query_cache) of
+                undefined -> ets:new(query_cache, [
+					public,
+					named_table,
+					{write_concurrency, true}
+					%{read_concurrency, true}
+				]);
+                _Else -> ok end.
 
 -ifdef(__MYDLP_NETWORK).
 
@@ -1046,15 +1064,25 @@ dirty(F) ->
 			{aborted, Reason}
 	end.
 
-evaluate_query(transaction, Query) ->
-	F = fun() -> handle_query(Query) end,
-	Result = transaction(F),
-	handle_result(Query, Result);
+handle_mnesia_error(Reason) ->
+        case is_no_exists_error(Reason) of
+                true -> mnesia_dir_cleanup();
+                false -> throw({error, {error_in_transaction, Reason}}) end.
 
+is_no_exists_error({no_exists, _}) -> true;
+is_no_exists_error({aborted, Reason}) -> is_no_exists_error(Reason);
+is_no_exists_error(_Else) -> false.
+
+evaluate_query(transaction, Query) ->
+        F = fun() -> handle_query(Query) end,
+        case transaction(F) of
+                {atomic, _} = Result -> handle_result(Query, Result);
+                {aborted, Reason} -> handle_mnesia_error(Reason), ok end;
 evaluate_query(dirty, Query) ->
-	F = fun() -> handle_query(Query) end,
-	Result = dirty(F),
-	handle_result(Query, Result).
+        F = fun() -> handle_query(Query) end,
+        case dirty(F) of
+                {atomic, _} = Result -> handle_result(Query, Result);
+                {aborted, Reason} -> handle_mnesia_error(Reason), ok end.
 
 cache_lookup(Query) ->
 	case ets:lookup(query_cache, Query) of
@@ -1083,7 +1111,6 @@ cache_cleanup_handle() ->
 		I when I > MaxSize -> cache_clean();
 		_Else -> ok end.
 	
-
 call_timer() -> timer:send_after(5000, cleanup_now).
 %call_timer() -> timer:send_after(?CFG(query_cache_cleanup_interval), cleanup_now).
 
