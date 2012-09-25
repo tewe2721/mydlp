@@ -64,6 +64,9 @@
 	fe_digit_match/0,
 	fe_digit_match/1,
 	fe_digit_match/2,
+	icd10_match/0,
+	icd10_match/1,
+	icd10_match/2,
 	ip_match/0,
 	ip_match/1,
 	ip_match/2,
@@ -286,6 +289,18 @@ fe_digit_match({pd_patterns, "wide"}) ->
 	 ?P({[{numeric, {5, 8}}], join_ws}).
 
 fe_digit_match(_Conf, _Phrase) -> true. % Validation is not required now.
+
+icd10_match() -> {normalized, {distance, true}, {pd, true}, {kw, false}}.
+
+icd10_match({conf, _Conf}) -> none;
+
+icd10_match({pd_patterns, "narrow"}) -> ?P({[{alpha, 1}, {numeric, 2}], encap_ws});
+icd10_match({pd_patterns, "normal"}) -> ?P({[{alpha, 1}, {numeric, 2}], encap_ws});
+icd10_match({pd_patterns, "wide"}) -> 
+	?P({[{alpha, 1}, {numeric, 2}], none}) ++
+	 ?P({[{alpha, 1}, {numeric, 2}], join_ws}).
+
+icd10_match(_Conf, Phrase) -> mydlp_api:is_valid_icd10(Phrase). % Validation is not required now.
 
 ip_match() -> {normalized, {distance, true}, {pd, true}, {kw, false}}.
 
