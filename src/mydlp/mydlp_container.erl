@@ -36,12 +36,11 @@
 -export([start_link/0,
 	schedule_confupdate/0,
 	confupdate/0,
-	get_user/0,
-	set_user/1,
-	unset_user/0,
-	get_version/0,
-	set_version/1,
-	unset_version/0,
+	get_ep_meta_dict/0,
+	get_ep_meta/1,
+	set_ep_meta/2,
+	set_ep_meta_from_dict/1,
+	unset_ep_meta/1,
 	new/0,
 	setprop/3,
 	getprop/2,
@@ -75,8 +74,7 @@
 
 -record(state, {
 	confupdate=true,
-	username=unknown,
-	version=unknown,
+	ep_meta,  % defined keys are: user , version
 	object_tree
 	}).
 
@@ -86,17 +84,15 @@ schedule_confupdate() -> gen_server:cast(?MODULE, schedule_confupdate).
 
 confupdate() -> gen_server:call(?MODULE, confupdate).
 
-get_user() -> gen_server:call(?MODULE, get_user).
+get_ep_meta_dict() -> gen_server:call(?MODULE, get_ep_meta_dict).
 
-set_user(Username) -> gen_server:cast(?MODULE, {set_user, Username}).
+get_ep_meta(Key) -> gen_server:call(?MODULE, {get_ep_meta, Key}).
 
-unset_user() -> gen_server:cast(?MODULE, {set_user, unknown}).
+set_ep_meta(Key, Val) -> gen_server:cast(?MODULE, {set_ep_meta, Key, Val}).
 
-get_version() -> gen_server:call(?MODULE, get_version).
+set_ep_meta_from_dict(MetaDict) -> gen_server:cast(?MODULE, {set_ep_meta_from_dict, MetaDict}).
 
-set_version(Version) -> gen_server:cast(?MODULE, {set_version, Version}).
-
-unset_version() -> gen_server:cast(?MODULE, {set_version, unknown}).
+unset_ep_meta(Key) -> gen_server:cast(?MODULE, {unset_ep_meta, Key}).
 
 new() -> gen_server:call(?MODULE, new).
 
@@ -128,11 +124,14 @@ destroy(ObjId) -> gen_server:cast(?MODULE, {destroy, ObjId}).
 handle_call(confupdate, _From, #state{confupdate=ConfUpdate} = State) ->
 	{reply, ConfUpdate, State#state{confupdate=false}};
 
-handle_call(get_user, _From, #state{username=Username} = State) ->
-	{reply, Username, State};
+handle_call(get_ep_meta_dict, _From, #state{ep_meta=D} = State) ->
+	{reply, D, State};
 
-handle_call(get_version, _From, #state{version=Version} = State) ->
-	{reply, Version, State};
+handle_call({get_ep_meta, Key}, _From, #state{ep_meta=D} = State) ->
+	Reply = case dict:find(Key, D) of
+		{ok, Value} -> Value;
+		error -> undefined end,
+	{reply, Reply, State};
 
 handle_call(new, _From, #state{object_tree=OT} = State) ->
 	{_MegaSecs, Secs, MicroSecs} = erlang:now(),
@@ -206,12 +205,17 @@ handle_call(_Msg, _From, State) ->
 handle_cast(schedule_confupdate, State) ->
 	{noreply, State#state{confupdate=true}};
 
-handle_cast({set_user, Username}, State) ->
-	UsernameU = qp_decode(Username),
-	{noreply, State#state{username=UsernameU}};
+handle_cast({set_ep_meta, Key, Value}, #state{ep_meta=D} = State) ->
+	D1 = dict_store(Key, Value, D),
+	{noreply, State#state{ep_meta=D1}};
 
-handle_cast({set_version, Version}, State) ->
-	{noreply, State#state{version=Version}};
+handle_cast({set_ep_meta_from_dict, MetaDict}, #state{ep_meta=D} = State) ->
+	D1 = set_meta_dict(MetaDict, D),
+	{noreply, State#state{ep_meta=D1}};
+
+handle_cast({unset_ep_meta, Key}, #state{ep_meta=D} = State) ->
+	D1 = dict:erase(Key, D),
+	{noreply, State#state{ep_meta=D1}};
 
 handle_cast({setprop, ObjId, Key, Value}, #state{object_tree=OT} = State) ->
 	case gb_trees:lookup(ObjId, OT) of
@@ -318,8 +322,7 @@ stop() ->
 
 init([]) ->
 	call_timer(),
-	{ok, #state{	object_tree=gb_trees:empty()
-			}}.
+	{ok, #state{ object_tree=gb_trees:empty(), ep_meta=dict:new() }}.
 
 terminate(_Reason, _State) ->
 	ok.
@@ -355,7 +358,7 @@ acl_ret(QRet, Obj, DFFiles) ->
 log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
 	User = case get_channel(Obj) of
 		api -> get_api_user(Obj);
-		_Else -> get_user() end,
+		_Else -> get_ep_meta("user") end,
 	Channel = get_channel(Obj),
 	Time = erlang:universaltime(),
 	Destination = case get_destination(Obj) of
@@ -482,5 +485,16 @@ qp_decode(Str) when is_binary(Str) ->
 	%DList = unicode:characters_to_list(DBin).
 	%filename:nativename(DList).
 
-	
+dict_store(Key, Value0, Dict) ->
+	Value = qp_decode(Value0),
+	dict:store(Key, Value, Dict).
+
+set_meta_dict(MD, SD) -> set_meta_dict(dict:fetch_keys(MD), MD, SD).
+
+set_meta_dict([Key|RestOfKeys], MD, SD) ->
+	SD1 = case dict:fetch(Key, MD) of
+		"" -> dict:store(Key, undefined, SD);
+		Value -> dict_store(Key, Value, SD) end,
+	set_meta_dict(RestOfKeys, MD, SD1);
+set_meta_dict([], _MD, SD) -> SD.
 

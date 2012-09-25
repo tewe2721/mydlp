@@ -148,35 +148,28 @@ requeueIncident(Incidentid) ->
                         [Class, Error, erlang:get_stacktrace()])
         end, ok.
 
-get_arg_value(ArgList, Arg) ->
-	case lists:keyfind(Arg, 1, ArgList) of
-		false -> "";
-		{Arg, nil} -> "";
-		{Arg, unknown} -> "";
-		{Arg, Value} when is_binary(Value) -> binary_to_list(Value);
-		{Arg, Value} when is_list(Value) -> Value end.
+get_arg_value(MetaDict, Arg) ->
+	case dict:find(Arg, MetaDict) of
+		error -> "";
+		{ok, ""} -> "";
+		{ok, nil} -> "";
+		{ok, unkown} -> "";
+		{ok, undefined} -> "";
+		{ok, Val} -> Val end.
 
 registerUserAddress(Ipaddress, Userh, Data) -> 
-	ArgList = try erlang:binary_to_term(Data)
+	MetaDict = try erlang:binary_to_term(Data)
 		catch Class:Error ->
 			?ERROR_LOG("REGISTER_USER_ADDRESS: Error occured when deserializing: Class: ["?S"]. Error: ["?S"].~n"
 					"Data: ["?S"]. UserHash: ["?S"]. IPAddr: ["?S"]. ~nStack trace: "?S"~n",
-				[Class, Error, Data, Userh, Ipaddress, erlang:get_stacktrace()]), [] end,
-
-	Username = get_arg_value(ArgList, username),
-	Version = get_arg_value(ArgList, version),
-
+				[Class, Error, Data, Userh, Ipaddress, erlang:get_stacktrace()]),
+		dict:new() end,
+	Username = get_arg_value(MetaDict, "user"),
 	UserHI = mydlp_api:binary_to_integer(Userh),
 	ClientIpS = binary_to_list(Ipaddress),
 	ClientIp = mydlp_api:str_to_ip(ClientIpS),
 	mydlp_mnesia:save_user_address(ClientIp, UserHI, Username),
-	Return = "v=" ++ Version ++ " " ++ "u=" ++ Username,
-	try unicode:characters_to_binary(Return)
-		catch Class2:Error2 ->
-			?ERROR_LOG("REGISTER_USER_ADDRESS: Error occured when converting to unicode: Class: ["?S"]. Error: ["?S"].~n"
-					"Version: ["?S"]. Username: ["?S"]. IPAddr: ["?S"]. ~nStack trace: "?S"~n",
-				[Class2, Error2, Version, Username, Ipaddress, erlang:get_stacktrace()]),
-		<<>> end.
+	MetaDict.
 
 saveLicenseKey(LicenseKey) ->
 	mydlp_license:save_license_key(LicenseKey),

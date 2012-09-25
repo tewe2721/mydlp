@@ -115,8 +115,8 @@ init([]) ->
 	{ ObjId } = get_req_args(Rest),
 	'DESTROY_RESP'(State, ObjId);
 'SEAP_REQ'({data, "CONFUPDATE" ++ Rest}, State) -> 
-	{ EpVersion, UserS } = get_two_args(Rest),
-	'CONFUPDATE_RESP'(State, EpVersion, UserS);
+	MetaDict = get_map_args(Rest),
+	'CONFUPDATE_RESP'(State, MetaDict);
 'SEAP_REQ'({data, "HELP" ++ _Rest}, State) -> 
 	'HELP_RESP'(State);
 'SEAP_REQ'({data, _Else}, State) -> 
@@ -170,13 +170,8 @@ init([]) ->
 	send_ok(State),
 	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
 
-'CONFUPDATE_RESP'(State, EpVersion, UserS) ->
-	case UserS of
-		"" -> mydlp_container:unset_user();
-		U when is_list(U) -> mydlp_container:set_user(U) end,
-	case EpVersion of
-		"" -> mydlp_container:unset_version();
-		V when is_list(V) -> mydlp_container:set_version(V) end,
+'CONFUPDATE_RESP'(State, MetaDict) ->
+	mydlp_container:set_ep_meta_from_dict(MetaDict),
 	Reply = case mydlp_container:confupdate() of
 		true -> "yes";
 		false -> "no" end,
@@ -343,6 +338,22 @@ get_two_args(String) ->
 get_getprop_args(Rest) ->
 	{ObjIdS, Key} = get_two_args(Rest),
 	{list_to_integer(ObjIdS), Key}.
+
+get_map_args(Rest) -> 
+	Rest1 = rm_trailing_crlf(Rest),
+	Tokens = string:tokens(Rest1),
+	get_map_args(Rest1, dict:new()).
+
+get_map_args([Token|RestOfTokens], D) ->
+	{Key, QpEncodedValue} = case string:chr(Token, $:) of
+		0 -> throw({no_semicolon_to_tokenize, Token});
+		I -> KS = string:sub_string(Token, 1, I - 1),
+			VS = string:sub_string(Token, I + 1),
+			{KS, VS} end,
+	D1 = dict:store(Key, QpEncodedValue, D),
+	get_map_args(RestOfTokens, D1);
+get_map_args([], D) -> D.
+	
 
 send(#state{socket=Socket}, Data) -> gen_tcp:send(Socket, <<Data/binary, "\r\n">>).
 

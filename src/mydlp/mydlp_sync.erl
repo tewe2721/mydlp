@@ -110,11 +110,11 @@ call_timer(Interval) -> timer:send_after(Interval, sync_now).
 
 sync(PolicyId) ->
 	RevisionS = integer_to_list(PolicyId),
-	User = mydlp_container:get_user(),
-	Version = mydlp_container:get_version(),
+	MetaDict = mydlp_container:get_ep_meta_dict(),
+	User = mydlp_container:get_ep_meta("user"),
 	UserHI = mydlp_api:hash_un(User),
 	UserHS = integer_to_list(UserHI),
-	Data = erlang:term_to_binary([{version, Version}, {username, User}]),
+	Data = erlang:term_to_binary(MetaDict),
 	Url = "https://" ++ ?CFG(management_server_address) ++ "/sync?rid=" ++ RevisionS ++ "&uh=" ++ UserHS,
 	case catch httpc:request(post, {Url, [], "application/octet-stream", Data}, [], []) of
 		{ok, {{_HttpVer, Code, _Msg}, _Headers, Body}} -> 
