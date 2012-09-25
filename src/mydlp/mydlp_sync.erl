@@ -36,6 +36,7 @@
 %% API
 -export([start_link/0,
 	set_policy_id/1,
+	sync_now/0,
 	stop/0]).
 
 %% gen_server callbacks
@@ -55,6 +56,8 @@
 %%%% API
 set_policy_id(PolicyId) -> gen_server:cast(?MODULE, {set_policy_id, PolicyId}).
 
+sync_now() -> gen_server:cast(?MODULE, sync).
+
 %%%%%%%%%%%%%% gen_server handles
 
 handle_call(stop, _From, State) ->
@@ -62,6 +65,10 @@ handle_call(stop, _From, State) ->
 
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
+
+handle_cast(sync, #state{policy_id=PolicyId} = State) ->
+	sync(PolicyId),
+        {noreply, State};
 
 handle_cast({set_policy_id, PolicyId}, State) ->
         {noreply, State#state{policy_id=PolicyId}};
