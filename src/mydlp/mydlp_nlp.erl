@@ -82,9 +82,9 @@ get_uchar(Bin) ->
 
 normal_bin(C) when C =< 31 -> <<32>>;
 normal_bin(32) -> <<32>>;
-normal_bin(C) when C >= 33, C =< 47 -> <<32, C, 32>>; % punctuation
-normal_bin(C) when C >= 58, C =< 64 -> <<32, C, 32>>; % punctuation
-normal_bin(C) when C >= 91, C =< 96 -> <<32, C, 32>>; % punctuation
+normal_bin(C) when C >= 33, C =< 47 -> <<C>>; % punctuation
+normal_bin(C) when C >= 58, C =< 64 -> <<C>>; % punctuation
+normal_bin(C) when C >= 91, C =< 96 -> <<C>>; % punctuation
 normal_bin(C) when C >= 123, C =< 127 -> <<32>>;
 normal_bin(C) when C >= 8192, C =< 8303 -> <<32>>; %% Unicode General Punctuation Block	U+2000	U+206F
 normal_bin(C) when C >= 11776, C =< 11903 -> <<32>>; %% Unicode Supplemental Punctuation	U+2E00	U+2E7F

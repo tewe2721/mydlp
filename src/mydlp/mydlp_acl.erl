@@ -343,7 +343,7 @@ execute_ifeatures(CTX, Distance, IFeatures, File) ->
 
 %% Controls information feature is applicable for distance property.
 is_distance_applicable(Func) ->
-	{_, {distance, IsDistance}, {pd, _}, {kw, _}} = apply(Func, []), IsDistance.
+	{_, {distance, IsDistance}, {pd, _}, {kw, _}} = apply(mydlp_matchers, Func, []), IsDistance.
 
 is_distance_satisfied(Results, Distance) ->
 	[ListOfIndexes, ListOfThresholds] = regulate_results(Results),
