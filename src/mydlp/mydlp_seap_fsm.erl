@@ -115,8 +115,8 @@ init([]) ->
 	{ ObjId } = get_req_args(Rest),
 	'DESTROY_RESP'(State, ObjId);
 'SEAP_REQ'({data, "CONFUPDATE" ++ Rest}, State) -> 
-	{ ArgStr } = get_arg_str(Rest),
-	'CONFUPDATE_RESP'(State, ArgStr);
+	{ EpVersion, UserS } = get_two_args(Rest),
+	'CONFUPDATE_RESP'(State, EpVersion, UserS);
 'SEAP_REQ'({data, "HELP" ++ _Rest}, State) -> 
 	'HELP_RESP'(State);
 'SEAP_REQ'({data, _Else}, State) -> 
@@ -170,10 +170,13 @@ init([]) ->
 	send_ok(State),
 	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
 
-'CONFUPDATE_RESP'(State, ArgStr) ->
-	case ArgStr of
+'CONFUPDATE_RESP'(State, EpVersion, UserS) ->
+	case UserS of
 		"" -> mydlp_container:unset_user();
 		U when is_list(U) -> mydlp_container:set_user(U) end,
+	case EpVersion of
+		"" -> mydlp_container:unset_version();
+		V when is_list(V) -> mydlp_container:set_version(V) end,
 	Reply = case mydlp_container:confupdate() of
 		true -> "yes";
 		false -> "no" end,
@@ -306,10 +309,10 @@ get_req_args(Rest) ->
 		[ObjIdS, ChunkSize] -> { list_to_integer(ObjIdS), list_to_integer(ChunkSize) };
 		_Else -> throw({error, {obj_id_not_found, Rest}}) end.
 
-get_arg_str(Rest) ->
-	Rest1 = rm_trailing_crlf(Rest),
-	ArgStr = string:strip(Rest1),
-	{ArgStr}.
+%get_arg_str(Rest) ->
+%	Rest1 = rm_trailing_crlf(Rest),
+%	ArgStr = string:strip(Rest1),
+%	{ArgStr}.
 
 get_setprop_args(Rest) ->
 	Rest1 = rm_trailing_crlf(Rest),
@@ -327,16 +330,19 @@ get_setprop_args(Rest) ->
 			{KS, VS} end,
 	{list_to_integer(ObjIdS), Key, Value}.
 
-get_getprop_args(Rest) ->
-	Rest1 = rm_trailing_crlf(Rest),
+get_two_args(String) ->
+	Rest1 = rm_trailing_crlf(String),
 	Rest2 = string:strip(Rest1),
-	{ObjIdS, Key} = case string:chr(Rest2, $\s) of
+	{S1, S2} = case string:chr(Rest2, $\s) of
 		0 -> throw({no_space_to_tokenize, Rest2});
 		I -> OS = string:sub_string(Rest2, 1, I - 1),
 			KS = string:sub_string(Rest2, I + 1),
 			{OS, KS} end,
-	Key2 = string:strip(Key),
-	{list_to_integer(ObjIdS), Key2}.
+	{S1, string:strip(S2)}.
+
+get_getprop_args(Rest) ->
+	{ObjIdS, Key} = get_two_args(Rest),
+	{list_to_integer(ObjIdS), Key}.
 
 send(#state{socket=Socket}, Data) -> gen_tcp:send(Socket, <<Data/binary, "\r\n">>).
 

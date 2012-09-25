@@ -148,27 +148,34 @@ requeueIncident(Incidentid) ->
                         [Class, Error, erlang:get_stacktrace()])
         end, ok.
 
+get_arg_value(ArgList, Arg) ->
+	case lists:keyfind(Arg, 1, ArgList) of
+		false -> "";
+		{Arg, nil} -> "";
+		{Arg, unknown} -> "";
+		{Arg, Value} when is_binary(Value) -> binary_to_list(Value);
+		{Arg, Value} when is_list(Value) -> Value end.
+
 registerUserAddress(Ipaddress, Userh, Data) -> 
-	Usern = try 	case erlang:binary_to_term(Data) of
-				[{username,nil}] -> "";
-				[{username,unknown}] -> "";
-				[{username,Username}] when is_binary(Username)-> binary_to_list(Username);
-				[{username,Username}] when is_list(Username)-> Username end
+	ArgList = try erlang:binary_to_term(Data)
 		catch Class:Error ->
 			?ERROR_LOG("REGISTER_USER_ADDRESS: Error occured when deserializing: Class: ["?S"]. Error: ["?S"].~n"
 					"Data: ["?S"]. UserHash: ["?S"]. IPAddr: ["?S"]. ~nStack trace: "?S"~n",
-				[Class, Error, Data, Userh, Ipaddress, erlang:get_stacktrace()]),
-			"" end,
+				[Class, Error, Data, Userh, Ipaddress, erlang:get_stacktrace()]), [] end,
+
+	Username = get_arg_value(ArgList, username),
+	Version = get_arg_value(ArgList, version),
 
 	UserHI = mydlp_api:binary_to_integer(Userh),
 	ClientIpS = binary_to_list(Ipaddress),
 	ClientIp = mydlp_api:str_to_ip(ClientIpS),
-	mydlp_mnesia:save_user_address(ClientIp, UserHI, Usern),
-	try unicode:characters_to_binary(Usern)
+	mydlp_mnesia:save_user_address(ClientIp, UserHI, Username),
+	Return = "v=" ++ Version ++ " " ++ "u=" ++ Username,
+	try unicode:characters_to_binary(Return)
 		catch Class2:Error2 ->
 			?ERROR_LOG("REGISTER_USER_ADDRESS: Error occured when converting to unicode: Class: ["?S"]. Error: ["?S"].~n"
-					"Usern: ["?S"]. IPAddr: ["?S"]. ~nStack trace: "?S"~n",
-				[Class2, Error2, Usern, Ipaddress, erlang:get_stacktrace()]),
+					"Version: ["?S"]. Username: ["?S"]. IPAddr: ["?S"]. ~nStack trace: "?S"~n",
+				[Class2, Error2, Version, Username, Ipaddress, erlang:get_stacktrace()]),
 		<<>> end.
 
 saveLicenseKey(LicenseKey) ->

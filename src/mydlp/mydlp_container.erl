@@ -39,6 +39,9 @@
 	get_user/0,
 	set_user/1,
 	unset_user/0,
+	get_version/0,
+	set_version/1,
+	unset_version/0,
 	new/0,
 	setprop/3,
 	getprop/2,
@@ -73,6 +76,7 @@
 -record(state, {
 	confupdate=true,
 	username=unknown,
+	version=unknown,
 	object_tree
 	}).
 
@@ -87,6 +91,12 @@ get_user() -> gen_server:call(?MODULE, get_user).
 set_user(Username) -> gen_server:cast(?MODULE, {set_user, Username}).
 
 unset_user() -> gen_server:cast(?MODULE, {set_user, unknown}).
+
+get_version() -> gen_server:call(?MODULE, get_version).
+
+set_version(Version) -> gen_server:cast(?MODULE, {set_version, Version}).
+
+unset_version() -> gen_server:cast(?MODULE, {set_version, unknown}).
 
 new() -> gen_server:call(?MODULE, new).
 
@@ -120,6 +130,9 @@ handle_call(confupdate, _From, #state{confupdate=ConfUpdate} = State) ->
 
 handle_call(get_user, _From, #state{username=Username} = State) ->
 	{reply, Username, State};
+
+handle_call(get_version, _From, #state{version=Version} = State) ->
+	{reply, Version, State};
 
 handle_call(new, _From, #state{object_tree=OT} = State) ->
 	{_MegaSecs, Secs, MicroSecs} = erlang:now(),
@@ -196,6 +209,9 @@ handle_cast(schedule_confupdate, State) ->
 handle_cast({set_user, Username}, State) ->
 	UsernameU = qp_decode(Username),
 	{noreply, State#state{username=UsernameU}};
+
+handle_cast({set_version, Version}, State) ->
+	{noreply, State#state{version=Version}};
 
 handle_cast({setprop, ObjId, Key, Value}, #state{object_tree=OT} = State) ->
 	case gb_trees:lookup(ObjId, OT) of
