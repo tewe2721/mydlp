@@ -341,12 +341,12 @@ get_getprop_args(Rest) ->
 
 get_map_args(Rest) -> 
 	Rest1 = rm_trailing_crlf(Rest),
-	Tokens = string:tokens(Rest1),
-	get_map_args(Rest1, dict:new()).
+	Tokens = string:tokens(Rest1, " "),
+	get_map_args(Tokens, dict:new()).
 
 get_map_args([Token|RestOfTokens], D) ->
-	{Key, QpEncodedValue} = case string:chr(Token, $:) of
-		0 -> throw({no_semicolon_to_tokenize, Token});
+	{Key, QpEncodedValue} = case string:chr(Token, $=) of
+		0 -> throw({no_equal_sign_to_tokenize, Token});
 		I -> KS = string:sub_string(Token, 1, I - 1),
 			VS = string:sub_string(Token, I + 1),
 			{KS, VS} end,
