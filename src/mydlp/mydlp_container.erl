@@ -205,6 +205,18 @@ handle_call(_Msg, _From, State) ->
 handle_cast(schedule_confupdate, State) ->
 	{noreply, State#state{confupdate=true}};
 
+handle_cast({set_ep_meta, Key, ""}, State) ->
+	handle_cast({unset_ep_meta, Key}, State);
+
+handle_cast({set_ep_meta, Key, nil}, State) ->
+	handle_cast({unset_ep_meta, Key}, State);
+
+handle_cast({set_ep_meta, Key, unknown}, State) ->
+	handle_cast({unset_ep_meta, Key}, State);
+
+handle_cast({set_ep_meta, Key, undefined}, State) ->
+	handle_cast({unset_ep_meta, Key}, State);
+
 handle_cast({set_ep_meta, Key, Value}, #state{ep_meta=D} = State) ->
 	D1 = dict_store(Key, Value, D),
 	{noreply, State#state{ep_meta=D1}};
