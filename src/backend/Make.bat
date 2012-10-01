@@ -3,6 +3,8 @@
 
 @set JAVA_HOME=%BASE_JAVA_HOME%
 
+cmd /c "mvn initialize"
+
 cmd /c "mvn clean"
 
 @set JAVA_HOME=..\%BASE_JAVA_HOME%

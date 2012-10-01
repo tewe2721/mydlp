@@ -24,6 +24,7 @@ backend_DATA = \
 	target/mydlp-backend.jar
 
 target/mydlp-backend.jar: pom.xml
+	@$(MVN) initialize
 	@$(MVN) clean compile assembly:single
 	cp -af target/mydlp-backend-1.0-jar-with-dependencies.jar target/mydlp-backend.jar
 
