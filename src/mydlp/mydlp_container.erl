@@ -392,21 +392,19 @@ log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}
 	log_req1(Time, Channel, RuleId, Action, User, Destination, IType, File, Misc).
 
 execute_custom_action(seclore, {HotFolderId, ActivityComments}, Obj) ->
-	Ret = case get_destination(Obj) of % Assuming this is a discovery or endpoint object with a filepath,
+	case get_destination(Obj) of % Assuming this is a discovery or endpoint object with a filepath,
 		undefined -> ?ERROR_LOG("Can not protect object with file path. Obj: "?S, [Obj]);
 		FilePath -> 
 			FPRet = try Bin = unicode:characters_to_binary(FilePath), {ok, Bin}
 				catch _:_ -> {error, "mydlp.error.canNotEncodeFilePathAsUnicode"} end,
 			case FPRet of
-				{ok, FPB} -> mydlp_tc:seclore_protect(FPB, HotFolderId, ActivityComments);
+				{ok, FPB} -> case mydlp_tc:seclore_protect(FPB, HotFolderId, ActivityComments) of
+						<<"ok ", Rest/binary>> -> <<"seclore.fileId ", Rest/binary>>;
+						"ok" -> none;
+						<<"ok">> -> none;
+						Else -> Else end;
 				{error, M} -> M end 
-	end,
-	case Ret of
-		"ok" -> none;
-		<<"ok">> -> none;
-		"" -> none;
-		<<>> -> none;
-		Else -> Else end.
+	end.
 
 -ifdef(__MYDLP_ENDPOINT).
 
