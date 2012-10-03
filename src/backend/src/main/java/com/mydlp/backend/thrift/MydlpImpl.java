@@ -1,5 +1,6 @@
 package com.mydlp.backend.thrift;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
@@ -123,6 +124,9 @@ public class MydlpImpl implements Mydlp.Iface {
 			String SecloreHotFolderCabinetPassphrase,
 			int SeclorePoolSize) throws TException {
 		try {
+			if (secloreProtect != null || secloreConfig != null)
+				secloreTerminate();
+			
 			secloreConfig = new FileSecureConfigBuilder(SecloreAppPath, SecloreAddress, SeclorePort, 
 							SecloreAppName, SecloreHotFolderCabinetId, SecloreHotFolderCabinetPassphrase, SeclorePoolSize);
 			try {
@@ -153,7 +157,16 @@ public class MydlpImpl implements Mydlp.Iface {
 			return "mydlp.backend.seclore.protect.notInitialized";
 		}
 		try {
-			String fileId = secloreProtect.protect(FilePath, HotFolderId, ActivityComments);
+			File file = new File(FilePath);
+			if (!file.exists())
+				return "mydlp.backend.seclore.protect.fileNotFound";
+			if (!file.isFile())
+				return "mydlp.backend.seclore.protect.notRegularFile";
+			if (!file.canRead())
+				return "mydlp.backend.seclore.protect.canNotRead";
+			if (!file.canWrite())
+				return "mydlp.backend.seclore.protect.canNotWrite";
+			String fileId = secloreProtect.protect(file.getAbsolutePath(), HotFolderId, ActivityComments);
 			return "ok " + fileId; 
 		} catch (FileSecureException e) {
 			logger.error("An error occurred when protecting document ( " +
