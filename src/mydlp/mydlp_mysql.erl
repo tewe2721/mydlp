@@ -978,6 +978,7 @@ pre_push_log(RuleId, Ip, User, Destination, Action, Channel) ->
 		nil -> null;
 		unknown -> null;
 		null -> null;
+		undefined -> null;
 		U when is_list(U) -> unicode:characters_to_binary(U);
 		U when is_binary(U) -> U
 	end,
