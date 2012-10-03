@@ -142,7 +142,8 @@ load_src(Src) ->
 	{log_dir, string, "-defined-explicitly-"},
 	{pid_file, string, "-defined-explicitly-"},
 	{work_dir, string, "-defined-explicitly-"},
-	{mnesia_dir, string, "-defined-explicitly-"}
+	{mnesia_dir, string, "-defined-explicitly-"},
+	{seclore_dir, string, "-defined-explicitly-"}
 ]).
 
 -endif.
@@ -248,7 +249,14 @@ load_src(Src) ->
 	{log_level, integer, "0"},
 	{log_limit, integer, "10485760"},
 	{usb_serial_access_control, boolean, "false"},
-	{print_monitor, boolean, "false"}
+	{print_monitor, boolean, "false"},
+	{seclore_fs_enable, boolean, "false"},
+	{seclore_fs_address, string, "127.0.0.1"},
+	{seclore_fs_port, integer, "443"},
+	{seclore_fs_app_name, string, "policyserver"},
+	{seclore_fs_hot_folder_cabinet_id, integer, "6"},
+	{seclore_fs_hot_folder_cabinet_passphrase, string, "seclore10"},
+	{seclore_fs_endpoint_pool_size, integer, "2"}
 ]).
 
 -endif.
@@ -402,6 +410,7 @@ val_to_type_src(work_dir, string, "-defined-explicitly-") ->
 	PTP = prettify_path(TempPath),
 	val_to_type_src(string, PTP ++ "/mydlp");
 val_to_type_src(mnesia_dir, string, "-defined-explicitly-") -> "app_dir() ++ \"/mnesia\"";
+val_to_type_src(seclore_dir, string, "-defined-explicitly-") -> "app_dir() ++ \"/internal/seclore\"";
 val_to_type_src(_Key, Type, ValStr) -> val_to_type_src(Type, ValStr).
 
 -endif.

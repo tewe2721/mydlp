@@ -28,7 +28,7 @@ public class Mydlp {
 
     public ByteBuffer getText(String FileName, String MimeType, ByteBuffer Data) throws org.apache.thrift.TException;
 
-    public String secloreInitialize(String SecloreAppPath, String SecloreAddress, int SeclorePort, String SecloreAppName, int SecloreHotFolderCabinetId, String SecloreHotFolderCabinetPassphrase) throws org.apache.thrift.TException;
+    public String secloreInitialize(String SecloreAppPath, String SecloreAddress, int SeclorePort, String SecloreAppName, int SecloreHotFolderCabinetId, String SecloreHotFolderCabinetPassphrase, int SeclorePoolSize) throws org.apache.thrift.TException;
 
     public String secloreProtect(String FilePath, int HotFolderId, String ActivityComments) throws org.apache.thrift.TException;
 
@@ -42,7 +42,7 @@ public class Mydlp {
 
     public void getText(String FileName, String MimeType, ByteBuffer Data, org.apache.thrift.async.AsyncMethodCallback<AsyncClient.getText_call> resultHandler) throws org.apache.thrift.TException;
 
-    public void secloreInitialize(String SecloreAppPath, String SecloreAddress, int SeclorePort, String SecloreAppName, int SecloreHotFolderCabinetId, String SecloreHotFolderCabinetPassphrase, org.apache.thrift.async.AsyncMethodCallback<AsyncClient.secloreInitialize_call> resultHandler) throws org.apache.thrift.TException;
+    public void secloreInitialize(String SecloreAppPath, String SecloreAddress, int SeclorePort, String SecloreAppName, int SecloreHotFolderCabinetId, String SecloreHotFolderCabinetPassphrase, int SeclorePoolSize, org.apache.thrift.async.AsyncMethodCallback<AsyncClient.secloreInitialize_call> resultHandler) throws org.apache.thrift.TException;
 
     public void secloreProtect(String FilePath, int HotFolderId, String ActivityComments, org.apache.thrift.async.AsyncMethodCallback<AsyncClient.secloreProtect_call> resultHandler) throws org.apache.thrift.TException;
 
@@ -119,13 +119,13 @@ public class Mydlp {
       throw new org.apache.thrift.TApplicationException(org.apache.thrift.TApplicationException.MISSING_RESULT, "getText failed: unknown result");
     }
 
-    public String secloreInitialize(String SecloreAppPath, String SecloreAddress, int SeclorePort, String SecloreAppName, int SecloreHotFolderCabinetId, String SecloreHotFolderCabinetPassphrase) throws org.apache.thrift.TException
+    public String secloreInitialize(String SecloreAppPath, String SecloreAddress, int SeclorePort, String SecloreAppName, int SecloreHotFolderCabinetId, String SecloreHotFolderCabinetPassphrase, int SeclorePoolSize) throws org.apache.thrift.TException
     {
-      send_secloreInitialize(SecloreAppPath, SecloreAddress, SeclorePort, SecloreAppName, SecloreHotFolderCabinetId, SecloreHotFolderCabinetPassphrase);
+      send_secloreInitialize(SecloreAppPath, SecloreAddress, SeclorePort, SecloreAppName, SecloreHotFolderCabinetId, SecloreHotFolderCabinetPassphrase, SeclorePoolSize);
       return recv_secloreInitialize();
     }
 
-    public void send_secloreInitialize(String SecloreAppPath, String SecloreAddress, int SeclorePort, String SecloreAppName, int SecloreHotFolderCabinetId, String SecloreHotFolderCabinetPassphrase) throws org.apache.thrift.TException
+    public void send_secloreInitialize(String SecloreAppPath, String SecloreAddress, int SeclorePort, String SecloreAppName, int SecloreHotFolderCabinetId, String SecloreHotFolderCabinetPassphrase, int SeclorePoolSize) throws org.apache.thrift.TException
     {
       secloreInitialize_args args = new secloreInitialize_args();
       args.setSecloreAppPath(SecloreAppPath);
@@ -134,6 +134,7 @@ public class Mydlp {
       args.setSecloreAppName(SecloreAppName);
       args.setSecloreHotFolderCabinetId(SecloreHotFolderCabinetId);
       args.setSecloreHotFolderCabinetPassphrase(SecloreHotFolderCabinetPassphrase);
+      args.setSeclorePoolSize(SeclorePoolSize);
       sendBase("secloreInitialize", args);
     }
 
@@ -285,9 +286,9 @@ public class Mydlp {
       }
     }
 
-    public void secloreInitialize(String SecloreAppPath, String SecloreAddress, int SeclorePort, String SecloreAppName, int SecloreHotFolderCabinetId, String SecloreHotFolderCabinetPassphrase, org.apache.thrift.async.AsyncMethodCallback<secloreInitialize_call> resultHandler) throws org.apache.thrift.TException {
+    public void secloreInitialize(String SecloreAppPath, String SecloreAddress, int SeclorePort, String SecloreAppName, int SecloreHotFolderCabinetId, String SecloreHotFolderCabinetPassphrase, int SeclorePoolSize, org.apache.thrift.async.AsyncMethodCallback<secloreInitialize_call> resultHandler) throws org.apache.thrift.TException {
       checkReady();
-      secloreInitialize_call method_call = new secloreInitialize_call(SecloreAppPath, SecloreAddress, SeclorePort, SecloreAppName, SecloreHotFolderCabinetId, SecloreHotFolderCabinetPassphrase, resultHandler, this, ___protocolFactory, ___transport);
+      secloreInitialize_call method_call = new secloreInitialize_call(SecloreAppPath, SecloreAddress, SeclorePort, SecloreAppName, SecloreHotFolderCabinetId, SecloreHotFolderCabinetPassphrase, SeclorePoolSize, resultHandler, this, ___protocolFactory, ___transport);
       this.___currentMethod = method_call;
       ___manager.call(method_call);
     }
@@ -299,7 +300,8 @@ public class Mydlp {
       private String SecloreAppName;
       private int SecloreHotFolderCabinetId;
       private String SecloreHotFolderCabinetPassphrase;
-      public secloreInitialize_call(String SecloreAppPath, String SecloreAddress, int SeclorePort, String SecloreAppName, int SecloreHotFolderCabinetId, String SecloreHotFolderCabinetPassphrase, org.apache.thrift.async.AsyncMethodCallback<secloreInitialize_call> resultHandler, org.apache.thrift.async.TAsyncClient client, org.apache.thrift.protocol.TProtocolFactory protocolFactory, org.apache.thrift.transport.TNonblockingTransport transport) throws org.apache.thrift.TException {
+      private int SeclorePoolSize;
+      public secloreInitialize_call(String SecloreAppPath, String SecloreAddress, int SeclorePort, String SecloreAppName, int SecloreHotFolderCabinetId, String SecloreHotFolderCabinetPassphrase, int SeclorePoolSize, org.apache.thrift.async.AsyncMethodCallback<secloreInitialize_call> resultHandler, org.apache.thrift.async.TAsyncClient client, org.apache.thrift.protocol.TProtocolFactory protocolFactory, org.apache.thrift.transport.TNonblockingTransport transport) throws org.apache.thrift.TException {
         super(client, protocolFactory, transport, resultHandler, false);
         this.SecloreAppPath = SecloreAppPath;
         this.SecloreAddress = SecloreAddress;
@@ -307,6 +309,7 @@ public class Mydlp {
         this.SecloreAppName = SecloreAppName;
         this.SecloreHotFolderCabinetId = SecloreHotFolderCabinetId;
         this.SecloreHotFolderCabinetPassphrase = SecloreHotFolderCabinetPassphrase;
+        this.SeclorePoolSize = SeclorePoolSize;
       }
 
       public void write_args(org.apache.thrift.protocol.TProtocol prot) throws org.apache.thrift.TException {
@@ -318,6 +321,7 @@ public class Mydlp {
         args.setSecloreAppName(SecloreAppName);
         args.setSecloreHotFolderCabinetId(SecloreHotFolderCabinetId);
         args.setSecloreHotFolderCabinetPassphrase(SecloreHotFolderCabinetPassphrase);
+        args.setSeclorePoolSize(SeclorePoolSize);
         args.write(prot);
         prot.writeMessageEnd();
       }
@@ -463,7 +467,7 @@ public class Mydlp {
 
       protected secloreInitialize_result getResult(I iface, secloreInitialize_args args) throws org.apache.thrift.TException {
         secloreInitialize_result result = new secloreInitialize_result();
-        result.success = iface.secloreInitialize(args.SecloreAppPath, args.SecloreAddress, args.SeclorePort, args.SecloreAppName, args.SecloreHotFolderCabinetId, args.SecloreHotFolderCabinetPassphrase);
+        result.success = iface.secloreInitialize(args.SecloreAppPath, args.SecloreAddress, args.SeclorePort, args.SecloreAppName, args.SecloreHotFolderCabinetId, args.SecloreHotFolderCabinetPassphrase, args.SeclorePoolSize);
         return result;
       }
     }
@@ -1997,6 +2001,7 @@ public class Mydlp {
     private static final org.apache.thrift.protocol.TField SECLORE_APP_NAME_FIELD_DESC = new org.apache.thrift.protocol.TField("SecloreAppName", org.apache.thrift.protocol.TType.STRING, (short)4);
     private static final org.apache.thrift.protocol.TField SECLORE_HOT_FOLDER_CABINET_ID_FIELD_DESC = new org.apache.thrift.protocol.TField("SecloreHotFolderCabinetId", org.apache.thrift.protocol.TType.I32, (short)5);
     private static final org.apache.thrift.protocol.TField SECLORE_HOT_FOLDER_CABINET_PASSPHRASE_FIELD_DESC = new org.apache.thrift.protocol.TField("SecloreHotFolderCabinetPassphrase", org.apache.thrift.protocol.TType.STRING, (short)6);
+    private static final org.apache.thrift.protocol.TField SECLORE_POOL_SIZE_FIELD_DESC = new org.apache.thrift.protocol.TField("SeclorePoolSize", org.apache.thrift.protocol.TType.I32, (short)7);
 
     public String SecloreAppPath; // required
     public String SecloreAddress; // required
@@ -2004,6 +2009,7 @@ public class Mydlp {
     public String SecloreAppName; // required
     public int SecloreHotFolderCabinetId; // required
     public String SecloreHotFolderCabinetPassphrase; // required
+    public int SeclorePoolSize; // required
 
     /** The set of fields this struct contains, along with convenience methods for finding and manipulating them. */
     public enum _Fields implements org.apache.thrift.TFieldIdEnum {
@@ -2012,7 +2018,8 @@ public class Mydlp {
       SECLORE_PORT((short)3, "SeclorePort"),
       SECLORE_APP_NAME((short)4, "SecloreAppName"),
       SECLORE_HOT_FOLDER_CABINET_ID((short)5, "SecloreHotFolderCabinetId"),
-      SECLORE_HOT_FOLDER_CABINET_PASSPHRASE((short)6, "SecloreHotFolderCabinetPassphrase");
+      SECLORE_HOT_FOLDER_CABINET_PASSPHRASE((short)6, "SecloreHotFolderCabinetPassphrase"),
+      SECLORE_POOL_SIZE((short)7, "SeclorePoolSize");
 
       private static final Map<String, _Fields> byName = new HashMap<String, _Fields>();
 
@@ -2039,6 +2046,8 @@ public class Mydlp {
             return SECLORE_HOT_FOLDER_CABINET_ID;
           case 6: // SECLORE_HOT_FOLDER_CABINET_PASSPHRASE
             return SECLORE_HOT_FOLDER_CABINET_PASSPHRASE;
+          case 7: // SECLORE_POOL_SIZE
+            return SECLORE_POOL_SIZE;
           default:
             return null;
         }
@@ -2081,7 +2090,8 @@ public class Mydlp {
     // isset id assignments
     private static final int __SECLOREPORT_ISSET_ID = 0;
     private static final int __SECLOREHOTFOLDERCABINETID_ISSET_ID = 1;
-    private BitSet __isset_bit_vector = new BitSet(2);
+    private static final int __SECLOREPOOLSIZE_ISSET_ID = 2;
+    private BitSet __isset_bit_vector = new BitSet(3);
 
     public static final Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> metaDataMap;
     static {
@@ -2098,6 +2108,8 @@ public class Mydlp {
           new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.I32)));
       tmpMap.put(_Fields.SECLORE_HOT_FOLDER_CABINET_PASSPHRASE, new org.apache.thrift.meta_data.FieldMetaData("SecloreHotFolderCabinetPassphrase", org.apache.thrift.TFieldRequirementType.DEFAULT, 
           new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING)));
+      tmpMap.put(_Fields.SECLORE_POOL_SIZE, new org.apache.thrift.meta_data.FieldMetaData("SeclorePoolSize", org.apache.thrift.TFieldRequirementType.DEFAULT, 
+          new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.I32)));
       metaDataMap = Collections.unmodifiableMap(tmpMap);
       org.apache.thrift.meta_data.FieldMetaData.addStructMetaDataMap(secloreInitialize_args.class, metaDataMap);
     }
@@ -2111,7 +2123,8 @@ public class Mydlp {
       int SeclorePort,
       String SecloreAppName,
       int SecloreHotFolderCabinetId,
-      String SecloreHotFolderCabinetPassphrase)
+      String SecloreHotFolderCabinetPassphrase,
+      int SeclorePoolSize)
     {
       this();
       this.SecloreAppPath = SecloreAppPath;
@@ -2122,6 +2135,8 @@ public class Mydlp {
       this.SecloreHotFolderCabinetId = SecloreHotFolderCabinetId;
       setSecloreHotFolderCabinetIdIsSet(true);
       this.SecloreHotFolderCabinetPassphrase = SecloreHotFolderCabinetPassphrase;
+      this.SeclorePoolSize = SeclorePoolSize;
+      setSeclorePoolSizeIsSet(true);
     }
 
     /**
@@ -2144,6 +2159,7 @@ public class Mydlp {
       if (other.isSetSecloreHotFolderCabinetPassphrase()) {
         this.SecloreHotFolderCabinetPassphrase = other.SecloreHotFolderCabinetPassphrase;
       }
+      this.SeclorePoolSize = other.SeclorePoolSize;
     }
 
     public secloreInitialize_args deepCopy() {
@@ -2160,6 +2176,8 @@ public class Mydlp {
       setSecloreHotFolderCabinetIdIsSet(false);
       this.SecloreHotFolderCabinetId = 0;
       this.SecloreHotFolderCabinetPassphrase = null;
+      setSeclorePoolSizeIsSet(false);
+      this.SeclorePoolSize = 0;
     }
 
     public String getSecloreAppPath() {
@@ -2304,6 +2322,29 @@ public class Mydlp {
       }
     }
 
+    public int getSeclorePoolSize() {
+      return this.SeclorePoolSize;
+    }
+
+    public secloreInitialize_args setSeclorePoolSize(int SeclorePoolSize) {
+      this.SeclorePoolSize = SeclorePoolSize;
+      setSeclorePoolSizeIsSet(true);
+      return this;
+    }
+
+    public void unsetSeclorePoolSize() {
+      __isset_bit_vector.clear(__SECLOREPOOLSIZE_ISSET_ID);
+    }
+
+    /** Returns true if field SeclorePoolSize is set (has been assigned a value) and false otherwise */
+    public boolean isSetSeclorePoolSize() {
+      return __isset_bit_vector.get(__SECLOREPOOLSIZE_ISSET_ID);
+    }
+
+    public void setSeclorePoolSizeIsSet(boolean value) {
+      __isset_bit_vector.set(__SECLOREPOOLSIZE_ISSET_ID, value);
+    }
+
     public void setFieldValue(_Fields field, Object value) {
       switch (field) {
       case SECLORE_APP_PATH:
@@ -2354,6 +2395,14 @@ public class Mydlp {
         }
         break;
 
+      case SECLORE_POOL_SIZE:
+        if (value == null) {
+          unsetSeclorePoolSize();
+        } else {
+          setSeclorePoolSize((Integer)value);
+        }
+        break;
+
       }
     }
 
@@ -2376,6 +2425,9 @@ public class Mydlp {
 
       case SECLORE_HOT_FOLDER_CABINET_PASSPHRASE:
         return getSecloreHotFolderCabinetPassphrase();
+
+      case SECLORE_POOL_SIZE:
+        return Integer.valueOf(getSeclorePoolSize());
 
       }
       throw new IllegalStateException();
@@ -2400,6 +2452,8 @@ public class Mydlp {
         return isSetSecloreHotFolderCabinetId();
       case SECLORE_HOT_FOLDER_CABINET_PASSPHRASE:
         return isSetSecloreHotFolderCabinetPassphrase();
+      case SECLORE_POOL_SIZE:
+        return isSetSeclorePoolSize();
       }
       throw new IllegalStateException();
     }
@@ -2468,6 +2522,15 @@ public class Mydlp {
         if (!(this_present_SecloreHotFolderCabinetPassphrase && that_present_SecloreHotFolderCabinetPassphrase))
           return false;
         if (!this.SecloreHotFolderCabinetPassphrase.equals(that.SecloreHotFolderCabinetPassphrase))
+          return false;
+      }
+
+      boolean this_present_SeclorePoolSize = true;
+      boolean that_present_SeclorePoolSize = true;
+      if (this_present_SeclorePoolSize || that_present_SeclorePoolSize) {
+        if (!(this_present_SeclorePoolSize && that_present_SeclorePoolSize))
+          return false;
+        if (this.SeclorePoolSize != that.SeclorePoolSize)
           return false;
       }
 
@@ -2547,6 +2610,16 @@ public class Mydlp {
           return lastComparison;
         }
       }
+      lastComparison = Boolean.valueOf(isSetSeclorePoolSize()).compareTo(typedOther.isSetSeclorePoolSize());
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+      if (isSetSeclorePoolSize()) {
+        lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.SeclorePoolSize, typedOther.SeclorePoolSize);
+        if (lastComparison != 0) {
+          return lastComparison;
+        }
+      }
       return 0;
     }
 
@@ -2608,6 +2681,14 @@ public class Mydlp {
               org.apache.thrift.protocol.TProtocolUtil.skip(iprot, field.type);
             }
             break;
+          case 7: // SECLORE_POOL_SIZE
+            if (field.type == org.apache.thrift.protocol.TType.I32) {
+              this.SeclorePoolSize = iprot.readI32();
+              setSeclorePoolSizeIsSet(true);
+            } else { 
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, field.type);
+            }
+            break;
           default:
             org.apache.thrift.protocol.TProtocolUtil.skip(iprot, field.type);
         }
@@ -2649,6 +2730,9 @@ public class Mydlp {
         oprot.writeString(this.SecloreHotFolderCabinetPassphrase);
         oprot.writeFieldEnd();
       }
+      oprot.writeFieldBegin(SECLORE_POOL_SIZE_FIELD_DESC);
+      oprot.writeI32(this.SeclorePoolSize);
+      oprot.writeFieldEnd();
       oprot.writeFieldStop();
       oprot.writeStructEnd();
     }
@@ -2696,6 +2780,10 @@ public class Mydlp {
       } else {
         sb.append(this.SecloreHotFolderCabinetPassphrase);
       }
+      first = false;
+      if (!first) sb.append(", ");
+      sb.append("SeclorePoolSize:");
+      sb.append(this.SeclorePoolSize);
       first = false;
       sb.append(")");
       return sb.toString();

@@ -349,11 +349,13 @@ acl_ret(QRet, Obj, DFFiles) ->
 		archive -> {archive, mydlp_api:empty_aclr(DFFiles)};
 		block -> {block, mydlp_api:empty_aclr(DFFiles)};
 		quarantine -> {quarantine, mydlp_api:empty_aclr(DFFiles)};
+		{custom, _} = CA -> {CA, mydlp_api:empty_aclr(DFFiles)};
 		{pass, _AR} = T -> T;
 		{log, _AR} = T -> T;
 		{archive, _AR} = T -> T;
 		{block, _AR} = T -> T;
-		{quarantine, _AR} = T -> T
+		{quarantine, _AR} = T -> T;
+		{{custom, _CD}, _AR} = T -> T
 	end of
 		{pass, _AclR} -> 	mydlp_api:clean_files(DFFiles),
 					pass; 
@@ -364,8 +366,19 @@ acl_ret(QRet, Obj, DFFiles) ->
 		{block, AclR} -> 	log_req(Obj, block, AclR),
 					block;
 		{quarantine, AclR} -> 	log_req(Obj, quarantine, AclR),
-					block
+					block;
+		{{custom, {Type, PrimAction, _Name, Param}} = CustomAction, AclR} -> 
+					Message = execute_custom_action(Type, Param, Obj),
+					log_req(Obj, CustomAction, AclR, Message),
+					PrimAction
 	end.
+
+log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}, none) ->
+	log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}});
+log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}, Message) ->
+	case Misc of	"" -> ok;
+			_Else -> ?ERROR_LOG("Misc was not empty. Misc: "?S, [Misc]) end,
+	log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Message}}).
 
 log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
 	User = case get_channel(Obj) of
@@ -377,6 +390,17 @@ log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}
 		undefined -> nil;
 		Else -> Else end,
 	log_req1(Time, Channel, RuleId, Action, User, Destination, IType, File, Misc).
+
+execute_custom_action(seclore, {HotFolderId, ActivityComments}, Obj) ->
+	Ret = case get_destination(Obj) of % Assuming this is a discovery or endpoint object with a filepath,
+		undefined -> ?ERROR_LOG("Can not protect object with file path. Obj: "?S, [Obj]);
+		FilePath -> mydlp_tc:secloreProtect(FilePath, HotFolderId, ActivityComments) end,
+	case Ret of
+		"ok" -> none;
+		<<"ok">> -> none;
+		"" -> none;
+		<<>> -> none;
+		Else -> Else end.
 
 -ifdef(__MYDLP_ENDPOINT).
 

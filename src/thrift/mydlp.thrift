@@ -29,7 +29,8 @@ service Mydlp {
 					3 : i32 SeclorePort,
 					4 : string SecloreAppName,
 					5 : i32 SecloreHotFolderCabinetId,
-					6 : string SecloreHotFolderCabinetPassphrase )
+					6 : string SecloreHotFolderCabinetPassphrase,
+					7 : i32 SeclorePoolSize )
 
 	string secloreProtect(		1 : string FilePath,
 					2 : i32 HotFolderId,

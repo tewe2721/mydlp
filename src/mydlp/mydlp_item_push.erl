@@ -190,8 +190,8 @@ http_req1(ReqRet) ->
 				{error, {http_req_not_ok, Else}} end.
 
 predict_serialized_size({endpoint_log, {_Time, _Channel, _RuleId, _Action, _Ip, _User, _To, _ITypeId, Files, _Misc}}) ->
-	128 + lists:sum([predict_file_size(F)||F <- Files]);
-predict_serialized_size({endpoint_log, _LogTerm}) -> 128;
+	300 + lists:sum([predict_file_size(F)||F <- Files]);
+predict_serialized_size({endpoint_log, _LogTerm}) -> 300;
 predict_serialized_size(Else) -> 
 	?ERROR_LOG("PREDICTSIZE: Unknown item. Cannot predict. Return maximum_push_size+1 as size: Item="?S"~n", [Else]),
 	?CFG(maximum_push_size) + 1.

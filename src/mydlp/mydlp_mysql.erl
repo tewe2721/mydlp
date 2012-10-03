@@ -462,6 +462,7 @@ populate_rules([[Id, DTYPE, ActionS, CustomActionId]|Rows], FilterId) ->
 		custom -> {custom, populate_custom_action_detail(CustomActionId)};
 		Else -> Else end,
 	Channel = rule_dtype_to_channel(DTYPE),
+	validate_action_for_channel(Channel, Action),
 	populate_rule(Id, Channel, Action, FilterId),
 	populate_rules(Rows, FilterId);
 populate_rules([], _FilterId) -> ok.
@@ -483,10 +484,10 @@ populate_rule(OrigId, Channel, Action, FilterId) ->
 populate_custom_action_detail(CustomActionId) ->
         {ok, [[Name, TypeKey]]} = psq(custom_action_by_id, [CustomActionId]),
 	Type = custom_action_type_to_atom(TypeKey),
-	CustomActionParam = case Type of
-		seclore -> populate_custom_action_seclore_param(CustomActionId)
+	{PrimAction, CustomActionParam} = case Type of
+		seclore -> {pass, populate_custom_action_seclore_param(CustomActionId)}
 	end,
-	{Type, Name, CustomActionParam}.
+	{Type, PrimAction, Name, CustomActionParam}.
 
 populate_custom_action_seclore_param(CustomActionId) ->
         {ok, [[HotFolderId, ActivityComment]]} = psq(custom_action_seclore_by_id, [CustomActionId]),
@@ -933,6 +934,40 @@ rule_dtype_to_channel(<<"DiscoveryRule">>) -> discovery;
 rule_dtype_to_channel(<<"ApiRule">>) -> api;
 rule_dtype_to_channel(Else) -> throw({error, unsupported_rule_type, Else}).
 
+validate_action_for_channel(web, pass) -> ok;
+validate_action_for_channel(web, log) -> ok;
+validate_action_for_channel(web, block) -> ok;
+validate_action_for_channel(web, archive) -> ok;
+validate_action_for_channel(web, quarantine) -> ok;
+validate_action_for_channel(mail, pass) -> ok;
+validate_action_for_channel(mail, log) -> ok;
+validate_action_for_channel(mail, block) -> ok;
+validate_action_for_channel(mail, archive) -> ok;
+validate_action_for_channel(mail, quarantine) -> ok;
+validate_action_for_channel(endpoint, pass) -> ok;
+validate_action_for_channel(endpoint, log) -> ok;
+validate_action_for_channel(endpoint, block) -> ok;
+validate_action_for_channel(endpoint, archive) -> ok;
+validate_action_for_channel(endpoint, quarantine) -> ok;
+validate_action_for_channel(printer, pass) -> ok;
+validate_action_for_channel(printer, log) -> ok;
+validate_action_for_channel(printer, block) -> ok;
+validate_action_for_channel(printer, archive) -> ok;
+validate_action_for_channel(printer, quarantine) -> ok;
+validate_action_for_channel(discovery, pass) -> ok;
+validate_action_for_channel(discovery, log) -> ok;
+validate_action_for_channel(discovery, block) -> ok;
+validate_action_for_channel(discovery, archive) -> ok;
+validate_action_for_channel(discovery, quarantine) -> ok;
+validate_action_for_channel(discovery, {custom, {seclore, pass, _, {HotFolderId, _}}}) 
+		when is_integer(HotFolderId)-> ok;
+validate_action_for_channel(api, pass) -> ok;
+validate_action_for_channel(api, log) -> ok;
+validate_action_for_channel(api, block) -> ok;
+validate_action_for_channel(api, archive) -> ok;
+validate_action_for_channel(api, quarantine) -> ok;
+validate_action_for_channel(Channel, Action) -> throw({error, {unexpected_action_for_channel, Channel, Action}}).
+
 pre_push_log(RuleId, Ip, User, Destination, Action, Channel) -> 
 %	{FilterId, RuleId1} = case RuleId of
 %		{dr, CId} -> {CId, 0};
@@ -959,7 +994,9 @@ pre_push_log(RuleId, Ip, User, Destination, Action, Channel) ->
 		block -> <<"B">>;
 		log -> <<"L">>;
 		quarantine -> <<"Q">>;
-		archive -> <<"A">> 
+		archive -> <<"A">>;
+		{custom, {seclore, pass, Name, {HotFolderId, _}}} ->
+			list_to_binary([<<"CIS ">>, integer_to_list(HotFolderId), <<" ">>, Name])
 	end,
 	ChannelS = case Channel of
 		web -> <<"W">>;
