@@ -296,7 +296,9 @@ init([]) ->
 	[ mysql:prepare(Key, Query) || {Key, Query} <- [
 		{last_insert_id, <<"SELECT last_insert_id()">>},
 		{configs, <<"SELECT configKey,value FROM Config">>},
-		{rules, <<"SELECT id,DTYPE,action FROM Rule WHERE enabled=1 order by priority desc">>},
+		{rules, <<"SELECT id,DTYPE,action,customAction_id FROM Rule WHERE enabled=1 order by priority desc">>},
+		{custom_action_by_id, <<"SELECT c.name, c.typeKey FROM CustomAction AS c WHERE c.id=?">>},
+		{custom_action_seclore_by_id, <<"SELECT cs.hotFolderId, cs.activityComment FROM CustomActionDescription AS cd, CustomActionDescriptionSeclore AS cs WHERE cd.coupledCustomAction_id=? AND cd.id=cs.id">>},
 		{network_by_rule_id, <<"SELECT n.ipBase,n.ipMask FROM Network AS n, RuleItem AS ri WHERE ri.rule_id=? AND n.id=ri.item_id">>},
 		{user_s_by_rule_id, <<"SELECT u.username FROM RuleUserStatic AS u, RuleItem AS ri WHERE ri.rule_id=? AND u.id=ri.item_id">>},
 		{user_ad_u_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=u.id">>},
@@ -455,8 +457,10 @@ populate_filters([[Id, DActionS]|Rows], Id) ->
 	populate_filters(Rows, Id);
 populate_filters([], _FilterId) -> ok.
 
-populate_rules([[Id, DTYPE, ActionS] |Rows], FilterId) ->
-	Action = rule_action_to_atom(ActionS),
+populate_rules([[Id, DTYPE, ActionS, CustomActionId]|Rows], FilterId) ->
+	Action = case rule_action_to_atom(ActionS) of
+		custom -> {custom, populate_custom_action_detail(CustomActionId)};
+		Else -> Else end,
 	Channel = rule_dtype_to_channel(DTYPE),
 	populate_rule(Id, Channel, Action, FilterId),
 	populate_rules(Rows, FilterId);
@@ -473,14 +477,20 @@ populate_rule(OrigId, Channel, Action, FilterId) ->
 	{ok, ITQ} = psq(itype_by_rule_id, [OrigId]),
 	populate_itypes(ITQ, RuleId),
 
-	%{ok, MQ} = psq(match_by_rule_id, [Id]),
-	%populate_matches(MQ, Parent),
-	%{ok, MGQ} = psq(mgroup_by_rule_id, [Id]),
-	%populate_matchGroups(MGQ, Parent),
-	%{ok, TDQ} = psq(tdomains_by_rid, [Id]),
-	%TDs = lists:flatten(TDQ),
 	R = #rule{id=RuleId, orig_id=OrigId, channel=Channel, action=Action, filter_id=FilterId},
 	mydlp_mnesia_write(R).
+
+populate_custom_action_detail(CustomActionId) ->
+        {ok, [[Name, TypeKey]]} = psq(custom_action_by_id, [CustomActionId]),
+	Type = custom_action_type_to_atom(TypeKey),
+	CustomActionParam = case Type of
+		seclore -> populate_custom_action_seclore_param(CustomActionId)
+	end,
+	{Type, Name, CustomActionParam}.
+
+populate_custom_action_seclore_param(CustomActionId) ->
+        {ok, [[HotFolderId, ActivityComment]]} = psq(custom_action_seclore_by_id, [CustomActionId]),
+	{HotFolderId, ActivityComment}.
 
 populate_iprs([[Base, Subnet]| Rows], RuleId) ->
 	B1 = int_to_ip(Base),
@@ -896,16 +906,22 @@ populate_mc_modules([]) -> ok.
 %		{ok, [[FilterId]]} -> FilterId;
 %		_Else -> 0 end.
 
+custom_action_type_to_atom(<<"SECLORE">>) -> seclore;
+custom_action_type_to_atom(<<"seclore">>) -> seclore;
+custom_action_type_to_atom(Else) -> throw({error, unsupported_custom_action_type, Else}).
+
 rule_action_to_atom(<<"PASS">>) -> pass;
 rule_action_to_atom(<<"LOG">>) -> log;
 rule_action_to_atom(<<"BLOCK">>) -> block;
 rule_action_to_atom(<<"QUARANTINE">>) -> quarantine;
 rule_action_to_atom(<<"ARCHIVE">>) -> archive;
+rule_action_to_atom(<<"CUSTOM">>) -> custom;
 rule_action_to_atom(<<"pass">>) -> pass;
 rule_action_to_atom(<<"log">>) -> log;
 rule_action_to_atom(<<"block">>) -> block;
 rule_action_to_atom(<<"quarantine">>) -> quarantine;
 rule_action_to_atom(<<"archive">>) -> archive;
+rule_action_to_atom(<<"custom">>) -> custom;
 rule_action_to_atom(<<"">>) -> pass;
 rule_action_to_atom(Else) -> throw({error, unsupported_action_type, Else}).
 
