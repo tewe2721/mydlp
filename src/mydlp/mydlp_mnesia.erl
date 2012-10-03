@@ -60,7 +60,8 @@
 	truncate_nondata/0,
 	write/1,
 	delete/1,
-	flush_cache/0
+	flush_cache/0,
+	post_start/0
 	]).
 
 -ifdef(__MYDLP_NETWORK).
@@ -970,18 +971,25 @@ repopulate_mnesia() -> mydlp_mysql:repopulate_mnesia().
 
 -ifdef(__MYDLP_ENDPOINT).
 
-repopulate_mnesia() -> ok.
+repopulate_mnesia() -> schedule_post_start().
 
 -endif.
+
+post_start() ->
+	consistency_chk(),
+	mydlp_dynamic:load(),
+	mydlp_mc:mc_load_mnesia(),
+	ok.
+
+schedule_post_start() ->
+	?ASYNC0(fun() -> post_start() end), ok.
 
 start_tables(IsDistributionInit) ->
 	start_table(IsDistributionInit, {unique_ids, set}),
 	StartResult =  start_tables(IsDistributionInit, ?TABLES),
 
-	consistency_chk(),
-
 	case StartResult of
-		{ok, no_change} -> ok;
+		{ok, no_change} -> schedule_post_start();
 		{ok, schema_changed} -> repopulate_mnesia() end,
 	ok.
 

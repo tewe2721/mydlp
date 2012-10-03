@@ -434,9 +434,7 @@ populate_site(FilterId) ->
 	erase(mydlp_mnesia_write),
 
 	%%% post actions
-	mydlp_mnesia:compile_regex(),
-	mydlp_dynamic:load(),
-	mydlp_mc:mc_load_mnesia(),
+	mydlp_mnesia:post_start(),
 	ok.
 
 populate_configs([[Key, Value]|Rows], FilterId) ->
