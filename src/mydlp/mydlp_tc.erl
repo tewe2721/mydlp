@@ -158,10 +158,6 @@ handle_call(stop, _From, #state{backend_java=Java} = State) ->
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-handle_info(load_now, State) ->
-	load(),
-	{noreply, State};
-
 handle_info(_Info, State) ->
 	{noreply, State}.
 
@@ -177,7 +173,7 @@ stop() ->
 
 init([]) ->
 	{ok, Java} = thrift_client_util:new("localhost",9090, mydlp_thrift, []),
-	timer:send_after(100, load_now),
+	?ASYNC0(fun() -> load() end),
 	{ok, #state{backend_java=Java}}.
 
 handle_cast(_Msg, State) ->
@@ -205,8 +201,7 @@ load() -> ok.
 
 -ifdef(__MYDLP_ENDPOINT).
 
-load() ->
-	case ?CFG(seclore_fs_enable) of
+load() -> case ?CFG(seclore_fs_enable) of
 		true ->	seclore_initialize(	?CFG(seclore_dir), 
 						?CFG(seclore_fs_address),
 						?CFG(seclore_fs_port),

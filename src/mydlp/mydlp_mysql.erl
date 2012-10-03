@@ -434,9 +434,7 @@ populate_site(FilterId) ->
 	erase(mydlp_mnesia_write),
 
 	%%% post actions
-	mydlp_mnesia:compile_regex(),
-	mydlp_dynamic:load(),
-	mydlp_mc:mc_load_mnesia(),
+	mydlp_mnesia:post_start(),
 	ok.
 
 populate_configs([[Key, Value]|Rows], FilterId) ->
@@ -978,6 +976,7 @@ pre_push_log(RuleId, Ip, User, Destination, Action, Channel) ->
 		nil -> null;
 		unknown -> null;
 		null -> null;
+		undefined -> null;
 		U when is_list(U) -> unicode:characters_to_binary(U);
 		U when is_binary(U) -> U
 	end,

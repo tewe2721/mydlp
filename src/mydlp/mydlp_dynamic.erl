@@ -69,12 +69,6 @@ denied_page_src() ->
 		not_found -> <<"Denied!!!">> end,
 	binary_to_list(DPBin).
 
-escape_quote(Str) -> escape_quote(Str, []).
-
-escape_quote([$"|Str], Acc) -> escape_quote(Str, [$",$\\|Acc]);
-escape_quote([C|Str], Acc) -> escape_quote(Str, [C|Acc]);
-escape_quote([], Acc) -> lists:reverse(Acc).
-
 mydlp_denied_page_src(DeniedPageSrc) when is_list(DeniedPageSrc) ->
 "-module(mydlp_denied_page).
 -author('kerem@mydlp.com').
@@ -84,7 +78,7 @@ mydlp_denied_page_src(DeniedPageSrc) when is_list(DeniedPageSrc) ->
 	get_base64_str/0
 ]).
 
-get() -> <<\"" ++ escape_quote(DeniedPageSrc) ++ "\">>. 
+get() -> <<\"" ++ escape_string(DeniedPageSrc) ++ "\">>. 
 
 get_base64_str() -> \"" ++ 
 	binary_to_list(
@@ -415,13 +409,21 @@ val_to_type_src(_Key, Type, ValStr) -> val_to_type_src(Type, ValStr).
 
 -endif.
 
+escape_string(Str) -> escape_string(Str, []).
+
+escape_string([$"|Str], Acc) -> escape_string(Str, [$",$\\|Acc]);
+escape_string([$\\|Str], Acc) -> escape_string(Str, [$\\,$\\|Acc]);
+escape_string([C|Str], Acc) -> escape_string(Str, [C|Acc]);
+escape_string([], Acc) -> lists:reverse(Acc).
+
+
 val_to_type_src(boolean, "yes") -> "true";
 val_to_type_src(boolean, "y") -> "true";
 val_to_type_src(boolean, "true") -> "true";
 val_to_type_src(boolean, "no") -> "false";
 val_to_type_src(boolean, "n") -> "false";
 val_to_type_src(boolean, "false") -> "false";
-val_to_type_src(string, V) -> "\"" ++ V ++ "\"";
+val_to_type_src(string, V) -> "\"" ++ escape_string(V) ++ "\"";
 val_to_type_src(integer, V) -> V;
 val_to_type_src(atom, V) -> V;
 val_to_type_src(ip, V) -> 

@@ -2660,9 +2660,9 @@ use_client_policy(CDBBin) ->
 		( catch mydlp_mnesia:write([ MCModule ]) ),
 		( catch mydlp_mnesia:write([ #rule_table{channel=C, table = RT} || {C, RT} <- RuleTables ]) ),
 
-		mydlp_dynamic:load(),
+		mydlp_mnesia:post_start(),
 		mydlp_dynamic:populate_win32reg(),
-		mydlp_mc:mc_load_mnesia(),
+		mydlp_tc:load(),
 		mydlp_container:schedule_confupdate(),
 
 		NewRevisionId = erlang:phash2(CDBObj),

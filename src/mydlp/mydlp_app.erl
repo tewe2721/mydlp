@@ -91,16 +91,7 @@ start(_Type, _Args) ->
 	Protocols = get_protocols(),
 
 	% Start mydlp
-	SRet = supervisor:start_link({local, ?MODULE}, ?MODULE, [Protocols]),
-
-	case SRet of
-		{ok, _} -> 
-			% If everything is allright,
-			% Load dynamic modules
-			mydlp_dynamic:load(),
-			mydlp_mc:mc_load_mnesia();
-		_Else -> ok end,
-	SRet.
+	supervisor:start_link({local, ?MODULE}, ?MODULE, [Protocols]).
 
 init([Protocols]) ->
 	SWorkers = get_sworkers(),
