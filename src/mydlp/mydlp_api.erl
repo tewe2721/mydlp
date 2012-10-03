@@ -2662,6 +2662,7 @@ use_client_policy(CDBBin) ->
 
 		mydlp_dynamic:load(),
 		mydlp_dynamic:populate_win32reg(),
+		mydlp_tc:load(),
 		mydlp_mc:mc_load_mnesia(),
 		mydlp_container:schedule_confupdate(),
 

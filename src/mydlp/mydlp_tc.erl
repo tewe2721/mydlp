@@ -205,8 +205,7 @@ load() -> ok.
 
 -ifdef(__MYDLP_ENDPOINT).
 
-load() ->
-	case ?CFG(seclore_fs_enable) of
+load() -> case ?CFG(seclore_fs_enable) of
 		true ->	seclore_initialize(	?CFG(seclore_dir), 
 						?CFG(seclore_fs_address),
 						?CFG(seclore_fs_port),
