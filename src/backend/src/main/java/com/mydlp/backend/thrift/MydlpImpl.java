@@ -120,10 +120,11 @@ public class MydlpImpl implements Mydlp.Iface {
 	public String secloreInitialize(String SecloreAppPath,
 			String SecloreAddress, int SeclorePort, String SecloreAppName,
 			int SecloreHotFolderCabinetId,
-			String SecloreHotFolderCabinetPassphrase) throws TException {
+			String SecloreHotFolderCabinetPassphrase,
+			int SeclorePoolSize) throws TException {
 		try {
 			secloreConfig = new FileSecureConfigBuilder(SecloreAppPath, SecloreAddress, SeclorePort, 
-							SecloreAppName, SecloreHotFolderCabinetId, SecloreHotFolderCabinetPassphrase);
+							SecloreAppName, SecloreHotFolderCabinetId, SecloreHotFolderCabinetPassphrase, SeclorePoolSize);
 			try {
 				secloreConfig.installCertificateIfNotExists();
 			} catch (MyDLPCertificateException e) {
