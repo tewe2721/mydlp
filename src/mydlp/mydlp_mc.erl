@@ -235,9 +235,12 @@ get_leafs(State) -> ets:match(mc_success, {{State, '$1'}, '$2'}). % [[Char, Next
 start_state() -> root.
 
 readlines(FileName) ->
-	{ok, Device} = file:open(FileName, [read, binary]),
-	try get_all_lines(Device, [])
-	after file:close(Device)
+	case file:open(FileName, [read, binary]) of
+		{ok, Device} ->
+			try get_all_lines(Device, [])
+			after file:close(Device)
+			end;
+		Error -> ?ERROR_LOG("MC: Cannot open file for mc generation. Filename: "?S", Error: "?S, [FileName, Error])
 	end.
 
 get_all_lines(Device, Acc) ->
@@ -559,9 +562,13 @@ func_pd_pattern(Func, _FuncParam) ->
 get_kw_patterns(Matchers) -> get_kw_patterns(Matchers, []).
 
 get_kw_patterns([{_Id, all, _FuncParam}|Rest], Acc) -> get_kw_patterns(Rest, Acc);
-get_kw_patterns([{Id, Func, FuncParam}|Rest], Acc) ->
+get_kw_patterns([{Id, Func, [{group_id, KGIs}]}|Rest], Acc) ->
 	case is_func_kw(Func) of
-		true -> get_kw_patterns(Rest, [{list, func_kw_pattern(Func, FuncParam), Id}|Acc]);
+		true -> get_kw_patterns(Rest, [{list, func_kw_pattern(Func, KGIs), Id}|Acc]);
+		false -> get_kw_patterns(Rest, Acc) end;
+get_kw_patterns([{Id, Func, [{file, BundledFilename}]}|Rest], Acc) ->
+	case is_func_kw(Func) of
+		true -> get_kw_patterns(Rest, [{file, filename:absname(BundledFilename, ?CFG(resources_dir)), Id}|Acc]);
 		false -> get_kw_patterns(Rest, Acc) end;
 get_kw_patterns([], Acc) -> lists:reverse(Acc).
 

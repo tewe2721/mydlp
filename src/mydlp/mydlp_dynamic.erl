@@ -154,6 +154,7 @@ load_src(Src) ->
 	{mysql_database, string, "mydlp"},
 	{mysql_log_database, string, "mydlp_log"},
 	{mysql_pool_size, integer, "2"},
+	{resources_dir, string, "/usr/share/mydlp/resources/"},
 	{quarantine_dir, string, "/var/lib/mydlp/quarantine/"},
 	{quarantine_uid, integer, "33"},
 	{quarantine_gid, integer, "33"},
@@ -192,7 +193,9 @@ load_src(Src) ->
 	{syslog_diag_facility, syslog_facility, "local6"},
 	{syslog_report_host, ip, "127.0.0.1"},
 	{syslog_report_port, integer, "514"},
-	{syslog_report_facility, syslog_facility, "local7"}
+	{syslog_report_facility, syslog_facility, "local7"},
+	{query_cache_maximum_size, integer, "1500000"},
+	{query_cache_cleanup_interval, integer, "900000"}
 ]).
 
 -endif.

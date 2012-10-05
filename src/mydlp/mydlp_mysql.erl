@@ -314,6 +314,7 @@ init([]) ->
 		{ifeature_by_itype_id, <<"SELECT f.threshold,f.matcher_id FROM InformationFeature AS f, InformationDescription_InformationFeature df, InformationType t WHERE t.id=? AND t.informationDescription_id=df.InformationDescription_id AND df.features_id=f.id">>},
 		{match_by_id, <<"SELECT m.id,m.functionName FROM Matcher AS m WHERE m.id=?">>},
 		{regex_by_matcher_id, <<"SELECT re.regex FROM MatcherArgument AS ma, RegularExpression AS re WHERE ma.coupledMatcher_id=? AND ma.coupledArgument_id=re.id">>},
+		{kg_bundled_by_matcher_id, <<"SELECT bkg.filename FROM MatcherArgument AS ma, NonCascadingArgument AS nca, BundledKeywordGroup AS bkg WHERE ma.coupledMatcher_id=? AND ma.coupledArgument_id=nca.id AND nca.argument_id=bkg.id">>},
 		{kg_regexes_by_matcher_id, <<"SELECT re.regex FROM MatcherArgument AS ma, NonCascadingArgument AS nca, RegularExpressionGroup_RegularExpressionGroupEntry AS gre, RegularExpressionGroupEntry AS re WHERE ma.coupledMatcher_id=? AND ma.coupledArgument_id=nca.id AND nca.argument_id=gre.RegularExpressionGroup_id AND gre.entries_id=re.id">>},
 		{kg_rdbms_regexes_by_matcher_id, <<"SELECT rev.string FROM MatcherArgument AS ma, NonCascadingArgument AS nca, RegularExpressionGroup AS reg, RDBMSEnumeratedValue AS rev WHERE ma.coupledMatcher_id=? AND ma.coupledArgument_id=nca.id AND nca.argument_id=reg.id AND reg.rdbmsInformationTarget_id=rev.informationTarget_id">>},
 		{dd_by_matcher_id, <<"SELECT dd.id FROM MatcherArgument AS ma, NonCascadingArgument AS nca, DocumentDatabase AS dd WHERE ma.coupledMatcher_id=? AND ma.coupledArgument_id=nca.id AND nca.argument_id=dd.id">>},
@@ -797,16 +798,20 @@ populate_match(Id, <<"keyword">>, IFeatureId) ->
 
 populate_match(Id, <<"keyword_group">>, IFeatureId) ->
 	Func = keyword_match,
-	KeywordGroupId = mydlp_mnesia:get_unique_id(keyword_group_id),
-	{ok, REQ} = psq(kg_regexes_by_matcher_id, [Id]),
-	lists:foreach(fun([KeywordS]) ->
-		write_keyword(KeywordGroupId, KeywordS)
-	end, REQ),
-	{ok, REREQ} = psq(kg_rdbms_regexes_by_matcher_id, [Id]),
-	lists:foreach(fun([KeywordS]) ->
-		write_keyword(KeywordGroupId, KeywordS)
-	end, REREQ),
-	FuncParams=[KeywordGroupId],
+
+	{ok, BKGQ} = psq(kg_bundled_by_matcher_id, [Id]),
+	FuncParams = case BKGQ of
+		[] ->	KeywordGroupId = mydlp_mnesia:get_unique_id(keyword_group_id),
+			{ok, REQ} = psq(kg_regexes_by_matcher_id, [Id]),
+			lists:foreach(fun([KeywordS]) ->
+				write_keyword(KeywordGroupId, KeywordS)
+			end, REQ),
+			{ok, REREQ} = psq(kg_rdbms_regexes_by_matcher_id, [Id]),
+			lists:foreach(fun([KeywordS]) ->
+				write_keyword(KeywordGroupId, KeywordS)
+			end, REREQ),
+			[{group_id, KeywordGroupId}];
+		[[BundledFileName]] -> [{file, BundledFileName}] end,
 	new_match(Id, IFeatureId, Func, FuncParams);
 
 populate_match(Id, <<"regex">>, IFeatureId) ->
