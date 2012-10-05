@@ -37,6 +37,10 @@
 	pre_init/1,
 	get_mime/2,
 	get_text/3,
+	seclore_initialize/7,
+	seclore_protect/3,
+	seclore_terminate/0,
+	load/0,
 	stop/0]).
 
 %% gen_server callbacks
@@ -110,6 +114,32 @@ get_text(Filename, MT, Data) ->
 				[Filename, MT, Class, Error, erlang:get_stacktrace()]),
 		mydlp_api:exception(Class, Error) end.
 
+seclore_initialize(SecloreAppPath, SecloreAddress, SeclorePort, SecloreAppName, SecloreHotFolderCabinetId, SecloreHotFolderCabinetPassphrase, SeclorePoolSize) ->
+	try	call_pool({thrift, java, secloreInitialize, [SecloreAppPath, SecloreAddress, SeclorePort, SecloreAppName, SecloreHotFolderCabinetId, SecloreHotFolderCabinetPassphrase, SeclorePoolSize]})
+	catch Class:Error ->
+		?ERROR_LOG("Error occured when initializing seclore module. "
+			"SecloreAppPath: "?S", SecloreAddress: "?S" SeclorePort: "?S", SecloreAppName: "?S", SecloreHotFolderCabinetId: "?S" SeclorePoolSize: "?S".~nClass: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
+				[SecloreAppPath, SecloreAddress, SeclorePort, SecloreAppName, SecloreHotFolderCabinetId, SeclorePoolSize, Class, Error, erlang:get_stacktrace()]),
+		mydlp_api:exception(Class, Error),
+		"mydlp.backend.secloreInitialize.unexpectedException" end.
+	
+seclore_protect(FilePath, HotFolderId, ActivityComments) ->
+	try	call_pool({thrift, java, secloreProtect, [FilePath, HotFolderId, ActivityComments]})
+	catch Class:Error ->
+		?ERROR_LOG("Error occured when protecting file with seclore. "
+			"FilePath: "?S", HotFolderId: "?S", ActivityComments: "?S".~nClass: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
+				[FilePath, HotFolderId, ActivityComments, Class, Error, erlang:get_stacktrace()]),
+		mydlp_api:exception(Class, Error),
+		"mydlp.backend.secloreProtect.unexpectedException" end.
+
+seclore_terminate() ->
+	try	call_pool({thrift, java, secloreTerminate, []})
+	catch Class:Error ->
+		?ERROR_LOG("Error occured when terminating seclore module.~nClass: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
+				[Class, Error, erlang:get_stacktrace()]),
+		mydlp_api:exception(Class, Error),
+		"mydlp.backend.secloreTerminate.unexpectedException" end.
+
 %%%%%%%%%%%%%% gen_server handles
 
 handle_call({thrift, java, Func, Params}, _From, #state{backend_java=TS} = State) ->
@@ -143,6 +173,7 @@ stop() ->
 
 init([]) ->
 	{ok, Java} = thrift_client_util:new("localhost",9090, mydlp_thrift, []),
+	?ASYNC0(fun() -> load() end),
 	{ok, #state{backend_java=Java}}.
 
 handle_cast(_Msg, State) ->
@@ -161,4 +192,27 @@ call_pool(Req) ->
 		{ok, Ret} -> Ret;
 		{error, Reason} -> throw({error, Reason});
 		{ierror, Class, Error} -> mydlp_api:exception(Class, Error) end.
+
+-ifdef(__MYDLP_NETWORK).
+
+load() -> ok.
+
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
+load() -> case ?CFG(seclore_fs_enable) of
+		true ->	seclore_initialize(	?CFG(seclore_dir), 
+						?CFG(seclore_fs_address),
+						?CFG(seclore_fs_port),
+						?CFG(seclore_fs_app_name),
+						?CFG(seclore_fs_hot_folder_cabinet_id),
+						?CFG(seclore_fs_hot_folder_cabinet_passphrase),
+						?CFG(seclore_fs_endpoint_pool_size)
+					);
+		false -> <<"ok">> end.
+
+-endif.
+
+
 

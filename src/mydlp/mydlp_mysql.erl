@@ -296,7 +296,9 @@ init([]) ->
 	[ mysql:prepare(Key, Query) || {Key, Query} <- [
 		{last_insert_id, <<"SELECT last_insert_id()">>},
 		{configs, <<"SELECT configKey,value FROM Config">>},
-		{rules, <<"SELECT id,DTYPE,action FROM Rule WHERE enabled=1 order by priority desc">>},
+		{rules, <<"SELECT id,DTYPE,action,customAction_id FROM Rule WHERE enabled=1 order by priority desc">>},
+		{custom_action_by_id, <<"SELECT c.name, c.typeKey FROM CustomAction AS c WHERE c.id=?">>},
+		{custom_action_seclore_by_id, <<"SELECT cs.hotFolderId, cs.activityComment FROM CustomActionDescription AS cd, CustomActionDescriptionSeclore AS cs WHERE cd.coupledCustomAction_id=? AND cd.id=cs.id">>},
 		{network_by_rule_id, <<"SELECT n.ipBase,n.ipMask FROM Network AS n, RuleItem AS ri WHERE ri.rule_id=? AND n.id=ri.item_id">>},
 		{user_s_by_rule_id, <<"SELECT u.username FROM RuleUserStatic AS u, RuleItem AS ri WHERE ri.rule_id=? AND u.id=ri.item_id">>},
 		{user_ad_u_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=u.id">>},
@@ -432,9 +434,7 @@ populate_site(FilterId) ->
 	erase(mydlp_mnesia_write),
 
 	%%% post actions
-	mydlp_mnesia:compile_regex(),
-	mydlp_dynamic:load(),
-	mydlp_mc:mc_load_mnesia(),
+	mydlp_mnesia:post_start(),
 	ok.
 
 populate_configs([[Key, Value]|Rows], FilterId) ->
@@ -455,9 +455,12 @@ populate_filters([[Id, DActionS]|Rows], Id) ->
 	populate_filters(Rows, Id);
 populate_filters([], _FilterId) -> ok.
 
-populate_rules([[Id, DTYPE, ActionS] |Rows], FilterId) ->
-	Action = rule_action_to_atom(ActionS),
+populate_rules([[Id, DTYPE, ActionS, CustomActionId]|Rows], FilterId) ->
+	Action = case rule_action_to_atom(ActionS) of
+		custom -> {custom, populate_custom_action_detail(CustomActionId)};
+		Else -> Else end,
 	Channel = rule_dtype_to_channel(DTYPE),
+	validate_action_for_channel(Channel, Action),
 	populate_rule(Id, Channel, Action, FilterId),
 	populate_rules(Rows, FilterId);
 populate_rules([], _FilterId) -> ok.
@@ -473,14 +476,20 @@ populate_rule(OrigId, Channel, Action, FilterId) ->
 	{ok, ITQ} = psq(itype_by_rule_id, [OrigId]),
 	populate_itypes(ITQ, RuleId),
 
-	%{ok, MQ} = psq(match_by_rule_id, [Id]),
-	%populate_matches(MQ, Parent),
-	%{ok, MGQ} = psq(mgroup_by_rule_id, [Id]),
-	%populate_matchGroups(MGQ, Parent),
-	%{ok, TDQ} = psq(tdomains_by_rid, [Id]),
-	%TDs = lists:flatten(TDQ),
 	R = #rule{id=RuleId, orig_id=OrigId, channel=Channel, action=Action, filter_id=FilterId},
 	mydlp_mnesia_write(R).
+
+populate_custom_action_detail(CustomActionId) ->
+        {ok, [[Name, TypeKey]]} = psq(custom_action_by_id, [CustomActionId]),
+	Type = custom_action_type_to_atom(TypeKey),
+	{PrimAction, CustomActionParam} = case Type of
+		seclore -> {pass, populate_custom_action_seclore_param(CustomActionId)}
+	end,
+	{Type, PrimAction, Name, CustomActionParam}.
+
+populate_custom_action_seclore_param(CustomActionId) ->
+        {ok, [[HotFolderId, ActivityComment]]} = psq(custom_action_seclore_by_id, [CustomActionId]),
+	{HotFolderId, ActivityComment}.
 
 populate_iprs([[Base, Subnet]| Rows], RuleId) ->
 	B1 = int_to_ip(Base),
@@ -896,16 +905,22 @@ populate_mc_modules([]) -> ok.
 %		{ok, [[FilterId]]} -> FilterId;
 %		_Else -> 0 end.
 
+custom_action_type_to_atom(<<"SECLORE">>) -> seclore;
+custom_action_type_to_atom(<<"seclore">>) -> seclore;
+custom_action_type_to_atom(Else) -> throw({error, unsupported_custom_action_type, Else}).
+
 rule_action_to_atom(<<"PASS">>) -> pass;
 rule_action_to_atom(<<"LOG">>) -> log;
 rule_action_to_atom(<<"BLOCK">>) -> block;
 rule_action_to_atom(<<"QUARANTINE">>) -> quarantine;
 rule_action_to_atom(<<"ARCHIVE">>) -> archive;
+rule_action_to_atom(<<"CUSTOM">>) -> custom;
 rule_action_to_atom(<<"pass">>) -> pass;
 rule_action_to_atom(<<"log">>) -> log;
 rule_action_to_atom(<<"block">>) -> block;
 rule_action_to_atom(<<"quarantine">>) -> quarantine;
 rule_action_to_atom(<<"archive">>) -> archive;
+rule_action_to_atom(<<"custom">>) -> custom;
 rule_action_to_atom(<<"">>) -> pass;
 rule_action_to_atom(Else) -> throw({error, unsupported_action_type, Else}).
 
@@ -917,6 +932,40 @@ rule_dtype_to_channel(<<"DiscoveryRule">>) -> discovery;
 rule_dtype_to_channel(<<"ApiRule">>) -> api;
 rule_dtype_to_channel(Else) -> throw({error, unsupported_rule_type, Else}).
 
+validate_action_for_channel(web, pass) -> ok;
+validate_action_for_channel(web, log) -> ok;
+validate_action_for_channel(web, block) -> ok;
+validate_action_for_channel(web, archive) -> ok;
+validate_action_for_channel(web, quarantine) -> ok;
+validate_action_for_channel(mail, pass) -> ok;
+validate_action_for_channel(mail, log) -> ok;
+validate_action_for_channel(mail, block) -> ok;
+validate_action_for_channel(mail, archive) -> ok;
+validate_action_for_channel(mail, quarantine) -> ok;
+validate_action_for_channel(endpoint, pass) -> ok;
+validate_action_for_channel(endpoint, log) -> ok;
+validate_action_for_channel(endpoint, block) -> ok;
+validate_action_for_channel(endpoint, archive) -> ok;
+validate_action_for_channel(endpoint, quarantine) -> ok;
+validate_action_for_channel(printer, pass) -> ok;
+validate_action_for_channel(printer, log) -> ok;
+validate_action_for_channel(printer, block) -> ok;
+validate_action_for_channel(printer, archive) -> ok;
+validate_action_for_channel(printer, quarantine) -> ok;
+validate_action_for_channel(discovery, pass) -> ok;
+validate_action_for_channel(discovery, log) -> ok;
+validate_action_for_channel(discovery, block) -> ok;
+validate_action_for_channel(discovery, archive) -> ok;
+validate_action_for_channel(discovery, quarantine) -> ok;
+validate_action_for_channel(discovery, {custom, {seclore, pass, _, {HotFolderId, _}}}) 
+		when is_integer(HotFolderId)-> ok;
+validate_action_for_channel(api, pass) -> ok;
+validate_action_for_channel(api, log) -> ok;
+validate_action_for_channel(api, block) -> ok;
+validate_action_for_channel(api, archive) -> ok;
+validate_action_for_channel(api, quarantine) -> ok;
+validate_action_for_channel(Channel, Action) -> throw({error, {unexpected_action_for_channel, Channel, Action}}).
+
 pre_push_log(RuleId, Ip, User, Destination, Action, Channel) -> 
 %	{FilterId, RuleId1} = case RuleId of
 %		{dr, CId} -> {CId, 0};
@@ -927,6 +976,7 @@ pre_push_log(RuleId, Ip, User, Destination, Action, Channel) ->
 		nil -> null;
 		unknown -> null;
 		null -> null;
+		undefined -> null;
 		U when is_list(U) -> unicode:characters_to_binary(U);
 		U when is_binary(U) -> U
 	end,
@@ -943,7 +993,9 @@ pre_push_log(RuleId, Ip, User, Destination, Action, Channel) ->
 		block -> <<"B">>;
 		log -> <<"L">>;
 		quarantine -> <<"Q">>;
-		archive -> <<"A">> 
+		archive -> <<"A">>;
+		{custom, {seclore, pass, Name, {HotFolderId, _}}} ->
+			list_to_binary([<<"CIS ">>, integer_to_list(HotFolderId), <<" ">>, Name])
 	end,
 	ChannelS = case Channel of
 		web -> <<"W">>;

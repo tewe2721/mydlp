@@ -1,5 +1,6 @@
 package com.mydlp.backend.thrift;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
@@ -14,6 +15,11 @@ import org.apache.tika.metadata.Metadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.mydlp.seclore.FileSecureConfigBuilder;
+import com.mydlp.seclore.FileSecureException;
+import com.mydlp.seclore.FileSecureProtect;
+import com.mydlp.seclore.MyDLPCertificateException;
+
 public class MydlpImpl implements Mydlp.Iface {
 	
 	private static Logger logger = LoggerFactory.getLogger(MydlpImpl.class);
@@ -26,6 +32,10 @@ public class MydlpImpl implements Mydlp.Iface {
 	protected static final String MIME_NOT_FOUND = "mydlp-internal/not-found";
 	
 	protected Tika tika = new Tika();
+	
+	protected FileSecureConfigBuilder secloreConfig = null;
+	
+	protected FileSecureProtect secloreProtect = null;
 		
 	protected InputStream getInputStream(final ByteBuffer buf) {
 		return new InputStream() {
@@ -105,6 +115,87 @@ public class MydlpImpl implements Mydlp.Iface {
 			}
 		}
 
+	}
+
+	@Override
+	public String secloreInitialize(String SecloreAppPath,
+			String SecloreAddress, int SeclorePort, String SecloreAppName,
+			int SecloreHotFolderCabinetId,
+			String SecloreHotFolderCabinetPassphrase,
+			int SeclorePoolSize) throws TException {
+		try {
+			if (secloreProtect != null || secloreConfig != null)
+				secloreTerminate();
+			
+			secloreConfig = new FileSecureConfigBuilder(SecloreAppPath, SecloreAddress, SeclorePort, 
+							SecloreAppName, SecloreHotFolderCabinetId, SecloreHotFolderCabinetPassphrase, SeclorePoolSize);
+			try {
+				secloreConfig.installCertificateIfNotExists();
+			} catch (MyDLPCertificateException e) {
+				logger.error("An error occurred when install seclore remote certificate", e);
+			}
+			
+			secloreProtect = new FileSecureProtect(secloreConfig);
+			
+			try {
+				secloreProtect.initialize();
+				return "ok";
+			} catch (FileSecureException e) {
+				logger.error("An error occurred when initializing seclore configuration", e);
+				return e.getMessage();
+			}
+		} catch (Throwable e) {
+			logger.error("An error unexpected occurred when initializing seclore configuration", e);
+			return "mydlp.backend.seclore.initialize.unexpectedException";	
+		}
+	}
+
+	@Override
+	public String secloreProtect(String FilePath, int HotFolderId,
+			String ActivityComments) throws TException {
+		if (secloreProtect == null) {
+			return "mydlp.backend.seclore.protect.notInitialized";
+		}
+		try {
+			File file = new File(FilePath);
+			if (!file.exists())
+				return "mydlp.backend.seclore.protect.fileNotFound";
+			if (!file.isFile())
+				return "mydlp.backend.seclore.protect.notRegularFile";
+			if (!file.canRead())
+				return "mydlp.backend.seclore.protect.canNotRead";
+			if (!file.canWrite())
+				return "mydlp.backend.seclore.protect.canNotWrite";
+			String fileId = secloreProtect.protect(file.getAbsolutePath(), HotFolderId, ActivityComments);
+			return "ok " + fileId; 
+		} catch (FileSecureException e) {
+			logger.error("An error occurred when protecting document ( " +
+					FilePath + " ) woth hot folder id (" + HotFolderId + " )", e);
+			return e.getMessage();
+		} catch (Throwable e) {
+			logger.error("An error unexpected occurred when protecting document ( " +
+					FilePath + " ) woth hot folder id (" + HotFolderId + " )", e);
+			return "mydlp.backend.seclore.protect.unexpectedException";	
+		}
+	}
+
+	@Override
+	public String secloreTerminate() throws TException {
+		if (secloreProtect == null) {
+			return "mydlp.backend.seclore.terminate.notInitialized";
+		}
+		try {
+			secloreProtect.terminate();
+			secloreConfig = null;
+			secloreProtect = null;
+			return "ok"; 
+		} catch (FileSecureException e) {
+			logger.error("An error occurred when terminating seclore connection", e);
+			return e.getMessage();
+		} catch (Throwable e) {
+			logger.error("An error unexpected occurred when terminating seclore connection", e);
+			return "mydlp.backend.seclore.protect.unexpectedException";	
+		}
 	}
 
 }

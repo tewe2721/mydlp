@@ -28,6 +28,12 @@ public class Mydlp {
 
     public ByteBuffer getText(String FileName, String MimeType, ByteBuffer Data) throws org.apache.thrift.TException;
 
+    public String secloreInitialize(String SecloreAppPath, String SecloreAddress, int SeclorePort, String SecloreAppName, int SecloreHotFolderCabinetId, String SecloreHotFolderCabinetPassphrase, int SeclorePoolSize) throws org.apache.thrift.TException;
+
+    public String secloreProtect(String FilePath, int HotFolderId, String ActivityComments) throws org.apache.thrift.TException;
+
+    public String secloreTerminate() throws org.apache.thrift.TException;
+
   }
 
   public interface AsyncIface {
@@ -35,6 +41,12 @@ public class Mydlp {
     public void getMime(String FileName, ByteBuffer Data, org.apache.thrift.async.AsyncMethodCallback<AsyncClient.getMime_call> resultHandler) throws org.apache.thrift.TException;
 
     public void getText(String FileName, String MimeType, ByteBuffer Data, org.apache.thrift.async.AsyncMethodCallback<AsyncClient.getText_call> resultHandler) throws org.apache.thrift.TException;
+
+    public void secloreInitialize(String SecloreAppPath, String SecloreAddress, int SeclorePort, String SecloreAppName, int SecloreHotFolderCabinetId, String SecloreHotFolderCabinetPassphrase, int SeclorePoolSize, org.apache.thrift.async.AsyncMethodCallback<AsyncClient.secloreInitialize_call> resultHandler) throws org.apache.thrift.TException;
+
+    public void secloreProtect(String FilePath, int HotFolderId, String ActivityComments, org.apache.thrift.async.AsyncMethodCallback<AsyncClient.secloreProtect_call> resultHandler) throws org.apache.thrift.TException;
+
+    public void secloreTerminate(org.apache.thrift.async.AsyncMethodCallback<AsyncClient.secloreTerminate_call> resultHandler) throws org.apache.thrift.TException;
 
   }
 
@@ -105,6 +117,82 @@ public class Mydlp {
         return result.success;
       }
       throw new org.apache.thrift.TApplicationException(org.apache.thrift.TApplicationException.MISSING_RESULT, "getText failed: unknown result");
+    }
+
+    public String secloreInitialize(String SecloreAppPath, String SecloreAddress, int SeclorePort, String SecloreAppName, int SecloreHotFolderCabinetId, String SecloreHotFolderCabinetPassphrase, int SeclorePoolSize) throws org.apache.thrift.TException
+    {
+      send_secloreInitialize(SecloreAppPath, SecloreAddress, SeclorePort, SecloreAppName, SecloreHotFolderCabinetId, SecloreHotFolderCabinetPassphrase, SeclorePoolSize);
+      return recv_secloreInitialize();
+    }
+
+    public void send_secloreInitialize(String SecloreAppPath, String SecloreAddress, int SeclorePort, String SecloreAppName, int SecloreHotFolderCabinetId, String SecloreHotFolderCabinetPassphrase, int SeclorePoolSize) throws org.apache.thrift.TException
+    {
+      secloreInitialize_args args = new secloreInitialize_args();
+      args.setSecloreAppPath(SecloreAppPath);
+      args.setSecloreAddress(SecloreAddress);
+      args.setSeclorePort(SeclorePort);
+      args.setSecloreAppName(SecloreAppName);
+      args.setSecloreHotFolderCabinetId(SecloreHotFolderCabinetId);
+      args.setSecloreHotFolderCabinetPassphrase(SecloreHotFolderCabinetPassphrase);
+      args.setSeclorePoolSize(SeclorePoolSize);
+      sendBase("secloreInitialize", args);
+    }
+
+    public String recv_secloreInitialize() throws org.apache.thrift.TException
+    {
+      secloreInitialize_result result = new secloreInitialize_result();
+      receiveBase(result, "secloreInitialize");
+      if (result.isSetSuccess()) {
+        return result.success;
+      }
+      throw new org.apache.thrift.TApplicationException(org.apache.thrift.TApplicationException.MISSING_RESULT, "secloreInitialize failed: unknown result");
+    }
+
+    public String secloreProtect(String FilePath, int HotFolderId, String ActivityComments) throws org.apache.thrift.TException
+    {
+      send_secloreProtect(FilePath, HotFolderId, ActivityComments);
+      return recv_secloreProtect();
+    }
+
+    public void send_secloreProtect(String FilePath, int HotFolderId, String ActivityComments) throws org.apache.thrift.TException
+    {
+      secloreProtect_args args = new secloreProtect_args();
+      args.setFilePath(FilePath);
+      args.setHotFolderId(HotFolderId);
+      args.setActivityComments(ActivityComments);
+      sendBase("secloreProtect", args);
+    }
+
+    public String recv_secloreProtect() throws org.apache.thrift.TException
+    {
+      secloreProtect_result result = new secloreProtect_result();
+      receiveBase(result, "secloreProtect");
+      if (result.isSetSuccess()) {
+        return result.success;
+      }
+      throw new org.apache.thrift.TApplicationException(org.apache.thrift.TApplicationException.MISSING_RESULT, "secloreProtect failed: unknown result");
+    }
+
+    public String secloreTerminate() throws org.apache.thrift.TException
+    {
+      send_secloreTerminate();
+      return recv_secloreTerminate();
+    }
+
+    public void send_secloreTerminate() throws org.apache.thrift.TException
+    {
+      secloreTerminate_args args = new secloreTerminate_args();
+      sendBase("secloreTerminate", args);
+    }
+
+    public String recv_secloreTerminate() throws org.apache.thrift.TException
+    {
+      secloreTerminate_result result = new secloreTerminate_result();
+      receiveBase(result, "secloreTerminate");
+      if (result.isSetSuccess()) {
+        return result.success;
+      }
+      throw new org.apache.thrift.TApplicationException(org.apache.thrift.TApplicationException.MISSING_RESULT, "secloreTerminate failed: unknown result");
     }
 
   }
@@ -198,6 +286,123 @@ public class Mydlp {
       }
     }
 
+    public void secloreInitialize(String SecloreAppPath, String SecloreAddress, int SeclorePort, String SecloreAppName, int SecloreHotFolderCabinetId, String SecloreHotFolderCabinetPassphrase, int SeclorePoolSize, org.apache.thrift.async.AsyncMethodCallback<secloreInitialize_call> resultHandler) throws org.apache.thrift.TException {
+      checkReady();
+      secloreInitialize_call method_call = new secloreInitialize_call(SecloreAppPath, SecloreAddress, SeclorePort, SecloreAppName, SecloreHotFolderCabinetId, SecloreHotFolderCabinetPassphrase, SeclorePoolSize, resultHandler, this, ___protocolFactory, ___transport);
+      this.___currentMethod = method_call;
+      ___manager.call(method_call);
+    }
+
+    public static class secloreInitialize_call extends org.apache.thrift.async.TAsyncMethodCall {
+      private String SecloreAppPath;
+      private String SecloreAddress;
+      private int SeclorePort;
+      private String SecloreAppName;
+      private int SecloreHotFolderCabinetId;
+      private String SecloreHotFolderCabinetPassphrase;
+      private int SeclorePoolSize;
+      public secloreInitialize_call(String SecloreAppPath, String SecloreAddress, int SeclorePort, String SecloreAppName, int SecloreHotFolderCabinetId, String SecloreHotFolderCabinetPassphrase, int SeclorePoolSize, org.apache.thrift.async.AsyncMethodCallback<secloreInitialize_call> resultHandler, org.apache.thrift.async.TAsyncClient client, org.apache.thrift.protocol.TProtocolFactory protocolFactory, org.apache.thrift.transport.TNonblockingTransport transport) throws org.apache.thrift.TException {
+        super(client, protocolFactory, transport, resultHandler, false);
+        this.SecloreAppPath = SecloreAppPath;
+        this.SecloreAddress = SecloreAddress;
+        this.SeclorePort = SeclorePort;
+        this.SecloreAppName = SecloreAppName;
+        this.SecloreHotFolderCabinetId = SecloreHotFolderCabinetId;
+        this.SecloreHotFolderCabinetPassphrase = SecloreHotFolderCabinetPassphrase;
+        this.SeclorePoolSize = SeclorePoolSize;
+      }
+
+      public void write_args(org.apache.thrift.protocol.TProtocol prot) throws org.apache.thrift.TException {
+        prot.writeMessageBegin(new org.apache.thrift.protocol.TMessage("secloreInitialize", org.apache.thrift.protocol.TMessageType.CALL, 0));
+        secloreInitialize_args args = new secloreInitialize_args();
+        args.setSecloreAppPath(SecloreAppPath);
+        args.setSecloreAddress(SecloreAddress);
+        args.setSeclorePort(SeclorePort);
+        args.setSecloreAppName(SecloreAppName);
+        args.setSecloreHotFolderCabinetId(SecloreHotFolderCabinetId);
+        args.setSecloreHotFolderCabinetPassphrase(SecloreHotFolderCabinetPassphrase);
+        args.setSeclorePoolSize(SeclorePoolSize);
+        args.write(prot);
+        prot.writeMessageEnd();
+      }
+
+      public String getResult() throws org.apache.thrift.TException {
+        if (getState() != org.apache.thrift.async.TAsyncMethodCall.State.RESPONSE_READ) {
+          throw new IllegalStateException("Method call not finished!");
+        }
+        org.apache.thrift.transport.TMemoryInputTransport memoryTransport = new org.apache.thrift.transport.TMemoryInputTransport(getFrameBuffer().array());
+        org.apache.thrift.protocol.TProtocol prot = client.getProtocolFactory().getProtocol(memoryTransport);
+        return (new Client(prot)).recv_secloreInitialize();
+      }
+    }
+
+    public void secloreProtect(String FilePath, int HotFolderId, String ActivityComments, org.apache.thrift.async.AsyncMethodCallback<secloreProtect_call> resultHandler) throws org.apache.thrift.TException {
+      checkReady();
+      secloreProtect_call method_call = new secloreProtect_call(FilePath, HotFolderId, ActivityComments, resultHandler, this, ___protocolFactory, ___transport);
+      this.___currentMethod = method_call;
+      ___manager.call(method_call);
+    }
+
+    public static class secloreProtect_call extends org.apache.thrift.async.TAsyncMethodCall {
+      private String FilePath;
+      private int HotFolderId;
+      private String ActivityComments;
+      public secloreProtect_call(String FilePath, int HotFolderId, String ActivityComments, org.apache.thrift.async.AsyncMethodCallback<secloreProtect_call> resultHandler, org.apache.thrift.async.TAsyncClient client, org.apache.thrift.protocol.TProtocolFactory protocolFactory, org.apache.thrift.transport.TNonblockingTransport transport) throws org.apache.thrift.TException {
+        super(client, protocolFactory, transport, resultHandler, false);
+        this.FilePath = FilePath;
+        this.HotFolderId = HotFolderId;
+        this.ActivityComments = ActivityComments;
+      }
+
+      public void write_args(org.apache.thrift.protocol.TProtocol prot) throws org.apache.thrift.TException {
+        prot.writeMessageBegin(new org.apache.thrift.protocol.TMessage("secloreProtect", org.apache.thrift.protocol.TMessageType.CALL, 0));
+        secloreProtect_args args = new secloreProtect_args();
+        args.setFilePath(FilePath);
+        args.setHotFolderId(HotFolderId);
+        args.setActivityComments(ActivityComments);
+        args.write(prot);
+        prot.writeMessageEnd();
+      }
+
+      public String getResult() throws org.apache.thrift.TException {
+        if (getState() != org.apache.thrift.async.TAsyncMethodCall.State.RESPONSE_READ) {
+          throw new IllegalStateException("Method call not finished!");
+        }
+        org.apache.thrift.transport.TMemoryInputTransport memoryTransport = new org.apache.thrift.transport.TMemoryInputTransport(getFrameBuffer().array());
+        org.apache.thrift.protocol.TProtocol prot = client.getProtocolFactory().getProtocol(memoryTransport);
+        return (new Client(prot)).recv_secloreProtect();
+      }
+    }
+
+    public void secloreTerminate(org.apache.thrift.async.AsyncMethodCallback<secloreTerminate_call> resultHandler) throws org.apache.thrift.TException {
+      checkReady();
+      secloreTerminate_call method_call = new secloreTerminate_call(resultHandler, this, ___protocolFactory, ___transport);
+      this.___currentMethod = method_call;
+      ___manager.call(method_call);
+    }
+
+    public static class secloreTerminate_call extends org.apache.thrift.async.TAsyncMethodCall {
+      public secloreTerminate_call(org.apache.thrift.async.AsyncMethodCallback<secloreTerminate_call> resultHandler, org.apache.thrift.async.TAsyncClient client, org.apache.thrift.protocol.TProtocolFactory protocolFactory, org.apache.thrift.transport.TNonblockingTransport transport) throws org.apache.thrift.TException {
+        super(client, protocolFactory, transport, resultHandler, false);
+      }
+
+      public void write_args(org.apache.thrift.protocol.TProtocol prot) throws org.apache.thrift.TException {
+        prot.writeMessageBegin(new org.apache.thrift.protocol.TMessage("secloreTerminate", org.apache.thrift.protocol.TMessageType.CALL, 0));
+        secloreTerminate_args args = new secloreTerminate_args();
+        args.write(prot);
+        prot.writeMessageEnd();
+      }
+
+      public String getResult() throws org.apache.thrift.TException {
+        if (getState() != org.apache.thrift.async.TAsyncMethodCall.State.RESPONSE_READ) {
+          throw new IllegalStateException("Method call not finished!");
+        }
+        org.apache.thrift.transport.TMemoryInputTransport memoryTransport = new org.apache.thrift.transport.TMemoryInputTransport(getFrameBuffer().array());
+        org.apache.thrift.protocol.TProtocol prot = client.getProtocolFactory().getProtocol(memoryTransport);
+        return (new Client(prot)).recv_secloreTerminate();
+      }
+    }
+
   }
 
   public static class Processor<I extends Iface> extends org.apache.thrift.TBaseProcessor implements org.apache.thrift.TProcessor {
@@ -213,6 +418,9 @@ public class Mydlp {
     private static <I extends Iface> Map<String,  org.apache.thrift.ProcessFunction<I, ? extends  org.apache.thrift.TBase>> getProcessMap(Map<String,  org.apache.thrift.ProcessFunction<I, ? extends  org.apache.thrift.TBase>> processMap) {
       processMap.put("getMime", new getMime());
       processMap.put("getText", new getText());
+      processMap.put("secloreInitialize", new secloreInitialize());
+      processMap.put("secloreProtect", new secloreProtect());
+      processMap.put("secloreTerminate", new secloreTerminate());
       return processMap;
     }
 
@@ -244,6 +452,54 @@ public class Mydlp {
       protected getText_result getResult(I iface, getText_args args) throws org.apache.thrift.TException {
         getText_result result = new getText_result();
         result.success = iface.getText(args.FileName, args.MimeType, args.Data);
+        return result;
+      }
+    }
+
+    private static class secloreInitialize<I extends Iface> extends org.apache.thrift.ProcessFunction<I, secloreInitialize_args> {
+      public secloreInitialize() {
+        super("secloreInitialize");
+      }
+
+      protected secloreInitialize_args getEmptyArgsInstance() {
+        return new secloreInitialize_args();
+      }
+
+      protected secloreInitialize_result getResult(I iface, secloreInitialize_args args) throws org.apache.thrift.TException {
+        secloreInitialize_result result = new secloreInitialize_result();
+        result.success = iface.secloreInitialize(args.SecloreAppPath, args.SecloreAddress, args.SeclorePort, args.SecloreAppName, args.SecloreHotFolderCabinetId, args.SecloreHotFolderCabinetPassphrase, args.SeclorePoolSize);
+        return result;
+      }
+    }
+
+    private static class secloreProtect<I extends Iface> extends org.apache.thrift.ProcessFunction<I, secloreProtect_args> {
+      public secloreProtect() {
+        super("secloreProtect");
+      }
+
+      protected secloreProtect_args getEmptyArgsInstance() {
+        return new secloreProtect_args();
+      }
+
+      protected secloreProtect_result getResult(I iface, secloreProtect_args args) throws org.apache.thrift.TException {
+        secloreProtect_result result = new secloreProtect_result();
+        result.success = iface.secloreProtect(args.FilePath, args.HotFolderId, args.ActivityComments);
+        return result;
+      }
+    }
+
+    private static class secloreTerminate<I extends Iface> extends org.apache.thrift.ProcessFunction<I, secloreTerminate_args> {
+      public secloreTerminate() {
+        super("secloreTerminate");
+      }
+
+      protected secloreTerminate_args getEmptyArgsInstance() {
+        return new secloreTerminate_args();
+      }
+
+      protected secloreTerminate_result getResult(I iface, secloreTerminate_args args) throws org.apache.thrift.TException {
+        secloreTerminate_result result = new secloreTerminate_result();
+        result.success = iface.secloreTerminate();
         return result;
       }
     }
@@ -1708,6 +1964,2392 @@ public class Mydlp {
         sb.append("null");
       } else {
         org.apache.thrift.TBaseHelper.toString(this.success, sb);
+      }
+      first = false;
+      sb.append(")");
+      return sb.toString();
+    }
+
+    public void validate() throws org.apache.thrift.TException {
+      // check for required fields
+    }
+
+    private void writeObject(java.io.ObjectOutputStream out) throws java.io.IOException {
+      try {
+        write(new org.apache.thrift.protocol.TCompactProtocol(new org.apache.thrift.transport.TIOStreamTransport(out)));
+      } catch (org.apache.thrift.TException te) {
+        throw new java.io.IOException(te);
+      }
+    }
+
+    private void readObject(java.io.ObjectInputStream in) throws java.io.IOException, ClassNotFoundException {
+      try {
+        read(new org.apache.thrift.protocol.TCompactProtocol(new org.apache.thrift.transport.TIOStreamTransport(in)));
+      } catch (org.apache.thrift.TException te) {
+        throw new java.io.IOException(te);
+      }
+    }
+
+  }
+
+  public static class secloreInitialize_args implements org.apache.thrift.TBase<secloreInitialize_args, secloreInitialize_args._Fields>, java.io.Serializable, Cloneable   {
+    private static final org.apache.thrift.protocol.TStruct STRUCT_DESC = new org.apache.thrift.protocol.TStruct("secloreInitialize_args");
+
+    private static final org.apache.thrift.protocol.TField SECLORE_APP_PATH_FIELD_DESC = new org.apache.thrift.protocol.TField("SecloreAppPath", org.apache.thrift.protocol.TType.STRING, (short)1);
+    private static final org.apache.thrift.protocol.TField SECLORE_ADDRESS_FIELD_DESC = new org.apache.thrift.protocol.TField("SecloreAddress", org.apache.thrift.protocol.TType.STRING, (short)2);
+    private static final org.apache.thrift.protocol.TField SECLORE_PORT_FIELD_DESC = new org.apache.thrift.protocol.TField("SeclorePort", org.apache.thrift.protocol.TType.I32, (short)3);
+    private static final org.apache.thrift.protocol.TField SECLORE_APP_NAME_FIELD_DESC = new org.apache.thrift.protocol.TField("SecloreAppName", org.apache.thrift.protocol.TType.STRING, (short)4);
+    private static final org.apache.thrift.protocol.TField SECLORE_HOT_FOLDER_CABINET_ID_FIELD_DESC = new org.apache.thrift.protocol.TField("SecloreHotFolderCabinetId", org.apache.thrift.protocol.TType.I32, (short)5);
+    private static final org.apache.thrift.protocol.TField SECLORE_HOT_FOLDER_CABINET_PASSPHRASE_FIELD_DESC = new org.apache.thrift.protocol.TField("SecloreHotFolderCabinetPassphrase", org.apache.thrift.protocol.TType.STRING, (short)6);
+    private static final org.apache.thrift.protocol.TField SECLORE_POOL_SIZE_FIELD_DESC = new org.apache.thrift.protocol.TField("SeclorePoolSize", org.apache.thrift.protocol.TType.I32, (short)7);
+
+    public String SecloreAppPath; // required
+    public String SecloreAddress; // required
+    public int SeclorePort; // required
+    public String SecloreAppName; // required
+    public int SecloreHotFolderCabinetId; // required
+    public String SecloreHotFolderCabinetPassphrase; // required
+    public int SeclorePoolSize; // required
+
+    /** The set of fields this struct contains, along with convenience methods for finding and manipulating them. */
+    public enum _Fields implements org.apache.thrift.TFieldIdEnum {
+      SECLORE_APP_PATH((short)1, "SecloreAppPath"),
+      SECLORE_ADDRESS((short)2, "SecloreAddress"),
+      SECLORE_PORT((short)3, "SeclorePort"),
+      SECLORE_APP_NAME((short)4, "SecloreAppName"),
+      SECLORE_HOT_FOLDER_CABINET_ID((short)5, "SecloreHotFolderCabinetId"),
+      SECLORE_HOT_FOLDER_CABINET_PASSPHRASE((short)6, "SecloreHotFolderCabinetPassphrase"),
+      SECLORE_POOL_SIZE((short)7, "SeclorePoolSize");
+
+      private static final Map<String, _Fields> byName = new HashMap<String, _Fields>();
+
+      static {
+        for (_Fields field : EnumSet.allOf(_Fields.class)) {
+          byName.put(field.getFieldName(), field);
+        }
+      }
+
+      /**
+       * Find the _Fields constant that matches fieldId, or null if its not found.
+       */
+      public static _Fields findByThriftId(int fieldId) {
+        switch(fieldId) {
+          case 1: // SECLORE_APP_PATH
+            return SECLORE_APP_PATH;
+          case 2: // SECLORE_ADDRESS
+            return SECLORE_ADDRESS;
+          case 3: // SECLORE_PORT
+            return SECLORE_PORT;
+          case 4: // SECLORE_APP_NAME
+            return SECLORE_APP_NAME;
+          case 5: // SECLORE_HOT_FOLDER_CABINET_ID
+            return SECLORE_HOT_FOLDER_CABINET_ID;
+          case 6: // SECLORE_HOT_FOLDER_CABINET_PASSPHRASE
+            return SECLORE_HOT_FOLDER_CABINET_PASSPHRASE;
+          case 7: // SECLORE_POOL_SIZE
+            return SECLORE_POOL_SIZE;
+          default:
+            return null;
+        }
+      }
+
+      /**
+       * Find the _Fields constant that matches fieldId, throwing an exception
+       * if it is not found.
+       */
+      public static _Fields findByThriftIdOrThrow(int fieldId) {
+        _Fields fields = findByThriftId(fieldId);
+        if (fields == null) throw new IllegalArgumentException("Field " + fieldId + " doesn't exist!");
+        return fields;
+      }
+
+      /**
+       * Find the _Fields constant that matches name, or null if its not found.
+       */
+      public static _Fields findByName(String name) {
+        return byName.get(name);
+      }
+
+      private final short _thriftId;
+      private final String _fieldName;
+
+      _Fields(short thriftId, String fieldName) {
+        _thriftId = thriftId;
+        _fieldName = fieldName;
+      }
+
+      public short getThriftFieldId() {
+        return _thriftId;
+      }
+
+      public String getFieldName() {
+        return _fieldName;
+      }
+    }
+
+    // isset id assignments
+    private static final int __SECLOREPORT_ISSET_ID = 0;
+    private static final int __SECLOREHOTFOLDERCABINETID_ISSET_ID = 1;
+    private static final int __SECLOREPOOLSIZE_ISSET_ID = 2;
+    private BitSet __isset_bit_vector = new BitSet(3);
+
+    public static final Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> metaDataMap;
+    static {
+      Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> tmpMap = new EnumMap<_Fields, org.apache.thrift.meta_data.FieldMetaData>(_Fields.class);
+      tmpMap.put(_Fields.SECLORE_APP_PATH, new org.apache.thrift.meta_data.FieldMetaData("SecloreAppPath", org.apache.thrift.TFieldRequirementType.DEFAULT, 
+          new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING)));
+      tmpMap.put(_Fields.SECLORE_ADDRESS, new org.apache.thrift.meta_data.FieldMetaData("SecloreAddress", org.apache.thrift.TFieldRequirementType.DEFAULT, 
+          new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING)));
+      tmpMap.put(_Fields.SECLORE_PORT, new org.apache.thrift.meta_data.FieldMetaData("SeclorePort", org.apache.thrift.TFieldRequirementType.DEFAULT, 
+          new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.I32)));
+      tmpMap.put(_Fields.SECLORE_APP_NAME, new org.apache.thrift.meta_data.FieldMetaData("SecloreAppName", org.apache.thrift.TFieldRequirementType.DEFAULT, 
+          new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING)));
+      tmpMap.put(_Fields.SECLORE_HOT_FOLDER_CABINET_ID, new org.apache.thrift.meta_data.FieldMetaData("SecloreHotFolderCabinetId", org.apache.thrift.TFieldRequirementType.DEFAULT, 
+          new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.I32)));
+      tmpMap.put(_Fields.SECLORE_HOT_FOLDER_CABINET_PASSPHRASE, new org.apache.thrift.meta_data.FieldMetaData("SecloreHotFolderCabinetPassphrase", org.apache.thrift.TFieldRequirementType.DEFAULT, 
+          new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING)));
+      tmpMap.put(_Fields.SECLORE_POOL_SIZE, new org.apache.thrift.meta_data.FieldMetaData("SeclorePoolSize", org.apache.thrift.TFieldRequirementType.DEFAULT, 
+          new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.I32)));
+      metaDataMap = Collections.unmodifiableMap(tmpMap);
+      org.apache.thrift.meta_data.FieldMetaData.addStructMetaDataMap(secloreInitialize_args.class, metaDataMap);
+    }
+
+    public secloreInitialize_args() {
+    }
+
+    public secloreInitialize_args(
+      String SecloreAppPath,
+      String SecloreAddress,
+      int SeclorePort,
+      String SecloreAppName,
+      int SecloreHotFolderCabinetId,
+      String SecloreHotFolderCabinetPassphrase,
+      int SeclorePoolSize)
+    {
+      this();
+      this.SecloreAppPath = SecloreAppPath;
+      this.SecloreAddress = SecloreAddress;
+      this.SeclorePort = SeclorePort;
+      setSeclorePortIsSet(true);
+      this.SecloreAppName = SecloreAppName;
+      this.SecloreHotFolderCabinetId = SecloreHotFolderCabinetId;
+      setSecloreHotFolderCabinetIdIsSet(true);
+      this.SecloreHotFolderCabinetPassphrase = SecloreHotFolderCabinetPassphrase;
+      this.SeclorePoolSize = SeclorePoolSize;
+      setSeclorePoolSizeIsSet(true);
+    }
+
+    /**
+     * Performs a deep copy on <i>other</i>.
+     */
+    public secloreInitialize_args(secloreInitialize_args other) {
+      __isset_bit_vector.clear();
+      __isset_bit_vector.or(other.__isset_bit_vector);
+      if (other.isSetSecloreAppPath()) {
+        this.SecloreAppPath = other.SecloreAppPath;
+      }
+      if (other.isSetSecloreAddress()) {
+        this.SecloreAddress = other.SecloreAddress;
+      }
+      this.SeclorePort = other.SeclorePort;
+      if (other.isSetSecloreAppName()) {
+        this.SecloreAppName = other.SecloreAppName;
+      }
+      this.SecloreHotFolderCabinetId = other.SecloreHotFolderCabinetId;
+      if (other.isSetSecloreHotFolderCabinetPassphrase()) {
+        this.SecloreHotFolderCabinetPassphrase = other.SecloreHotFolderCabinetPassphrase;
+      }
+      this.SeclorePoolSize = other.SeclorePoolSize;
+    }
+
+    public secloreInitialize_args deepCopy() {
+      return new secloreInitialize_args(this);
+    }
+
+    @Override
+    public void clear() {
+      this.SecloreAppPath = null;
+      this.SecloreAddress = null;
+      setSeclorePortIsSet(false);
+      this.SeclorePort = 0;
+      this.SecloreAppName = null;
+      setSecloreHotFolderCabinetIdIsSet(false);
+      this.SecloreHotFolderCabinetId = 0;
+      this.SecloreHotFolderCabinetPassphrase = null;
+      setSeclorePoolSizeIsSet(false);
+      this.SeclorePoolSize = 0;
+    }
+
+    public String getSecloreAppPath() {
+      return this.SecloreAppPath;
+    }
+
+    public secloreInitialize_args setSecloreAppPath(String SecloreAppPath) {
+      this.SecloreAppPath = SecloreAppPath;
+      return this;
+    }
+
+    public void unsetSecloreAppPath() {
+      this.SecloreAppPath = null;
+    }
+
+    /** Returns true if field SecloreAppPath is set (has been assigned a value) and false otherwise */
+    public boolean isSetSecloreAppPath() {
+      return this.SecloreAppPath != null;
+    }
+
+    public void setSecloreAppPathIsSet(boolean value) {
+      if (!value) {
+        this.SecloreAppPath = null;
+      }
+    }
+
+    public String getSecloreAddress() {
+      return this.SecloreAddress;
+    }
+
+    public secloreInitialize_args setSecloreAddress(String SecloreAddress) {
+      this.SecloreAddress = SecloreAddress;
+      return this;
+    }
+
+    public void unsetSecloreAddress() {
+      this.SecloreAddress = null;
+    }
+
+    /** Returns true if field SecloreAddress is set (has been assigned a value) and false otherwise */
+    public boolean isSetSecloreAddress() {
+      return this.SecloreAddress != null;
+    }
+
+    public void setSecloreAddressIsSet(boolean value) {
+      if (!value) {
+        this.SecloreAddress = null;
+      }
+    }
+
+    public int getSeclorePort() {
+      return this.SeclorePort;
+    }
+
+    public secloreInitialize_args setSeclorePort(int SeclorePort) {
+      this.SeclorePort = SeclorePort;
+      setSeclorePortIsSet(true);
+      return this;
+    }
+
+    public void unsetSeclorePort() {
+      __isset_bit_vector.clear(__SECLOREPORT_ISSET_ID);
+    }
+
+    /** Returns true if field SeclorePort is set (has been assigned a value) and false otherwise */
+    public boolean isSetSeclorePort() {
+      return __isset_bit_vector.get(__SECLOREPORT_ISSET_ID);
+    }
+
+    public void setSeclorePortIsSet(boolean value) {
+      __isset_bit_vector.set(__SECLOREPORT_ISSET_ID, value);
+    }
+
+    public String getSecloreAppName() {
+      return this.SecloreAppName;
+    }
+
+    public secloreInitialize_args setSecloreAppName(String SecloreAppName) {
+      this.SecloreAppName = SecloreAppName;
+      return this;
+    }
+
+    public void unsetSecloreAppName() {
+      this.SecloreAppName = null;
+    }
+
+    /** Returns true if field SecloreAppName is set (has been assigned a value) and false otherwise */
+    public boolean isSetSecloreAppName() {
+      return this.SecloreAppName != null;
+    }
+
+    public void setSecloreAppNameIsSet(boolean value) {
+      if (!value) {
+        this.SecloreAppName = null;
+      }
+    }
+
+    public int getSecloreHotFolderCabinetId() {
+      return this.SecloreHotFolderCabinetId;
+    }
+
+    public secloreInitialize_args setSecloreHotFolderCabinetId(int SecloreHotFolderCabinetId) {
+      this.SecloreHotFolderCabinetId = SecloreHotFolderCabinetId;
+      setSecloreHotFolderCabinetIdIsSet(true);
+      return this;
+    }
+
+    public void unsetSecloreHotFolderCabinetId() {
+      __isset_bit_vector.clear(__SECLOREHOTFOLDERCABINETID_ISSET_ID);
+    }
+
+    /** Returns true if field SecloreHotFolderCabinetId is set (has been assigned a value) and false otherwise */
+    public boolean isSetSecloreHotFolderCabinetId() {
+      return __isset_bit_vector.get(__SECLOREHOTFOLDERCABINETID_ISSET_ID);
+    }
+
+    public void setSecloreHotFolderCabinetIdIsSet(boolean value) {
+      __isset_bit_vector.set(__SECLOREHOTFOLDERCABINETID_ISSET_ID, value);
+    }
+
+    public String getSecloreHotFolderCabinetPassphrase() {
+      return this.SecloreHotFolderCabinetPassphrase;
+    }
+
+    public secloreInitialize_args setSecloreHotFolderCabinetPassphrase(String SecloreHotFolderCabinetPassphrase) {
+      this.SecloreHotFolderCabinetPassphrase = SecloreHotFolderCabinetPassphrase;
+      return this;
+    }
+
+    public void unsetSecloreHotFolderCabinetPassphrase() {
+      this.SecloreHotFolderCabinetPassphrase = null;
+    }
+
+    /** Returns true if field SecloreHotFolderCabinetPassphrase is set (has been assigned a value) and false otherwise */
+    public boolean isSetSecloreHotFolderCabinetPassphrase() {
+      return this.SecloreHotFolderCabinetPassphrase != null;
+    }
+
+    public void setSecloreHotFolderCabinetPassphraseIsSet(boolean value) {
+      if (!value) {
+        this.SecloreHotFolderCabinetPassphrase = null;
+      }
+    }
+
+    public int getSeclorePoolSize() {
+      return this.SeclorePoolSize;
+    }
+
+    public secloreInitialize_args setSeclorePoolSize(int SeclorePoolSize) {
+      this.SeclorePoolSize = SeclorePoolSize;
+      setSeclorePoolSizeIsSet(true);
+      return this;
+    }
+
+    public void unsetSeclorePoolSize() {
+      __isset_bit_vector.clear(__SECLOREPOOLSIZE_ISSET_ID);
+    }
+
+    /** Returns true if field SeclorePoolSize is set (has been assigned a value) and false otherwise */
+    public boolean isSetSeclorePoolSize() {
+      return __isset_bit_vector.get(__SECLOREPOOLSIZE_ISSET_ID);
+    }
+
+    public void setSeclorePoolSizeIsSet(boolean value) {
+      __isset_bit_vector.set(__SECLOREPOOLSIZE_ISSET_ID, value);
+    }
+
+    public void setFieldValue(_Fields field, Object value) {
+      switch (field) {
+      case SECLORE_APP_PATH:
+        if (value == null) {
+          unsetSecloreAppPath();
+        } else {
+          setSecloreAppPath((String)value);
+        }
+        break;
+
+      case SECLORE_ADDRESS:
+        if (value == null) {
+          unsetSecloreAddress();
+        } else {
+          setSecloreAddress((String)value);
+        }
+        break;
+
+      case SECLORE_PORT:
+        if (value == null) {
+          unsetSeclorePort();
+        } else {
+          setSeclorePort((Integer)value);
+        }
+        break;
+
+      case SECLORE_APP_NAME:
+        if (value == null) {
+          unsetSecloreAppName();
+        } else {
+          setSecloreAppName((String)value);
+        }
+        break;
+
+      case SECLORE_HOT_FOLDER_CABINET_ID:
+        if (value == null) {
+          unsetSecloreHotFolderCabinetId();
+        } else {
+          setSecloreHotFolderCabinetId((Integer)value);
+        }
+        break;
+
+      case SECLORE_HOT_FOLDER_CABINET_PASSPHRASE:
+        if (value == null) {
+          unsetSecloreHotFolderCabinetPassphrase();
+        } else {
+          setSecloreHotFolderCabinetPassphrase((String)value);
+        }
+        break;
+
+      case SECLORE_POOL_SIZE:
+        if (value == null) {
+          unsetSeclorePoolSize();
+        } else {
+          setSeclorePoolSize((Integer)value);
+        }
+        break;
+
+      }
+    }
+
+    public Object getFieldValue(_Fields field) {
+      switch (field) {
+      case SECLORE_APP_PATH:
+        return getSecloreAppPath();
+
+      case SECLORE_ADDRESS:
+        return getSecloreAddress();
+
+      case SECLORE_PORT:
+        return Integer.valueOf(getSeclorePort());
+
+      case SECLORE_APP_NAME:
+        return getSecloreAppName();
+
+      case SECLORE_HOT_FOLDER_CABINET_ID:
+        return Integer.valueOf(getSecloreHotFolderCabinetId());
+
+      case SECLORE_HOT_FOLDER_CABINET_PASSPHRASE:
+        return getSecloreHotFolderCabinetPassphrase();
+
+      case SECLORE_POOL_SIZE:
+        return Integer.valueOf(getSeclorePoolSize());
+
+      }
+      throw new IllegalStateException();
+    }
+
+    /** Returns true if field corresponding to fieldID is set (has been assigned a value) and false otherwise */
+    public boolean isSet(_Fields field) {
+      if (field == null) {
+        throw new IllegalArgumentException();
+      }
+
+      switch (field) {
+      case SECLORE_APP_PATH:
+        return isSetSecloreAppPath();
+      case SECLORE_ADDRESS:
+        return isSetSecloreAddress();
+      case SECLORE_PORT:
+        return isSetSeclorePort();
+      case SECLORE_APP_NAME:
+        return isSetSecloreAppName();
+      case SECLORE_HOT_FOLDER_CABINET_ID:
+        return isSetSecloreHotFolderCabinetId();
+      case SECLORE_HOT_FOLDER_CABINET_PASSPHRASE:
+        return isSetSecloreHotFolderCabinetPassphrase();
+      case SECLORE_POOL_SIZE:
+        return isSetSeclorePoolSize();
+      }
+      throw new IllegalStateException();
+    }
+
+    @Override
+    public boolean equals(Object that) {
+      if (that == null)
+        return false;
+      if (that instanceof secloreInitialize_args)
+        return this.equals((secloreInitialize_args)that);
+      return false;
+    }
+
+    public boolean equals(secloreInitialize_args that) {
+      if (that == null)
+        return false;
+
+      boolean this_present_SecloreAppPath = true && this.isSetSecloreAppPath();
+      boolean that_present_SecloreAppPath = true && that.isSetSecloreAppPath();
+      if (this_present_SecloreAppPath || that_present_SecloreAppPath) {
+        if (!(this_present_SecloreAppPath && that_present_SecloreAppPath))
+          return false;
+        if (!this.SecloreAppPath.equals(that.SecloreAppPath))
+          return false;
+      }
+
+      boolean this_present_SecloreAddress = true && this.isSetSecloreAddress();
+      boolean that_present_SecloreAddress = true && that.isSetSecloreAddress();
+      if (this_present_SecloreAddress || that_present_SecloreAddress) {
+        if (!(this_present_SecloreAddress && that_present_SecloreAddress))
+          return false;
+        if (!this.SecloreAddress.equals(that.SecloreAddress))
+          return false;
+      }
+
+      boolean this_present_SeclorePort = true;
+      boolean that_present_SeclorePort = true;
+      if (this_present_SeclorePort || that_present_SeclorePort) {
+        if (!(this_present_SeclorePort && that_present_SeclorePort))
+          return false;
+        if (this.SeclorePort != that.SeclorePort)
+          return false;
+      }
+
+      boolean this_present_SecloreAppName = true && this.isSetSecloreAppName();
+      boolean that_present_SecloreAppName = true && that.isSetSecloreAppName();
+      if (this_present_SecloreAppName || that_present_SecloreAppName) {
+        if (!(this_present_SecloreAppName && that_present_SecloreAppName))
+          return false;
+        if (!this.SecloreAppName.equals(that.SecloreAppName))
+          return false;
+      }
+
+      boolean this_present_SecloreHotFolderCabinetId = true;
+      boolean that_present_SecloreHotFolderCabinetId = true;
+      if (this_present_SecloreHotFolderCabinetId || that_present_SecloreHotFolderCabinetId) {
+        if (!(this_present_SecloreHotFolderCabinetId && that_present_SecloreHotFolderCabinetId))
+          return false;
+        if (this.SecloreHotFolderCabinetId != that.SecloreHotFolderCabinetId)
+          return false;
+      }
+
+      boolean this_present_SecloreHotFolderCabinetPassphrase = true && this.isSetSecloreHotFolderCabinetPassphrase();
+      boolean that_present_SecloreHotFolderCabinetPassphrase = true && that.isSetSecloreHotFolderCabinetPassphrase();
+      if (this_present_SecloreHotFolderCabinetPassphrase || that_present_SecloreHotFolderCabinetPassphrase) {
+        if (!(this_present_SecloreHotFolderCabinetPassphrase && that_present_SecloreHotFolderCabinetPassphrase))
+          return false;
+        if (!this.SecloreHotFolderCabinetPassphrase.equals(that.SecloreHotFolderCabinetPassphrase))
+          return false;
+      }
+
+      boolean this_present_SeclorePoolSize = true;
+      boolean that_present_SeclorePoolSize = true;
+      if (this_present_SeclorePoolSize || that_present_SeclorePoolSize) {
+        if (!(this_present_SeclorePoolSize && that_present_SeclorePoolSize))
+          return false;
+        if (this.SeclorePoolSize != that.SeclorePoolSize)
+          return false;
+      }
+
+      return true;
+    }
+
+    @Override
+    public int hashCode() {
+      return 0;
+    }
+
+    public int compareTo(secloreInitialize_args other) {
+      if (!getClass().equals(other.getClass())) {
+        return getClass().getName().compareTo(other.getClass().getName());
+      }
+
+      int lastComparison = 0;
+      secloreInitialize_args typedOther = (secloreInitialize_args)other;
+
+      lastComparison = Boolean.valueOf(isSetSecloreAppPath()).compareTo(typedOther.isSetSecloreAppPath());
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+      if (isSetSecloreAppPath()) {
+        lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.SecloreAppPath, typedOther.SecloreAppPath);
+        if (lastComparison != 0) {
+          return lastComparison;
+        }
+      }
+      lastComparison = Boolean.valueOf(isSetSecloreAddress()).compareTo(typedOther.isSetSecloreAddress());
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+      if (isSetSecloreAddress()) {
+        lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.SecloreAddress, typedOther.SecloreAddress);
+        if (lastComparison != 0) {
+          return lastComparison;
+        }
+      }
+      lastComparison = Boolean.valueOf(isSetSeclorePort()).compareTo(typedOther.isSetSeclorePort());
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+      if (isSetSeclorePort()) {
+        lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.SeclorePort, typedOther.SeclorePort);
+        if (lastComparison != 0) {
+          return lastComparison;
+        }
+      }
+      lastComparison = Boolean.valueOf(isSetSecloreAppName()).compareTo(typedOther.isSetSecloreAppName());
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+      if (isSetSecloreAppName()) {
+        lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.SecloreAppName, typedOther.SecloreAppName);
+        if (lastComparison != 0) {
+          return lastComparison;
+        }
+      }
+      lastComparison = Boolean.valueOf(isSetSecloreHotFolderCabinetId()).compareTo(typedOther.isSetSecloreHotFolderCabinetId());
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+      if (isSetSecloreHotFolderCabinetId()) {
+        lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.SecloreHotFolderCabinetId, typedOther.SecloreHotFolderCabinetId);
+        if (lastComparison != 0) {
+          return lastComparison;
+        }
+      }
+      lastComparison = Boolean.valueOf(isSetSecloreHotFolderCabinetPassphrase()).compareTo(typedOther.isSetSecloreHotFolderCabinetPassphrase());
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+      if (isSetSecloreHotFolderCabinetPassphrase()) {
+        lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.SecloreHotFolderCabinetPassphrase, typedOther.SecloreHotFolderCabinetPassphrase);
+        if (lastComparison != 0) {
+          return lastComparison;
+        }
+      }
+      lastComparison = Boolean.valueOf(isSetSeclorePoolSize()).compareTo(typedOther.isSetSeclorePoolSize());
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+      if (isSetSeclorePoolSize()) {
+        lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.SeclorePoolSize, typedOther.SeclorePoolSize);
+        if (lastComparison != 0) {
+          return lastComparison;
+        }
+      }
+      return 0;
+    }
+
+    public _Fields fieldForId(int fieldId) {
+      return _Fields.findByThriftId(fieldId);
+    }
+
+    public void read(org.apache.thrift.protocol.TProtocol iprot) throws org.apache.thrift.TException {
+      org.apache.thrift.protocol.TField field;
+      iprot.readStructBegin();
+      while (true)
+      {
+        field = iprot.readFieldBegin();
+        if (field.type == org.apache.thrift.protocol.TType.STOP) { 
+          break;
+        }
+        switch (field.id) {
+          case 1: // SECLORE_APP_PATH
+            if (field.type == org.apache.thrift.protocol.TType.STRING) {
+              this.SecloreAppPath = iprot.readString();
+            } else { 
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, field.type);
+            }
+            break;
+          case 2: // SECLORE_ADDRESS
+            if (field.type == org.apache.thrift.protocol.TType.STRING) {
+              this.SecloreAddress = iprot.readString();
+            } else { 
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, field.type);
+            }
+            break;
+          case 3: // SECLORE_PORT
+            if (field.type == org.apache.thrift.protocol.TType.I32) {
+              this.SeclorePort = iprot.readI32();
+              setSeclorePortIsSet(true);
+            } else { 
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, field.type);
+            }
+            break;
+          case 4: // SECLORE_APP_NAME
+            if (field.type == org.apache.thrift.protocol.TType.STRING) {
+              this.SecloreAppName = iprot.readString();
+            } else { 
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, field.type);
+            }
+            break;
+          case 5: // SECLORE_HOT_FOLDER_CABINET_ID
+            if (field.type == org.apache.thrift.protocol.TType.I32) {
+              this.SecloreHotFolderCabinetId = iprot.readI32();
+              setSecloreHotFolderCabinetIdIsSet(true);
+            } else { 
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, field.type);
+            }
+            break;
+          case 6: // SECLORE_HOT_FOLDER_CABINET_PASSPHRASE
+            if (field.type == org.apache.thrift.protocol.TType.STRING) {
+              this.SecloreHotFolderCabinetPassphrase = iprot.readString();
+            } else { 
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, field.type);
+            }
+            break;
+          case 7: // SECLORE_POOL_SIZE
+            if (field.type == org.apache.thrift.protocol.TType.I32) {
+              this.SeclorePoolSize = iprot.readI32();
+              setSeclorePoolSizeIsSet(true);
+            } else { 
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, field.type);
+            }
+            break;
+          default:
+            org.apache.thrift.protocol.TProtocolUtil.skip(iprot, field.type);
+        }
+        iprot.readFieldEnd();
+      }
+      iprot.readStructEnd();
+
+      // check for required fields of primitive type, which can't be checked in the validate method
+      validate();
+    }
+
+    public void write(org.apache.thrift.protocol.TProtocol oprot) throws org.apache.thrift.TException {
+      validate();
+
+      oprot.writeStructBegin(STRUCT_DESC);
+      if (this.SecloreAppPath != null) {
+        oprot.writeFieldBegin(SECLORE_APP_PATH_FIELD_DESC);
+        oprot.writeString(this.SecloreAppPath);
+        oprot.writeFieldEnd();
+      }
+      if (this.SecloreAddress != null) {
+        oprot.writeFieldBegin(SECLORE_ADDRESS_FIELD_DESC);
+        oprot.writeString(this.SecloreAddress);
+        oprot.writeFieldEnd();
+      }
+      oprot.writeFieldBegin(SECLORE_PORT_FIELD_DESC);
+      oprot.writeI32(this.SeclorePort);
+      oprot.writeFieldEnd();
+      if (this.SecloreAppName != null) {
+        oprot.writeFieldBegin(SECLORE_APP_NAME_FIELD_DESC);
+        oprot.writeString(this.SecloreAppName);
+        oprot.writeFieldEnd();
+      }
+      oprot.writeFieldBegin(SECLORE_HOT_FOLDER_CABINET_ID_FIELD_DESC);
+      oprot.writeI32(this.SecloreHotFolderCabinetId);
+      oprot.writeFieldEnd();
+      if (this.SecloreHotFolderCabinetPassphrase != null) {
+        oprot.writeFieldBegin(SECLORE_HOT_FOLDER_CABINET_PASSPHRASE_FIELD_DESC);
+        oprot.writeString(this.SecloreHotFolderCabinetPassphrase);
+        oprot.writeFieldEnd();
+      }
+      oprot.writeFieldBegin(SECLORE_POOL_SIZE_FIELD_DESC);
+      oprot.writeI32(this.SeclorePoolSize);
+      oprot.writeFieldEnd();
+      oprot.writeFieldStop();
+      oprot.writeStructEnd();
+    }
+
+    @Override
+    public String toString() {
+      StringBuilder sb = new StringBuilder("secloreInitialize_args(");
+      boolean first = true;
+
+      sb.append("SecloreAppPath:");
+      if (this.SecloreAppPath == null) {
+        sb.append("null");
+      } else {
+        sb.append(this.SecloreAppPath);
+      }
+      first = false;
+      if (!first) sb.append(", ");
+      sb.append("SecloreAddress:");
+      if (this.SecloreAddress == null) {
+        sb.append("null");
+      } else {
+        sb.append(this.SecloreAddress);
+      }
+      first = false;
+      if (!first) sb.append(", ");
+      sb.append("SeclorePort:");
+      sb.append(this.SeclorePort);
+      first = false;
+      if (!first) sb.append(", ");
+      sb.append("SecloreAppName:");
+      if (this.SecloreAppName == null) {
+        sb.append("null");
+      } else {
+        sb.append(this.SecloreAppName);
+      }
+      first = false;
+      if (!first) sb.append(", ");
+      sb.append("SecloreHotFolderCabinetId:");
+      sb.append(this.SecloreHotFolderCabinetId);
+      first = false;
+      if (!first) sb.append(", ");
+      sb.append("SecloreHotFolderCabinetPassphrase:");
+      if (this.SecloreHotFolderCabinetPassphrase == null) {
+        sb.append("null");
+      } else {
+        sb.append(this.SecloreHotFolderCabinetPassphrase);
+      }
+      first = false;
+      if (!first) sb.append(", ");
+      sb.append("SeclorePoolSize:");
+      sb.append(this.SeclorePoolSize);
+      first = false;
+      sb.append(")");
+      return sb.toString();
+    }
+
+    public void validate() throws org.apache.thrift.TException {
+      // check for required fields
+    }
+
+    private void writeObject(java.io.ObjectOutputStream out) throws java.io.IOException {
+      try {
+        write(new org.apache.thrift.protocol.TCompactProtocol(new org.apache.thrift.transport.TIOStreamTransport(out)));
+      } catch (org.apache.thrift.TException te) {
+        throw new java.io.IOException(te);
+      }
+    }
+
+    private void readObject(java.io.ObjectInputStream in) throws java.io.IOException, ClassNotFoundException {
+      try {
+        // it doesn't seem like you should have to do this, but java serialization is wacky, and doesn't call the default constructor.
+        __isset_bit_vector = new BitSet(1);
+        read(new org.apache.thrift.protocol.TCompactProtocol(new org.apache.thrift.transport.TIOStreamTransport(in)));
+      } catch (org.apache.thrift.TException te) {
+        throw new java.io.IOException(te);
+      }
+    }
+
+  }
+
+  public static class secloreInitialize_result implements org.apache.thrift.TBase<secloreInitialize_result, secloreInitialize_result._Fields>, java.io.Serializable, Cloneable   {
+    private static final org.apache.thrift.protocol.TStruct STRUCT_DESC = new org.apache.thrift.protocol.TStruct("secloreInitialize_result");
+
+    private static final org.apache.thrift.protocol.TField SUCCESS_FIELD_DESC = new org.apache.thrift.protocol.TField("success", org.apache.thrift.protocol.TType.STRING, (short)0);
+
+    public String success; // required
+
+    /** The set of fields this struct contains, along with convenience methods for finding and manipulating them. */
+    public enum _Fields implements org.apache.thrift.TFieldIdEnum {
+      SUCCESS((short)0, "success");
+
+      private static final Map<String, _Fields> byName = new HashMap<String, _Fields>();
+
+      static {
+        for (_Fields field : EnumSet.allOf(_Fields.class)) {
+          byName.put(field.getFieldName(), field);
+        }
+      }
+
+      /**
+       * Find the _Fields constant that matches fieldId, or null if its not found.
+       */
+      public static _Fields findByThriftId(int fieldId) {
+        switch(fieldId) {
+          case 0: // SUCCESS
+            return SUCCESS;
+          default:
+            return null;
+        }
+      }
+
+      /**
+       * Find the _Fields constant that matches fieldId, throwing an exception
+       * if it is not found.
+       */
+      public static _Fields findByThriftIdOrThrow(int fieldId) {
+        _Fields fields = findByThriftId(fieldId);
+        if (fields == null) throw new IllegalArgumentException("Field " + fieldId + " doesn't exist!");
+        return fields;
+      }
+
+      /**
+       * Find the _Fields constant that matches name, or null if its not found.
+       */
+      public static _Fields findByName(String name) {
+        return byName.get(name);
+      }
+
+      private final short _thriftId;
+      private final String _fieldName;
+
+      _Fields(short thriftId, String fieldName) {
+        _thriftId = thriftId;
+        _fieldName = fieldName;
+      }
+
+      public short getThriftFieldId() {
+        return _thriftId;
+      }
+
+      public String getFieldName() {
+        return _fieldName;
+      }
+    }
+
+    // isset id assignments
+
+    public static final Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> metaDataMap;
+    static {
+      Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> tmpMap = new EnumMap<_Fields, org.apache.thrift.meta_data.FieldMetaData>(_Fields.class);
+      tmpMap.put(_Fields.SUCCESS, new org.apache.thrift.meta_data.FieldMetaData("success", org.apache.thrift.TFieldRequirementType.DEFAULT, 
+          new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING)));
+      metaDataMap = Collections.unmodifiableMap(tmpMap);
+      org.apache.thrift.meta_data.FieldMetaData.addStructMetaDataMap(secloreInitialize_result.class, metaDataMap);
+    }
+
+    public secloreInitialize_result() {
+    }
+
+    public secloreInitialize_result(
+      String success)
+    {
+      this();
+      this.success = success;
+    }
+
+    /**
+     * Performs a deep copy on <i>other</i>.
+     */
+    public secloreInitialize_result(secloreInitialize_result other) {
+      if (other.isSetSuccess()) {
+        this.success = other.success;
+      }
+    }
+
+    public secloreInitialize_result deepCopy() {
+      return new secloreInitialize_result(this);
+    }
+
+    @Override
+    public void clear() {
+      this.success = null;
+    }
+
+    public String getSuccess() {
+      return this.success;
+    }
+
+    public secloreInitialize_result setSuccess(String success) {
+      this.success = success;
+      return this;
+    }
+
+    public void unsetSuccess() {
+      this.success = null;
+    }
+
+    /** Returns true if field success is set (has been assigned a value) and false otherwise */
+    public boolean isSetSuccess() {
+      return this.success != null;
+    }
+
+    public void setSuccessIsSet(boolean value) {
+      if (!value) {
+        this.success = null;
+      }
+    }
+
+    public void setFieldValue(_Fields field, Object value) {
+      switch (field) {
+      case SUCCESS:
+        if (value == null) {
+          unsetSuccess();
+        } else {
+          setSuccess((String)value);
+        }
+        break;
+
+      }
+    }
+
+    public Object getFieldValue(_Fields field) {
+      switch (field) {
+      case SUCCESS:
+        return getSuccess();
+
+      }
+      throw new IllegalStateException();
+    }
+
+    /** Returns true if field corresponding to fieldID is set (has been assigned a value) and false otherwise */
+    public boolean isSet(_Fields field) {
+      if (field == null) {
+        throw new IllegalArgumentException();
+      }
+
+      switch (field) {
+      case SUCCESS:
+        return isSetSuccess();
+      }
+      throw new IllegalStateException();
+    }
+
+    @Override
+    public boolean equals(Object that) {
+      if (that == null)
+        return false;
+      if (that instanceof secloreInitialize_result)
+        return this.equals((secloreInitialize_result)that);
+      return false;
+    }
+
+    public boolean equals(secloreInitialize_result that) {
+      if (that == null)
+        return false;
+
+      boolean this_present_success = true && this.isSetSuccess();
+      boolean that_present_success = true && that.isSetSuccess();
+      if (this_present_success || that_present_success) {
+        if (!(this_present_success && that_present_success))
+          return false;
+        if (!this.success.equals(that.success))
+          return false;
+      }
+
+      return true;
+    }
+
+    @Override
+    public int hashCode() {
+      return 0;
+    }
+
+    public int compareTo(secloreInitialize_result other) {
+      if (!getClass().equals(other.getClass())) {
+        return getClass().getName().compareTo(other.getClass().getName());
+      }
+
+      int lastComparison = 0;
+      secloreInitialize_result typedOther = (secloreInitialize_result)other;
+
+      lastComparison = Boolean.valueOf(isSetSuccess()).compareTo(typedOther.isSetSuccess());
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+      if (isSetSuccess()) {
+        lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.success, typedOther.success);
+        if (lastComparison != 0) {
+          return lastComparison;
+        }
+      }
+      return 0;
+    }
+
+    public _Fields fieldForId(int fieldId) {
+      return _Fields.findByThriftId(fieldId);
+    }
+
+    public void read(org.apache.thrift.protocol.TProtocol iprot) throws org.apache.thrift.TException {
+      org.apache.thrift.protocol.TField field;
+      iprot.readStructBegin();
+      while (true)
+      {
+        field = iprot.readFieldBegin();
+        if (field.type == org.apache.thrift.protocol.TType.STOP) { 
+          break;
+        }
+        switch (field.id) {
+          case 0: // SUCCESS
+            if (field.type == org.apache.thrift.protocol.TType.STRING) {
+              this.success = iprot.readString();
+            } else { 
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, field.type);
+            }
+            break;
+          default:
+            org.apache.thrift.protocol.TProtocolUtil.skip(iprot, field.type);
+        }
+        iprot.readFieldEnd();
+      }
+      iprot.readStructEnd();
+
+      // check for required fields of primitive type, which can't be checked in the validate method
+      validate();
+    }
+
+    public void write(org.apache.thrift.protocol.TProtocol oprot) throws org.apache.thrift.TException {
+      oprot.writeStructBegin(STRUCT_DESC);
+
+      if (this.isSetSuccess()) {
+        oprot.writeFieldBegin(SUCCESS_FIELD_DESC);
+        oprot.writeString(this.success);
+        oprot.writeFieldEnd();
+      }
+      oprot.writeFieldStop();
+      oprot.writeStructEnd();
+    }
+
+    @Override
+    public String toString() {
+      StringBuilder sb = new StringBuilder("secloreInitialize_result(");
+      boolean first = true;
+
+      sb.append("success:");
+      if (this.success == null) {
+        sb.append("null");
+      } else {
+        sb.append(this.success);
+      }
+      first = false;
+      sb.append(")");
+      return sb.toString();
+    }
+
+    public void validate() throws org.apache.thrift.TException {
+      // check for required fields
+    }
+
+    private void writeObject(java.io.ObjectOutputStream out) throws java.io.IOException {
+      try {
+        write(new org.apache.thrift.protocol.TCompactProtocol(new org.apache.thrift.transport.TIOStreamTransport(out)));
+      } catch (org.apache.thrift.TException te) {
+        throw new java.io.IOException(te);
+      }
+    }
+
+    private void readObject(java.io.ObjectInputStream in) throws java.io.IOException, ClassNotFoundException {
+      try {
+        read(new org.apache.thrift.protocol.TCompactProtocol(new org.apache.thrift.transport.TIOStreamTransport(in)));
+      } catch (org.apache.thrift.TException te) {
+        throw new java.io.IOException(te);
+      }
+    }
+
+  }
+
+  public static class secloreProtect_args implements org.apache.thrift.TBase<secloreProtect_args, secloreProtect_args._Fields>, java.io.Serializable, Cloneable   {
+    private static final org.apache.thrift.protocol.TStruct STRUCT_DESC = new org.apache.thrift.protocol.TStruct("secloreProtect_args");
+
+    private static final org.apache.thrift.protocol.TField FILE_PATH_FIELD_DESC = new org.apache.thrift.protocol.TField("FilePath", org.apache.thrift.protocol.TType.STRING, (short)1);
+    private static final org.apache.thrift.protocol.TField HOT_FOLDER_ID_FIELD_DESC = new org.apache.thrift.protocol.TField("HotFolderId", org.apache.thrift.protocol.TType.I32, (short)2);
+    private static final org.apache.thrift.protocol.TField ACTIVITY_COMMENTS_FIELD_DESC = new org.apache.thrift.protocol.TField("ActivityComments", org.apache.thrift.protocol.TType.STRING, (short)3);
+
+    public String FilePath; // required
+    public int HotFolderId; // required
+    public String ActivityComments; // required
+
+    /** The set of fields this struct contains, along with convenience methods for finding and manipulating them. */
+    public enum _Fields implements org.apache.thrift.TFieldIdEnum {
+      FILE_PATH((short)1, "FilePath"),
+      HOT_FOLDER_ID((short)2, "HotFolderId"),
+      ACTIVITY_COMMENTS((short)3, "ActivityComments");
+
+      private static final Map<String, _Fields> byName = new HashMap<String, _Fields>();
+
+      static {
+        for (_Fields field : EnumSet.allOf(_Fields.class)) {
+          byName.put(field.getFieldName(), field);
+        }
+      }
+
+      /**
+       * Find the _Fields constant that matches fieldId, or null if its not found.
+       */
+      public static _Fields findByThriftId(int fieldId) {
+        switch(fieldId) {
+          case 1: // FILE_PATH
+            return FILE_PATH;
+          case 2: // HOT_FOLDER_ID
+            return HOT_FOLDER_ID;
+          case 3: // ACTIVITY_COMMENTS
+            return ACTIVITY_COMMENTS;
+          default:
+            return null;
+        }
+      }
+
+      /**
+       * Find the _Fields constant that matches fieldId, throwing an exception
+       * if it is not found.
+       */
+      public static _Fields findByThriftIdOrThrow(int fieldId) {
+        _Fields fields = findByThriftId(fieldId);
+        if (fields == null) throw new IllegalArgumentException("Field " + fieldId + " doesn't exist!");
+        return fields;
+      }
+
+      /**
+       * Find the _Fields constant that matches name, or null if its not found.
+       */
+      public static _Fields findByName(String name) {
+        return byName.get(name);
+      }
+
+      private final short _thriftId;
+      private final String _fieldName;
+
+      _Fields(short thriftId, String fieldName) {
+        _thriftId = thriftId;
+        _fieldName = fieldName;
+      }
+
+      public short getThriftFieldId() {
+        return _thriftId;
+      }
+
+      public String getFieldName() {
+        return _fieldName;
+      }
+    }
+
+    // isset id assignments
+    private static final int __HOTFOLDERID_ISSET_ID = 0;
+    private BitSet __isset_bit_vector = new BitSet(1);
+
+    public static final Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> metaDataMap;
+    static {
+      Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> tmpMap = new EnumMap<_Fields, org.apache.thrift.meta_data.FieldMetaData>(_Fields.class);
+      tmpMap.put(_Fields.FILE_PATH, new org.apache.thrift.meta_data.FieldMetaData("FilePath", org.apache.thrift.TFieldRequirementType.DEFAULT, 
+          new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING)));
+      tmpMap.put(_Fields.HOT_FOLDER_ID, new org.apache.thrift.meta_data.FieldMetaData("HotFolderId", org.apache.thrift.TFieldRequirementType.DEFAULT, 
+          new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.I32)));
+      tmpMap.put(_Fields.ACTIVITY_COMMENTS, new org.apache.thrift.meta_data.FieldMetaData("ActivityComments", org.apache.thrift.TFieldRequirementType.DEFAULT, 
+          new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING)));
+      metaDataMap = Collections.unmodifiableMap(tmpMap);
+      org.apache.thrift.meta_data.FieldMetaData.addStructMetaDataMap(secloreProtect_args.class, metaDataMap);
+    }
+
+    public secloreProtect_args() {
+    }
+
+    public secloreProtect_args(
+      String FilePath,
+      int HotFolderId,
+      String ActivityComments)
+    {
+      this();
+      this.FilePath = FilePath;
+      this.HotFolderId = HotFolderId;
+      setHotFolderIdIsSet(true);
+      this.ActivityComments = ActivityComments;
+    }
+
+    /**
+     * Performs a deep copy on <i>other</i>.
+     */
+    public secloreProtect_args(secloreProtect_args other) {
+      __isset_bit_vector.clear();
+      __isset_bit_vector.or(other.__isset_bit_vector);
+      if (other.isSetFilePath()) {
+        this.FilePath = other.FilePath;
+      }
+      this.HotFolderId = other.HotFolderId;
+      if (other.isSetActivityComments()) {
+        this.ActivityComments = other.ActivityComments;
+      }
+    }
+
+    public secloreProtect_args deepCopy() {
+      return new secloreProtect_args(this);
+    }
+
+    @Override
+    public void clear() {
+      this.FilePath = null;
+      setHotFolderIdIsSet(false);
+      this.HotFolderId = 0;
+      this.ActivityComments = null;
+    }
+
+    public String getFilePath() {
+      return this.FilePath;
+    }
+
+    public secloreProtect_args setFilePath(String FilePath) {
+      this.FilePath = FilePath;
+      return this;
+    }
+
+    public void unsetFilePath() {
+      this.FilePath = null;
+    }
+
+    /** Returns true if field FilePath is set (has been assigned a value) and false otherwise */
+    public boolean isSetFilePath() {
+      return this.FilePath != null;
+    }
+
+    public void setFilePathIsSet(boolean value) {
+      if (!value) {
+        this.FilePath = null;
+      }
+    }
+
+    public int getHotFolderId() {
+      return this.HotFolderId;
+    }
+
+    public secloreProtect_args setHotFolderId(int HotFolderId) {
+      this.HotFolderId = HotFolderId;
+      setHotFolderIdIsSet(true);
+      return this;
+    }
+
+    public void unsetHotFolderId() {
+      __isset_bit_vector.clear(__HOTFOLDERID_ISSET_ID);
+    }
+
+    /** Returns true if field HotFolderId is set (has been assigned a value) and false otherwise */
+    public boolean isSetHotFolderId() {
+      return __isset_bit_vector.get(__HOTFOLDERID_ISSET_ID);
+    }
+
+    public void setHotFolderIdIsSet(boolean value) {
+      __isset_bit_vector.set(__HOTFOLDERID_ISSET_ID, value);
+    }
+
+    public String getActivityComments() {
+      return this.ActivityComments;
+    }
+
+    public secloreProtect_args setActivityComments(String ActivityComments) {
+      this.ActivityComments = ActivityComments;
+      return this;
+    }
+
+    public void unsetActivityComments() {
+      this.ActivityComments = null;
+    }
+
+    /** Returns true if field ActivityComments is set (has been assigned a value) and false otherwise */
+    public boolean isSetActivityComments() {
+      return this.ActivityComments != null;
+    }
+
+    public void setActivityCommentsIsSet(boolean value) {
+      if (!value) {
+        this.ActivityComments = null;
+      }
+    }
+
+    public void setFieldValue(_Fields field, Object value) {
+      switch (field) {
+      case FILE_PATH:
+        if (value == null) {
+          unsetFilePath();
+        } else {
+          setFilePath((String)value);
+        }
+        break;
+
+      case HOT_FOLDER_ID:
+        if (value == null) {
+          unsetHotFolderId();
+        } else {
+          setHotFolderId((Integer)value);
+        }
+        break;
+
+      case ACTIVITY_COMMENTS:
+        if (value == null) {
+          unsetActivityComments();
+        } else {
+          setActivityComments((String)value);
+        }
+        break;
+
+      }
+    }
+
+    public Object getFieldValue(_Fields field) {
+      switch (field) {
+      case FILE_PATH:
+        return getFilePath();
+
+      case HOT_FOLDER_ID:
+        return Integer.valueOf(getHotFolderId());
+
+      case ACTIVITY_COMMENTS:
+        return getActivityComments();
+
+      }
+      throw new IllegalStateException();
+    }
+
+    /** Returns true if field corresponding to fieldID is set (has been assigned a value) and false otherwise */
+    public boolean isSet(_Fields field) {
+      if (field == null) {
+        throw new IllegalArgumentException();
+      }
+
+      switch (field) {
+      case FILE_PATH:
+        return isSetFilePath();
+      case HOT_FOLDER_ID:
+        return isSetHotFolderId();
+      case ACTIVITY_COMMENTS:
+        return isSetActivityComments();
+      }
+      throw new IllegalStateException();
+    }
+
+    @Override
+    public boolean equals(Object that) {
+      if (that == null)
+        return false;
+      if (that instanceof secloreProtect_args)
+        return this.equals((secloreProtect_args)that);
+      return false;
+    }
+
+    public boolean equals(secloreProtect_args that) {
+      if (that == null)
+        return false;
+
+      boolean this_present_FilePath = true && this.isSetFilePath();
+      boolean that_present_FilePath = true && that.isSetFilePath();
+      if (this_present_FilePath || that_present_FilePath) {
+        if (!(this_present_FilePath && that_present_FilePath))
+          return false;
+        if (!this.FilePath.equals(that.FilePath))
+          return false;
+      }
+
+      boolean this_present_HotFolderId = true;
+      boolean that_present_HotFolderId = true;
+      if (this_present_HotFolderId || that_present_HotFolderId) {
+        if (!(this_present_HotFolderId && that_present_HotFolderId))
+          return false;
+        if (this.HotFolderId != that.HotFolderId)
+          return false;
+      }
+
+      boolean this_present_ActivityComments = true && this.isSetActivityComments();
+      boolean that_present_ActivityComments = true && that.isSetActivityComments();
+      if (this_present_ActivityComments || that_present_ActivityComments) {
+        if (!(this_present_ActivityComments && that_present_ActivityComments))
+          return false;
+        if (!this.ActivityComments.equals(that.ActivityComments))
+          return false;
+      }
+
+      return true;
+    }
+
+    @Override
+    public int hashCode() {
+      return 0;
+    }
+
+    public int compareTo(secloreProtect_args other) {
+      if (!getClass().equals(other.getClass())) {
+        return getClass().getName().compareTo(other.getClass().getName());
+      }
+
+      int lastComparison = 0;
+      secloreProtect_args typedOther = (secloreProtect_args)other;
+
+      lastComparison = Boolean.valueOf(isSetFilePath()).compareTo(typedOther.isSetFilePath());
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+      if (isSetFilePath()) {
+        lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.FilePath, typedOther.FilePath);
+        if (lastComparison != 0) {
+          return lastComparison;
+        }
+      }
+      lastComparison = Boolean.valueOf(isSetHotFolderId()).compareTo(typedOther.isSetHotFolderId());
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+      if (isSetHotFolderId()) {
+        lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.HotFolderId, typedOther.HotFolderId);
+        if (lastComparison != 0) {
+          return lastComparison;
+        }
+      }
+      lastComparison = Boolean.valueOf(isSetActivityComments()).compareTo(typedOther.isSetActivityComments());
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+      if (isSetActivityComments()) {
+        lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.ActivityComments, typedOther.ActivityComments);
+        if (lastComparison != 0) {
+          return lastComparison;
+        }
+      }
+      return 0;
+    }
+
+    public _Fields fieldForId(int fieldId) {
+      return _Fields.findByThriftId(fieldId);
+    }
+
+    public void read(org.apache.thrift.protocol.TProtocol iprot) throws org.apache.thrift.TException {
+      org.apache.thrift.protocol.TField field;
+      iprot.readStructBegin();
+      while (true)
+      {
+        field = iprot.readFieldBegin();
+        if (field.type == org.apache.thrift.protocol.TType.STOP) { 
+          break;
+        }
+        switch (field.id) {
+          case 1: // FILE_PATH
+            if (field.type == org.apache.thrift.protocol.TType.STRING) {
+              this.FilePath = iprot.readString();
+            } else { 
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, field.type);
+            }
+            break;
+          case 2: // HOT_FOLDER_ID
+            if (field.type == org.apache.thrift.protocol.TType.I32) {
+              this.HotFolderId = iprot.readI32();
+              setHotFolderIdIsSet(true);
+            } else { 
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, field.type);
+            }
+            break;
+          case 3: // ACTIVITY_COMMENTS
+            if (field.type == org.apache.thrift.protocol.TType.STRING) {
+              this.ActivityComments = iprot.readString();
+            } else { 
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, field.type);
+            }
+            break;
+          default:
+            org.apache.thrift.protocol.TProtocolUtil.skip(iprot, field.type);
+        }
+        iprot.readFieldEnd();
+      }
+      iprot.readStructEnd();
+
+      // check for required fields of primitive type, which can't be checked in the validate method
+      validate();
+    }
+
+    public void write(org.apache.thrift.protocol.TProtocol oprot) throws org.apache.thrift.TException {
+      validate();
+
+      oprot.writeStructBegin(STRUCT_DESC);
+      if (this.FilePath != null) {
+        oprot.writeFieldBegin(FILE_PATH_FIELD_DESC);
+        oprot.writeString(this.FilePath);
+        oprot.writeFieldEnd();
+      }
+      oprot.writeFieldBegin(HOT_FOLDER_ID_FIELD_DESC);
+      oprot.writeI32(this.HotFolderId);
+      oprot.writeFieldEnd();
+      if (this.ActivityComments != null) {
+        oprot.writeFieldBegin(ACTIVITY_COMMENTS_FIELD_DESC);
+        oprot.writeString(this.ActivityComments);
+        oprot.writeFieldEnd();
+      }
+      oprot.writeFieldStop();
+      oprot.writeStructEnd();
+    }
+
+    @Override
+    public String toString() {
+      StringBuilder sb = new StringBuilder("secloreProtect_args(");
+      boolean first = true;
+
+      sb.append("FilePath:");
+      if (this.FilePath == null) {
+        sb.append("null");
+      } else {
+        sb.append(this.FilePath);
+      }
+      first = false;
+      if (!first) sb.append(", ");
+      sb.append("HotFolderId:");
+      sb.append(this.HotFolderId);
+      first = false;
+      if (!first) sb.append(", ");
+      sb.append("ActivityComments:");
+      if (this.ActivityComments == null) {
+        sb.append("null");
+      } else {
+        sb.append(this.ActivityComments);
+      }
+      first = false;
+      sb.append(")");
+      return sb.toString();
+    }
+
+    public void validate() throws org.apache.thrift.TException {
+      // check for required fields
+    }
+
+    private void writeObject(java.io.ObjectOutputStream out) throws java.io.IOException {
+      try {
+        write(new org.apache.thrift.protocol.TCompactProtocol(new org.apache.thrift.transport.TIOStreamTransport(out)));
+      } catch (org.apache.thrift.TException te) {
+        throw new java.io.IOException(te);
+      }
+    }
+
+    private void readObject(java.io.ObjectInputStream in) throws java.io.IOException, ClassNotFoundException {
+      try {
+        // it doesn't seem like you should have to do this, but java serialization is wacky, and doesn't call the default constructor.
+        __isset_bit_vector = new BitSet(1);
+        read(new org.apache.thrift.protocol.TCompactProtocol(new org.apache.thrift.transport.TIOStreamTransport(in)));
+      } catch (org.apache.thrift.TException te) {
+        throw new java.io.IOException(te);
+      }
+    }
+
+  }
+
+  public static class secloreProtect_result implements org.apache.thrift.TBase<secloreProtect_result, secloreProtect_result._Fields>, java.io.Serializable, Cloneable   {
+    private static final org.apache.thrift.protocol.TStruct STRUCT_DESC = new org.apache.thrift.protocol.TStruct("secloreProtect_result");
+
+    private static final org.apache.thrift.protocol.TField SUCCESS_FIELD_DESC = new org.apache.thrift.protocol.TField("success", org.apache.thrift.protocol.TType.STRING, (short)0);
+
+    public String success; // required
+
+    /** The set of fields this struct contains, along with convenience methods for finding and manipulating them. */
+    public enum _Fields implements org.apache.thrift.TFieldIdEnum {
+      SUCCESS((short)0, "success");
+
+      private static final Map<String, _Fields> byName = new HashMap<String, _Fields>();
+
+      static {
+        for (_Fields field : EnumSet.allOf(_Fields.class)) {
+          byName.put(field.getFieldName(), field);
+        }
+      }
+
+      /**
+       * Find the _Fields constant that matches fieldId, or null if its not found.
+       */
+      public static _Fields findByThriftId(int fieldId) {
+        switch(fieldId) {
+          case 0: // SUCCESS
+            return SUCCESS;
+          default:
+            return null;
+        }
+      }
+
+      /**
+       * Find the _Fields constant that matches fieldId, throwing an exception
+       * if it is not found.
+       */
+      public static _Fields findByThriftIdOrThrow(int fieldId) {
+        _Fields fields = findByThriftId(fieldId);
+        if (fields == null) throw new IllegalArgumentException("Field " + fieldId + " doesn't exist!");
+        return fields;
+      }
+
+      /**
+       * Find the _Fields constant that matches name, or null if its not found.
+       */
+      public static _Fields findByName(String name) {
+        return byName.get(name);
+      }
+
+      private final short _thriftId;
+      private final String _fieldName;
+
+      _Fields(short thriftId, String fieldName) {
+        _thriftId = thriftId;
+        _fieldName = fieldName;
+      }
+
+      public short getThriftFieldId() {
+        return _thriftId;
+      }
+
+      public String getFieldName() {
+        return _fieldName;
+      }
+    }
+
+    // isset id assignments
+
+    public static final Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> metaDataMap;
+    static {
+      Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> tmpMap = new EnumMap<_Fields, org.apache.thrift.meta_data.FieldMetaData>(_Fields.class);
+      tmpMap.put(_Fields.SUCCESS, new org.apache.thrift.meta_data.FieldMetaData("success", org.apache.thrift.TFieldRequirementType.DEFAULT, 
+          new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING)));
+      metaDataMap = Collections.unmodifiableMap(tmpMap);
+      org.apache.thrift.meta_data.FieldMetaData.addStructMetaDataMap(secloreProtect_result.class, metaDataMap);
+    }
+
+    public secloreProtect_result() {
+    }
+
+    public secloreProtect_result(
+      String success)
+    {
+      this();
+      this.success = success;
+    }
+
+    /**
+     * Performs a deep copy on <i>other</i>.
+     */
+    public secloreProtect_result(secloreProtect_result other) {
+      if (other.isSetSuccess()) {
+        this.success = other.success;
+      }
+    }
+
+    public secloreProtect_result deepCopy() {
+      return new secloreProtect_result(this);
+    }
+
+    @Override
+    public void clear() {
+      this.success = null;
+    }
+
+    public String getSuccess() {
+      return this.success;
+    }
+
+    public secloreProtect_result setSuccess(String success) {
+      this.success = success;
+      return this;
+    }
+
+    public void unsetSuccess() {
+      this.success = null;
+    }
+
+    /** Returns true if field success is set (has been assigned a value) and false otherwise */
+    public boolean isSetSuccess() {
+      return this.success != null;
+    }
+
+    public void setSuccessIsSet(boolean value) {
+      if (!value) {
+        this.success = null;
+      }
+    }
+
+    public void setFieldValue(_Fields field, Object value) {
+      switch (field) {
+      case SUCCESS:
+        if (value == null) {
+          unsetSuccess();
+        } else {
+          setSuccess((String)value);
+        }
+        break;
+
+      }
+    }
+
+    public Object getFieldValue(_Fields field) {
+      switch (field) {
+      case SUCCESS:
+        return getSuccess();
+
+      }
+      throw new IllegalStateException();
+    }
+
+    /** Returns true if field corresponding to fieldID is set (has been assigned a value) and false otherwise */
+    public boolean isSet(_Fields field) {
+      if (field == null) {
+        throw new IllegalArgumentException();
+      }
+
+      switch (field) {
+      case SUCCESS:
+        return isSetSuccess();
+      }
+      throw new IllegalStateException();
+    }
+
+    @Override
+    public boolean equals(Object that) {
+      if (that == null)
+        return false;
+      if (that instanceof secloreProtect_result)
+        return this.equals((secloreProtect_result)that);
+      return false;
+    }
+
+    public boolean equals(secloreProtect_result that) {
+      if (that == null)
+        return false;
+
+      boolean this_present_success = true && this.isSetSuccess();
+      boolean that_present_success = true && that.isSetSuccess();
+      if (this_present_success || that_present_success) {
+        if (!(this_present_success && that_present_success))
+          return false;
+        if (!this.success.equals(that.success))
+          return false;
+      }
+
+      return true;
+    }
+
+    @Override
+    public int hashCode() {
+      return 0;
+    }
+
+    public int compareTo(secloreProtect_result other) {
+      if (!getClass().equals(other.getClass())) {
+        return getClass().getName().compareTo(other.getClass().getName());
+      }
+
+      int lastComparison = 0;
+      secloreProtect_result typedOther = (secloreProtect_result)other;
+
+      lastComparison = Boolean.valueOf(isSetSuccess()).compareTo(typedOther.isSetSuccess());
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+      if (isSetSuccess()) {
+        lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.success, typedOther.success);
+        if (lastComparison != 0) {
+          return lastComparison;
+        }
+      }
+      return 0;
+    }
+
+    public _Fields fieldForId(int fieldId) {
+      return _Fields.findByThriftId(fieldId);
+    }
+
+    public void read(org.apache.thrift.protocol.TProtocol iprot) throws org.apache.thrift.TException {
+      org.apache.thrift.protocol.TField field;
+      iprot.readStructBegin();
+      while (true)
+      {
+        field = iprot.readFieldBegin();
+        if (field.type == org.apache.thrift.protocol.TType.STOP) { 
+          break;
+        }
+        switch (field.id) {
+          case 0: // SUCCESS
+            if (field.type == org.apache.thrift.protocol.TType.STRING) {
+              this.success = iprot.readString();
+            } else { 
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, field.type);
+            }
+            break;
+          default:
+            org.apache.thrift.protocol.TProtocolUtil.skip(iprot, field.type);
+        }
+        iprot.readFieldEnd();
+      }
+      iprot.readStructEnd();
+
+      // check for required fields of primitive type, which can't be checked in the validate method
+      validate();
+    }
+
+    public void write(org.apache.thrift.protocol.TProtocol oprot) throws org.apache.thrift.TException {
+      oprot.writeStructBegin(STRUCT_DESC);
+
+      if (this.isSetSuccess()) {
+        oprot.writeFieldBegin(SUCCESS_FIELD_DESC);
+        oprot.writeString(this.success);
+        oprot.writeFieldEnd();
+      }
+      oprot.writeFieldStop();
+      oprot.writeStructEnd();
+    }
+
+    @Override
+    public String toString() {
+      StringBuilder sb = new StringBuilder("secloreProtect_result(");
+      boolean first = true;
+
+      sb.append("success:");
+      if (this.success == null) {
+        sb.append("null");
+      } else {
+        sb.append(this.success);
+      }
+      first = false;
+      sb.append(")");
+      return sb.toString();
+    }
+
+    public void validate() throws org.apache.thrift.TException {
+      // check for required fields
+    }
+
+    private void writeObject(java.io.ObjectOutputStream out) throws java.io.IOException {
+      try {
+        write(new org.apache.thrift.protocol.TCompactProtocol(new org.apache.thrift.transport.TIOStreamTransport(out)));
+      } catch (org.apache.thrift.TException te) {
+        throw new java.io.IOException(te);
+      }
+    }
+
+    private void readObject(java.io.ObjectInputStream in) throws java.io.IOException, ClassNotFoundException {
+      try {
+        read(new org.apache.thrift.protocol.TCompactProtocol(new org.apache.thrift.transport.TIOStreamTransport(in)));
+      } catch (org.apache.thrift.TException te) {
+        throw new java.io.IOException(te);
+      }
+    }
+
+  }
+
+  public static class secloreTerminate_args implements org.apache.thrift.TBase<secloreTerminate_args, secloreTerminate_args._Fields>, java.io.Serializable, Cloneable   {
+    private static final org.apache.thrift.protocol.TStruct STRUCT_DESC = new org.apache.thrift.protocol.TStruct("secloreTerminate_args");
+
+
+
+    /** The set of fields this struct contains, along with convenience methods for finding and manipulating them. */
+    public enum _Fields implements org.apache.thrift.TFieldIdEnum {
+;
+
+      private static final Map<String, _Fields> byName = new HashMap<String, _Fields>();
+
+      static {
+        for (_Fields field : EnumSet.allOf(_Fields.class)) {
+          byName.put(field.getFieldName(), field);
+        }
+      }
+
+      /**
+       * Find the _Fields constant that matches fieldId, or null if its not found.
+       */
+      public static _Fields findByThriftId(int fieldId) {
+        switch(fieldId) {
+          default:
+            return null;
+        }
+      }
+
+      /**
+       * Find the _Fields constant that matches fieldId, throwing an exception
+       * if it is not found.
+       */
+      public static _Fields findByThriftIdOrThrow(int fieldId) {
+        _Fields fields = findByThriftId(fieldId);
+        if (fields == null) throw new IllegalArgumentException("Field " + fieldId + " doesn't exist!");
+        return fields;
+      }
+
+      /**
+       * Find the _Fields constant that matches name, or null if its not found.
+       */
+      public static _Fields findByName(String name) {
+        return byName.get(name);
+      }
+
+      private final short _thriftId;
+      private final String _fieldName;
+
+      _Fields(short thriftId, String fieldName) {
+        _thriftId = thriftId;
+        _fieldName = fieldName;
+      }
+
+      public short getThriftFieldId() {
+        return _thriftId;
+      }
+
+      public String getFieldName() {
+        return _fieldName;
+      }
+    }
+    public static final Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> metaDataMap;
+    static {
+      Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> tmpMap = new EnumMap<_Fields, org.apache.thrift.meta_data.FieldMetaData>(_Fields.class);
+      metaDataMap = Collections.unmodifiableMap(tmpMap);
+      org.apache.thrift.meta_data.FieldMetaData.addStructMetaDataMap(secloreTerminate_args.class, metaDataMap);
+    }
+
+    public secloreTerminate_args() {
+    }
+
+    /**
+     * Performs a deep copy on <i>other</i>.
+     */
+    public secloreTerminate_args(secloreTerminate_args other) {
+    }
+
+    public secloreTerminate_args deepCopy() {
+      return new secloreTerminate_args(this);
+    }
+
+    @Override
+    public void clear() {
+    }
+
+    public void setFieldValue(_Fields field, Object value) {
+      switch (field) {
+      }
+    }
+
+    public Object getFieldValue(_Fields field) {
+      switch (field) {
+      }
+      throw new IllegalStateException();
+    }
+
+    /** Returns true if field corresponding to fieldID is set (has been assigned a value) and false otherwise */
+    public boolean isSet(_Fields field) {
+      if (field == null) {
+        throw new IllegalArgumentException();
+      }
+
+      switch (field) {
+      }
+      throw new IllegalStateException();
+    }
+
+    @Override
+    public boolean equals(Object that) {
+      if (that == null)
+        return false;
+      if (that instanceof secloreTerminate_args)
+        return this.equals((secloreTerminate_args)that);
+      return false;
+    }
+
+    public boolean equals(secloreTerminate_args that) {
+      if (that == null)
+        return false;
+
+      return true;
+    }
+
+    @Override
+    public int hashCode() {
+      return 0;
+    }
+
+    public int compareTo(secloreTerminate_args other) {
+      if (!getClass().equals(other.getClass())) {
+        return getClass().getName().compareTo(other.getClass().getName());
+      }
+
+      int lastComparison = 0;
+      secloreTerminate_args typedOther = (secloreTerminate_args)other;
+
+      return 0;
+    }
+
+    public _Fields fieldForId(int fieldId) {
+      return _Fields.findByThriftId(fieldId);
+    }
+
+    public void read(org.apache.thrift.protocol.TProtocol iprot) throws org.apache.thrift.TException {
+      org.apache.thrift.protocol.TField field;
+      iprot.readStructBegin();
+      while (true)
+      {
+        field = iprot.readFieldBegin();
+        if (field.type == org.apache.thrift.protocol.TType.STOP) { 
+          break;
+        }
+        switch (field.id) {
+          default:
+            org.apache.thrift.protocol.TProtocolUtil.skip(iprot, field.type);
+        }
+        iprot.readFieldEnd();
+      }
+      iprot.readStructEnd();
+
+      // check for required fields of primitive type, which can't be checked in the validate method
+      validate();
+    }
+
+    public void write(org.apache.thrift.protocol.TProtocol oprot) throws org.apache.thrift.TException {
+      validate();
+
+      oprot.writeStructBegin(STRUCT_DESC);
+      oprot.writeFieldStop();
+      oprot.writeStructEnd();
+    }
+
+    @Override
+    public String toString() {
+      StringBuilder sb = new StringBuilder("secloreTerminate_args(");
+      boolean first = true;
+
+      sb.append(")");
+      return sb.toString();
+    }
+
+    public void validate() throws org.apache.thrift.TException {
+      // check for required fields
+    }
+
+    private void writeObject(java.io.ObjectOutputStream out) throws java.io.IOException {
+      try {
+        write(new org.apache.thrift.protocol.TCompactProtocol(new org.apache.thrift.transport.TIOStreamTransport(out)));
+      } catch (org.apache.thrift.TException te) {
+        throw new java.io.IOException(te);
+      }
+    }
+
+    private void readObject(java.io.ObjectInputStream in) throws java.io.IOException, ClassNotFoundException {
+      try {
+        read(new org.apache.thrift.protocol.TCompactProtocol(new org.apache.thrift.transport.TIOStreamTransport(in)));
+      } catch (org.apache.thrift.TException te) {
+        throw new java.io.IOException(te);
+      }
+    }
+
+  }
+
+  public static class secloreTerminate_result implements org.apache.thrift.TBase<secloreTerminate_result, secloreTerminate_result._Fields>, java.io.Serializable, Cloneable   {
+    private static final org.apache.thrift.protocol.TStruct STRUCT_DESC = new org.apache.thrift.protocol.TStruct("secloreTerminate_result");
+
+    private static final org.apache.thrift.protocol.TField SUCCESS_FIELD_DESC = new org.apache.thrift.protocol.TField("success", org.apache.thrift.protocol.TType.STRING, (short)0);
+
+    public String success; // required
+
+    /** The set of fields this struct contains, along with convenience methods for finding and manipulating them. */
+    public enum _Fields implements org.apache.thrift.TFieldIdEnum {
+      SUCCESS((short)0, "success");
+
+      private static final Map<String, _Fields> byName = new HashMap<String, _Fields>();
+
+      static {
+        for (_Fields field : EnumSet.allOf(_Fields.class)) {
+          byName.put(field.getFieldName(), field);
+        }
+      }
+
+      /**
+       * Find the _Fields constant that matches fieldId, or null if its not found.
+       */
+      public static _Fields findByThriftId(int fieldId) {
+        switch(fieldId) {
+          case 0: // SUCCESS
+            return SUCCESS;
+          default:
+            return null;
+        }
+      }
+
+      /**
+       * Find the _Fields constant that matches fieldId, throwing an exception
+       * if it is not found.
+       */
+      public static _Fields findByThriftIdOrThrow(int fieldId) {
+        _Fields fields = findByThriftId(fieldId);
+        if (fields == null) throw new IllegalArgumentException("Field " + fieldId + " doesn't exist!");
+        return fields;
+      }
+
+      /**
+       * Find the _Fields constant that matches name, or null if its not found.
+       */
+      public static _Fields findByName(String name) {
+        return byName.get(name);
+      }
+
+      private final short _thriftId;
+      private final String _fieldName;
+
+      _Fields(short thriftId, String fieldName) {
+        _thriftId = thriftId;
+        _fieldName = fieldName;
+      }
+
+      public short getThriftFieldId() {
+        return _thriftId;
+      }
+
+      public String getFieldName() {
+        return _fieldName;
+      }
+    }
+
+    // isset id assignments
+
+    public static final Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> metaDataMap;
+    static {
+      Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> tmpMap = new EnumMap<_Fields, org.apache.thrift.meta_data.FieldMetaData>(_Fields.class);
+      tmpMap.put(_Fields.SUCCESS, new org.apache.thrift.meta_data.FieldMetaData("success", org.apache.thrift.TFieldRequirementType.DEFAULT, 
+          new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING)));
+      metaDataMap = Collections.unmodifiableMap(tmpMap);
+      org.apache.thrift.meta_data.FieldMetaData.addStructMetaDataMap(secloreTerminate_result.class, metaDataMap);
+    }
+
+    public secloreTerminate_result() {
+    }
+
+    public secloreTerminate_result(
+      String success)
+    {
+      this();
+      this.success = success;
+    }
+
+    /**
+     * Performs a deep copy on <i>other</i>.
+     */
+    public secloreTerminate_result(secloreTerminate_result other) {
+      if (other.isSetSuccess()) {
+        this.success = other.success;
+      }
+    }
+
+    public secloreTerminate_result deepCopy() {
+      return new secloreTerminate_result(this);
+    }
+
+    @Override
+    public void clear() {
+      this.success = null;
+    }
+
+    public String getSuccess() {
+      return this.success;
+    }
+
+    public secloreTerminate_result setSuccess(String success) {
+      this.success = success;
+      return this;
+    }
+
+    public void unsetSuccess() {
+      this.success = null;
+    }
+
+    /** Returns true if field success is set (has been assigned a value) and false otherwise */
+    public boolean isSetSuccess() {
+      return this.success != null;
+    }
+
+    public void setSuccessIsSet(boolean value) {
+      if (!value) {
+        this.success = null;
+      }
+    }
+
+    public void setFieldValue(_Fields field, Object value) {
+      switch (field) {
+      case SUCCESS:
+        if (value == null) {
+          unsetSuccess();
+        } else {
+          setSuccess((String)value);
+        }
+        break;
+
+      }
+    }
+
+    public Object getFieldValue(_Fields field) {
+      switch (field) {
+      case SUCCESS:
+        return getSuccess();
+
+      }
+      throw new IllegalStateException();
+    }
+
+    /** Returns true if field corresponding to fieldID is set (has been assigned a value) and false otherwise */
+    public boolean isSet(_Fields field) {
+      if (field == null) {
+        throw new IllegalArgumentException();
+      }
+
+      switch (field) {
+      case SUCCESS:
+        return isSetSuccess();
+      }
+      throw new IllegalStateException();
+    }
+
+    @Override
+    public boolean equals(Object that) {
+      if (that == null)
+        return false;
+      if (that instanceof secloreTerminate_result)
+        return this.equals((secloreTerminate_result)that);
+      return false;
+    }
+
+    public boolean equals(secloreTerminate_result that) {
+      if (that == null)
+        return false;
+
+      boolean this_present_success = true && this.isSetSuccess();
+      boolean that_present_success = true && that.isSetSuccess();
+      if (this_present_success || that_present_success) {
+        if (!(this_present_success && that_present_success))
+          return false;
+        if (!this.success.equals(that.success))
+          return false;
+      }
+
+      return true;
+    }
+
+    @Override
+    public int hashCode() {
+      return 0;
+    }
+
+    public int compareTo(secloreTerminate_result other) {
+      if (!getClass().equals(other.getClass())) {
+        return getClass().getName().compareTo(other.getClass().getName());
+      }
+
+      int lastComparison = 0;
+      secloreTerminate_result typedOther = (secloreTerminate_result)other;
+
+      lastComparison = Boolean.valueOf(isSetSuccess()).compareTo(typedOther.isSetSuccess());
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+      if (isSetSuccess()) {
+        lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.success, typedOther.success);
+        if (lastComparison != 0) {
+          return lastComparison;
+        }
+      }
+      return 0;
+    }
+
+    public _Fields fieldForId(int fieldId) {
+      return _Fields.findByThriftId(fieldId);
+    }
+
+    public void read(org.apache.thrift.protocol.TProtocol iprot) throws org.apache.thrift.TException {
+      org.apache.thrift.protocol.TField field;
+      iprot.readStructBegin();
+      while (true)
+      {
+        field = iprot.readFieldBegin();
+        if (field.type == org.apache.thrift.protocol.TType.STOP) { 
+          break;
+        }
+        switch (field.id) {
+          case 0: // SUCCESS
+            if (field.type == org.apache.thrift.protocol.TType.STRING) {
+              this.success = iprot.readString();
+            } else { 
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, field.type);
+            }
+            break;
+          default:
+            org.apache.thrift.protocol.TProtocolUtil.skip(iprot, field.type);
+        }
+        iprot.readFieldEnd();
+      }
+      iprot.readStructEnd();
+
+      // check for required fields of primitive type, which can't be checked in the validate method
+      validate();
+    }
+
+    public void write(org.apache.thrift.protocol.TProtocol oprot) throws org.apache.thrift.TException {
+      oprot.writeStructBegin(STRUCT_DESC);
+
+      if (this.isSetSuccess()) {
+        oprot.writeFieldBegin(SUCCESS_FIELD_DESC);
+        oprot.writeString(this.success);
+        oprot.writeFieldEnd();
+      }
+      oprot.writeFieldStop();
+      oprot.writeStructEnd();
+    }
+
+    @Override
+    public String toString() {
+      StringBuilder sb = new StringBuilder("secloreTerminate_result(");
+      boolean first = true;
+
+      sb.append("success:");
+      if (this.success == null) {
+        sb.append("null");
+      } else {
+        sb.append(this.success);
       }
       first = false;
       sb.append(")");

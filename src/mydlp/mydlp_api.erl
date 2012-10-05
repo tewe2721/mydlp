@@ -1147,6 +1147,7 @@ rr_files([FN|FNs], WorkDir, Ret) ->
 					rr_files(FNs, WorkDir, Ret) end end end;
 rr_files([], _WorkDir, Ret) -> lists:flatten(lists:reverse(Ret)).
 
+is_store_action({custom, _}) -> false;
 is_store_action(pass) -> false;
 is_store_action(block) -> false;
 is_store_action(log) -> false;
@@ -1252,6 +1253,9 @@ str_channel(_) -> "Unknown".
 
 acl_act(_Channel, pass) -> {[], []};
 acl_act(discovery, block) -> {[" act=~s"], ["Deleted"]};
+acl_act(discovery, {custom, {seclore, pass, Name, {HotFolderId, ActivityComment}}}) -> 
+	{[" act=~s cn3Label=~ts cn3=~B cs1Label=~ts cs1=~ts cs2Label=~ts cs2=~ts cs3Label=~ts cs3=~ts"], 
+	["Encrypted", "HotFolder Id", HotFolderId, "Name of Custom Action", escape_es(Name), "IRM Model", "Seclore FileSecure", "Activity Comment", escape_es(ActivityComment)]};
 acl_act(_Channel, block) -> {[" act=~s"], ["Blocked"]};
 acl_act(_Channel, log) -> {[" act=~s"], ["Logged"]};
 acl_act(_Channel, quarantine) -> {[" act=~s"], ["Quarantined"]};
@@ -1289,12 +1293,12 @@ acl_files([#file{size=Size, md5_hash=Hash, mime_type=MT} = File]) ->
 		lists:append([ArgsHead, SizeA, HashA, TypeA])};
 acl_files(Files) when is_list(Files) -> 
 	FileS = string:join([file_to_str(F) || F <- Files] , ", "),
-	{[" cs5=~ts"], ["Multiple files with names: " ++ escape_es(FileS)]}.
+	{[" cs5Label=~ts cs5=~ts"], ["Filenames", escape_es(FileS)]}.
 
 acl_misc("") -> {[], []};
 acl_misc(<<>>) -> {[], []};
 acl_misc(undefined) -> {[], []};
-acl_misc(Misc) -> {[" cs6=~ts"], [escape_es(Misc)]}.
+acl_misc(Misc) -> {[" cs6Label=~ts cs6=~ts"], ["Misc", escape_es(Misc)]}.
 
 -ifdef(__MYDLP_NETWORK).
 
@@ -1323,6 +1327,7 @@ get_message(endpoint, archive) -> "Transfer of file containing sensitive informa
 get_message(discovery, archive) -> "A file containing sensitive information on endpoint has been discovered, logged and a copy has been archived in central data store.";
 get_message(printer, archive) -> "Printing of document containing sensitive information on endpoint has been logged and a copy has been archived in data store.";
 get_message(api, archive) -> "Specified file should not be blocked in response to API query, logged query and a copy of file has been archived in central data store.";
+get_message(discovery, {custom, {seclore, pass, _, _}}) -> "A file containing sensitive information has been discovered, logged and protected with Seclore FileSecure IRM.";
 get_message(_, _) -> "Check MyDLP Logs using management console for details.".
 
 -endif.
@@ -1342,17 +1347,18 @@ get_message(printer, quarantine) -> "Prevented printing of document containing s
 get_message(endpoint, archive) -> "Transfer of file containing sensitive information to a removable storage device has been logged and a copy has been sent to central data store to be archived.";
 get_message(discovery, archive) -> "A file containing sensitive information has been discovered, logged and a copy has been sent to central data store to be archived.";
 get_message(printer, archive) -> "Printing of document containing sensitive information has been logged and a copy has been sent to central data store to be archived.";
+get_message(discovery, {custom, {seclore, pass, _, _}}) -> "A file containing sensitive information has been discovered, logged and protected with Seclore FileSecure IRM.";
 get_message(_, _) -> "Check MyDLP Logs using management console for details.".
 
 -endif.
 
 acl_msg_logger(Time, Channel, RuleId, Action, SrcIp, SrcUser, To, ITypeId, Files, Misc) ->
-	FormatHead=["CEF:0|Medra Inc.|MyDLP|1.0|~B|~ts|~B|rt=~s cs1=~B cs2=~B proto=~s"],
+	FormatHead=["CEF:0|Medra Inc.|MyDLP|1.0|~B|~ts|~B|rt=~s cn1Label=~ts cn1=~B cn2Label=~ts cn2=~B proto=~s"],
 	GeneratedMessage = get_message(Channel, Action),
 	Severity = 10,
 	RTime = formatted_cur_date(Time),
 	ChannelS = str_channel(Channel),
-	ArgsHead = [RuleId, GeneratedMessage, Severity, RTime, RuleId, ITypeId, ChannelS],
+	ArgsHead = [RuleId, GeneratedMessage, Severity, RTime, "Rule Id", RuleId, "Infromation Type Id", ITypeId, ChannelS],
 
 	{SrcF, SrcA} = acl_src(SrcIp),
 	{SUserF, SUserA} = acl_suser(SrcUser),
@@ -2654,9 +2660,9 @@ use_client_policy(CDBBin) ->
 		( catch mydlp_mnesia:write([ MCModule ]) ),
 		( catch mydlp_mnesia:write([ #rule_table{channel=C, table = RT} || {C, RT} <- RuleTables ]) ),
 
-		mydlp_dynamic:load(),
+		mydlp_mnesia:post_start(),
 		mydlp_dynamic:populate_win32reg(),
-		mydlp_mc:mc_load_mnesia(),
+		mydlp_tc:load(),
 		mydlp_container:schedule_confupdate(),
 
 		NewRevisionId = erlang:phash2(CDBObj),
