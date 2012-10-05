@@ -137,11 +137,11 @@ handle_call(get_denied_page, _From, State) ->
 handle_call({push_log, {Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc}}, From, State) ->
 	Worker = self(),
 	?ASYNC(fun() ->
-			{_FilterId, RuleId1, Ip1, User1, To1, ActionS, ChannelS, Visible} = 
-				pre_push_log(RuleId, Ip, User, To, Action, Channel),
+			{_FilterId, RuleId1, Ip1, User1, To1, ActionS, ChannelS, Misc1, Visible} = 
+				pre_push_log(RuleId, Ip, User, To, Action, Channel, Misc),
 			{atomic, ILId} = ltransaction(fun() ->
 					psqt(insert_incident, 
-						[Time, ChannelS, RuleId1, Ip1, User1, To1, ITypeId, ActionS, Misc, Visible]),
+						[Time, ChannelS, RuleId1, Ip1, User1, To1, ITypeId, ActionS, Misc1, Visible]),
 					last_insert_id_t() end, 30000),
 			Reply = ILId,	
                         Worker ! {async_reply, Reply, From}
@@ -970,7 +970,7 @@ validate_action_for_channel(api, archive) -> ok;
 validate_action_for_channel(api, quarantine) -> ok;
 validate_action_for_channel(Channel, Action) -> throw({error, {unexpected_action_for_channel, Channel, Action}}).
 
-pre_push_log(RuleId, Ip, User, Destination, Action, Channel) -> 
+pre_push_log(RuleId, Ip, User, Destination, Action, Channel, Misc) -> 
 %	{FilterId, RuleId1} = case RuleId of
 %		{dr, CId} -> {CId, 0};
 %		-1 = RuleId -> {mydlp_mnesia:get_dfid(), RuleId};	% this shows default action had been enforeced 
@@ -990,7 +990,7 @@ pre_push_log(RuleId, Ip, User, Destination, Action, Channel) ->
 	end,
 	Destination1 = case Destination of
 		nil -> null;
-		Else3 -> Else3
+		Else3 -> unicode:characters_to_binary(Else3)
 	end,
 	ActionS = case Action of
 		pass -> <<"P">>;
@@ -999,7 +999,7 @@ pre_push_log(RuleId, Ip, User, Destination, Action, Channel) ->
 		quarantine -> <<"Q">>;
 		archive -> <<"A">>;
 		{custom, {seclore, pass, Name, {HotFolderId, _}}} ->
-			list_to_binary([<<"CIS ">>, integer_to_list(HotFolderId), <<" ">>, Name])
+			list_to_binary([<<"CIS ">>, integer_to_list(HotFolderId), <<" ">>, unicode:characters_to_binary(Name)])
 	end,
 	ChannelS = case Channel of
 		web -> <<"W">>;
@@ -1012,7 +1012,11 @@ pre_push_log(RuleId, Ip, User, Destination, Action, Channel) ->
 	Visible = case RuleId of
 		-1 -> 0;
 		_Else -> 1 end,
-	{0, RuleId, Ip1, User1, Destination1, ActionS, ChannelS, Visible}.
+	Misc1 = case Misc of
+		M when is_list(M) -> unicode:characters_to_binary(M);
+		Else4 -> Else4
+	end,
+	{0, RuleId, Ip1, User1, Destination1, ActionS, ChannelS, Misc1, Visible}.
 
 pre_insert_log(Filename) ->
 	Filename1 = case Filename of
