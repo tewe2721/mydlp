@@ -1,0 +1,79 @@
+arbitrage
+credit score
+credit risk
+financial liabilities
+gearing ratio
+appreciation
+depreciation
+dividend
+leverage
+asset allocation
+equity fund
+balance sheet
+income statement
+property and equipment
+account receivable
+deposit and prepaid expenses
+inventory
+overdraft
+accured liabilities
+stated capital
+deficit
+amortisation
+bad debt
+advances
+acquisition
+pledged trading assets
+deferred tax assests
+intangible assets
+loans and advances to banks
+loans and advances to customer
+derivative assets held for risk management
+investment securities
+deposits from banks
+deposits from customers
+debt securities issued
+subordinated liabilities
+deferred tax liabilities
+provisions
+cash and cash equivalents
+share capital
+share premium
+retained earnings
+controlling interests
+interest income
+interest expense
+fee and commission income
+fee and commission expense
+net trading income
+net income
+net loss
+amortised cost
+net impairment loss
+operation lease expenses
+profit before tax
+profit before year
+basic earnings per share
+diluted earnings per share
+trading assets
+derivative assets held for risk management
+loans and advances to banks
+loans and advances to customers
+trading liabilities
+derivative liabilities held for risk management
+deposits from banks
+deposits from customers
+liabilities and provisions
+personnel expenses
+share-based payment
+vesting conditions
+government bond
+corporate bond
+asset-backed securities
+translation reserve
+hedging reserve
+fair value reserve
+liability credit reserve
+Contingencies
+Securitisations
+lease commitments

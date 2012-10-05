@@ -1,0 +1,66 @@
+Anaplasmosis
+Anthrax
+Botulism
+Brucellosis
+Campylobacteriosis
+Chancroid
+Chlamydia
+Cholera
+Diphtheria
+Donovanosis
+Ehrlichiosis
+Escherichia coli
+Encephalitis
+Gonococcal infection
+Haemolytic uraemic syndrome
+Haemophilus influenzae serotype
+Legionellosis 	
+Leprosy
+Leptospirosis
+Listeriosis
+Lyme disease
+Meningococcal disease
+Paratyphoid fever
+Pertussis
+Plague
+Psittacosis
+Q fever
+Relapsing fever
+Rickettsiosis
+Scarlet fever
+Salmonellosis
+Shigellosis
+Pneumococcal disease
+Streptococcus suis infection
+Syphilis
+Tetanus
+Toxic shock syndrome
+Tuberculosis
+Tularemia
+Typhoid fever
+Typhus
+Chickenpox
+Chikungunya fever 			
+Dengue fever
+Enterovirus 71 infection 			
+Hantavirus
+Hepatitis
+Hepatitis A
+Hepatitis B
+Hepatitis C
+Hepatitis D
+Hepatitis E
+Human immunodeficiency virus
+Influenza
+Japanese encephalitis
+Lyssavirus
+Measles
+Mumps
+Poliomyelitis
+Rabies
+Rubella
+Severe Acute Respiratory Syndrome
+Smallpox
+Yellow fever
+Dysentery
+Malaria

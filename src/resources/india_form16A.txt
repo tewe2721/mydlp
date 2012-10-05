@@ -1,0 +1,25 @@
+form no.16a
+certificate under section 203 of the income-tax act, 1961 for tax deducted at source
+Name and address of the deductor
+name and address of the deductee
+Name and designation of the employee
+PAN of the deductor
+TAN of the deductor
+PAN of the deductee
+assessment year
+summary of payment
+nature of payment
+status of booking
+summary of tax deducted at source in respect of deductee
+receipt numbers of original quarterly statements of TDS under sub-section (3) of section 200
+Amount of tax deducted in respect of the deductee
+details of tax deducted and deposited in the central government account through challan
+challan identification number
+tax deposited in respect of the deductee
+bsr code of the bank branch
+date on which tax deposited
+challan serial number
+status of bookingI further certify that the information given above is true and correct based on the books of account, documents, TDS stataments, TDS deposited and other available records
+signature of the person responsible for deduction of tax
+full name
+designation

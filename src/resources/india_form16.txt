@@ -1,0 +1,23 @@
+form no. 16
+certificate under section 203 of the income-tax act, 1961 for tax deducted at source from income chargeable under the head 'salaries'
+Name and address of the employer
+Name and designation of the employee
+PAN No. of the deductor
+TAN No. of the deductor
+PAN No. of the employee
+assessment year
+details of salary paid and any other income and tax deducted.
+gross salary
+less: allowance to the extend exempt under section 10
+income chargeable under the head 'salaries' [3-5]
+Gross total income
+Aggregate of deductible amount under Chapter VIA
+Total income
+Relief under section 89
+Tax payable
+balance tax
+deductions
+I further certify that the information given above is true and correct based on
+Signature of the person responsible for deduction of tax
+Full name
+Designation
