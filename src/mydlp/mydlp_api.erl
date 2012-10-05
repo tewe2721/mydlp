@@ -410,7 +410,6 @@ check_aba_modulus1([A1, A2, A3, A4, A5, A6, A7, A8, A9]) ->
 %% @end
 %%------------------------------------------------------------------------
 
-%is_valid_pan([_WS, _I1, _I2, _I3, I4, _I5 | _Tail]) ->
 is_valid_pan(PanStr) ->
 	Clean = remove_chars(PanStr, ?WS),
 	[_I1, _I2, _I3, I4|_Tail] = Clean,
@@ -427,6 +426,61 @@ is_valid_pan(PanStr) ->
 		$g -> true;
 		_Else -> false
 	end.
+
+%%------------------------------------------------------------------------
+%% @doc Checks whether string is a valid India TAN 
+%% @end
+%%------------------------------------------------------------------------
+
+is_valid_tan(TanStr) ->
+	Clean = remove_chars(TanStr, ?WS),
+	[I1,I2,I3|_Tail]= Clean,
+	is_valid_tan1([I1, I2, I3]).
+
+is_valid_tan1(_Code="agr") -> true;	
+is_valid_tan1(_Code="ahm") -> true;	
+is_valid_tan1(_Code="ald") -> true;	
+is_valid_tan1(_Code="amr") -> true;	
+is_valid_tan1(_Code="bbn") -> true;	
+is_valid_tan1(_Code="blr") -> true;	
+is_valid_tan1(_Code="bpl") -> true;	
+is_valid_tan1(_Code="brd") -> true;	
+is_valid_tan1(_Code="cal") -> true;	
+is_valid_tan1(_Code="che") -> true;	
+is_valid_tan1(_Code="chn") -> true;	
+is_valid_tan1(_Code="cmb") -> true;	
+is_valid_tan1(_Code="del") -> true;	
+is_valid_tan1(_Code="hyd") -> true;	
+is_valid_tan1(_Code="jbp") -> true;	
+is_valid_tan1(_Code="jdh") -> true;	
+is_valid_tan1(_Code="jld") -> true;	
+is_valid_tan1(_Code="jpr") -> true;	
+is_valid_tan1(_Code="klp") -> true;	
+is_valid_tan1(_Code="knp") -> true;	
+is_valid_tan1(_Code="lkn") -> true;	
+is_valid_tan1(_Code="mri") -> true;	
+is_valid_tan1(_Code="mrt") -> true;	
+is_valid_tan1(_Code="mum") -> true;	
+is_valid_tan1(_Code="ngp") -> true;	
+is_valid_tan1(_Code="nsk") -> true;	
+is_valid_tan1(_Code="pne") -> true;	
+is_valid_tan1(_Code="ptl") -> true;	
+is_valid_tan1(_Code="ptn") -> true;	
+is_valid_tan1(_Code="rch") -> true;	
+is_valid_tan1(_Code="rkt") -> true;	
+is_valid_tan1(_Code="shl") -> true;	
+is_valid_tan1(_Code="srt") -> true;	
+is_valid_tan1(_Code="tvd") -> true;	
+is_valid_tan1(_Code="vpn") -> true;	
+is_valid_tan1(_Code="guj") -> true;	
+is_valid_tan1(_Code="nwr") -> true;	
+is_valid_tan1(_Code="kar") -> true;	
+is_valid_tan1(_Code="dlc") -> true;	
+is_valid_tan1(_Code="wbg") -> true;	
+is_valid_tan1(_Code="krl") -> true;	
+is_valid_tan1(_Code="apr") -> true;	
+is_valid_tan1(_Code="rjn") -> true;	
+is_valid_tan1(_Code)-> false.
 
 %%---------------------------------------------------------------------
 %% @doc Checks whether string is a valid China Identity Card Number

@@ -124,6 +124,9 @@
 	pan_match/0,
 	pan_match/1,
 	pan_match/2,
+	tan_match/0,
+	tan_match/1,
+	tan_match/2,
 	cpf_match/0,
 	cpf_match/1,
 	cpf_match/2,
@@ -373,6 +376,19 @@ pan_match({pd_patterns, "wide"}) ->
 	?P({[{alpha, 5}, {numeric, 4}, {alpha, 1}], join_ws}).
 
 pan_match(_Conf, Phrase) -> mydlp_api:is_valid_pan(Phrase).
+
+tan_match() -> {normalized, {distance, true}, {pd, true}, {kw, false}}.
+
+tan_match({conf, _Conf}) -> none;
+
+tan_match({pd_patterns, "narrow"}) -> ?P({[{alpha, 4}, {numeric, 5}, {alpha, 1}], encap_ws});
+tan_match({pd_patterns, "normal"}) -> ?P({[{alpha, 4}, {numeric, 5}, {alpha, 1}], encap_ws});
+tan_match({pd_patterns, "wide"}) -> 
+	?P({[{alpha, 4}, {numeric, 5}, {alpha, 1}], none}) ++ 
+	?P({[{alpha, 4}, {numeric, 5}, {alpha, 1}], join_ws}).
+
+tan_match(_Conf, Phrase) -> mydlp_api:is_valid_tan(Phrase).
+
 
 cpf_match() -> {normalized, {distance, true}, {pd, true}, {kw, false}}.
 
