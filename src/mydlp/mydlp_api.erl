@@ -415,16 +415,16 @@ is_valid_pan(PanStr) ->
 	Clean = remove_chars(PanStr, ?WS),
 	[_I1, _I2, _I3, I4|_Tail] = Clean,
 	case I4 of
-		$C -> true;
-		$P -> true;
-		$H -> true;
-		$F -> true;
-		$A -> true;
-		$T -> true;
-		$B -> true;
-		$L -> true;
-		$J -> true;
-		$G -> true;
+		$c -> true;
+		$p -> true;
+		$h -> true;
+		$f -> true;
+		$a -> true;
+		$t -> true;
+		$b -> true;
+		$l -> true;
+		$j -> true;
+		$g -> true;
 		_Else -> false
 	end.
 
