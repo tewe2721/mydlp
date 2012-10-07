@@ -562,13 +562,11 @@ func_pd_pattern(Func, _FuncParam) ->
 get_kw_patterns(Matchers) -> get_kw_patterns(Matchers, []).
 
 get_kw_patterns([{_Id, all, _FuncParam}|Rest], Acc) -> get_kw_patterns(Rest, Acc);
-get_kw_patterns([{Id, Func, [{group_id, KGIs}]}|Rest], Acc) ->
+get_kw_patterns([{Id, Func, FuncParam}|Rest], Acc) ->
 	case is_func_kw(Func) of
-		true -> get_kw_patterns(Rest, [{list, func_kw_pattern(Func, KGIs), Id}|Acc]);
-		false -> get_kw_patterns(Rest, Acc) end;
-get_kw_patterns([{Id, Func, [{file, BundledFilename}]}|Rest], Acc) ->
-	case is_func_kw(Func) of
-		true -> get_kw_patterns(Rest, [{file, filename:absname(BundledFilename, ?CFG(resources_dir)), Id}|Acc]);
+		true -> case FuncParam of
+			[{group_id, KGIs}] -> get_kw_patterns(Rest, [{list, func_kw_pattern(Func, KGIs), Id}|Acc]);
+			[{file, BundledFilename}] -> get_kw_patterns(Rest, [{file, filename:absname(BundledFilename, ?CFG(resources_dir)), Id}|Acc]) end;
 		false -> get_kw_patterns(Rest, Acc) end;
 get_kw_patterns([], Acc) -> lists:reverse(Acc).
 

@@ -101,7 +101,7 @@ acl_call(Query, Files, Timeout) ->
 	FileSizes = lists:map(fun(F) -> ?BB_S(F#file.dataref) end, Files),
 	TotalSize = lists:sum(FileSizes),
 	case TotalSize > ?CFG(maximum_object_size) of
-		true -> {log, mydlp_api:empty_aclr(Files, max_size_exceeded)};
+		true ->	{log, mydlp_api:empty_aclr(Files, max_size_exceeded)};
 		false -> acl_call1(Query, Files, Timeout) end.
 
 % no need to call acl server for inbound requests.
