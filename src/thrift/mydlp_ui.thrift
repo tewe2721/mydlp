@@ -33,6 +33,7 @@ struct LicenseObject {
 service Mydlp_ui {
 
 	void compileCustomer(1: i32 Customerid)
+	string getCompileStatus()
 
 	binary getRuletable(1: string Ipaddress, 2: string Userh, 3: string Revisionid)
 
