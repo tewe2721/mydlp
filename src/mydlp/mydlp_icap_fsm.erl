@@ -205,7 +205,7 @@ init([]) ->
 		0 -> throw({error, {bad_header_line, IcapHeaderLine}});
 		I -> K = string:substr(IcapHeaderLine, 1, I-1),
 			K1 = http_util:to_lower(K),
-			[$\s| V] = string:substr(IcapHeaderLine, I+1), {K1, rm_trailing_crlf(V)} end,
+			[$\s| V] = string:substr(IcapHeaderLine, I+1), {K1, mydlp_api:rm_trailing_crlf(V)} end,
 
         IcapHeaders1 = case Key of
                 "connection" -> IcapHeaders#icap_headers{connection=Value};
@@ -347,7 +347,7 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 		0 -> throw({error, {bad_header_line, HttpHeaderLine}});
 		I -> K = string:substr(HttpHeaderLine, 1, I-1),
 			K1 = http_util:to_lower(K),
-			[$\s| V] = string:substr(HttpHeaderLine, I+1), {K1, rm_trailing_crlf(V)} end,
+			[$\s| V] = string:substr(HttpHeaderLine, I+1), {K1, mydlp_api:rm_trailing_crlf(V)} end,
 	HttpHeaders1 = case Key of
 		"connection" -> HttpHeaders#http_headers{connection=Value};
 		"host" -> HttpHeaders#http_headers{host=Value};
@@ -388,7 +388,7 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 		CSize1 == 0 -> {next_state, 'HTTP_CC_CRLF',
 				State#state{http_content= <<Content/binary,Line/binary>>, tmp=undefined}, ?CFG(fsm_timeout)};
 		CSize1 == -2 -> {next_state, 'HTTP_CC_LINE',
-				State#state{http_content= <<Content/binary, (rm_trailing_crlf(Line)) /binary>>, tmp=undefined}, ?CFG(fsm_timeout)}
+				State#state{http_content= <<Content/binary, (mydlp_api:rm_trailing_crlf(Line)) /binary>>, tmp=undefined}, ?CFG(fsm_timeout)}
 	end.
 
 'HTTP_CC_CRLF'({data, <<"\r\n">>}, State) ->
@@ -677,15 +677,6 @@ terminate(_Reason, _StateName, #state{socket=Socket} = _State) ->
 %%-------------------------------------------------------------------------
 code_change(_OldVsn, StateName, StateData, _Extra) ->
     {ok, StateName, StateData}.
-
-rm_trailing_crlf(Str) when is_list(Str) ->
-	StrL = string:len(Str),
-	"\r\n" = string:substr(Str, StrL - 1, 2),
-	string:substr(Str, 1, StrL - 2);
-rm_trailing_crlf(Bin) when is_binary(Bin) -> 
-	BuffSize = size(Bin) - 2,
-	<<Buff:BuffSize/binary, "\r\n">> = Bin,
-	Buff.
 
 raw_to_allowh(AllowStr) ->
 	string:tokens(AllowStr, ", ").

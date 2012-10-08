@@ -173,7 +173,6 @@ stop() ->
 
 init([]) ->
 	{ok, Java} = thrift_client_util:new("localhost",9090, mydlp_thrift, []),
-	?ASYNC0(fun() -> load() end),
 	{ok, #state{backend_java=Java}}.
 
 handle_cast(_Msg, State) ->
@@ -195,7 +194,17 @@ call_pool(Req) ->
 
 -ifdef(__MYDLP_NETWORK).
 
-load() -> ok.
+load() -> 
+	case ?CFG(seclore_fs_enable) of
+		true ->	seclore_initialize(	?CFG(seclore_dir), 
+						?CFG(seclore_fs_address),
+						?CFG(seclore_fs_port),
+						?CFG(seclore_fs_app_name),
+						?CFG(seclore_fs_hot_folder_cabinet_id),
+						?CFG(seclore_fs_hot_folder_cabinet_passphrase),
+						?CFG(seclore_fs_server_pool_size)
+					);
+		false -> <<"ok">> end.
 
 -endif.
 

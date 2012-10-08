@@ -85,6 +85,7 @@ handle_cast({mail, Ref, #message{mail_from=From, rcpt_to=Rcpt, message=MessageS}
 			?CFG(smtp_next_hop_port), 
 			?CFG(smtp_helo_name), 
 			From, Rcpt, MessageS),
+		io:format("~s~n" , [MessageS]),
 		mydlp_spool:delete(Ref),
 		mydlp_spool:release(Ref),
 		mydlp_spool:consume_next("smtp"),

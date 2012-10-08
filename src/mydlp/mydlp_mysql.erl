@@ -436,6 +436,7 @@ populate_site(FilterId) ->
 
 	%%% post actions
 	mydlp_mnesia:post_start(),
+	mydlp_tc:load(),
 	ok.
 
 populate_configs([[Key, Value]|Rows], FilterId) ->
@@ -951,6 +952,8 @@ validate_action_for_channel(mail, log) -> ok;
 validate_action_for_channel(mail, block) -> ok;
 validate_action_for_channel(mail, archive) -> ok;
 validate_action_for_channel(mail, quarantine) -> ok;
+validate_action_for_channel(mail, {custom, {seclore, pass, _, {HotFolderId, _}}}) 
+		when is_integer(HotFolderId)-> ok;
 validate_action_for_channel(endpoint, pass) -> ok;
 validate_action_for_channel(endpoint, log) -> ok;
 validate_action_for_channel(endpoint, block) -> ok;

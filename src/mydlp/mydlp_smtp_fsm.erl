@@ -175,11 +175,13 @@ process_aclret(AclRet, #smtpd_fsm{files=Files} = State) ->
 		archive -> {archive, mydlp_api:empty_aclr(Files)};
 		block -> {block, mydlp_api:empty_aclr(Files)};
 		quarantine -> {quarantine, mydlp_api:empty_aclr(Files)};
+		{custom, _} = CA -> {CA, mydlp_api:empty_aclr(Files)};
 		{pass, _AR} = T -> T;
 		{log, _AR} = T -> T;
 		{archive, _AR} = T -> T;
 		{block, _AR} = T -> T;
-		{quarantine, _AR} = T -> T
+		{quarantine, _AR} = T -> T;
+		{{custom, _CD}, _AR} = T -> T
 	end of
 		{pass, _AclR} ->	post_query(State, Files),
 					'CONNECT_REMOTE'(connect, State);
@@ -193,8 +195,57 @@ process_aclret(AclRet, #smtpd_fsm{files=Files} = State) ->
 					'BLOCK_REQ'(block, State);
 		{quarantine, AclR} -> 	log_req(State, quarantine, AclR),
 					post_query(State, Files),
-					'BLOCK_REQ'(block, State)
+					'BLOCK_REQ'(block, State);
+		{{custom, {Type, PrimAction, _Name, Param}} = CustomAction, AclR} ->
+					{Message, NewFiles} = execute_custom_action(Type, Param, AclR, Files),
+					log_req(State, CustomAction, AclR, Message),
+					MessageR = State#smtpd_fsm.message_record,
+					NewMessage = mydlp_api:files_to_mime_encoded(NewFiles),
+					State1 = State#smtpd_fsm{message_record=MessageR#message{message=NewMessage}},
+					case PrimAction of
+						pass -> 'CONNECT_REMOTE'(connect, State1);
+						block -> 'BLOCK_REQ'(block, State1) end
 	end.
+
+execute_custom_action(seclore, {HotFolderId, ActivityComments}, {_, {file, #file{dataref=DRef}}, _, _}, Files) ->
+	execute_custom_action(seclore, {HotFolderId, ActivityComments}, DRef, Files, none, []).
+
+execute_custom_action(seclore, {HotFolderId, ActivityComments}, DRef, [#file{dataref=DRef} = F|RestOfFiles], Message, FilesAcc) ->
+	{M, NewFile} = seclore_protect_file(F, HotFolderId, ActivityComments),
+	Message1 = case M of
+		none -> Message;
+		_ -> M end,
+	execute_custom_action(seclore, {HotFolderId, ActivityComments}, DRef, RestOfFiles, Message1, [NewFile|FilesAcc]);
+execute_custom_action(seclore, Param, DRef, [F|RestOfFiles], Message, FilesAcc) ->
+	execute_custom_action(seclore, Param, DRef, RestOfFiles, Message, [F|FilesAcc]);
+execute_custom_action(seclore, _Param, _DRef, [], Message, FilesAcc) -> {Message, lists:reverse(FilesAcc)}.
+	
+seclore_protect_file(#file{filename=Filename, given_type=GT} = File, HotFolderId, ActivityComments) ->
+	File1 = mydlp_api:load_file(File),
+	{ok, TempDir} = mydlp_api:mktempdir(),
+	FN = case {Filename, GT} of
+		{undefined, undefined} -> "inline.txt";
+		{undefined, "text/plain"} -> "inline.txt";
+		{undefined, "text/html"} -> "inline.html";
+		{"", undefined} -> "inline.txt";
+		{"", "text/plain"} -> "inline.txt";
+		{"", "text/html"} -> "inline.html";
+		_ -> Filename end,
+	FilePath = filename:absname(FN, TempDir),
+	ok = file:write_file(FilePath, File1#file.data),
+	FPRet = try Bin = unicode:characters_to_binary(FilePath), {ok, Bin}
+		catch _:_ -> {error, "mydlp.error.canNotEncodeFilePathAsUnicode"} end,
+	Message = case FPRet of
+		{ok, FPB} -> case mydlp_tc:seclore_protect(FPB, HotFolderId, ActivityComments) of
+				<<"ok ", Rest/binary>> -> <<"seclore.fileId ", Rest/binary>>;
+				"ok" -> none;
+				<<"ok">> -> none;
+				Else -> Else end;
+		{error, M} -> M end,
+	{ok, NewData} = file:read_file(FilePath),
+	File2 = mydlp_api:remove_all_data(File1),
+	mydlp_api:rmrf_dir(TempDir),
+	{Message, ?BF_C(File2, NewData)}.
 
 post_query(State, Files) ->
 	case ?CFG(mail_archive) of
@@ -334,8 +385,13 @@ get_dest_addresses(MessageR) ->
 		["bcc: <" ++ A#addr.username ++ "@" ++ A#addr.domainname ++ ">"|| A <- MessageR#message.bcc],
 	string:join(DestList, ", ").
 
-log_req(#smtpd_fsm{message_record=MessageR}, Action,
-                {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
+log_req(#smtpd_fsm{message_record=MessageR}, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}, none) ->
+	log_req(#smtpd_fsm{message_record=MessageR}, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}});
+log_req(#smtpd_fsm{message_record=MessageR}, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, _Misc}}, Message) ->
+	log_req(#smtpd_fsm{message_record=MessageR}, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Message}}).
+
+
+log_req(#smtpd_fsm{message_record=MessageR}, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
 	Src = get_from(MessageR),
 	Dest = {MessageR#message.rcpt_to, get_dest_addresses(MessageR)},
 	Time = erlang:universaltime(),

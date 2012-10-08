@@ -1310,6 +1310,9 @@ acl_act(discovery, block) -> {[" act=~s"], ["Deleted"]};
 acl_act(discovery, {custom, {seclore, pass, Name, {HotFolderId, ActivityComment}}}) -> 
 	{[" act=~s cn3Label=~ts cn3=~B cs1Label=~ts cs1=~ts cs2Label=~ts cs2=~ts cs3Label=~ts cs3=~ts"], 
 	["Encrypted", "HotFolder Id", HotFolderId, "Name of Custom Action", escape_es(Name), "IRM Model", "Seclore FileSecure", "Activity Comment", escape_es(ActivityComment)]};
+acl_act(mail, {custom, {seclore, pass, Name, {HotFolderId, ActivityComment}}}) -> 
+	{[" act=~s cn3Label=~ts cn3=~B cs1Label=~ts cs1=~ts cs2Label=~ts cs2=~ts cs3Label=~ts cs3=~ts"], 
+	["Encrypted", "HotFolder Id", HotFolderId, "Name of Custom Action", escape_es(Name), "IRM Model", "Seclore FileSecure", "Activity Comment", escape_es(ActivityComment)]};
 acl_act(_Channel, block) -> {[" act=~s"], ["Blocked"]};
 acl_act(_Channel, log) -> {[" act=~s"], ["Logged"]};
 acl_act(_Channel, quarantine) -> {[" act=~s"], ["Quarantined"]};
@@ -1382,6 +1385,7 @@ get_message(discovery, archive) -> "A file containing sensitive information on e
 get_message(printer, archive) -> "Printing of document containing sensitive information on endpoint has been logged and a copy has been archived in data store.";
 get_message(api, archive) -> "Specified file should not be blocked in response to API query, logged query and a copy of file has been archived in central data store.";
 get_message(discovery, {custom, {seclore, pass, _, _}}) -> "A file containing sensitive information has been discovered, logged and protected with Seclore FileSecure IRM.";
+get_message(mail, {custom, {seclore, pass, _, _}}) -> "A file containing sensitive information has been detected, logged and protected with Seclore FileSecure IRM. Protected file leaved mail gateway.";
 get_message(_, _) -> "Check MyDLP Logs using management console for details.".
 
 -endif.
@@ -2212,12 +2216,12 @@ heads_to_file_int1(Str, QS, CT) ->
 		1 -> "noname";
 		L -> string:substr(Str, 1, L - 1) end.
 
-heads_to_file(Headers) -> heads_to_file(Headers, #file{}).
+heads_to_file(Headers) -> heads_to_file(Headers, #file{meta=[{mime_headers, Headers}]}).
 
 heads_to_file([{'content-disposition', "inline"}|Rest], #file{filename=undefined, name=undefined} = File) ->
 	case lists:keysearch('content-type',1,Rest) of
-		{value,{'content-type',"text/plain"}} -> heads_to_file(Rest, File#file{name="Inline text message"});
-		{value,{'content-type',"text/html"}} -> heads_to_file(Rest, File#file{name="Inline HTML message"});
+		{value,{'content-type',"text/plain"}} -> heads_to_file(Rest, File#file{name="Inline text message", given_type="text/plain"});
+		{value,{'content-type',"text/html"}} -> heads_to_file(Rest, File#file{name="Inline HTML message", given_type="text/html"});
 		_Else -> heads_to_file(Rest, File)
 	end;
 heads_to_file([{'content-disposition', CD}|Rest], #file{filename=undefined} = File) ->
@@ -2228,12 +2232,12 @@ heads_to_file([{'content-disposition', CD}|Rest], #file{filename=undefined} = Fi
 	end;
 heads_to_file([{'content-type', "text/html"}|Rest], #file{filename=undefined, name=undefined} = File) ->
 	case lists:keysearch('content-disposition',1,Rest) of
-		{value,{'content-disposition',"inline"}} -> heads_to_file(Rest, File#file{name="Inline HTML message"});
+		{value,{'content-disposition',"inline"}} -> heads_to_file(Rest, File#file{name="Inline HTML message", given_type="text/html"});
 		_Else -> heads_to_file(Rest, File)
 	end;
 heads_to_file([{'content-type', "text/plain"}|Rest], #file{filename=undefined, name=undefined} = File) ->
 	case lists:keysearch('content-disposition',1,Rest) of
-		{value,{'content-disposition',"inline"}} -> heads_to_file(Rest, File#file{name="Inline text message"});
+		{value,{'content-disposition',"inline"}} -> heads_to_file(Rest, File#file{name="Inline text message", given_type="text/plain"});
 		_Else -> heads_to_file(Rest, File)
 	end;
 heads_to_file([{'content-type', CT}|Rest], #file{filename=undefined} = F) ->
@@ -2412,6 +2416,108 @@ mime_to_files([#mime{content=Content, header=Headers, body=Body}|Rest], Acc) ->
 			Content end,
 	mime_to_files(lists:append(Body, Rest), [?BF_C(File,Data)|Acc]);
 mime_to_files([], Acc) -> lists:reverse(Acc).
+
+files_to_mime_encoded(Files) -> 
+	Boundary = list_to_binary(get_random_string()),
+	files_to_mime_encoded(Files, Boundary, <<>>).
+
+files_to_mime_encoded([File|RestOfFiles], Boundary, Acc) -> 
+	IsFirst = case Acc of
+		<<>> -> true;
+		_ -> false end,
+	HeadersBin = case IsFirst of
+		true -> headers_to_mime_encoded(File, Boundary);
+		false -> headers_to_mime_encoded(File) end,
+	ContentBin = content_to_mime_encoded(File),
+	Tail = case ContentBin of
+		<<>> -> <<"\r\n">>;
+		_ -> <<ContentBin/binary, "\r\n\r\n">> end,
+	NewAcc = case IsFirst of
+		true -> <<HeadersBin/binary, "\r\n", Tail/binary>>;
+		false -> <<Acc/binary, "--", Boundary/binary, "\r\n", HeadersBin/binary, "\r\n", Tail/binary>> end,
+	files_to_mime_encoded(RestOfFiles, Boundary, NewAcc);
+files_to_mime_encoded([], Boundary, Acc) -> <<Acc/binary, "--", Boundary/binary, "--\r\n">>.
+
+content_to_mime_encoded(File0) ->
+	File = load_file(File0),
+	case File#file.data of
+		<<>> -> <<>>;
+		undefined -> <<>>;
+		Data -> base64:encode(Data) end.
+	
+headers_to_mime_encoded(File) -> headers_to_mime_encoded(File, undefined).
+
+headers_to_mime_encoded(#file{meta=[{mime_headers, Headers}], filename=FN, given_type=GT}, Boundary) -> 
+	Headers1 = override_mime_headers(Headers, FN, GT, Boundary),
+	headers_to_mime_encoded1(Headers1, <<>>).
+
+headers_to_mime_encoded1([{KeyAtom, Value}|RestOfHeaders], Acc) ->
+	KeyS = atom_to_list(KeyAtom),
+	Key = to_mime_key_upper(KeyS),
+	KeyB = list_to_binary([Key]),
+	ValueS = case KeyAtom of
+		from -> encode_smtp_addr(Value);
+		to -> encode_smtp_addrs(Value);
+		cc -> encode_smtp_addrs(Value);
+		bcc -> encode_smtp_addrs(Value);
+		_ -> Value end,
+	ValueB = list_to_binary([ValueS]),
+	NewAcc = <<Acc/binary, KeyB/binary, ": ", ValueB/binary, "\r\n">>,
+	headers_to_mime_encoded1(RestOfHeaders, NewAcc);
+headers_to_mime_encoded1([], Acc) -> Acc.
+
+to_mime_key_upper([F|Str]) -> to_mime_key_upper(Str, string:to_upper([F])).
+
+to_mime_key_upper([$-,C|Str], Acc) -> to_mime_key_upper(Str, string:to_upper([C]) ++ "-" ++ Acc);
+to_mime_key_upper([C|Str], Acc) -> to_mime_key_upper(Str, [C|Acc]);
+to_mime_key_upper([], Acc) -> lists:reverse(Acc).
+
+
+override_mime_headers(Headers, FN, GT0, Boundary) ->
+	GT = case Boundary of
+		undefined -> GT0;
+		_ -> "multipart/mixed; boundary=\"" ++ binary_to_list(Boundary) ++ "\"" end,
+
+	Headers1 = case lists:keyfind('content-type', 1, Headers) of
+		false -> Headers ++ [{'content-type', GT}];
+		{'content-type', _} -> lists:keyreplace('content-type', 1, Headers, {'content-type', GT}) end,
+
+	Headers2 = case lists:keyfind('content-transfer-encoding', 1, Headers1) of
+		false -> Headers1 ++ [{'content-transfer-encoding', "base64"}];
+		{'content-transfer-encoding', _} -> lists:keyreplace('content-transfer-encoding', 1, Headers1, {'content-transfer-encoding', "base64"}) end,
+
+	Headers3 = case lists:keyfind('content-disposition', 1, Headers2) of
+		false -> case FN of
+			"" -> Headers2 ++ [{'content-disposition', "inline"}];
+			undefined -> Headers2 ++ [{'content-disposition', "inline"}];
+			_ -> Headers2 ++ [{'content-disposition', "attachment; filename=\"" ++ encode_rfc2047(FN) ++ "\""}] end;
+		{'content-disposition', "inline"} -> Headers2;
+		{'content-disposition', _} -> case FN of
+			"" -> Headers2 ++ [{'content-disposition', "inline"}];
+			undefined -> Headers2 ++ [{'content-disposition', "inline"}];
+			_ -> Headers2 ++ [{'content-disposition', "attachment; filename=\"" ++ encode_rfc2047(FN) ++ "\""}] end end,
+
+	Headers4 = lists:keydelete('content-length', 1, Headers3),
+	Headers4.
+
+encode_rfc2047(S) -> 
+	"=?UTF-8?B?" ++ [base64:encode(unicode:characters_to_binary(S))] ++ "?=".
+	
+encode_smtp_addrs(Addrs) -> 
+	Strings = lists:map(fun(A) -> encode_smtp_addr(A) end, Addrs),
+	string:join(Strings, ", ").
+
+encode_smtp_addr({addr, User, Domain, Name}) ->	
+	B = list_to_binary([$", encode_rfc2047(Name), $", $\s, User, $@, Domain]),
+	binary_to_list(B). %% TODO: workaround
+
+get_random_string() ->
+	AllowedChars = "qwertyuioplkjhgfdsazxcvbnm0987654321QWERTYUIOPLKJHGFDSAZXCVBNM",
+	Length = 32,
+	lists:foldl(fun(_, Acc) ->
+		[lists:nth(random:uniform(length(AllowedChars)), AllowedChars)]
+                            ++ Acc
+                end, [], lists:seq(1, Length)).
 
 -endif.
 
@@ -2760,6 +2866,27 @@ ref_to_fn(Dir, Prefix, Ref) ->
 	{A,B,C} = Ref,
 	RN = lists:flatten(io_lib:format("~s-~p.~p.~p",[Prefix,A,B,C])),
 	Dir ++ "/" ++ RN.
+
+%%-------------------------------------------------------------------------
+%% @doc Removes trailing CRLF from given string
+%% @end
+%%-------------------------------------------------------------------------
+rm_trailing_crlf("") -> "";
+rm_trailing_crlf("\r") -> "";
+rm_trailing_crlf("\n") -> "";
+rm_trailing_crlf(<<>>) -> <<>>;
+rm_trailing_crlf(<<"\r">>) -> <<>>;
+rm_trailing_crlf(<<"\n">>) -> <<>>;
+rm_trailing_crlf([_] = Str) -> Str;
+rm_trailing_crlf(<<_:1/binary>> = Bin) -> Bin;
+rm_trailing_crlf(Str) when is_list(Str) ->
+	StrL = string:len(Str),
+	"\r\n" = string:substr(Str, StrL - 1, 2),
+	string:substr(Str, 1, StrL - 2);
+rm_trailing_crlf(Bin) when is_binary(Bin) -> 
+	BuffSize = size(Bin) - 2,
+	<<Buff:BuffSize/binary, "\r\n">> = Bin,
+	Buff.
 
 %%-------------------------------------------------------------------------
 %% @doc Decodes given quoted-printable string.

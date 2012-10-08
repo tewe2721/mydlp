@@ -59,6 +59,7 @@
                 given_type,
 		md5_hash,
 		size,
+		meta=[],
 		compressed_copy = false,
 		is_encrypted = false,
                 data,

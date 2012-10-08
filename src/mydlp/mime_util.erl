@@ -70,7 +70,7 @@ decode(Message) when is_binary(Message) ->
 	end.
 
 decode_multipart(MIME, Boundary) ->
-	Content = case re:run(MIME#mime.body_text, 
+	Content0 = case re:run(MIME#mime.body_text, 
 			mydlp_api:escape_regex(Boundary), 
 			[{capture,first}] ) of
 		nomatch -> [];
@@ -80,6 +80,7 @@ decode_multipart(MIME, Boundary) ->
 		{match,[{I,_}]} -> 
 			CSize = I - 2,
 			<<C:CSize/binary, _/binary>> = MIME#mime.body_text, C end,
+	Content = mydlp_api:rm_trailing_crlf(Content0),
 	Parts = split_multipart(Boundary,MIME#mime.body_text),
 	MIMEParts = lists:map(fun(P) ->
 			decode(P)
@@ -95,7 +96,12 @@ dec_addrs(AddrList) ->
 dec_addr(Address) ->
 	case mydlp_api:rsplit_at(Address) of
 		{Email,[]} -> dec_addr2(Email,#addr{});
-		{Desc,Email} -> dec_addr2(Email,#addr{description = mydlp_api:unquote(Desc)})
+		{Desc,Email} -> 
+			Desc1 = mydlp_api:unquote(Desc),
+			Desc2 = case Desc1 of
+				"=?" ++ _Rest -> mydlp_api:multipart_decode_fn_rfc2047(Desc1);
+				_Else -> Desc1 end,
+			dec_addr2(Email,#addr{description = Desc2})
 	end.
 
 dec_addr2(Address,Addr) ->
@@ -145,10 +151,6 @@ strip(Value) -> strip(Value,[32,9,13,10]).
 strip(Value,[]) -> Value;
 strip(Value,[H|T]) ->
 	strip(string:strip(Value,both,H),T).
-
-	
-
-
 
 %%-------------------------------------------------------------------------
 %% @spec (Part::string()) -> mime() | {error,Reason::atom()}

@@ -61,6 +61,11 @@ prestart_load() ->
 load() ->
 	load_mydlp_denied_page(),
 	load_mydlp_config_full(),
+	post_load(),
+	ok.
+
+post_load() ->
+	mydlp_tc:load(),
 	ok.
 
 denied_page_src() ->
@@ -124,7 +129,8 @@ load_src(Src) ->
 	{pid_file, string, "/var/run/mydlp/mydlp.pid"},
 	{work_dir, string, "/var/tmp/mydlp"},
 	{spool_dir, string, "/var/lib/mydlp/spool"},
-	{mnesia_dir, string, "/var/lib/mydlp/mnesia"}
+	{mnesia_dir, string, "/var/lib/mydlp/mnesia"},
+	{seclore_dir, string, "/var/lib/mydlp/internal/seclore"}
 ]).
 
 -endif.
@@ -229,7 +235,8 @@ load_src(Src) ->
 	{syslog_diag_facility, syslog_facility, "local6"},
 	{syslog_report_host, ip, "127.0.0.1"},
 	{syslog_report_port, integer, "514"},
-	{syslog_report_facility, syslog_facility, "local7"}
+	{syslog_report_facility, syslog_facility, "local7"},
+	{seclore_fs_server_pool_size, integer, "8"}
 ]).
 
 -endif.
@@ -247,12 +254,6 @@ load_src(Src) ->
 	{log_limit, integer, "10485760"},
 	{usb_serial_access_control, boolean, "false"},
 	{print_monitor, boolean, "false"},
-	{seclore_fs_enable, boolean, "false"},
-	{seclore_fs_address, string, "127.0.0.1"},
-	{seclore_fs_port, integer, "443"},
-	{seclore_fs_app_name, string, "policyserver"},
-	{seclore_fs_hot_folder_cabinet_id, integer, "6"},
-	{seclore_fs_hot_folder_cabinet_passphrase, string, "seclore10"},
 	{seclore_fs_endpoint_pool_size, integer, "2"}
 ]).
 
@@ -266,7 +267,13 @@ load_src(Src) ->
 	{maximum_memory_object, integer, "204800"},
 	{maximum_chunk_size, integer, "1048576"},
 	{query_cache_maximum_size, integer, "1500000"},
-	{query_cache_cleanup_interval, integer, "900000"}
+	{query_cache_cleanup_interval, integer, "900000"},
+	{seclore_fs_enable, boolean, "false"},
+	{seclore_fs_address, string, "127.0.0.1"},
+	{seclore_fs_port, integer, "443"},
+	{seclore_fs_app_name, string, "policyserver"},
+	{seclore_fs_hot_folder_cabinet_id, integer, "6"},
+	{seclore_fs_hot_folder_cabinet_passphrase, string, "seclore10"}
 ]).
 
 -define(CONFDEF_FILE, lists:append([?CONFDEF_PLATFORM, ?CONFDEF_FILE_OTHER, ?CONFDEF_FILE_COMMON])).

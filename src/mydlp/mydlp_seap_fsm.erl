@@ -288,29 +288,20 @@ terminate(_Reason, _StateName, #state{socket=Socket} = _State) ->
 code_change(_OldVsn, StateName, StateData, _Extra) ->
     {ok, StateName, StateData}.
 
-rm_trailing_crlf(Str) when is_list(Str) ->
-	StrL = string:len(Str),
-	"\r\n" = string:substr(Str, StrL - 1, 2),
-	string:substr(Str, 1, StrL - 2);
-rm_trailing_crlf(Bin) when is_binary(Bin) -> 
-	BuffSize = size(Bin) - 2,
-	<<Buff:BuffSize/binary, "\r\n">> = Bin,
-	Buff.
-
 get_req_args(Rest) ->
-	Rest1 = rm_trailing_crlf(Rest),
+	Rest1 = mydlp_api:rm_trailing_crlf(Rest),
 	case string:tokens(Rest1, " ") of
 		[ObjIdS] -> { list_to_integer(ObjIdS) };
 		[ObjIdS, ChunkSize] -> { list_to_integer(ObjIdS), list_to_integer(ChunkSize) };
 		_Else -> throw({error, {obj_id_not_found, Rest}}) end.
 
 %get_arg_str(Rest) ->
-%	Rest1 = rm_trailing_crlf(Rest),
+%	Rest1 = mydlp_api:rm_trailing_crlf(Rest),
 %	ArgStr = string:strip(Rest1),
 %	{ArgStr}.
 
 get_setprop_args(Rest) ->
-	Rest1 = rm_trailing_crlf(Rest),
+	Rest1 = mydlp_api:rm_trailing_crlf(Rest),
 	Rest2 = string:strip(Rest1),
 	{ObjIdS, KeyValuePairS} = case string:chr(Rest2, $\s) of
 		0 -> throw({no_space_to_tokenize, Rest2});
@@ -326,7 +317,7 @@ get_setprop_args(Rest) ->
 	{list_to_integer(ObjIdS), Key, Value}.
 
 get_two_args(String) ->
-	Rest1 = rm_trailing_crlf(String),
+	Rest1 = mydlp_api:rm_trailing_crlf(String),
 	Rest2 = string:strip(Rest1),
 	{S1, S2} = case string:chr(Rest2, $\s) of
 		0 -> throw({no_space_to_tokenize, Rest2});
@@ -340,7 +331,7 @@ get_getprop_args(Rest) ->
 	{list_to_integer(ObjIdS), Key}.
 
 get_map_args(Rest) -> 
-	Rest1 = rm_trailing_crlf(Rest),
+	Rest1 = mydlp_api:rm_trailing_crlf(Rest),
 	Tokens = string:tokens(Rest1, " "),
 	get_map_args(Tokens, dict:new()).
 

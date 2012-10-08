@@ -7,3 +7,4 @@
 /var/lib/mydlp/backup/
 /var/lib/mydlp/quarantine/
 /var/lib/mydlp/revision/
+/var/lib/mydlp/internal/seclore/
