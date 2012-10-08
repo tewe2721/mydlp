@@ -21,27 +21,27 @@
 mydlpresourcesdir = $(datadir)/mydlp/resources
 
 mydlpresources_DATA = \
-	10k_content.txt
-	10k_cover.txt
-	10k_financial_data.txt
-	10k_financial_statement.txt
-	10k_performanceGraph.txt
-	10q_consolidated.txt
-	10q_content.txt
-	10q_cover.txt
-	10q_information.txt
-	cv.txt
-	disease_names.txt
-	drug_names.txt
-	icd9_codes.txt
-	india_form16A.txt
-	india_form16.txt
-	investment_finance_terms.txt
-	names_wl.txt
-	national_drug_code.txt
-	network_terms.txt
-	personal_finance_terms.txt
-	pricing_terms.txt
-	sensitive_diseases.txt
+	10k_content.txt \
+	10k_cover.txt \
+	10k_financial_data.txt \
+	10k_financial_statement.txt \
+	10k_performanceGraph.txt \
+	10q_consolidated.txt \
+	10q_content.txt \
+	10q_cover.txt \
+	10q_information.txt \
+	cv.txt \
+	disease_names.txt \
+	drug_names.txt \
+	icd9_codes.txt \
+	india_form16A.txt \
+	india_form16.txt \
+	investment_finance_terms.txt \
+	names_wl.txt \
+	national_drug_code.txt \
+	network_terms.txt \
+	personal_finance_terms.txt \
+	pricing_terms.txt \
+	sensitive_diseases.txt \
 	strategic_business_documents.txt
 
