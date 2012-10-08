@@ -61,7 +61,9 @@ start_link() -> thrift_socket_server:start([{handler, ?MODULE},
                                 {service, mydlp_ui_thrift},
                                 {port, 9092},
                                 {framed, true},
-                                {name, mydlp_ts}]).
+                                {name, mydlp_ts},
+				{socket_opts, [{recv_timeout, infinity}]}
+				]).
 
 stop(Server) -> thrift_server:stop(Server), ok.
 

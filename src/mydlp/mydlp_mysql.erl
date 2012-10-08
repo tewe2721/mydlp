@@ -100,7 +100,7 @@ repopulate_mnesia() ->
 compile_customer() -> compile_customer(mydlp_mnesia:get_dfid()).
 
 compile_customer(FilterId) when is_integer(FilterId) ->
-	gen_server:call(?MODULE, {compile_customer, FilterId} , 60000).
+	gen_server:call(?MODULE, {compile_customer, FilterId} , 900000).
 
 %is_multisite() -> gen_server:call(?MODULE, is_multisite).
 is_multisite() -> false.
@@ -115,7 +115,7 @@ handle_call({compile_customer, FilterId}, From, State) ->
 			mydlp_mnesia:remove_site(FilterId),
 			populate_site(FilterId),
                         Worker ! {async_reply, ok, From}
-		end, 60000),
+		end, 900000),
         {noreply, State};
 
 %handle_call(is_multisite, _From, State) ->
