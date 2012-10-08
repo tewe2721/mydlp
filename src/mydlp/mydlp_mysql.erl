@@ -48,6 +48,7 @@
 	delete_log_requeue/1,
 	repopulate_mnesia/0,
 	save_fingerprints/2,
+	get_progress/0,
 	stop/0]).
 
 %% gen_server callbacks
@@ -68,7 +69,8 @@
 	pool_size,
 	master_pid,
 	pool_pids,
-	pool_pids_l
+	pool_pids_l,
+	compile_progress
 }).
 
 %%%%%%%%%%%%% MyDLP Thrift RPC API
@@ -100,23 +102,18 @@ repopulate_mnesia() ->
 compile_customer() -> compile_customer(mydlp_mnesia:get_dfid()).
 
 compile_customer(FilterId) when is_integer(FilterId) ->
-	gen_server:call(?MODULE, {compile_customer, FilterId} , 900000).
+	gen_server:cast(?MODULE, {compile_customer, FilterId}).
 
 %is_multisite() -> gen_server:call(?MODULE, is_multisite).
 is_multisite() -> false.
 
 get_denied_page() -> gen_server:call(?MODULE, get_denied_page).
 
-%%%%%%%%%%%%%% gen_server handles
+set_progress(Progress) -> gen_server:cast(?MODULE, {set_progress, Progress}).
 
-handle_call({compile_customer, FilterId}, From, State) ->
-	Worker = self(),
-	?ASYNC(fun() ->
-			mydlp_mnesia:remove_site(FilterId),
-			populate_site(FilterId),
-                        Worker ! {async_reply, ok, From}
-		end, 900000),
-        {noreply, State};
+get_progress() -> gen_server:call(?MODULE, get_progress).
+
+%%%%%%%%%%%%%% gen_server handles
 
 %handle_call(is_multisite, _From, State) ->
 %	{ok, ATQ} = psq(app_type),
@@ -125,6 +122,9 @@ handle_call({compile_customer, FilterId}, From, State) ->
 %		[[0]] -> false;
 %		[[1]] -> true end,
 %        {reply, Reply, State};
+
+handle_call(get_progress, _From, #state{compile_progress=Progress} = State) ->
+        {reply, Progress, State};
 
 handle_call(get_denied_page, _From, State) ->
 	% Probably will create problems in multisite use.
@@ -226,6 +226,19 @@ handle_cast({requeued, LogId}, State) ->
 		lpsq(update_requeue_status, [LogId], 30000)
 	end),
 	{noreply, State};
+
+handle_cast({compile_customer, FilterId}, State) ->
+	?ASYNC(fun() ->
+		try	mydlp_mnesia:remove_site(FilterId),
+			populate_site(FilterId),
+			ok
+		after	set_progress(done)
+		end
+	end, 900000),
+	{noreply, State};
+
+handle_cast({set_progress, Progress}, State) ->
+	{noreply, State#state{compile_progress=Progress}};
 
 handle_cast(_Msg, State) ->
 	{noreply, State}.
@@ -346,7 +359,8 @@ init([]) ->
 	{ok, #state{host=Host, port=Port, 
 			user=User, password=Password, 
 			database=DB, database_l=LDB, pool_size=PoolSize, 
-			master_pid=MPid, pool_pids=PPids, pool_pids_l=PPids}}.
+			master_pid=MPid, pool_pids=PPids, pool_pids_l=PPids,
+			compile_progress=done}}.
 
 terminate(_Reason, _State) ->
 	ok.
@@ -411,6 +425,7 @@ mydlp_mnesia_write(I) when is_tuple(I) ->
 	ok.
 
 populate_site(FilterId) ->
+	set_progress(compile),
 	put(mydlp_mnesia_write, []),
 	%TODO: refine this
 	%{ok, FQ} = psq(filters_by_cid, [FilterId]),
@@ -429,14 +444,20 @@ populate_site(FilterId) ->
 	mydlp_mnesia:write(get(mydlp_mnesia_write)),
 	erase(mydlp_mnesia_write),
 
+	set_progress(post_compile),
+
 	put(mydlp_mnesia_write, []),
 	populate_mc_modules(),
 	mydlp_mnesia:write(get(mydlp_mnesia_write)),
 	erase(mydlp_mnesia_write),
 
+	set_progress(post_loads),
+
 	%%% post actions
 	mydlp_mnesia:post_start(),
 	mydlp_tc:load(),
+
+	set_progress(done),
 	ok.
 
 populate_configs([[Key, Value]|Rows], FilterId) ->
@@ -794,7 +815,7 @@ populate_match(Id, <<"keyword">>, IFeatureId) ->
 	[[KeywordS]] = REQ,
 	KeywordGroupId = mydlp_mnesia:get_unique_id(keyword_group_id),
 	write_keyword(KeywordGroupId, KeywordS),
-	FuncParams=[KeywordGroupId],
+	FuncParams=[{group_id, KeywordGroupId}],
 	new_match(Id, IFeatureId, Func, FuncParams);
 
 populate_match(Id, <<"keyword_group">>, IFeatureId) ->

@@ -43,6 +43,7 @@
 -export([
 	generateFingerprints/3,
 	compileCustomer/1,
+	getCompileStatus/0,
 	getRuletable/3,
 	receiveBegin/1,
 	receiveChunk/5,
@@ -78,6 +79,10 @@ handle_function(Function, Args) when is_atom(Function), is_tuple(Args) ->
 %%%%% FUNCTIONS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 compileCustomer(Customerid) -> mydlp_mysql:compile_customer(Customerid).
+
+getCompileStatus() -> 
+	Atom = mydlp_mysql:get_progress(),
+	atom_to_list(Atom).
 
 getRuletable(Ipaddress, Userh, Revisionid) ->
 	RevisionIdI = mydlp_api:binary_to_integer(Revisionid),

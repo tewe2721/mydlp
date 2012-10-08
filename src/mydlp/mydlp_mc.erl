@@ -90,13 +90,28 @@ mc_module(RuleIds) ->
 	Matchers = mydlp_mnesia:get_matchers(RuleIds),
 	mc_module1(RuleIds, Matchers).
 
-mc_module1(Target, Matchers) ->
+mc_module1(Target, Matchers0) ->
+	Matchers = merge_duplicate_matchers(Matchers0),
 	PDPatterns = get_pd_patterns(Matchers),
 	KWPatterns = get_kw_patterns(Matchers),
 	PDCodes = mc_generate(pd, PDPatterns, true),
 	KWCodes = mc_generate(kw, KWPatterns, true),
 	Codes = PDCodes ++ KWCodes,
 	#mc_module{target=Target, modules=Codes}.
+
+merge_duplicate_matchers(Matchers) -> merge_duplicate_matchers(Matchers, dict:new()).
+
+merge_duplicate_matchers([{Id, Func, FuncParam}|RestOfMatchers], D) ->
+	Key = {Func, FuncParam},
+	CurrentList = case dict:find(Key, D) of
+		{ok, L} -> L;
+		error -> [] end,
+	IdList = lists:umerge(CurrentList, [Id]),
+	D1 = dict:store(Key, IdList, D),
+	merge_duplicate_matchers(RestOfMatchers, D1);
+merge_duplicate_matchers([], D) -> matcher_dict_to_list(D).
+
+matcher_dict_to_list(D) -> [{IdList, Func, FuncParam} || {{Func, FuncParam}, IdList} <- dict:to_list(D)].
 
 mc_print(Engine, Data) ->
 	Results = mc_search(Engine, Data),
@@ -145,12 +160,14 @@ reset_table(TableName, Type) ->
 						{write_concurrency,false}, {read_concurrency,true}]);
 		_Else -> ets:delete_all_objects(TableName) end.
 
-set_accept(State, MatcherConf) -> 
+set_accept(State, MatcherConf) when is_list(MatcherConf) -> 
 	MCL = case ets:match(mc_states, {State, '$1'}) of
                 [] -> [MatcherConf];
                 [[undefined]] -> [MatcherConf];
-                [[MC]] -> lists:umerge(MC, [MatcherConf]) end,
-	ets:insert(mc_states, {State, MCL}).
+                [[MC]] -> lists:umerge(MC, MatcherConf) end,
+	ets:insert(mc_states, {State, MCL});
+set_accept(State, MatcherConf) -> 
+	set_accept(State, [MatcherConf]).
 
 is_accept_rec(root) -> false;
 is_accept_rec(not_found) -> false;
@@ -240,7 +257,7 @@ readlines(FileName) ->
 			try get_all_lines(Device, [])
 			after file:close(Device)
 			end;
-		Error -> ?ERROR_LOG("MC: Cannot open file for mc generation. Filename: "?S", Error: "?S, [FileName, Error])
+		Error -> ?ERROR_LOG("MC: Cannot open file for mc generation. Filename: "?S", Error: "?S, [FileName, Error]), []
 	end.
 
 get_all_lines(Device, Acc) ->
@@ -531,7 +548,7 @@ compile1(Source, JustReturnCode) ->
 	case JustReturnCode of
 		false -> code:load_binary(Mod, ?MODFILENAME, Code);
 		true -> ok end,
-	?DEBUG("Dynamic module compiled and loaded, ByteCodeSize: "?S"...~n", [size(Code)]),
+	?DEBUG("Dynamic module compiled, ByteCodeSize: "?S"...~n", [size(Code)]),
 	file:delete(Tempfile),
 	[{Mod, Code}].
 
@@ -570,7 +587,9 @@ get_kw_patterns([{Id, Func, FuncParam}|Rest], Acc) ->
 		false -> get_kw_patterns(Rest, Acc) end;
 get_kw_patterns([], Acc) -> lists:reverse(Acc).
 
-func_kw_pattern(keyword_match, KGIs) ->
+func_kw_pattern(keyword_match, KGI) when is_integer(KGI) ->
+	func_kw_pattern(keyword_match, [KGI]);
+func_kw_pattern(keyword_match, KGIs) when is_list(KGIs) ->
 	lists:append([mydlp_mnesia:get_keywords(GI) || GI <- KGIs]);
 func_kw_pattern(Func, FuncParam) -> 
 	?ERROR_LOG("Unexpected matcher definition, F: "?S" FP: "?S, [Func, FuncParam]), [].
