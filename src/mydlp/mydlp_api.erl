@@ -2479,23 +2479,22 @@ override_mime_headers(Headers, FN, GT0, Boundary) ->
 		_ -> "multipart/mixed; boundary=\"" ++ binary_to_list(Boundary) ++ "\"" end,
 
 	Headers1 = case lists:keyfind('content-type', 1, Headers) of
-		false -> Headers ++ [{'content-type', GT}];
-		{'content-type', _} -> lists:keyreplace('content-type', 1, Headers, {'content-type', GT}) end,
+		false -> 		Headers ++ [{'content-type', GT}];
+		{'content-type', _} -> 	lists:keyreplace('content-type', 1, Headers, {'content-type', GT}) end,
 
 	Headers2 = case lists:keyfind('content-transfer-encoding', 1, Headers1) of
-		false -> Headers1 ++ [{'content-transfer-encoding', "base64"}];
-		{'content-transfer-encoding', _} -> lists:keyreplace('content-transfer-encoding', 1, Headers1, {'content-transfer-encoding', "base64"}) end,
+		false -> 				Headers1 ++ [{'content-transfer-encoding', "base64"}];
+		{'content-transfer-encoding', _} -> 	lists:keyreplace('content-transfer-encoding', 1, Headers1, {'content-transfer-encoding', "base64"}) end,
 
 	Headers3 = case lists:keyfind('content-disposition', 1, Headers2) of
 		false -> case FN of
-			"" -> Headers2 ++ [{'content-disposition', "inline"}];
-			undefined -> Headers2 ++ [{'content-disposition', "inline"}];
-			_ -> Headers2 ++ [{'content-disposition', "attachment; filename=\"" ++ encode_rfc2047(FN) ++ "\""}] end;
-		{'content-disposition', "inline"} -> Headers2;
+			"" -> 		Headers2 ++ [{'content-disposition', "inline"}];
+			undefined -> 	Headers2 ++ [{'content-disposition', "inline"}];
+			_ -> 		Headers2 ++ [{'content-disposition', "attachment; filename=\"" ++ encode_rfc2047(FN) ++ "\""}] end;
 		{'content-disposition', _} -> case FN of
-			"" -> Headers2 ++ [{'content-disposition', "inline"}];
-			undefined -> Headers2 ++ [{'content-disposition', "inline"}];
-			_ -> Headers2 ++ [{'content-disposition', "attachment; filename=\"" ++ encode_rfc2047(FN) ++ "\""}] end end,
+			"" -> 		lists:keyreplace('content-disposition', 1, Headers2, {'content-disposition', "inline"});
+			undefined -> 	lists:keyreplace('content-disposition', 1, Headers2, {'content-disposition', "inline"});
+			_ ->	 	lists:keyreplace('content-disposition', 1, Headers2, {'content-disposition', "attachment; filename=\"" ++ encode_rfc2047(FN) ++ "\""}) end end,
 
 	Headers4 = lists:keydelete('content-length', 1, Headers3),
 	Headers4.
