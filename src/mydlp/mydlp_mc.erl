@@ -162,8 +162,8 @@ reset_table(TableName, Type) ->
 
 set_accept(State, MatcherConf) when is_list(MatcherConf) -> 
 	MCL = case ets:match(mc_states, {State, '$1'}) of
-                [] -> [MatcherConf];
-                [[undefined]] -> [MatcherConf];
+                [] -> MatcherConf;
+                [[undefined]] -> MatcherConf;
                 [[MC]] -> lists:umerge(MC, MatcherConf) end,
 	ets:insert(mc_states, {State, MCL});
 set_accept(State, MatcherConf) -> 

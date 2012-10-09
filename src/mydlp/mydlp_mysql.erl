@@ -451,8 +451,6 @@ populate_site(FilterId) ->
 	mydlp_mnesia:write(get(mydlp_mnesia_write)),
 	erase(mydlp_mnesia_write),
 
-	set_progress(post_loads),
-
 	%%% post actions
 	mydlp_mnesia:post_start(),
 	mydlp_tc:load(),
