@@ -224,13 +224,14 @@ seclore_protect_file(#file{filename=Filename, given_type=GT} = File, HotFolderId
 	File1 = mydlp_api:load_file(File),
 	{ok, TempDir} = mydlp_api:mktempdir(),
 	FN = case {Filename, GT} of
-		{undefined, undefined} -> "inline.txt";
-		{undefined, "text/plain"} -> "inline.txt";
-		{undefined, "text/html"} -> "inline.html";
-		{"", undefined} -> "inline.txt";
-		{"", "text/plain"} -> "inline.txt";
-		{"", "text/html"} -> "inline.html";
+		{undefined, undefined} -> "mail_content.txt";
+		{undefined, "text/plain"} -> "mail_content.txt";
+		{undefined, "text/html"} -> "mail_content.html";
+		{"", undefined} -> "mail_content.txt";
+		{"", "text/plain"} -> "mail_content.txt";
+		{"", "text/html"} -> "mail_content.html";
 		_ -> Filename end,
+	File2 = File1#file{filename=FN},
 	FilePath = filename:absname(FN, TempDir),
 	ok = file:write_file(FilePath, File1#file.data),
 	FPRet = try Bin = unicode:characters_to_binary(FilePath), {ok, Bin}
@@ -243,9 +244,9 @@ seclore_protect_file(#file{filename=Filename, given_type=GT} = File, HotFolderId
 				Else -> Else end;
 		{error, M} -> M end,
 	{ok, NewData} = file:read_file(FilePath),
-	File2 = mydlp_api:remove_all_data(File1),
+	File3 = mydlp_api:remove_all_data(File2),
 	mydlp_api:rmrf_dir(TempDir),
-	{Message, ?BF_C(File2, NewData)}.
+	{Message, ?BF_C(File3, NewData)}.
 
 post_query(State, Files) ->
 	case ?CFG(mail_archive) of

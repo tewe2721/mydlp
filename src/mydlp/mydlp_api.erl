@@ -2417,6 +2417,11 @@ mime_to_files([#mime{content=Content, header=Headers, body=Body}|Rest], Acc) ->
 	mime_to_files(lists:append(Body, Rest), [?BF_C(File,Data)|Acc]);
 mime_to_files([], Acc) -> lists:reverse(Acc).
 
+files_to_mime_encoded([#file{meta=[{mime_headers, Headers}]} = File]) ->
+	MimeEncap = #file{meta=[{mime_headers, Headers}]},
+	File1 = File#file{meta=[{mime_headers, []}]},
+	Files = [MimeEncap, File1],
+	files_to_mime_encoded(Files);
 files_to_mime_encoded(Files) -> 
 	Boundary = list_to_binary(get_random_string()),
 	files_to_mime_encoded(Files, Boundary, <<>>).
@@ -2440,10 +2445,20 @@ files_to_mime_encoded([], Boundary, Acc) -> <<Acc/binary, "--", Boundary/binary,
 
 content_to_mime_encoded(File0) ->
 	File = load_file(File0),
-	case File#file.data of
+	Base64 = case File#file.data of
 		<<>> -> <<>>;
 		undefined -> <<>>;
-		Data -> base64:encode(Data) end.
+		Data -> base64:encode(Data) end,
+	prettify_base64(Base64).
+
+prettify_base64(Base64) -> prettify_base64(Base64, <<>>).
+
+prettify_base64(Base64, Acc) when size(Base64) > 80 ->
+	<<C:80/binary, Rest/binary>> = Base64,
+	prettify_base64(Rest, <<Acc/binary, C/binary, "\r\n">>);
+prettify_base64(Base64, Acc) ->
+	<<Acc/binary, Base64/binary>>.
+
 	
 headers_to_mime_encoded(File) -> headers_to_mime_encoded(File, undefined).
 
