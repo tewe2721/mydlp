@@ -410,10 +410,9 @@ mc_fsm_handle(PD, P, {continue, S, <<_C/utf8, R/binary>> = D, I, A}) ->
 	NP = case P of
 		" ++ p(NumberOfPages) ++ " -> 1;
 		_ElseI -> P+1 end,
-
 	case {S, dict:find(NP, PD)} of
 		{root, {ok, I}} -> mc_fsm(dict:new(), 1, root, R, I + 1, A);
-		{_, {ok, I}} -> mc_fsm(dict:new(), 1, root, D, I + 1, A);
+		{_AnyOtherState, {ok, I}} -> mc_fsm(dict:new(), 1, root, D, I, A);
 		_Else -> PD1 = dict:store(P, I, PD),
 			mc_fsm(PD1, NP, S, D, I, A) end.
 ").
