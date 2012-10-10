@@ -62,13 +62,12 @@
 -record(ifeature, {
 	id,
 	itype_id,
+	match_id,
 	threshold
 }).
 
 -record(match, {
 	id,
-	orig_id,
-	ifeature_id,
 	func,
 	func_params=[]
 }).

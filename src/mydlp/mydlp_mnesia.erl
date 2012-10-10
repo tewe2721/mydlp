@@ -574,20 +574,20 @@ handle_query({get_matchers, all}) ->
 
 handle_query({get_matchers, RuleIDs}) ->
 	ML = lists:map(fun(RId) ->
-		Q1 = ?QLCQ([F#ifeature.id ||
+		Q1 = ?QLCQ([F#ifeature.match_id ||
 			F <- mnesia:table(ifeature),
 			T <- mnesia:table(itype),
 			T#itype.rule_id == RId,
 			F#ifeature.itype_id == T#itype.id
 			]),
-		IFIds = ?QLCE(Q1),
-		lists:map(fun(IFId) ->
+		MIds = ?QLCE(Q1),
+		lists:map(fun(MId) ->
 			Q2 = ?QLCQ([{M#match.id, M#match.func, M#match.func_params} ||
 				M <- mnesia:table(match),
-				M#match.ifeature_id ==  IFId
+				M#match.id == MId
 				]),
 			?QLCE(Q2) 
-		end, IFIds)
+		end, MIds)
 	end, RuleIDs),
 	lists:usort(lists:flatten(ML));
 
@@ -1212,16 +1212,16 @@ find_itypes(RuleId) ->
 	?QLCE(QM).
 
 find_ifeatures(ITypeId) ->
-	QM = ?QLCQ([{F#ifeature.threshold, find_func(F#ifeature.id)} ||
+	QM = ?QLCQ([{F#ifeature.threshold, find_func(F#ifeature.match_id)} ||
 			F <- mnesia:table(ifeature),
 			F#ifeature.itype_id == ITypeId
 		]),
 	?QLCE(QM).
 
-find_func(IFeatureId) ->
+find_func(MatchId) ->
 	QM = ?QLCQ([{M#match.id, M#match.func, M#match.func_params} ||
 			M <- mnesia:table(match),
-			M#match.ifeature_id == IFeatureId
+			M#match.id == MatchId
 		]),
 	case ?QLCE(QM) of
 		[FuncTuple] -> FuncTuple;
@@ -1367,7 +1367,9 @@ remove_ifeatures(IFIs) -> lists:foreach(fun(Id) -> remove_ifeature(Id) end, IFIs
 remove_ifeature(IFI) ->
 	Q1 = ?QLCQ([M#match.func_params ||	
 		M <- mnesia:table(match),
-		M#match.ifeature_id == IFI,
+		F <- mnesia:table(ifeature),
+		F#ifeature.id == IFI,
+		M#match.id == F#ifeature.match_id,
 		M#match.func == md5_match
 		]),
 	FHGIs = ?QLCE(Q1),
@@ -1375,15 +1377,39 @@ remove_ifeature(IFI) ->
 
 	Q2 = ?QLCQ([M#match.func_params ||	
 		M <- mnesia:table(match),
-		M#match.ifeature_id == IFI,
+		F <- mnesia:table(ifeature),
+		F#ifeature.id == IFI,
+		M#match.id == F#ifeature.match_id,
 		M#match.func == pdm_match
 		]),
 	FFGIs = ?QLCE(Q2),
 	remove_filefingerprints(lists:usort(lists:flatten(FFGIs))),
 
+	Q3 = ?QLCQ([M#match.func_params ||	
+		M <- mnesia:table(match),
+		F <- mnesia:table(ifeature),
+		F#ifeature.id == IFI,
+		M#match.id == F#ifeature.match_id,
+		M#match.func == keyword_match
+		]),
+	KGIs = ?QLCE(Q3),
+	remove_keywords(lists:usort(lists:flatten(KGIs))),
+
+	Q4 = ?QLCQ([M#match.func_params ||	
+		M <- mnesia:table(match),
+		F <- mnesia:table(ifeature),
+		F#ifeature.id == IFI,
+		M#match.id == F#ifeature.match_id,
+		M#match.func == regex_match
+		]),
+	RGIs = ?QLCE(Q4),
+	remove_regexes(lists:usort(lists:flatten(RGIs))),
+
 	Q0 = ?QLCQ([M#match.id ||	
 		M <- mnesia:table(match),
-		M#match.ifeature_id == IFI
+		F <- mnesia:table(ifeature),
+		F#ifeature.id == IFI,
+		M#match.id == F#ifeature.match_id
 		]),
 	MIs = ?QLCE(Q0),
 	remove_matches(MIs),
@@ -1406,6 +1432,19 @@ remove_filefingerprints1(GroupId) ->
 	Fingerprints = mnesia:match_object(#file_fingerprint{id='_', file_id='_', group_id=GroupId, fingerprint='_'}),
 	lists:foreach(fun(#file_fingerprint{id=Id}) -> mnesia:delete({file_fingerprint, Id}) end, Fingerprints),
 	ok.
+
+remove_keywords(KGIs) -> lists:foreach(fun(GroupId) -> remove_keyword(GroupId) end, KGIs), ok.
+
+remove_keyword({group_id, GroupId}) ->
+	Keywords = mnesia:match_object(#keyword{id='_', group_id=GroupId, keyword='_'}),
+	lists:foreach(fun(#keyword{id=Id}) -> mnesia:delete({keyword, Id}) end, Keywords), ok;
+remove_keyword(_) -> ok.
+
+remove_regexes(RGIs) -> lists:foreach(fun(GroupId) -> remove_regex(GroupId) end, RGIs), ok.
+
+remove_regex(GroupId) ->
+	Regexes = mnesia:match_object(#regex{id='_', group_id=GroupId, plain='_', compiled='_', error='_'}),
+	lists:foreach(fun(#regex{id=Id}) -> mnesia:delete({regex, Id}) end, Regexes), ok.
 
 -endif.
 

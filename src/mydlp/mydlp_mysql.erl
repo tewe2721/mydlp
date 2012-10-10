@@ -413,20 +413,11 @@ psqt(PreparedKey, Params) ->
 	end.
 
 %%%%%%%%%%%% internal
-
-mydlp_mnesia_write(I) when is_list(I) ->
-	L = get(mydlp_mnesia_write),
-	put(mydlp_mnesia_write, lists:append(I,L)),
-	ok;
-
-mydlp_mnesia_write(I) when is_tuple(I) ->
-	L = get(mydlp_mnesia_write),
-	put(mydlp_mnesia_write, [I|L]),
-	ok.
+	
 
 populate_site(FilterId) ->
 	set_progress(compile),
-	put(mydlp_mnesia_write, []),
+	init_mydlp_mnesia_write(),
 	%TODO: refine this
 	%{ok, FQ} = psq(filters_by_cid, [FilterId]),
 	populate_filters([[FilterId, <<"pass">> ]], FilterId),
@@ -441,19 +432,19 @@ populate_site(FilterId) ->
 
 	{ok, UDQ} = psq(usb_devices),
 	populate_usb_devices(UDQ, FilterId),
-	mydlp_mnesia:write(get(mydlp_mnesia_write)),
-	erase(mydlp_mnesia_write),
+	mydlp_mnesia:write(get_mydlp_mnesia_write()),
+	erase_mydlp_mnesia_write(),
 
 	set_progress(post_compile),
-
-	put(mydlp_mnesia_write, []),
-	populate_mc_modules(),
-	mydlp_mnesia:write(get(mydlp_mnesia_write)),
-	erase(mydlp_mnesia_write),
 
 	%%% post actions
 	mydlp_mnesia:post_start(),
 	mydlp_tc:load(),
+
+	init_mydlp_mnesia_write(),
+	populate_mc_modules(),
+	mydlp_mnesia:write(get_mydlp_mnesia_write()),
+	erase_mydlp_mnesia_write(),
 
 	set_progress(done),
 	ok.
@@ -629,24 +620,12 @@ populate_itypes([], _RuleId) -> ok.
 
 populate_ifeatures([[Threshold, MatcherId]| Rows], ITypeId) ->
 	IFeatureId = mydlp_mnesia:get_unique_id(ifeature),
-	F = #ifeature{id=IFeatureId, itype_id=ITypeId, threshold=Threshold},
 	{ok, MQ} = psq(match_by_id, [MatcherId]),
-	populate_matches(MQ, IFeatureId),
+	MatchId = populate_match(MQ),
+	F = #ifeature{id=IFeatureId, itype_id=ITypeId, match_id=MatchId, threshold=Threshold},
 	mydlp_mnesia_write(F),
 	populate_ifeatures(Rows, ITypeId);
 populate_ifeatures([], _RuleId) -> ok.
-
-populate_matches(Rows, IFeatureId) -> populate_matches(Rows, IFeatureId, []).
-
-populate_matches([[Id, Func]| Rows], IFeatureId, Matches) ->
-	Match = populate_match(Id, Func, IFeatureId),
-	populate_matches(Rows, IFeatureId, [Match|Matches]);
-populate_matches([], _IFeatureId, Matches) -> 
-	% TODO: whitefiles
-	%Matches1 = expand_matches(lists:reverse(Matches)),
-	%Matches2 = whitefile(Matches1),
-	write_matches(Matches),
-	ok.
 
 %whitefile(Matches) -> whitefile(Matches, []).
 
@@ -656,10 +635,15 @@ populate_matches([], _IFeatureId, Matches) ->
 %whitefile([Match|Matches], Returns) -> whitefile(Matches, [Match|Returns]);
 %whitefile([], Returns) -> lists:reverse(Returns).
 
-new_match(Id, Parent, Func) -> new_match(Id, Parent, Func, []).
+new_match(Func) -> new_match(Func, []).
 
-new_match(OrigId, IFeatureId, Func, FuncParams) ->
-	#match{orig_id=OrigId, ifeature_id=IFeatureId, func=Func, func_params=FuncParams}.
+new_match(Func, FuncParams) ->
+	case find_match_id(Func, FuncParams) of
+		none -> NewId = mydlp_mnesia:get_unique_id(match),
+			M = #match{id=NewId, func=Func, func_params=FuncParams},
+			mydlp_mnesia_write(M),
+			NewId;
+		Id ->	Id end.
 
 write_regex(RegexGroupId, RegexS) ->
 	RegexId = mydlp_mnesia:get_unique_id(regex),
@@ -671,152 +655,150 @@ write_keyword(KeywordGroupId, KeywordS) ->
 	K = #keyword{id=KeywordId, group_id=KeywordGroupId, keyword=KeywordS},
 	mydlp_mnesia_write(K).
 
-write_matches(Matches) ->
-	Matches1 = [ M#match{id=mydlp_mnesia:get_unique_id(match)} || M <- Matches ],
-	mydlp_mnesia_write(Matches1).
+populate_match([[OrigId, FuncName]]) -> populate_match(OrigId, FuncName).
 
-populate_match(Id, <<"encrypted_archive">>, IFeatureId) ->
+populate_match(_Id, <<"encrypted_archive">>) ->
 	Func = e_archive_match,
-	new_match(Id, IFeatureId, Func);
+	new_match(Func);
 
-populate_match(Id, <<"encrypted_file">>, IFeatureId) ->
+populate_match(_Id, <<"encrypted_file">>) ->
 	Func = e_file_match,
-	new_match(Id, IFeatureId, Func);
+	new_match(Func);
 
-populate_match(Id, <<"trid">>, IFeatureId) ->
+populate_match(_Id, <<"trid">>) ->
 	Func = trid_match,
-	new_match(Id, IFeatureId, Func);
+	new_match(Func);
 
-populate_match(Id, <<"ssn">>, IFeatureId) ->
+populate_match(_Id, <<"ssn">>) ->
 	Func = ssn_match,
-	new_match(Id, IFeatureId, Func);
+	new_match(Func);
 
-populate_match(Id, <<"iban">>, IFeatureId) ->
+populate_match(_Id, <<"iban">>) ->
 	Func = iban_match,
-	new_match(Id, IFeatureId, Func);
+	new_match(Func);
 
-populate_match(Id, <<"aba">>, IFeatureId) ->
+populate_match(_Id, <<"aba">>) ->
 	Func = aba_match,
-	new_match(Id, IFeatureId, Func);
+	new_match(Func);
 
-populate_match(Id, <<"cc">>, IFeatureId) ->
+populate_match(_Id, <<"cc">>) ->
 	Func = cc_match,
-	new_match(Id, IFeatureId, Func);
+	new_match(Func);
 
-populate_match(Id, <<"cc_track1">>, IFeatureId) ->
+populate_match(_Id, <<"cc_track1">>) ->
 	Func = cc_track1_match,
-	new_match(Id, IFeatureId, Func);
+	new_match(Func);
 
-populate_match(Id, <<"cc_track2">>, IFeatureId) ->
+populate_match(_Id, <<"cc_track2">>) ->
 	Func = cc_track2_match,
-	new_match(Id, IFeatureId, Func);
+	new_match(Func);
 
-populate_match(Id, <<"cc_track3">>, IFeatureId) ->
+populate_match(_Id, <<"cc_track3">>) ->
 	Func = cc_track3_match,
-	new_match(Id, IFeatureId, Func);
+	new_match(Func);
 
-populate_match(Id, <<"ten_digit">>, IFeatureId) ->
+populate_match(_Id, <<"ten_digit">>) ->
 	Func = ten_digit_match,
-	new_match(Id, IFeatureId, Func);
+	new_match(Func);
 
-populate_match(Id, <<"nine_digit">>, IFeatureId) ->
+populate_match(_Id, <<"nine_digit">>) ->
 	Func = nine_digit_match,
-	new_match(Id, IFeatureId, Func);
+	new_match(Func);
 
-populate_match(Id, <<"fe_digit">>, IFeatureId) ->
+populate_match(_Id, <<"fe_digit">>) ->
 	Func = fe_digit_match,
-	new_match(Id, IFeatureId, Func);
+	new_match(Func);
 
-populate_match(Id, <<"ip">>, IFeatureId) ->
+populate_match(_Id, <<"ip">>) ->
 	Func = ip_match,
-	new_match(Id, IFeatureId, Func);
+	new_match(Func);
 
-populate_match(Id, <<"mac">>, IFeatureId) ->
+populate_match(_Id, <<"mac">>) ->
 	Func = mac_match,
-	new_match(Id, IFeatureId, Func);
+	new_match(Func);
 
-populate_match(Id, <<"icd10">>, IFeatureId) ->
+populate_match(_Id, <<"icd10">>) ->
 	Func = icd10_match,
-	new_match(Id, IFeatureId, Func);
+	new_match(Func);
 
-populate_match(Id, <<"canada_sin">>, IFeatureId) ->
+populate_match(_Id, <<"canada_sin">>) ->
 	Func = canada_sin_match,
-	new_match(Id, IFeatureId, Func);
+	new_match(Func);
 
-populate_match(Id, <<"france_insee">>, IFeatureId) ->
+populate_match(_Id, <<"france_insee">>) ->
 	Func = france_insee_match,
-	new_match(Id, IFeatureId, Func);
+	new_match(Func);
 
-populate_match(Id, <<"uk_nino">>, IFeatureId) ->
+populate_match(_Id, <<"uk_nino">>) ->
 	Func = uk_nino_match,
-	new_match(Id, IFeatureId, Func);
+	new_match(Func);
 
-populate_match(Id, <<"italy_fc">>, IFeatureId) ->
+populate_match(_Id, <<"italy_fc">>) ->
 	Func = italy_fc_match,
-	new_match(Id, IFeatureId, Func);
+	new_match(Func);
 
-populate_match(Id, <<"spain_dni">>, IFeatureId) ->
+populate_match(_Id, <<"spain_dni">>) ->
 	Func = spain_dni_match,
-	new_match(Id, IFeatureId, Func);
+	new_match(Func);
 
-populate_match(Id, <<"dna">>, IFeatureId) ->
+populate_match(_Id, <<"dna">>) ->
 	Func = dna_match,
-	new_match(Id, IFeatureId, Func);
+	new_match(Func);
 
-populate_match(Id, <<"said">>, IFeatureId) ->
+populate_match(_Id, <<"said">>) ->
 	Func = said_match,
-	new_match(Id, IFeatureId, Func);
+	new_match(Func);
 
-populate_match(Id, <<"pan">>, IFeatureId) ->
+populate_match(_Id, <<"pan">>) ->
 	Func = pan_match,
-	new_match(Id, IFeatureId, Func);
+	new_match(Func);
 
-populate_match(Id, <<"tan">>, IFeatureId) ->
+populate_match(_Id, <<"tan">>) ->
 	Func = tan_match,
-	new_match(Id, IFeatureId, Func);
+	new_match(Func);
 
-populate_match(Id, <<"cpf">>, IFeatureId) ->
+populate_match(_Id, <<"cpf">>) ->
 	Func = cpf_match,
-	new_match(Id, IFeatureId, Func);
+	new_match(Func);
 
-populate_match(Id, <<"china_icn">>, IFeatureId) ->
+populate_match(_Id, <<"china_icn">>) ->
 	Func = china_icn_match,
-	new_match(Id, IFeatureId, Func);
+	new_match(Func);
 
-populate_match(Id, <<"cc_edate">>, IFeatureId) ->
+populate_match(_Id, <<"cc_edate">>) ->
 	Func = cc_edate_match,
-	new_match(Id, IFeatureId, Func);
+	new_match(Func);
 
-populate_match(Id, <<"gdate">>, IFeatureId) ->
+populate_match(_Id, <<"gdate">>) ->
 	Func = gdate_match,
-	new_match(Id, IFeatureId, Func);
+	new_match(Func);
 
-populate_match(Id, <<"birthdate">>, IFeatureId) ->
+populate_match(_Id, <<"birthdate">>) ->
 	Func = birthdate_match,
-	new_match(Id, IFeatureId, Func);
+	new_match(Func);
 
-populate_match(Id, <<"scode">>, IFeatureId) ->
+populate_match(_Id, <<"scode">>) ->
 	Func = scode_match,
-	new_match(Id, IFeatureId, Func);
+	new_match(Func);
 
-populate_match(Id, <<"scode_ada">>, IFeatureId) ->
+populate_match(_Id, <<"scode_ada">>) ->
 	Func = scode_ada_match,
-	new_match(Id, IFeatureId, Func);
+	new_match(Func);
 
-populate_match(Id, <<"all">>, IFeatureId) ->
+populate_match(_Id, <<"all">>) ->
 	Func = all,
-	new_match(Id, IFeatureId, Func);
+	new_match(Func);
 
-populate_match(Id, <<"keyword">>, IFeatureId) ->
+populate_match(Id, <<"keyword">>) ->
 	Func = keyword_match,
 	{ok, REQ} = psq(regex_by_matcher_id, [Id]),
 	[[KeywordS]] = REQ,
 	KeywordGroupId = mydlp_mnesia:get_unique_id(keyword_group_id),
 	write_keyword(KeywordGroupId, KeywordS),
 	FuncParams=[{group_id, KeywordGroupId}],
-	new_match(Id, IFeatureId, Func, FuncParams);
+	new_match(Func, FuncParams);
 
-populate_match(Id, <<"keyword_group">>, IFeatureId) ->
+populate_match(Id, <<"keyword_group">>) ->
 	Func = keyword_match,
 
 	{ok, BKGQ} = psq(kg_bundled_by_matcher_id, [Id]),
@@ -832,27 +814,27 @@ populate_match(Id, <<"keyword_group">>, IFeatureId) ->
 			end, REREQ),
 			[{group_id, KeywordGroupId}];
 		[[BundledFileName]] -> [{file, BundledFileName}] end,
-	new_match(Id, IFeatureId, Func, FuncParams);
+	new_match(Func, FuncParams);
 
-populate_match(Id, <<"regex">>, IFeatureId) ->
+populate_match(Id, <<"regex">>) ->
 	Func = regex_match,
 	{ok, REQ} = psq(regex_by_matcher_id, [Id]),
 	[[RegexS]] = REQ,
 	RegexGroupId = mydlp_mnesia:get_unique_id(regex_group_id),
 	write_regex(RegexGroupId, RegexS),
 	FuncParams=[RegexGroupId],
-	new_match(Id, IFeatureId, Func, FuncParams);
+	new_match(Func, FuncParams);
 
-populate_match(Id, <<"document_hash">>, IFeatureId) ->
+populate_match(Id, <<"document_hash">>) ->
 	Func = md5_match,
 	{ok, DDQ} = psq(dd_by_matcher_id, [Id]),
 	[[DDId]] = DDQ,
 	{ok, FHQ} = psq(filehash_by_dd_id, [DDId]),
 	populate_filehashes(FHQ, DDId),
 	FuncParams=[DDId],
-	new_match(Id, IFeatureId, Func, FuncParams);
+	new_match(Func, FuncParams);
 
-populate_match(Id, <<"document_pdm">>, IFeatureId) ->
+populate_match(Id, <<"document_pdm">>) ->
 	Func = pdm_match,
 	{ok, DDQ} = psq(dd_by_matcher_id, [Id]),
 	[[DDId]] = DDQ,
@@ -861,9 +843,9 @@ populate_match(Id, <<"document_pdm">>, IFeatureId) ->
 	{ok, RFQ} = psq(rdbmsfingerprint_by_dd_id, [DDId]),
 	populate_filefingerprints(RFQ, DDId),
 	FuncParams=[DDId],
-	new_match(Id, IFeatureId, Func, FuncParams);
+	new_match(Func, FuncParams);
 
-populate_match(Id, Matcher, _) -> throw({error, {unsupported_match, Id, Matcher} }).
+populate_match(Id, Matcher) -> throw({error, {unsupported_match, Id, Matcher} }).
 
 populate_data_formats([DFId|DFs]) ->
 	{ok, MQ} = psq(mimes_by_data_format_id, [DFId]),
@@ -997,6 +979,44 @@ validate_action_for_channel(api, archive) -> ok;
 validate_action_for_channel(api, quarantine) -> ok;
 validate_action_for_channel(Channel, Action) -> throw({error, {unexpected_action_for_channel, Channel, Action}}).
 
+mydlp_mnesia_write(I) when is_list(I) ->
+	L = get(mydlp_mnesia_write),
+	put(mydlp_mnesia_write, lists:append(I,L)),
+	ok;
+
+mydlp_mnesia_write(#match{} = M) ->
+	L = get(mydlp_mnesia_write_match),
+	put(mydlp_mnesia_write_match, [M|L]),
+	ok;
+
+mydlp_mnesia_write(I) when is_tuple(I) ->
+	L = get(mydlp_mnesia_write),
+	put(mydlp_mnesia_write, [I|L]),
+	ok.
+
+get_mydlp_mnesia_write() ->
+	MW = get(mydlp_mnesia_write),
+	MWM = get(mydlp_mnesia_write_match),
+	lists:append(MW, MWM).
+
+erase_mydlp_mnesia_write() ->
+	erase(mydlp_mnesia_write),
+	erase(mydlp_mnesia_write_match),
+	ok.
+
+init_mydlp_mnesia_write() ->
+	put(mydlp_mnesia_write, []),
+	put(mydlp_mnesia_write_match, []),
+	ok.
+	
+find_match_id(Func, FuncParam) ->
+	MWM = get(mydlp_mnesia_write_match),
+	find_match_id(MWM, Func, FuncParam).
+
+find_match_id([#match{id=Id, func=Func, func_params=FuncParam}|_Rest], Func, FuncParam) -> Id;
+find_match_id([_M|Rest], Func, FuncParams) -> find_match_id(Rest, Func, FuncParams);
+find_match_id([], _Func, _FuncParams) -> none.
+
 pre_push_log(RuleId, Ip, User, Destination, Action, Channel, Misc) -> 
 %	{FilterId, RuleId1} = case RuleId of
 %		{dr, CId} -> {CId, 0};
@@ -1051,6 +1071,7 @@ pre_insert_log(Filename) ->
 		F when is_binary(F) -> F end,
 
 	{Filename1}.
+
 
 -endif.
 
