@@ -61,6 +61,7 @@
 	write/1,
 	delete/1,
 	flush_cache/0,
+	post_start/1,
 	post_start/0
 	]).
 
@@ -976,8 +977,15 @@ repopulate_mnesia() -> schedule_post_start().
 -endif.
 
 post_start() ->
+	post_start(mnesia),
+	post_start(mc),
+	ok.
+
+post_start(mnesia) ->
 	consistency_chk(),
 	mydlp_dynamic:load(),
+	ok;
+post_start(mc) ->
 	mydlp_mc:mc_load_mnesia(),
 	ok.
 

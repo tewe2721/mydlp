@@ -438,13 +438,15 @@ populate_site(FilterId) ->
 	set_progress(post_compile),
 
 	%%% post actions
-	mydlp_mnesia:post_start(),
+	mydlp_mnesia:post_start(mnesia),
 	mydlp_tc:load(),
 
 	init_mydlp_mnesia_write(),
 	populate_mc_modules(),
 	mydlp_mnesia:write(get_mydlp_mnesia_write()),
 	erase_mydlp_mnesia_write(),
+
+	mydlp_mnesia:post_start(mc),
 
 	set_progress(done),
 	ok.
