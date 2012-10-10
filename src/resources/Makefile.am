@@ -37,11 +37,13 @@ mydlpresources_DATA = \
 	india_form16A.txt \
 	india_form16.txt \
 	investment_finance_terms.txt \
-	names_wl.txt \
+	names.txt \
+	names_hindu.txt \
 	national_drug_code.txt \
 	network_terms.txt \
 	personal_finance_terms.txt \
 	pricing_terms.txt \
 	sensitive_diseases.txt \
+	surnames.txt \
 	strategic_business_documents.txt
 
