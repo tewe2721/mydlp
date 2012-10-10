@@ -500,15 +500,15 @@ canada_sin_match() -> {normalized, {distance, true}, {pd, true}, {kw, false}}.
 
 canada_sin_match({conf, _Conf}) -> none;
 
-canada_sin_match({pd_patterns, "narrow"}) -> ?P({[{numeric, 3}, {special, "-"}, {numeric, 2}, {special, "-"}, {numeric, 4}], encap_ws});	
+canada_sin_match({pd_patterns, "narrow"}) -> ?P({[{numeric, 3}, {special, "-"}, {numeric, 3}, {special, "-"}, {numeric, 3}], encap_ws});	
 canada_sin_match({pd_patterns, "normal"}) -> 
-	?P({[{numeric, 3}, {special, "-"}, {numeric, 2}, {special, "-"}, {numeric, 4}], encap_ws}) ++
-	?P({[{numeric, 3}, ws, {numeric, 2}, ws, {numeric, 4}], encap_ws});	
+	?P({[{numeric, 3}, {special, "-"}, {numeric, 3}, {special, "-"}, {numeric, 3}], encap_ws}) ++
+	?P({[{numeric, 3}, ws, {numeric, 3}, ws, {numeric, 3}], encap_ws});	
 canada_sin_match({pd_patterns, "wide"}) ->
-	?P({[{numeric, 3}, {special, "-"}, {numeric, 2}, {special, "-"}, {numeric, 4}], none}) ++
-	?P({[{numeric, 3}, ws, {numeric, 2}, ws, {numeric, 4}], none}) ++	
-	?P({[{numeric, 3}, {special, "-"}, {numeric, 2}, {special, "-"}, {numeric, 4}], join_ws}) ++
-	?P({[{numeric, 3}, ws, {numeric, 2}, ws, {numeric, 4}], join_ws}).	
+	?P({[{numeric, 3}, {special, "-"}, {numeric, 3}, {special, "-"}, {numeric, 3}], none}) ++
+	?P({[{numeric, 3}, ws, {numeric, 3}, ws, {numeric, 3}], none}) ++	
+	?P({[{numeric, 3}, {special, "-"}, {numeric, 3}, {special, "-"}, {numeric, 3}], join_ws}) ++
+	?P({[{numeric, 3}, ws, {numeric, 3}, ws, {numeric, 3}], join_ws}).	
 
 canada_sin_match(_Conf, Phrase) -> mydlp_api:is_valid_sin(Phrase).
 
