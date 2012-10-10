@@ -108,7 +108,8 @@ get_text(Filename, MT, Data) when is_list(Filename) ->
 	FilenameB = unicode:characters_to_binary(Filename),
 	get_text(FilenameB, MT, Data);
 get_text(Filename, MT, Data) ->
-	try	call_pool({thrift, java, getText, [Filename, MT, Data]})
+	try	Text = call_pool({thrift, java, getText, [Filename, MT, Data]}),
+		<<" ", Text/binary, " ">>
 	catch Class:Error ->
 		?ERROR_LOG("Error occured when extractiong text. Filename: "?S", Mimetype: "?S".~nClass: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
 				[Filename, MT, Class, Error, erlang:get_stacktrace()]),
