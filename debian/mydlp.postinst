@@ -46,7 +46,7 @@ fi
 generate_keys() {
 	mkdir -p $SSLDIR || exit 1
 
-	[ -e $SSLDIR/private.pem ] || $OPENSSL genrsa > $SSLDIR/private.pem
+	[ -e $SSLDIR/private.pem ] || $OPENSSL genrsa 4096 > $SSLDIR/private.pem
 
 	[ -e $SSLDIR/public.pem ] || (echo -e "TR\nAnkara\nTechnopolis\nMyDLP\nMyDLP\n*\nsupport@mydlp.com\n"| $OPENSSL req -new -x509 -days 3650 -key $SSLDIR/private.pem -out $SSLDIR/public.pem)
 
@@ -141,6 +141,9 @@ case "$1" in
 		patch_mysql_schema $2
 		if $DPKGBIN --compare-versions "0.9.140-1" lt "$2"; then
 			restart_rsyslog
+		fi
+		if $DPKGBIN --compare-versions "$2" le "0.9.159-1"; then
+			generate_keys
 		fi
 	else
 		# first install
