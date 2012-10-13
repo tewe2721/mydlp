@@ -540,10 +540,23 @@ compile(Engine, Pages, _PageCount, _ProcessCount, JustReturnCode, Acc) ->
 	lists:flatten(Acc ++ Codes).
 
 compile1(Source, JustReturnCode) ->
-	{ok, Tempfile0} = mydlp_workdir:tempfile(),
+	Tempfile0 = case mydlp_workdir:tempfile() of
+		{ok, TF} -> TF;
+		Error -> ?ERROR_LOG("Error occurred when trying to create a temp file. Error: "?S, [Error]),
+			throw({error, cannot_create_tempfile}) end,
 	Tempfile = Tempfile0 ++ ".erl",
-	file:write_file(Tempfile, Source),
-	{ok, Mod, Code} = compile:file(Tempfile ,[binary, compressed, verbose,report_errors,report_warnings] ),
+	case file:write_file(Tempfile, Source) of
+		ok -> ok;
+		Error2 -> ?ERROR_LOG("Error occurred when trying to write to temp file.~nTempfile: "?S", Error: "?S, [Tempfile, Error2]),
+			throw({error, cannot_write_to_tempfile}) end,
+	{Mod, Code} = case compile:file(Tempfile ,[binary, compressed, verbose,report_errors,report_warnings] ) of
+		{ok, M, C} -> {M, C};
+		{ok, M, C, Ws} ->	?ERROR_LOG("Warnings occurred when compiling mc module.~nWarnings: "?S, [Ws]),
+					{M, C};
+		{error, Es, Ws} ->	?ERROR_LOG("Error occurred when compiling mc module.~nErrors: "?S"~nWarnings: "?S, [Es, Ws]),
+					throw({error, {compilation_error, Es, Ws}});
+		error ->		?ERROR_LOG("Error occurred when compiling mc module.", []),
+					throw({error, compilation_error}) end,
 	case JustReturnCode of
 		false -> code:load_binary(Mod, ?MODFILENAME, Code);
 		true -> ok end,
