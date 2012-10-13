@@ -38,6 +38,8 @@ AWKBIN=/usr/bin/awk
 DPKGBIN=/usr/bin/dpkg
 ECHOBIN=/bin/echo
 
+SQUIDSSLCRTDDIR=/var/lib/ssl_db/
+
 if test -f /etc/default/mydlp; then
         . /etc/default/mydlp
 fi
@@ -63,6 +65,12 @@ configure_apache() {
 	/usr/sbin/a2dissite default-ssl
 	/usr/sbin/a2dissite default
 	/usr/sbin/a2ensite mydlp
+}
+
+cleanup_sslcrtd_db() {
+	/etc/init.d/squid3 stop
+	rm -rf $SQUIDSSLCRTDDIR
+	/etc/init.d/squid3 start
 }
 
 generate_init_epoch() {
@@ -144,6 +152,7 @@ case "$1" in
 		fi
 		if $DPKGBIN --compare-versions "$2" le "0.9.159-1"; then
 			generate_keys
+			cleanup_sslcrtd_db
 		fi
 	else
 		# first install
