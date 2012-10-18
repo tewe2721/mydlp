@@ -45,6 +45,7 @@
 	poppush_all/1,
 	delete/1,
 	is_empty/1,
+	total_size/1,
 	stop/0]).
 
 %% gen_server callbacks
@@ -95,54 +96,56 @@ poppush(SpoolName) -> gen_server:call(?MODULE, {poppush, SpoolName}, 30000).
 
 poppush_all(SpoolName) -> gen_server:call(?MODULE, {poppush_all, SpoolName}, 60000).
 
+total_size(SpoolName) -> gen_server:call(?MODULE, {total_size, SpoolName}, 30000).
+
 %%%%%%%%%%%%%% gen_server handles
 
 handle_call({pop, SpoolName}, _From, #state{spools = Spools} = State) ->
-	case dict:is_key(SpoolName, Spools) of
-		true ->	Ret = case file:list_dir(?SPOOL_DIR(SpoolName)) of
+	Reply = ?FLER(fun() -> case dict:is_key(SpoolName, Spools) of
+		true ->	case file:list_dir(?SPOOL_DIR(SpoolName)) of
 				{ok, []} -> {ierror, spool_is_empty};
 				{ok, [FN0|_]} -> FN = filename:absname(FN0, ?SPOOL_DIR(SpoolName)),
 						{ok, Bin} = file:read_file(FN),
 						Item = erlang:binary_to_term(Bin),
 						ok = file:delete(FN),
 						{ok, Item};
-				{error, Error} -> {ierror, Error} end,
-			{reply, Ret, State};
+				{error, Error} -> {ierror, Error} end;
 		false -> ?ERROR_LOG("Spool does not exist: Name: "?S" Dir: "?S, 
 				[SpoolName, ?SPOOL_DIR(SpoolName)]),
-			{reply, {ierror, spool_does_not_exist}, State}
-			end;
+			{ierror, spool_does_not_exist} end
+	end, pop),
+	{reply, Reply, State};
 
 handle_call({is_empty, SpoolName}, _From, #state{spools = Spools} = State) ->
-	case dict:is_key(SpoolName, Spools) of
-		true ->	Ret = case file:list_dir(?SPOOL_DIR(SpoolName)) of
+	Reply = ?FLER(fun() -> case dict:is_key(SpoolName, Spools) of
+		true ->	case file:list_dir(?SPOOL_DIR(SpoolName)) of
 				{ok, []} -> {ok, true};
 				{ok, _Else} -> {ok, false};
-				{error, Error} -> {ierror, Error} end,
-			{reply, Ret, State};
+				{error, Error} -> {ierror, Error} end;
 		false -> ?ERROR_LOG("Spool does not exist: Name: "?S" Dir: "?S, 
 				[SpoolName, ?SPOOL_DIR(SpoolName)]),
-			{reply, {ierror, spool_does_not_exist}, State}
-			end;
+			{ierror, spool_does_not_exist} end
+	end, is_empty),
+	{reply, Reply, State};
 
 handle_call({poppush, SpoolName}, _From, #state{spools = Spools} = State) ->
-	case dict:is_key(SpoolName, Spools) of
-		true ->	Ret = case file:list_dir(?SPOOL_DIR(SpoolName)) of
+	Reply = ?FLER(fun() -> case dict:is_key(SpoolName, Spools) of
+		true ->	case file:list_dir(?SPOOL_DIR(SpoolName)) of
 				{ok, []} -> {ierror, spool_is_empty};
 				{ok, [_|_] = FNs} -> 
 						case acquire_fn(FNs) of
 							none -> {ierror, spool_is_empty};
 							FN0 -> renew_ref(SpoolName,FN0) end;
-				{error, Error2} -> {ierror, Error2} end,
-			{reply, Ret, State};
+				{error, Error2} -> {ierror, Error2} end;
 		false -> ?ERROR_LOG("Spool does not exist: Name: "?S" Dir: "?S, 
 				[SpoolName, ?SPOOL_DIR(SpoolName)]),
-			{reply, {ierror, spool_does_not_exist}, State}
-			end;
+			{ierror, spool_does_not_exist} end
+	end, poppush),
+	{reply, Reply, State};
 
 handle_call({poppush_all, SpoolName}, _From, #state{spools = Spools} = State) ->
-	case dict:is_key(SpoolName, Spools) of
-		true ->	Ret = case file:list_dir(?SPOOL_DIR(SpoolName)) of
+	Reply = ?FLER(fun() -> case dict:is_key(SpoolName, Spools) of
+		true ->	case file:list_dir(?SPOOL_DIR(SpoolName)) of
 				{ok, []} -> {ierror, spool_is_empty};
 				{ok, [_|_] = FNs} ->	RefItemPL = [ case renew_ref(SpoolName, FN) of
 									{ok, Ref, Item} -> {Ref, Item};
@@ -150,28 +153,38 @@ handle_call({poppush_all, SpoolName}, _From, #state{spools = Spools} = State) ->
 										[] end
 									|| FN <- FNs, lock_item(FN) == true ],
 							{ok, lists:flatten(RefItemPL)};
-				{error, Error2} -> {ierror, Error2} end,
-			{reply, Ret, State};
+				{error, Error2} -> {ierror, Error2} end;
 		false -> ?ERROR_LOG("Spool does not exist: Name: "?S" Dir: "?S, 
 				[SpoolName, ?SPOOL_DIR(SpoolName)]),
-			{reply, {ierror, spool_does_not_exist}, State}
-			end;
+			{ierror, spool_does_not_exist} end
+	end, poppush_all),
+	{reply, Reply, State};
 
 handle_call({push, SpoolName, Item}, _From, #state{spools = Spools} = State) ->
-	case dict:is_key(SpoolName, Spools) of
+	Reply = ?FLER(fun() -> case dict:is_key(SpoolName, Spools) of
 		true ->	Bin = erlang:term_to_binary(Item, [compressed]),
 			NRef = now(),
 			Ref = {SpoolName, NRef},
 			FP = mydlp_api:ref_to_fn(?SPOOL_DIR(SpoolName), "item", NRef),
 			ok = file:write_file(FP, Bin),
-			{reply, {ok, Ref}, State};
+			{ok, Ref};
 		false -> ?ERROR_LOG("Spool does not exist: Name: "?S" Dir: "?S, 
 				[SpoolName, ?SPOOL_DIR(SpoolName)]),
-			{reply, {ierror, spool_does_not_exist}, State}
-			end;
+			{ierror, spool_does_not_exist} end
+	end, push),
+	{reply, Reply, State};
+
+handle_call({total_size, SpoolName}, _From, #state{spools = Spools} = State) ->
+	Reply = ?FLER(fun() -> case dict:is_key(SpoolName, Spools) of
+		true ->	get_dir_size(?SPOOL_DIR(SpoolName));
+		false -> ?ERROR_LOG("Spool does not exist: Name: "?S" Dir: "?S, 
+				[SpoolName, ?SPOOL_DIR(SpoolName)]),
+			{ierror, spool_does_not_exist} end
+	end, total_size),
+	{reply, Reply, State};
 
 handle_call({lock, Item}, _From, State) ->
-	Reply = lock_item(Item),
+	Reply = ?FLER(fun() -> lock_item(Item) end, lock),
 	{reply, Reply, State};
 
 handle_call(stop, _From, State) ->
@@ -181,14 +194,15 @@ handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
 handle_cast({delete, {SpoolName, NRef}}, #state{spools = Spools} = State) ->
-	case dict:is_key(SpoolName, Spools) of
+	?ASYNC0(fun() -> case dict:is_key(SpoolName, Spools) of
 		true ->	FP = mydlp_api:ref_to_fn(?SPOOL_DIR(SpoolName), "item", NRef),
 			case file:delete(FP) of
 				ok ->  ok;
 				Error -> ?ERROR_LOG("Can not delete spool ref. SpoolName: "?S"~nRefPath: "?S"~nError: "?S"", 
 					[SpoolName, FP, Error]) end;
 		false -> ?ERROR_LOG("Spool does not exist: Name: "?S" Dir: "?S, 
-				[SpoolName, ?SPOOL_DIR(SpoolName)]) end,
+				[SpoolName, ?SPOOL_DIR(SpoolName)]) end
+	end),
 	{noreply, State};
 
 handle_cast({create_spool, SpoolName}, #state{spools = Spools} = State) ->
@@ -358,4 +372,14 @@ release_item({SpoolName, NRef}) ->
 	FP = mydlp_api:ref_to_fn(?SPOOL_DIR(SpoolName), "item", NRef),
 	release_item(FP).
 
+get_dir_size(Dir) ->
+	case file:list_dir(Dir) of
+		{ok, FNs} -> 	FSs = [ get_file_size(FN) || FN <- FNs],
+				lists:sum(FSs);
+		{error, Reason} -> throw({error, Reason}) end.
+
+get_file_size(FN) ->
+	case filelib:is_regular(FN) of
+		true -> filelib:file_size(FN);
+		false -> throw({error, is_not_a_regular_file}) end.
 

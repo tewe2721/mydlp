@@ -32,7 +32,15 @@
 		try Fun()
 		catch Class:Error ->
 			?ERROR_LOG("Logged exception: Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
-                        [Class, Error, erlang:get_stacktrace()]) end
+				[Class, Error, erlang:get_stacktrace()]) end
+	 end).
+
+-define(FLER(Fun, ErrKey), fun() -> 
+		try Fun()
+		catch Class:Error ->
+			?ERROR_LOG("Logged exception: Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
+				[Class, Error, erlang:get_stacktrace()]),
+			{ierror, Class, {ErrKey,Error}} end
 	 end).
 
 -define(ASYNC0(Fun), mydlp_api:mspawn(?FLE(Fun))).
