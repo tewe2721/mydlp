@@ -143,7 +143,7 @@ process_item(Item)  ->
 
 process_item(_ItemId, _ItemBin, RemainingItemSize, _ChunkNumTotal, _ChunkNumTotal) when RemainingItemSize < 0 ->
 	throw({error, negative_remaining_item_size});
-process_item(ItemId, ItemBin, RemainingItemSize, ChunkNumTotal, ChunkNumTotal) ->
+process_item(ItemId, ItemBin, RemainingItemSize, _ChunkNum = ChunkNumTotal, ChunkNumTotal) ->
 	ChunkSize = RemainingItemSize,
 	<<ChunkData:ChunkSize/binary>> = ItemBin,
 	push_chunk(ItemId, ChunkData, ChunkNumTotal, ChunkNumTotal);
@@ -168,6 +168,7 @@ new_item_id() ->
 	Url = "https://" ++ ?CFG(management_server_address) ++ "/receive?o=begin",
 	case http_req(Url) of
 		{ok, "error"} -> throw(http_returned_error);
+		{ok, "null"} -> throw(http_returned_null);
 		{ok, Ret} -> list_to_integer(Ret);
 		Else -> throw(Else) end.
 
