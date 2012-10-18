@@ -162,7 +162,7 @@ handle_call({total_size, SpoolName}, _From, #state{spools = Spools} = State) ->
 	{reply, Reply, State};
 
 handle_call({lock, Item}, _From, State) ->
-	Reply = ?EMF(fun() -> lock_item(Item) end, lock),
+	Reply = ?EMF(fun() -> lock_item(Item, request) end, lock),
 	{reply, Reply, State};
 
 handle_call(stop, _From, State) ->
@@ -210,8 +210,9 @@ handle_cast({consume_next, SpoolName}, #state{spools = Spools} = State) ->
 		{ok, #spool{consume_prog = false, consume_fun=ConsumeFun} = Spool} ->
 			?ASYNC(fun() -> case mydlp_spool:is_empty(SpoolName) of
 					{ok, false} -> 
-						{ok, Ref, Item} = mydlp_spool:poppush(SpoolName),
-						ConsumeFun(Ref, Item);
+						case mydlp_spool:poppush(SpoolName) of
+							{ok, Ref, Item} -> ConsumeFun(Ref, Item);
+							{ierror, spool_is_empty} -> ok end;
 					{ok, true} -> ok end,
 				Worker ! {consume_completed, SpoolName}
 			end, 120000),
@@ -302,32 +303,34 @@ renew_ref(SpoolName, FN) ->
 	FP = mydlp_api:ref_to_fn(?SPOOL_DIR(SpoolName), "item", NRef),
 	case file:rename(FN, FP) of
 		ok -> 	release_item(FN),
-			lock_item(FP),
+			lock_item(FP, renew),
 			{ok, Ref, Item};
 		{error, Error} -> {ierror, Error} end.
 
-lock_item(FilePath) when is_list(FilePath)->
-	LockPath = FilePath ++ ".lock",
-	Reply = case filelib:is_regular(LockPath) of
-		false ->	global:set_lock({FilePath, spool}, nodes(), 0),
-				timer:apply_after(600000, mydlp, spool, [FilePath]),
-				true;
-		true -> false end,
+lock_item(FilePath, Locker) when is_list(FilePath)->
+	Nodes = [node()|nodes()],
+	Reply = global:set_lock({FilePath, Locker}, Nodes, 0),
+	case Reply of 
+		true -> timer:apply_after(60000, mydlp_spool, release, [FilePath]);
+		false -> ok end,
 	Reply;
 
-lock_item({SpoolName, NRef}) ->
+lock_item({SpoolName, NRef}, Locker) ->
 	FP = mydlp_api:ref_to_fn(?SPOOL_DIR(SpoolName), "item", NRef),
-	lock_item(FP).
+	lock_item(FP, Locker).
 
 acquire_fn([FN|Rest], SpoolDir) ->
 	FilePath = filename:absname(FN, SpoolDir),
-	case lock_item(FilePath) of
+	case lock_item(FilePath, acquire) of
 		true -> FilePath;
-		false -> acquire_fn(Rest, SpoolDir) end;
+		false -> acquire_fn(Rest, acquire) end;
 acquire_fn([], _SpoolDir) -> none.
 
 release_item(FilePath) when is_list(FilePath)->
-	global:del_lock({FilePath, spool}, nodes()),
+	Nodes = [node()|nodes()],
+	global:del_lock({FilePath, request}, Nodes),
+	global:del_lock({FilePath, renew}, Nodes),
+	global:del_lock({FilePath, acquire}, Nodes),
 	ok;
 
 release_item({SpoolName, NRef}) ->
