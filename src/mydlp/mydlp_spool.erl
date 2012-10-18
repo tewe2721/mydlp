@@ -101,7 +101,7 @@ total_size(SpoolName) -> gen_server:call(?MODULE, {total_size, SpoolName}, 30000
 %%%%%%%%%%%%%% gen_server handles
 
 handle_call({pop, SpoolName}, _From, #state{spools = Spools} = State) ->
-	Reply = ?FLER(fun() -> case dict:is_key(SpoolName, Spools) of
+	Reply = ?EMF(fun() -> case dict:is_key(SpoolName, Spools) of
 		true ->	case file:list_dir(?SPOOL_DIR(SpoolName)) of
 				{ok, []} -> {ierror, spool_is_empty};
 				{ok, [FN0|_]} -> FN = filename:absname(FN0, ?SPOOL_DIR(SpoolName)),
@@ -117,7 +117,7 @@ handle_call({pop, SpoolName}, _From, #state{spools = Spools} = State) ->
 	{reply, Reply, State};
 
 handle_call({is_empty, SpoolName}, _From, #state{spools = Spools} = State) ->
-	Reply = ?FLER(fun() -> case dict:is_key(SpoolName, Spools) of
+	Reply = ?EMF(fun() -> case dict:is_key(SpoolName, Spools) of
 		true ->	case file:list_dir(?SPOOL_DIR(SpoolName)) of
 				{ok, []} -> {ok, true};
 				{ok, _Else} -> {ok, false};
@@ -129,7 +129,7 @@ handle_call({is_empty, SpoolName}, _From, #state{spools = Spools} = State) ->
 	{reply, Reply, State};
 
 handle_call({poppush, SpoolName}, _From, #state{spools = Spools} = State) ->
-	Reply = ?FLER(fun() -> case dict:is_key(SpoolName, Spools) of
+	Reply = ?EMF(fun() -> case dict:is_key(SpoolName, Spools) of
 		true ->	case file:list_dir(?SPOOL_DIR(SpoolName)) of
 				{ok, []} -> {ierror, spool_is_empty};
 				{ok, [_|_] = FNs} -> 
@@ -144,7 +144,7 @@ handle_call({poppush, SpoolName}, _From, #state{spools = Spools} = State) ->
 	{reply, Reply, State};
 
 handle_call({poppush_all, SpoolName}, _From, #state{spools = Spools} = State) ->
-	Reply = ?FLER(fun() -> case dict:is_key(SpoolName, Spools) of
+	Reply = ?EMF(fun() -> case dict:is_key(SpoolName, Spools) of
 		true ->	case file:list_dir(?SPOOL_DIR(SpoolName)) of
 				{ok, []} -> {ierror, spool_is_empty};
 				{ok, [_|_] = FNs} ->	RefItemPL = [ case renew_ref(SpoolName, FN) of
@@ -161,7 +161,7 @@ handle_call({poppush_all, SpoolName}, _From, #state{spools = Spools} = State) ->
 	{reply, Reply, State};
 
 handle_call({push, SpoolName, Item}, _From, #state{spools = Spools} = State) ->
-	Reply = ?FLER(fun() -> case dict:is_key(SpoolName, Spools) of
+	Reply = ?EMF(fun() -> case dict:is_key(SpoolName, Spools) of
 		true ->	Bin = erlang:term_to_binary(Item, [compressed]),
 			NRef = now(),
 			Ref = {SpoolName, NRef},
@@ -175,7 +175,7 @@ handle_call({push, SpoolName, Item}, _From, #state{spools = Spools} = State) ->
 	{reply, Reply, State};
 
 handle_call({total_size, SpoolName}, _From, #state{spools = Spools} = State) ->
-	Reply = ?FLER(fun() -> case dict:is_key(SpoolName, Spools) of
+	Reply = ?EMF(fun() -> case dict:is_key(SpoolName, Spools) of
 		true ->	get_dir_size(?SPOOL_DIR(SpoolName));
 		false -> ?ERROR_LOG("Spool does not exist: Name: "?S" Dir: "?S, 
 				[SpoolName, ?SPOOL_DIR(SpoolName)]),
@@ -184,7 +184,7 @@ handle_call({total_size, SpoolName}, _From, #state{spools = Spools} = State) ->
 	{reply, Reply, State};
 
 handle_call({lock, Item}, _From, State) ->
-	Reply = ?FLER(fun() -> lock_item(Item) end, lock),
+	Reply = ?EMF(fun() -> lock_item(Item) end, lock),
 	{reply, Reply, State};
 
 handle_call(stop, _From, State) ->
@@ -208,7 +208,7 @@ handle_cast({delete, {SpoolName, NRef}}, #state{spools = Spools} = State) ->
 handle_cast({create_spool, SpoolName}, #state{spools = Spools} = State) ->
 	case dict:is_key(SpoolName, Spools) of
 		true -> {noreply, State};
-		false -> case filelib:ensure_dir(?SPOOL_DIR(SpoolName)) of
+		false -> case filelib:ensure_dir(?SPOOL_DIR(SpoolName) ++ "/") of
 				ok -> NewSpool = #spool{name=SpoolName},
 					{noreply, State#state{spools=dict:store(SpoolName, NewSpool, Spools)}};
 				Error -> ?ERROR_LOG("Can not create spool directory. Name: "?S"~nDir: "?S"~nError: "?S"", 
@@ -297,7 +297,7 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
-	Ret = case filelib:ensure_dir(?CFG(spool_dir) ++ "/") of
+	Ret = case filelib:ensure_dir(?CFG(spool_dir)) of
 		ok -> {ok, #state{}};
 		Error -> Error end,
 
@@ -323,8 +323,8 @@ create_spools() ->
         ConsumeFun = fun(Ref, Item) ->
                 mydlp_item_push:p(Ref, Item)
         end,
-        mydlp_spool:create_spool("log_push"),
-        mydlp_spool:register_consumer("log_push", ConsumeFun),
+        mydlp_spool:create_spool("log"),
+        mydlp_spool:register_consumer("log", ConsumeFun),
 	ok.
 	
 -endif.
@@ -352,6 +352,7 @@ renew_ref(SpoolName, FN0) ->
 lock_item(FilePath) when is_list(FilePath)->
 	Reply = global:set_lock({FilePath, spool}, nodes(), 0),
 	timer:apply_after(600000, global, del_lock, [{FilePath, spool}, nodes()]),
+	erlang:display({FilePath, Reply}),
 	Reply;
 
 lock_item({SpoolName, NRef}) ->
@@ -374,11 +375,12 @@ release_item({SpoolName, NRef}) ->
 
 get_dir_size(Dir) ->
 	case file:list_dir(Dir) of
-		{ok, FNs} -> 	FSs = [ get_file_size(FN) || FN <- FNs],
+		{ok, FNs} -> 	FSs = [ get_file_size(FN, Dir) || FN <- FNs],
 				lists:sum(FSs);
 		{error, Reason} -> throw({error, Reason}) end.
 
-get_file_size(FN) ->
+get_file_size(FN0, Dir) ->
+	FN = filename:absname(FN0, Dir),
 	case filelib:is_regular(FN) of
 		true -> filelib:file_size(FN);
 		false -> throw({error, is_not_a_regular_file}) end.

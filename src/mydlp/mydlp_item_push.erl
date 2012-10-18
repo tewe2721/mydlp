@@ -69,16 +69,18 @@ handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
 handle_cast({p, Item}, State) ->
-	SpoolSize = mydlp_spool:total_size("log_push"),
+	SpoolSize = mydlp_spool:total_size("log"),
+	SoftLimit = ?CFG(endpoint_spool_soft_limit),
+	HardLimit = ?CFG(endpoint_spool_hard_limit),
 	case SpoolSize of
 		{ierror, Error} -> ?ERROR_LOG("Error occured when getting queue size: Error: ["?S"].", [Error]);
-		S when S < ?CFG(endpoint_spool_soft_limit) -> 
-			{ok, Ref} = mydlp_spool:push("log_push", Item),
+		S when S < SoftLimit -> 
+			{ok, Ref} = mydlp_spool:push("log", Item),
 			mydlp_spool:lock(Ref),
 			p(Ref, Item);
-		S when S < ?CFG(endpoint_spool_hard_limit) -> 
+		S when S < HardLimit -> 
 			StrippedItem = strip_item(Item),
-			{ok, Ref} = mydlp_spool:push("log_push", StrippedItem),
+			{ok, Ref} = mydlp_spool:push("log", StrippedItem),
 			mydlp_spool:lock(Ref),
 			p(Ref, Item);
 		_Else -> ok end,
@@ -91,7 +93,7 @@ handle_cast({p, Ref, Item}, #state{item_queue=Q, queue_size=QS} = State) ->
 	case NextQS > ?CFG(maximum_push_size) of
 		true -> consume_item();
 		false -> ok end,
-	mydlp_spool:consume_next("log_push"),
+	mydlp_spool:consume_next("log"),
 	{noreply,State#state{item_queue=Q1, queue_size=NextQS}};
 
 handle_cast(consume_item, #state{item_queue=Q} = State) ->
