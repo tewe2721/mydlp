@@ -312,6 +312,7 @@ create_spools() ->
                 mydlp_smtpc:mail(Ref, Item)
         end,
         mydlp_spool:create_spool("smtp"),
+        mydlp_spool:cleanup_locks("smtp"),
         mydlp_spool:register_consumer("smtp", ConsumeFun),
 	ok.
 	
@@ -324,6 +325,7 @@ create_spools() ->
                 mydlp_item_push:p(Ref, Item)
         end,
         mydlp_spool:create_spool("log_push"),
+        mydlp_spool:cleanup_locks("log"),
         mydlp_spool:register_consumer("log_push", ConsumeFun),
 	ok.
 	
@@ -350,8 +352,12 @@ renew_ref(SpoolName, FN0) ->
 		{error, Error} -> {ierror, Error} end.
 
 lock_item(FilePath) when is_list(FilePath)->
-	Reply = global:set_lock({FilePath, spool}, nodes(), 0),
-	timer:apply_after(600000, global, del_lock, [{FilePath, spool}, nodes()]),
+	LockPath = FilePath ++ ".lock",
+	Reply = case filelib:is_regular(LockPath) of
+		false ->	global:set_lock({FilePath, spool}, nodes(), 0),
+				timer:apply_after(600000, mydlp, spool, [FilePath]),
+				true;
+		true -> false end,
 	Reply;
 
 lock_item({SpoolName, NRef}) ->
