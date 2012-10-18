@@ -69,9 +69,19 @@ handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
 handle_cast({p, Item}, State) ->
-	{ok, Ref} = mydlp_spool:push("log_push", Item),
-	mydlp_spool:lock(Ref),
-	p(Ref, Item),
+	SpoolSize = mydlp_spool:total_size("log_push"),
+	case SpoolSize of
+		{ierror, Error} -> ?ERROR_LOG("Error occured when getting queue size: Error: ["?S"].", [Error]);
+		S when S < ?CFG(endpoint_spool_soft_limit) -> 
+			{ok, Ref} = mydlp_spool:push("log_push", Item),
+			mydlp_spool:lock(Ref),
+			p(Ref, Item);
+		S when S < ?CFG(endpoint_spool_hard_limit) -> 
+			StrippedItem = strip_item(Item),
+			{ok, Ref} = mydlp_spool:push("log_push", StrippedItem),
+			mydlp_spool:lock(Ref),
+			p(Ref, Item);
+		_Else -> ok end,
 	{noreply, State};
 
 handle_cast({p, Ref, Item}, #state{item_queue=Q, queue_size=QS} = State) ->
@@ -214,6 +224,11 @@ predict_serialized_size(Else) ->
 
 predict_file_size(#file{data=undefined}) -> 0;
 predict_file_size(#file{data=Data}) -> size(Data).
+
+
+strip_item({endpoint_log, {Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc}}) ->
+	StrippedFiles = mydlp_api:remove_all_data(Files),
+	{endpoint_log, {Time, Channel, RuleId, Action, Ip, User, To, ITypeId, StrippedFiles, Misc}}.
 
 
 -endif.

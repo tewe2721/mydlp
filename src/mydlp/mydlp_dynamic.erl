@@ -255,7 +255,9 @@ load_src(Src) ->
 	{log_limit, integer, "10485760"},
 	{usb_serial_access_control, boolean, "false"},
 	{print_monitor, boolean, "false"},
-	{seclore_fs_endpoint_pool_size, integer, "2"}
+	{seclore_fs_endpoint_pool_size, integer, "2"},
+	{endpoint_spool_soft_limit, integer, "52428800"},
+	{endpoint_spool_hard_limit, integer, "78643200"}
 ]).
 
 -endif.
