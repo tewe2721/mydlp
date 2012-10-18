@@ -49,6 +49,7 @@
 			{mydlp_workdir, start_link,[]},
 			{mydlp_sync, start_link,[]},
 			{mydlp_item_push, start_link,[]},
+			{mydlp_spool, start_link,[]},
 			{mydlp_discover_fs, start_link,[]}
 		]
 	).

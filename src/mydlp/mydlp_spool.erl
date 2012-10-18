@@ -25,8 +25,6 @@
 %%% @end
 %%%-------------------------------------------------------------------
 
--ifdef(__MYDLP_NETWORK).
-
 -module(mydlp_spool).
 -author("kerem@mydlp.com").
 -behaviour(gen_server).
@@ -69,7 +67,7 @@
 	consume_prog = false
 	}).
 
--define(SPOOL_DIR(SpoolName), ?CFG(spool_dir) ++ "/" ++ SpoolName).
+-define(SPOOL_DIR(SpoolName), filename:absname(SpoolName, ?CFG(spool_dir)) ).
 
 %%%% API
 
@@ -103,7 +101,7 @@ handle_call({pop, SpoolName}, _From, #state{spools = Spools} = State) ->
 	case dict:is_key(SpoolName, Spools) of
 		true ->	Ret = case file:list_dir(?SPOOL_DIR(SpoolName)) of
 				{ok, []} -> {ierror, spool_is_empty};
-				{ok, [FN0|_]} -> FN = ?SPOOL_DIR(SpoolName) ++ "/" ++ FN0,
+				{ok, [FN0|_]} -> FN = filename:absname(FN0, ?SPOOL_DIR(SpoolName)),
 						{ok, Bin} = file:read_file(FN),
 						Item = erlang:binary_to_term(Bin),
 						ok = file:delete(FN),
@@ -196,7 +194,7 @@ handle_cast({delete, {SpoolName, NRef}}, #state{spools = Spools} = State) ->
 handle_cast({create_spool, SpoolName}, #state{spools = Spools} = State) ->
 	case dict:is_key(SpoolName, Spools) of
 		true -> {noreply, State};
-		false -> case filelib:ensure_dir(?SPOOL_DIR(SpoolName) ++ "/") of
+		false -> case filelib:ensure_dir(?SPOOL_DIR(SpoolName)) of
 				ok -> NewSpool = #spool{name=SpoolName},
 					{noreply, State#state{spools=dict:store(SpoolName, NewSpool, Spools)}};
 				Error -> ?ERROR_LOG("Can not create spool directory. Name: "?S"~nDir: "?S"~nError: "?S"", 
@@ -289,13 +287,33 @@ init([]) ->
 		ok -> {ok, #state{}};
 		Error -> Error end,
 
+	create_spools(),
+	Ret.
+
+
+-ifdef(__MYDLP_NETWORK).
+
+create_spools() ->
         ConsumeFun = fun(Ref, Item) ->
                 mydlp_smtpc:mail(Ref, Item)
         end,
         mydlp_spool:create_spool("smtp"),
         mydlp_spool:register_consumer("smtp", ConsumeFun),
+	ok.
+	
+-endif.
 
-	Ret.
+-ifdef(__MYDLP_ENDPOINT).
+
+create_spools() ->
+        ConsumeFun = fun(Ref, Item) ->
+                mydlp_item_push:p(Ref, Item)
+        end,
+        mydlp_spool:create_spool("log_push"),
+        mydlp_spool:register_consumer("log_push", ConsumeFun),
+	ok.
+	
+-endif.
 
 
 terminate(_Reason, _State) ->
@@ -305,7 +323,7 @@ code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 
 renew_ref(SpoolName, FN0) -> 
-	FN = ?SPOOL_DIR(SpoolName) ++ "/" ++ FN0,
+	FN = filename:absname(FN0, ?SPOOL_DIR(SpoolName)),
 	{ok, Bin} = file:read_file(FN),
 	Item = erlang:binary_to_term(Bin),
 	NRef = now(),
@@ -340,5 +358,4 @@ release_item({SpoolName, NRef}) ->
 	FP = mydlp_api:ref_to_fn(?SPOOL_DIR(SpoolName), "item", NRef),
 	release_item(FP).
 
--endif.
 

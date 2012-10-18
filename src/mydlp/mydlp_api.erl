@@ -2879,7 +2879,7 @@ binary_to_integer(Bin) -> list_to_integer(binary_to_list(Bin)).
 ref_to_fn(Dir, Prefix, Ref) ->
 	{A,B,C} = Ref,
 	RN = lists:flatten(io_lib:format("~s-~p.~p.~p",[Prefix,A,B,C])),
-	Dir ++ "/" ++ RN.
+	filename:absname(RN, Dir).
 
 %%-------------------------------------------------------------------------
 %% @doc Removes trailing CRLF from given string

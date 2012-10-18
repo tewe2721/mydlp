@@ -36,6 +36,7 @@
 %% API
 -export([start_link/0,
 	p/1,
+	p/2,
 	stop/0]).
 
 %% gen_server callbacks
@@ -57,6 +58,8 @@
 
 p(Item) -> gen_server:cast(?MODULE, {p, Item}).
 
+p(Ref, Item) -> gen_server:cast(?MODULE, {p, Ref, Item}).
+
 %%%%%%%%%%%%%% gen_server handles
 
 handle_call(stop, _From, State) ->
@@ -65,29 +68,31 @@ handle_call(stop, _From, State) ->
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-handle_cast({p, Item}, #state{item_queue=Q, queue_size=QS} = State) ->
-	Q1 = queue:in(Item, Q),
+handle_cast({p, Item}, State) ->
+	{ok, Ref} = mydlp_spool:push("log_push", Item),
+	mydlp_spool:lock(Ref),
+	p(Ref, Item),
+	{noreply, State};
+
+handle_cast({p, Ref, Item}, #state{item_queue=Q, queue_size=QS} = State) ->
+	Q1 = queue:in({Ref, Item}, Q),
 	ItemSize = predict_serialized_size(Item),
 	NextQS = QS+ItemSize,
 	case NextQS > ?CFG(maximum_push_size) of
 		true -> consume_item();
 		false -> ok end,
+	mydlp_spool:consume_next("log_push"),
 	{noreply,State#state{item_queue=Q1, queue_size=NextQS}};
 
 handle_cast(consume_item, #state{item_queue=Q} = State) ->
 	case queue:is_empty(Q) of
-		false -> try 	ItemList = queue:to_list(Q),
-				process_item(ItemList),
-				consume_item(?CFG(sync_interval)),
-				{noreply, State#state{item_queue=queue:new(), queue_size=0}}
+		false -> try 	RefItemList = queue:to_list(Q),
+				process_ril(RefItemList)
 			catch Class:Error ->
-			?ERROR_LOG("Push Item Consume: Error occured: Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n.~nState: "?S"~n ",
-				[Class, Error, erlang:get_stacktrace(), State]),
-				% temporary change for test deployment
-				consume_item(?CFG(sync_interval)),
-				{noreply, State#state{item_queue=queue:new(), queue_size=0}} end; 
-				%consume_item(15000),
-				%{noreply, State} end;
+				?ERROR_LOG("Push Item Consume: Error occured: Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n.~nState: "?S"~n ",
+					[Class, Error, erlang:get_stacktrace(), State]) end,
+			consume_item(?CFG(sync_interval)),
+			{noreply, State#state{item_queue=queue:new(), queue_size=0}};
 		true -> consume_item(?CFG(sync_interval)),
 			{noreply, State} end;
 
@@ -132,12 +137,22 @@ code_change(_OldVsn, State, _Extra) ->
 
 %%%%%%%%%%%%%%%%% internal
 
+process_ril(RefItemList) ->
+	RefList = [ R || {R,_I} <- RefItemList],
+	ItemList = [ I || {_R,I} <- RefItemList],
+	try	ok = process_item(ItemList),
+		lists:foreach(fun(R) -> mydlp_spool:delete(R) end, RefList)
+	catch Class:Error ->
+		?ERROR_LOG("Process Item : Error occured: Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n.~nRefItemList: "?S"~n ",
+			[Class, Error, erlang:get_stacktrace(), RefItemList])
+	after 	lists:foreach(fun(R) -> mydlp_spool:release(R) end, RefList) end.
+
 process_item(Item)  ->  
 	ItemBin = erlang:term_to_binary(Item, [compressed]),
 	ItemId = new_item_id(),
 	ItemSize = size(ItemBin),
 	ChunkNumTotal = (ItemSize div ?CFG(maximum_push_size)) + 1,
-	process_item(ItemId, ItemBin, ItemSize, 1, ChunkNumTotal), ok.
+	process_item(ItemId, ItemBin, ItemSize, 1, ChunkNumTotal).
 
 % process_item(_Item) -> ok. % TODO log unkown item.
 
