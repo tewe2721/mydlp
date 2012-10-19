@@ -37,12 +37,11 @@
 	register_consumer/2,
 	consume_next/1,
 	push/2,
+	push/3,
 	lock/1,
 	release/1,
 	pop/1,
-	poppush/1,
 	delete/1,
-	is_empty/1,
 	total_size/1,
 	stop/0]).
 
@@ -82,15 +81,13 @@ lock(Item) -> gen_server:cast(?MODULE, {lock, Item}).
 
 release(Item) -> gen_server:cast(?MODULE, {release, Item}).
 
-push(SpoolName, Item) -> gen_server:call(?MODULE, {push, SpoolName, Item}, 30000).
+push(SpoolName, Item) -> push(SpoolName, Item, true).
 
-is_empty(SpoolName) -> gen_server:call(?MODULE, {is_empty, SpoolName}, 30000).
+push(SpoolName, Item, Lock) -> gen_server:call(?MODULE, {push, SpoolName, Item, Lock}, 45000).
 
-pop(SpoolName) -> gen_server:call(?MODULE, {pop, SpoolName}, 30000).
+pop(SpoolName) -> gen_server:call(?MODULE, {pop, SpoolName}, 45000).
 
-poppush(SpoolName) -> gen_server:call(?MODULE, {poppush, SpoolName}, 30000).
-
-total_size(SpoolName) -> gen_server:call(?MODULE, {total_size, SpoolName}, 30000).
+total_size(SpoolName) -> gen_server:call(?MODULE, {total_size, SpoolName}, 45000).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -110,41 +107,16 @@ handle_call({pop, SpoolName}, _From, #state{spools = Spools} = State) ->
 	end, pop),
 	{reply, Reply, State};
 
-handle_call({is_empty, SpoolName}, _From, #state{spools = Spools} = State) ->
-	Reply = ?EMF(fun() -> case dict:is_key(SpoolName, Spools) of
-		true ->	case file:list_dir(?SPOOL_DIR(SpoolName)) of
-				{ok, []} -> {ok, true};
-				{ok, _Else} -> {ok, false};
-				{error, Error} -> {ierror, Error} end;
-		false -> ?ERROR_LOG("Spool does not exist: Name: "?S" Dir: "?S, 
-				[SpoolName, ?SPOOL_DIR(SpoolName)]),
-			{ierror, spool_does_not_exist} end
-	end, is_empty),
-	{reply, Reply, State};
-
-handle_call({poppush, SpoolName}, _From, #state{spools = Spools} = State) ->
-	Reply = ?EMF(fun() -> case dict:is_key(SpoolName, Spools) of
-		true ->	SpoolDir = ?SPOOL_DIR(SpoolName),
-			case file:list_dir(SpoolDir) of
-				{ok, []} -> {ierror, spool_is_empty};
-				{ok, [_|_] = FNs} -> 
-						case acquire_fn(FNs, SpoolDir) of
-							none -> {ierror, spool_is_empty};
-							FN0 -> renew_ref(SpoolName,FN0) end;
-				{error, Error2} -> {ierror, Error2} end;
-		false -> ?ERROR_LOG("Spool does not exist: Name: "?S" Dir: "?S, 
-				[SpoolName, ?SPOOL_DIR(SpoolName)]),
-			{ierror, spool_does_not_exist} end
-	end, poppush),
-	{reply, Reply, State};
-
-handle_call({push, SpoolName, Item}, _From, #state{spools = Spools} = State) ->
+handle_call({push, SpoolName, Item, Lock}, _From, #state{spools = Spools} = State) ->
 	Reply = ?EMF(fun() -> case dict:is_key(SpoolName, Spools) of
 		true ->	Bin = erlang:term_to_binary(Item, [compressed]),
 			NRef = now(),
 			Ref = {SpoolName, NRef},
 			FP = mydlp_api:ref_to_fn(?SPOOL_DIR(SpoolName), "item", NRef),
 			ok = file:write_file(FP, Bin),
+			case Lock of
+				true -> true = lock_item(Ref, request);
+				false -> ok end,
 			{ok, Ref};
 		false -> ?ERROR_LOG("Spool does not exist: Name: "?S" Dir: "?S, 
 				[SpoolName, ?SPOOL_DIR(SpoolName)]),
@@ -172,7 +144,7 @@ handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
 handle_cast({delete, {SpoolName, NRef}}, #state{spools = Spools} = State) ->
-	?ASYNC0(fun() -> case dict:is_key(SpoolName, Spools) of
+	?EMF(fun() -> case dict:is_key(SpoolName, Spools) of
 		true ->	FP = mydlp_api:ref_to_fn(?SPOOL_DIR(SpoolName), "item", NRef),
 			case file:delete(FP) of
 				ok ->  ok;
@@ -180,7 +152,7 @@ handle_cast({delete, {SpoolName, NRef}}, #state{spools = Spools} = State) ->
 					[SpoolName, FP, Error]) end;
 		false -> ?ERROR_LOG("Spool does not exist: Name: "?S" Dir: "?S, 
 				[SpoolName, ?SPOOL_DIR(SpoolName)]) end
-	end),
+	end, delete),
 	{noreply, State};
 
 handle_cast({create_spool, SpoolName}, #state{spools = Spools} = State) ->
@@ -208,15 +180,21 @@ handle_cast({consume_next, SpoolName}, #state{spools = Spools} = State) ->
 	Worker = self(),
 	case dict:find(SpoolName, Spools) of
 		{ok, #spool{consume_prog = false, consume_fun=ConsumeFun} = Spool} ->
-			?ASYNC(fun() -> case mydlp_spool:is_empty(SpoolName) of
-					{ok, false} -> 
-						case mydlp_spool:poppush(SpoolName) of
-							{ok, Ref, Item} -> ConsumeFun(Ref, Item);
-							{ierror, spool_is_empty} -> ok end;
-					{ok, true} -> ok end,
-				Worker ! {consume_completed, SpoolName}
-			end, 120000),
-			{noreply, State#state{spools=dict:store(SpoolName, Spool#spool{consume_prog = true}, Spools)}};
+			?EMF(fun() -> case is_empty(SpoolName) of
+				{ok, false} ->	
+					case poppush(SpoolName) of
+						{ok, Ref, Item} -> 
+							?ASYNC(fun() -> 
+								ConsumeFun(Ref, Item),
+								Worker ! {consume_completed, SpoolName}
+							end, 120000);
+						none -> ok end;
+				{ok, true} -> ok end
+			end, consume_next),
+			ConsumeProg = case SpoolName of
+				"log" -> false; % because of async nature of its ConsumeFun.
+				_Else -> true end,
+			{noreply, State#state{spools=dict:store(SpoolName, Spool#spool{consume_prog = ConsumeProg}, Spools)}};
 		{ok, #spool{consume_prog = true}} ->
 			{noreply, State};
 		error -> ?ERROR_LOG("Spool does not exist: Name: "?S" Dir: "?S, 
@@ -307,11 +285,23 @@ renew_ref(SpoolName, FN) ->
 			{ok, Ref, Item};
 		{error, Error} -> {ierror, Error} end.
 
+-ifdef(__MYDLP_NETWORK).
+
+-define(CLEANUP_TIME, 180000).
+
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
+-define(CLEANUP_TIME, ?CFG(sync_interval) * 4).
+
+-endif.
+
 lock_item(FilePath, Locker) when is_list(FilePath)->
 	Nodes = [node()|nodes()],
 	Reply = global:set_lock({FilePath, Locker}, Nodes, 0),
 	case Reply of 
-		true -> timer:apply_after(60000, mydlp_spool, release, [FilePath]);
+		true -> timer:apply_after(?CLEANUP_TIME, mydlp_spool, release, [FilePath]);
 		false -> ok end,
 	Reply;
 
@@ -323,7 +313,7 @@ acquire_fn([FN|Rest], SpoolDir) ->
 	FilePath = filename:absname(FN, SpoolDir),
 	case lock_item(FilePath, acquire) of
 		true -> FilePath;
-		false -> acquire_fn(Rest, acquire) end;
+		false -> acquire_fn(Rest, SpoolDir) end;
 acquire_fn([], _SpoolDir) -> none.
 
 release_item(FilePath) when is_list(FilePath)->
@@ -348,4 +338,23 @@ get_file_size(FN0, Dir) ->
 	case filelib:is_regular(FN) of
 		true -> filelib:file_size(FN);
 		false -> throw({error, is_not_a_regular_file}) end.
+
+is_empty(SpoolName) ->
+	?EMF(fun() -> case file:list_dir(?SPOOL_DIR(SpoolName)) of
+		{ok, []} -> {ok, true};
+		{ok, _Else} -> {ok, false};
+		{error, Error} -> {ierror, Error} end
+	end, is_empty).
+
+poppush(SpoolName) ->
+	?EMF(fun() ->
+		SpoolDir = ?SPOOL_DIR(SpoolName),
+		case file:list_dir(SpoolDir) of
+			{ok, []} -> {ierror, spool_is_empty};
+			{ok, [_|_] = FNs} -> 
+					case acquire_fn(FNs, SpoolDir) of
+						none -> none;
+						FN0 -> renew_ref(SpoolName,FN0) end;
+			{error, Error2} -> {ierror, Error2} end
+	end, poppush).
 

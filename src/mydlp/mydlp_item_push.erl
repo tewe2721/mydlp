@@ -51,7 +51,8 @@
 
 -record(state, {
 	item_queue,
-	queue_size = 0
+	queue_size = 0,
+	has_failure = false
 }).
 
 %%%%%%%%%%%%%  API
@@ -76,36 +77,38 @@ handle_cast({p, Item}, State) ->
 		{ierror, Error} -> ?ERROR_LOG("Error occured when getting queue size: Error: ["?S"].", [Error]);
 		S when S < SoftLimit -> 
 			{ok, Ref} = mydlp_spool:push("log", Item),
-			mydlp_spool:lock(Ref),
 			p(Ref, Item);
 		S when S < HardLimit -> 
 			StrippedItem = strip_item(Item),
 			{ok, Ref} = mydlp_spool:push("log", StrippedItem),
-			mydlp_spool:lock(Ref),
 			p(Ref, Item);
 		_Else -> ok end,
 	{noreply, State};
 
-handle_cast({p, Ref, Item}, #state{item_queue=Q, queue_size=QS} = State) ->
+handle_cast({p, Ref, Item}, #state{item_queue=Q, queue_size=QS, has_failure=HF} = State) ->
 	Q1 = queue:in({Ref, Item}, Q),
 	ItemSize = predict_serialized_size(Item),
 	NextQS = QS+ItemSize,
 	case NextQS > ?CFG(maximum_push_size) of
 		true -> consume_item();
 		false -> ok end,
-	mydlp_spool:consume_next("log"),
+	case HF of
+		false -> mydlp_spool:consume_next("log");
+		true -> ok end,
 	{noreply,State#state{item_queue=Q1, queue_size=NextQS}};
 
 handle_cast(consume_item, #state{item_queue=Q} = State) ->
 	case queue:is_empty(Q) of
-		false -> try 	RefItemList = queue:to_list(Q),
-				process_ril(RefItemList)
+		false -> HF = try RefItemList = queue:to_list(Q),
+				process_ril(RefItemList),
+				false
 			catch Class:Error ->
 				?ERROR_LOG("Push Item Consume: Error occured: Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n.~nState: "?S"~n ",
-					[Class, Error, erlang:get_stacktrace(), State]) end,
+					[Class, Error, erlang:get_stacktrace(), State]), true end,
 			consume_item(?CFG(sync_interval)),
-			{noreply, State#state{item_queue=queue:new(), queue_size=0}};
-		true -> consume_item(?CFG(sync_interval)),
+			{noreply, State#state{item_queue=queue:new(), queue_size=0, has_failure=HF}};
+		true -> mydlp_spool:consume_next("log"),
+			consume_item(?CFG(sync_interval)),
 			{noreply, State} end;
 
 handle_cast(_Msg, State) ->
