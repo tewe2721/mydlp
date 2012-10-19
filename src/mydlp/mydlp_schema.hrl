@@ -45,6 +45,12 @@
 	ipmask
 }).
 
+-record(dest, {
+	id,
+	rule_id,
+	destination
+}).
+
 -record(m_user, {
 	id,
 	rule_id,

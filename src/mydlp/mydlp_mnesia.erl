@@ -102,7 +102,8 @@
 	del_fs_entry/1,
 	add_fs_entry/1,
 	fs_entry_list_dir/1,
-	is_valid_usb_device_id/1
+	is_valid_usb_device_id/1,
+	get_destination/0
 	]).
 
 -endif.
@@ -152,7 +153,8 @@
 -define(NONDATA_FUNCTIONAL_TABLES, [
 	filter,
 	rule,
-	ipr, 
+	ipr,
+	dest, 
 	{m_user, ordered_set, 
 		fun() -> mnesia:add_table_index(m_user, un_hash) end},
 	itype,
@@ -220,6 +222,7 @@ get_record_fields_functional(Record) ->
 		filter -> record_info(fields, filter);
 		rule -> record_info(fields, rule);
 		ipr -> record_info(fields, ipr);
+		dest -> record_info(fields, dest);
 		m_user -> record_info(fields, m_user);
 		itype -> record_info(fields, itype);
 		ifeature -> record_info(fields, ifeature);
@@ -342,6 +345,8 @@ add_fs_entry(Record) when is_tuple(Record) -> write(Record, nocache).
 
 is_valid_usb_device_id(DeviceId) -> aqc({is_valid_usb_device_id, DeviceId}, cache).
 
+get_destinations() -> aqc({get_destinations, discovery}, nocache).
+
 -endif.
 
 dump_tables(Tables) when is_list(Tables) -> aqc({dump_tables, Tables}, cache);
@@ -414,6 +419,11 @@ handle_result({is_valid_usb_device_id, _DeviceId}, {atomic, Result}) ->
 		[] -> false;
 		[_|_] -> true end;
 
+%handle_result({get_destination}, {atomic, Result}) ->
+%	case Result of
+%		[] -> none;
+%		[]
+
 handle_result(Query, Result) -> handle_result_common(Query, Result).
 
 -endif.
@@ -444,6 +454,36 @@ handle_result_common(_Query, {atomic, Objects}) -> Objects.
 
 -ifdef(__MYDLP_NETWORK).
 
+is_applicable_destination(Destinations, UserDestination) ->
+	R = mydlp_api:reverse_binary(UserDestination),
+	A = lists:filter(fun(D) -> erlang:display(binary_to_list(D)), R1 = mydlp_api:reverse_binary(D),
+				is_sub_destination(R, R1) end, 
+				Destinations),
+	length(A) > 0.
+
+is_sub_destination(<<>>, _Dest2) -> true;
+is_sub_destination(<<C/utf8, R/binary>>, <<C1/utf8, R1/binary>>) when C == C1 -> is_sub_destination(R, R1);
+is_sub_destination(_, _) -> false.
+
+filter_rule_ids_by_dest(RuleIds, Destinations) ->
+	Q0 = ?QLCQ([R ||
+		D <- mnesia:table(dest),
+		R <- RuleIds,
+		D#dest.rule_id == R,
+		D#dest.destination == all
+	]),
+	RuleaD = ?QLCE(Q0),
+	
+	Q1 = ?QLCQ([R ||
+		D <- mnesia:table(dest),
+		R <- RuleIds,
+		D#dest.rule_id == R,
+		D#dest.destination /= all,
+		is_applicable_destination(Destinations, D#dest.destination)
+	]),
+	RulenD = ?QLCE(Q1),
+	lists:append([RuleaD, RulenD]).
+
 handle_query({get_remote_rule_tables, FilterId, Addr, UserH}) ->
 	AclQ = #aclq{src_addr=Addr, src_user_h=UserH},
 	EndpointRuleTable = get_rules(FilterId, AclQ#aclq{channel=endpoint}),
@@ -463,7 +503,7 @@ handle_query({get_remote_rule_ids, FilterId, Addr, UserH}) ->
 	R = lists:flatten([EndpointRuleIds, PrinterRuleIds, DiscoveryRuleIds]),
 	lists:usort(R);
 
-handle_query({get_rule_ids, FilterId, #aclq{channel=Channel} = AclQ}) ->
+handle_query({get_rule_ids, FilterId, #aclq{channel=Channel, destinations=Destinations} = AclQ}) ->
 	Q0 = ?QLCQ([R#rule.id || 
 		R <- mnesia:table(rule),
 		I <- mnesia:table(ipr),
@@ -499,7 +539,11 @@ handle_query({get_rule_ids, FilterId, #aclq{channel=Channel} = AclQ}) ->
 				U#m_user.un_hash == UserH
 				]), ?QLCE(Q2) end,
 
-	lists:usort(lists:append([RulesD, RulesI, RulesU]));
+	RuleIds = lists:append([RulesD, RulesI, RulesU]),
+
+	FinalRuleIds = filter_rule_ids_by_dest(RuleIds, Destinations),
+
+	lists:usort(FinalRuleIds);
 
 handle_query({get_rule_table, FilterId, RuleIDs}) ->
 	Rules = lists:map(fun(I) ->
@@ -1337,8 +1381,15 @@ remove_rule(RI) ->
 		]),
 	UIs = ?QLCE(Q4),
 
+	Q5 = ?QLCQ([I#dest.id ||	
+		I <- mnesia:table(dest),
+		I#dest.rule_id == RI
+		]),
+	DIs = ?QLCE(Q5),
+
 	lists:foreach(fun(Id) -> mnesia:delete({ipr, Id}) end, IIs),
 	lists:foreach(fun(Id) -> mnesia:delete({m_user, Id}) end, UIs),
+	lists:foreach(fun(Id) -> mnesia:delete({dest, Id}) end, DIs),
 
 	remove_data_formats(DFIs),
 	remove_itypes(ITIs),

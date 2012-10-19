@@ -313,6 +313,8 @@ init([]) ->
 		{custom_action_by_id, <<"SELECT c.name, c.typeKey FROM CustomAction AS c WHERE c.id=?">>},
 		{custom_action_seclore_by_id, <<"SELECT cs.hotFolderId, cs.activityComment FROM CustomActionDescription AS cd, CustomActionDescriptionSeclore AS cs WHERE cd.coupledCustomAction_id=? AND cd.id=cs.id">>},
 		{network_by_rule_id, <<"SELECT n.ipBase,n.ipMask FROM Network AS n, RuleItem AS ri WHERE ri.rule_id=? AND n.id=ri.item_id">>},
+		{domain_by_rule_id, <<"SELECT d.destinationString FROM Domain AS d, RuleItem AS ri WHERE ri.rule_id=? AND d.id=ri.item_id">>},
+		{directory_by_rule_id, <<"SELECT d.destinationString FROM FileSystemDirectory AS d, RuleItem AS ri WHERE ri.rule_id=? AND d.id=ri.item_id">>},
 		{user_s_by_rule_id, <<"SELECT u.username FROM RuleUserStatic AS u, RuleItem AS ri WHERE ri.rule_id=? AND u.id=ri.item_id">>},
 		{user_ad_u_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=u.id">>},
 		{user_ad_o_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, ADDomainItem i, ADDomainOU o, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=o.id AND o.id=i.parent_id AND i.id=u.id">>},
@@ -490,6 +492,9 @@ populate_rule(OrigId, Channel, Action, FilterId) ->
 	{ok, ITQ} = psq(itype_by_rule_id, [OrigId]),
 	populate_itypes(ITQ, RuleId),
 
+	{ok, DQ} = psq(domain_by_rule_id, [OrigId]),
+	populate_domains(DQ, RuleId),
+
 	R = #rule{id=RuleId, orig_id=OrigId, channel=Channel, action=Action, filter_id=FilterId},
 	mydlp_mnesia_write(R).
 
@@ -513,6 +518,17 @@ populate_iprs([[Base, Subnet]| Rows], RuleId) ->
 	mydlp_mnesia_write(I),
 	populate_iprs(Rows, RuleId);
 populate_iprs([], _RuleId) -> ok.
+
+populate_domains([[Destination]|Rows], RuleId)->
+	Id = mydlp_mnesia:get_unique_id(dest),
+	D = case Destination of
+		<<"all">> -> all; 
+		_ -> Destination
+	end,
+	I = #dest{id=Id, rule_id=RuleId, destination=D},
+	mydlp_mnesia_write(I),
+	populate_domains(Rows, RuleId);
+populate_domains([], _RuleId) -> ok.
 
 populate_rule_users(RuleOrigId, RuleId) -> 
 	{ok, USQ} = psq(user_s_by_rule_id, [RuleOrigId]),

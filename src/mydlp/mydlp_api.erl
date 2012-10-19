@@ -2964,3 +2964,8 @@ pany_test_() -> [
 					_ -> false end end,
 				[1,2,3,4,5,6,7,8]))
 ].
+
+reverse_binary(Bin) ->
+	S = size(Bin)*8, 
+	<<X:S/integer-little>> = Bin,
+	<<X:S/integer-big>>.

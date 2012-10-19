@@ -132,6 +132,7 @@ schedule(Interval) ->
 	timer:send_after(Interval, schedule_now).
 
 schedule() ->
+	%Paths = mydlp_mnesia:get_destinations(),
 	Paths = ?CFG(discover_fs_paths),
 	PathList = string:tokens(Paths,";"),
 	lists:foreach(fun(P) -> q(P) end, PathList),
