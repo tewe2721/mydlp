@@ -200,9 +200,7 @@ load_src(Src) ->
 	{syslog_diag_facility, syslog_facility, "local6"},
 	{syslog_report_host, ip, "127.0.0.1"},
 	{syslog_report_port, integer, "514"},
-	{syslog_report_facility, syslog_facility, "local7"},
-	{query_cache_maximum_size, integer, "1500000"},
-	{query_cache_cleanup_interval, integer, "900000"}
+	{syslog_report_facility, syslog_facility, "local7"}
 ]).
 
 -endif.
@@ -213,6 +211,14 @@ load_src(Src) ->
 ]).
 
 -endif.
+
+-define(CONFDEF_PRESTART_COMMON, [
+	{query_cache_maximum_size, integer, "1500000"},
+	{query_cache_cleanup_interval, integer, "900000"},
+	{seclore_fs_enable, boolean, "false"}
+]).
+
+-define(CONFDEF_PRESTART, lists:append(?CONFDEF_PRESTART_DEFAULT, ?CONFDEF_PRESTART_COMMON)).
 
 -ifdef(__MYDLP_NETWORK).
 
@@ -479,7 +485,7 @@ mydlp_config_mnesia([{Key,Type,DefaultVal}|Rest], SrcAcc) ->
 	mydlp_config_mnesia(Rest, SrcAcc ++ SLine);
 mydlp_config_mnesia([], SrcAcc) -> SrcAcc.
 
-mydlp_config_prestart_default() -> mydlp_config_prestart_default(?CONFDEF_PRESTART_DEFAULT, "").
+mydlp_config_prestart_default() -> mydlp_config_prestart_default(?CONFDEF_PRESTART, "").
 
 mydlp_config_prestart_default([{Key,Type,ValStr}|Rest], SrcAcc) ->
 	KeyStr = erlang:atom_to_list(Key),
