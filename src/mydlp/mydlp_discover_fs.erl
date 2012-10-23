@@ -59,9 +59,9 @@
 
 %%%%%%%%%%%%%  API
 
-q(FilePath) -> q(none, FilePath).
+q(FilePath, ParentFilePath) -> q(none, FilePath, ParentFilePath).
 
-q(ParentId, FilePath) -> gen_server:cast(?MODULE, {q, ParentId, FilePath}).
+q(ParentId, FilePath, ParentFilePath) -> gen_server:cast(?MODULE, {q, ParentId, FilePath, ParentFilePath}).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -71,20 +71,20 @@ handle_call(stop, _From, State) ->
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-handle_cast({q, ParentId, FilePath}, #state{discover_queue=Q, discover_inprog=false} = State) ->
-	Q1 = queue:in({ParentId, FilePath}, Q),
+handle_cast({q, ParentId, FilePath, ParentFilePath}, #state{discover_queue=Q, discover_inprog=false} = State) ->
+	Q1 = queue:in({ParentId, FilePath, ParentFilePath}, Q),
 	consume(),
 	{noreply, State#state{discover_queue=Q1, discover_inprog=true}};
 
-handle_cast({q, ParentId, FilePath}, #state{discover_queue=Q, discover_inprog=true} = State) ->
-	Q1 = queue:in({ParentId, FilePath}, Q),
+handle_cast({q, ParentId, FilePath, ParentFilePath}, #state{discover_queue=Q, discover_inprog=true} = State) ->
+	Q1 = queue:in({ParentId, FilePath, ParentFilePath}, Q),
 	{noreply,State#state{discover_queue=Q1}};
 
 handle_cast(consume, #state{discover_queue=Q} = State) ->
 	case queue:out(Q) of
-		{{value, {ParentId, FilePath}}, Q1} ->
+		{{value, {ParentId, FilePath, ParentFilePath}}, Q1} ->
 			try	case has_discover_rule() of
-					true -> discover(ParentId, FilePath);
+					true -> discover(ParentId, FilePath, ParentFilePath);
 					false -> ok end,
 				consume(),
 				{noreply, State#state{discover_queue=Q1}}
@@ -132,9 +132,9 @@ schedule(Interval) ->
 	timer:send_after(Interval, schedule_now).
 
 schedule() ->
-	%Paths = mydlp_mnesia:get_destinations(),
-	Paths = ?CFG(discover_fs_paths),
-	PathList = string:tokens(Paths,";"),
+	Paths = mydlp_mnesia:get_discovery_directory(),
+	%Paths = ?CFG(discover_fs_paths),
+	PathList = lists:map(fun(P) -> binary_to_list(P) end, Paths),%string:tokens(Paths,";"),
 	lists:foreach(fun(P) -> q(P) end, PathList),
 	ok.
 
@@ -172,18 +172,19 @@ is_changed(#fs_entry{file_path=FP, file_size=FSize, last_modified=LMod} = E) ->
 			true;
 		false -> false end.
 
-fs_entry(ParentId, FilePath) ->
+fs_entry(ParentId, FilePath, ParentFilePath) ->
 	case mydlp_mnesia:get_fs_entry(FilePath) of
 		none -> Id = mydlp_mnesia:get_unique_id(fs_entry),
-			E = #fs_entry{file_path=FilePath, entry_id=Id, parent_id=ParentId},
+			E = #fs_entry{file_path=FilePath, entry_id=Id, parent_id=ParentId, parent_file_path=ParentFilePath},
 			mydlp_mnesia:add_fs_entry(E), %% bulk write may improve performance
 			E;
 		#fs_entry{} = FS -> FS end.
 
-discover_file(#fs_entry{file_path=FP}) -> 
+discover_file(#fs_entry{file_path=FP, parent_file_path=ParentFilePath}) -> 
 	try	timer:sleep(20),
 		{ok, ObjId} = mydlp_container:new(),
 		ok = mydlp_container:setprop(ObjId, "channel", "discovery"),
+		ok = mydlp_container:setprop(ObjId, "parent_file_path", ParentFilePath),
 		ok = mydlp_container:pushfile(ObjId, {raw, FP}),
 		ok = mydlp_container:eof(ObjId),
 		{ok, Action} = mydlp_container:aclq(ObjId),
@@ -198,28 +199,28 @@ discover_file(#fs_entry{file_path=FP}) ->
 	end,
 	ok.
 
-discover_dir(#fs_entry{file_path=FP, entry_id=EId}) ->
+discover_dir(#fs_entry{file_path=FP, entry_id=EId, parent_file_path=ParentFilePath}) ->
 	CList = case file:list_dir(FP) of
 		{ok, LD} -> LD;
 		{error, _} -> [] end,
 	OList = mydlp_mnesia:fs_entry_list_dir(EId),
 	MList = lists:umerge([CList, OList]),
-	[ q(EId, filename:absname(FN, FP)) || FN <- MList ],
+	[ q(EId, filename:absname(FN, FP), ParentFilePath) || FN <- MList ],
 	ok.
 
-discover_dir_dir(#fs_entry{file_path=FP, entry_id=EId}) ->
+discover_dir_dir(#fs_entry{file_path=FP, entry_id=EId, parent_file_path=ParentFilePath}) ->
 	OList = mydlp_mnesia:fs_entry_list_dir(EId),
-	[ q(EId, filename:absname(FN, FP)) || FN <- OList ],
+	[ q(EId, filename:absname(FN, FP), ParentFilePath) || FN <- OList ],
 	ok.
 
-discover(ParentId, FilePath) ->
+discover(ParentId, FilePath, ParentFilePath) ->
 	case filelib:is_regular(FilePath) of
-		true -> E = fs_entry(ParentId, FilePath),
+		true -> E = fs_entry(ParentId, FilePath, ParentFilePath),
 			case is_changed(E) of
 				true -> discover_file(E);
 				false -> ok end;
 	false -> case filelib:is_dir(FilePath) of
-		true -> E = fs_entry(ParentId, FilePath),
+		true -> E = fs_entry(ParentId, FilePath, ParentFilePath),
 			case is_changed(E) of
 				true -> discover_dir(E);
 				false -> discover_dir_dir(E) end;

@@ -97,6 +97,7 @@
 
 -record(rule_table, {
 	channel,
+	destination,
 	table=[]
 }).
 
@@ -105,7 +106,8 @@
 	entry_id,
 	parent_id,
 	file_size,
-	last_modified
+	last_modified,
+	parent_file_path
 }).
 
 -endif.

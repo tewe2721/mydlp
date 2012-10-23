@@ -98,6 +98,8 @@
 % API endpoint 
 -export([
 	get_rule_table/1,
+	get_rule_table/2,
+	get_discovery_directory/0,
 	get_fs_entry/1,
 	del_fs_entry/1,
 	add_fs_entry/1,
@@ -335,6 +337,10 @@ get_matchers(Source) -> aqc({get_matchers, Source}, nocache).
 
 get_rule_table(Channel) -> aqc({get_rule_table, Channel}, cache).
 
+get_rule_table(Channel, Destination) -> aqc({get_rule_table, Channel, Destination}, cache).
+
+get_discovery_directory() -> aqc({get_discovery_directory}, cache).
+
 get_fs_entry(FilePath) -> aqc({get_fs_entry, FilePath}, nocache).
 
 del_fs_entry(FilePath) -> aqc({del_fs_entry, FilePath}, nocache).
@@ -484,15 +490,26 @@ filter_rule_ids_by_dest(RuleIds, Destinations) ->
 	RulenD = ?QLCE(Q1),
 	lists:append([RuleaD, RulenD]).
 
+get_destinations_for_discovery(RuleIds) ->
+	Q0 = ?QLCQ([D#dest.destination ||
+		D <- mnesia:table(dest),
+		R <- RuleIds,
+		D#dest.rule_id == R
+	]),
+	?QLCE(Q0).
+
 handle_query({get_remote_rule_tables, FilterId, Addr, UserH}) ->
 	AclQ = #aclq{src_addr=Addr, src_user_h=UserH},
 	EndpointRuleTable = get_rules(FilterId, AclQ#aclq{channel=endpoint}),
 	PrinterRuleTable = get_rules(FilterId, AclQ#aclq{channel=printer}),
-	DiscoveryRuleTable = get_rules(FilterId, AclQ#aclq{channel=discovery}),
+	DiscoveryRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=discovery}),
+	Directories = get_destinations_for_discovery(DiscoveryRuleIds),
+	DiscoveryRuleTable = get_rule_table(FilterId, DiscoveryRuleIds),
+	erlang:display(DiscoveryRuleTable),
 	[
-		{endpoint, EndpointRuleTable},
-		{printer, PrinterRuleTable},
-		{discovery, DiscoveryRuleTable}
+		{endpoint, none, EndpointRuleTable},
+		{printer, none, PrinterRuleTable},
+		{discovery, Directories, DiscoveryRuleTable}
 	];
 
 handle_query({get_remote_rule_ids, FilterId, Addr, UserH}) ->
@@ -541,7 +558,11 @@ handle_query({get_rule_ids, FilterId, #aclq{channel=Channel, destinations=Destin
 
 	RuleIds = lists:append([RulesD, RulesI, RulesU]),
 
-	FinalRuleIds = filter_rule_ids_by_dest(RuleIds, Destinations),
+	FinalRuleIds = case Channel of
+				web -> filter_rule_ids_by_dest(RuleIds, Destinations);
+				mail -> filter_rule_ids_by_dest(RuleIds, Destinations);
+				_ -> RuleIds
+			end,
 
 	lists:usort(FinalRuleIds);
 
@@ -717,11 +738,28 @@ handle_query(Query) -> handle_query_common(Query).
 
 -ifdef(__MYDLP_ENDPOINT).
 
+%has_this_destination()
+
 % TODO: should be refined for multi-site usage
 handle_query({get_rule_table, Channel}) ->
 	Q = ?QLCQ([ R#rule_table.table ||
 		R <- mnesia:table(rule_table),
 		R#rule_table.channel == Channel
+		]),
+	?QLCE(Q);
+
+handle_query({get_rule_table, Channel, Destination}) ->
+	Q = ?QLCQ([R#rule_table.table ||
+		R <- mnesia:table(rule_table),
+		R#rule_table.channel == Channel
+		has_this_destination(R#rule_table.table, Destination),
+		]),
+	?QLCE(Q);
+
+handle_query({get_discovery_directory}) ->
+	Q = ?QLCQ([ R#rule_table.destination ||
+		R <- mnesia:table(rule_table),
+		R#rule_table.channel == discovery
 		]),
 	?QLCE(Q);
 

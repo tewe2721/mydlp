@@ -51,7 +51,7 @@
 
 -export([
 	qi/2,
-	qe/2
+	qe/3
 	]).
 
 %% gen_server callbacks
@@ -85,7 +85,7 @@ q(AclQ, Files) -> acl_call({q, AclQ}, Files).
 % For handling inbound request.
 qi(Channel, Files) -> acl_call({qi, Channel}, Files).
 
-qe(Channel, Files) -> acl_call({qe, Channel}, Files).
+qe(Channel, Files, ParentDirectory) -> acl_call({qe, Channel, ParentDirectory}, Files).
 
 -ifdef(__MYDLP_NETWORK).
 
@@ -191,16 +191,17 @@ handle_acl(Q, _Files, _State) -> throw({error, {undefined_query, Q}}).
 
 -ifdef(__MYDLP_ENDPOINT).
 
-handle_acl({qe, _Channel}, [#file{mime_type= <<"mydlp-internal/usb-device;id=unknown">>}] = Files, _State) ->
+handle_acl({qe, _Channel, _ParentDirectory}, [#file{mime_type= <<"mydlp-internal/usb-device;id=unknown">>}] = Files, _State) ->
 	{?CFG(error_action), mydlp_api:empty_aclr(Files, usb_device_id_unknown)};
 
-handle_acl({qe, _Channel}, [#file{mime_type= <<"mydlp-internal/usb-device;id=", DeviceId/binary>>}] = Files, _State) ->
+handle_acl({qe, _Channel, _ParentDirectory}, [#file{mime_type= <<"mydlp-internal/usb-device;id=", DeviceId/binary>>}] = Files, _State) ->
 	case mydlp_mnesia:is_valid_usb_device_id(DeviceId) of % TODO: need refinements for multi-user usage.
 		true -> pass;
 		false -> {block, mydlp_api:empty_aclr(Files, usb_device_rejected)} end;
 
-handle_acl({qe, Channel}, Files, _State) ->
-	Rules = mydlp_mnesia:get_rule_table(Channel),
+handle_acl({qe, Channel, ParentDirectory}, Files, _State) ->
+	Rules = mydlp_mnesia:get_rule_table(Channel, ParentDirectory),
+	erlang:display("Buraya da geldi ya la"),
 	acl_exec2(Rules, Files);
 
 handle_acl(Q, _Files, _State) -> throw({error, {undefined_query, Q}}).

@@ -2832,7 +2832,7 @@ use_client_policy(CDBBin) ->
 		mydlp_mnesia:truncate_nondata(),
 		( catch mydlp_mnesia:write(ItemDump) ),
 		( catch mydlp_mnesia:write([ MCModule ]) ),
-		( catch mydlp_mnesia:write([ #rule_table{channel=C, table = RT} || {C, RT} <- RuleTables ]) ),
+		( catch mydlp_mnesia:write([ #rule_table{channel=C, destination=D,table = RT} || {C, D, RT} <- RuleTables ]) ),
 
 		mydlp_mnesia:post_start(),
 		mydlp_dynamic:populate_win32reg(),
@@ -2964,6 +2964,11 @@ pany_test_() -> [
 					_ -> false end end,
 				[1,2,3,4,5,6,7,8]))
 ].
+
+%%-------------------------------------------------------------------------
+%% @doc Reverses given binary.
+%% @end
+%%-------------------------------------------------------------------------
 
 reverse_binary(Bin) ->
 	S = size(Bin)*8, 

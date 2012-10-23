@@ -493,7 +493,8 @@ populate_rule(OrigId, Channel, Action, FilterId) ->
 	populate_itypes(ITQ, RuleId),
 
 	{ok, DQ} = psq(domain_by_rule_id, [OrigId]),
-	populate_domains(DQ, RuleId),
+	{ok, DIRQ} = psq(directory_by_rule_id, [OrigId]),
+	populate_destinations(DQ++DIRQ, RuleId),
 
 	R = #rule{id=RuleId, orig_id=OrigId, channel=Channel, action=Action, filter_id=FilterId},
 	mydlp_mnesia_write(R).
@@ -519,7 +520,7 @@ populate_iprs([[Base, Subnet]| Rows], RuleId) ->
 	populate_iprs(Rows, RuleId);
 populate_iprs([], _RuleId) -> ok.
 
-populate_domains([[Destination]|Rows], RuleId)->
+populate_destinations([[Destination]|Rows], RuleId)->
 	Id = mydlp_mnesia:get_unique_id(dest),
 	D = case Destination of
 		<<"all">> -> all; 
@@ -527,8 +528,18 @@ populate_domains([[Destination]|Rows], RuleId)->
 	end,
 	I = #dest{id=Id, rule_id=RuleId, destination=D},
 	mydlp_mnesia_write(I),
-	populate_domains(Rows, RuleId);
-populate_domains([], _RuleId) -> ok.
+	populate_destinations(Rows, RuleId);
+populate_destinations([], _RuleId) -> ok.
+
+%populate_directories([[Directories]|Rows], RuleId) ->
+%	Id = mydlp_mnesia:get_unique_id(dir),
+%	D = case Destination of
+%		<<"all">> -> all;
+%		_ -> Destination
+%	end,
+%	I = #dir{id=Id, rule_id=RuleId, destination=D},
+%	populate_directories(Rows, RuleId);
+%populate_directories([], _RuleId) -> ok.
 
 populate_rule_users(RuleOrigId, RuleId) -> 
 	{ok, USQ} = psq(user_s_by_rule_id, [RuleOrigId]),

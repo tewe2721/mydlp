@@ -159,6 +159,7 @@ handle_call({aclq, ObjId, Timeout}, From, #state{object_tree=OT} = State) ->
 						File = object_to_file(Obj),
 						DFFiles = [File],
 						Channel = get_channel(Obj),
+						ParentDirectory = get_discovery_directory(Obj),
 						{QRet, Obj1} = case Channel of
 							api ->	IpAddress = get_ip_address(Obj),
 								{UserName, UserHash} = mydlp_mnesia:get_user_from_address(IpAddress),
@@ -166,7 +167,7 @@ handle_call({aclq, ObjId, Timeout}, From, #state{object_tree=OT} = State) ->
 								{mydlp_acl:q(AclQ, DFFiles), set_api_user(Obj, UserName)};
 							_Else -> { case ( ?CFG(archive_inbound) and is_inbound(Obj) ) of
 									true -> mydlp_acl:qi(Channel, DFFiles);
-									false -> mydlp_acl:qe(Channel, DFFiles) end,
+									false -> mydlp_acl:qe(Channel, DFFiles, ParentDirectory) end,
 								Obj } end,
 						AclRet = acl_ret(QRet, Obj1, DFFiles),
 						{ok, AclRet}
@@ -436,6 +437,12 @@ get_channel(#object{prop_dict=PD}) ->
 	error -> case dict:find("printerName", PD) of
 		{ok, _} -> printer;
 		error -> endpoint end end.
+
+get_discovery_directory(#object{prop_dict=PD}) ->
+	case dict:find("parent_file_path", PD) of
+		{ok, FilePath} -> FilePath;
+		error -> none
+	end.
 
 get_type(#object{prop_dict=PD}) ->
 	case dict:find("type", PD) of
