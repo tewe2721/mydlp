@@ -490,13 +490,16 @@ filter_rule_ids_by_dest(RuleIds, Destinations) ->
 	RulenD = ?QLCE(Q1),
 	lists:append([RuleaD, RulenD]).
 
-get_destinations_for_discovery(RuleIds) ->
-	Q0 = ?QLCQ([D#dest.destination ||
+get_destinations_for_discovery(RuleIds) -> get_destinations_for_discovery(RuleIds, 0, []).
+
+get_destinations_for_discovery([Id|RuleIds], Index, Acc) ->
+	Q0 = ?QLCQ([{D#dest.destination, Index} ||
 		D <- mnesia:table(dest),
-		R <- RuleIds,
-		D#dest.rule_id == R
+		D#dest.rule_id == Id
 	]),
-	?QLCE(Q0).
+	Q1 = ?QLCE(Q0),
+	get_destinations_for_discovery(RuleIds, Index+1, [Q1|Acc]);
+get_destinations_for_discovery([], _Index, Acc) ->  lists:flatten(Acc).
 
 handle_query({get_remote_rule_tables, FilterId, Addr, UserH}) ->
 	AclQ = #aclq{src_addr=Addr, src_user_h=UserH},
@@ -738,7 +741,6 @@ handle_query(Query) -> handle_query_common(Query).
 
 -ifdef(__MYDLP_ENDPOINT).
 
-%has_this_destination()
 
 % TODO: should be refined for multi-site usage
 handle_query({get_rule_table, Channel}) ->
@@ -752,7 +754,6 @@ handle_query({get_rule_table, Channel, Destination}) ->
 	Q = ?QLCQ([R#rule_table.table ||
 		R <- mnesia:table(rule_table),
 		R#rule_table.channel == Channel
-		has_this_destination(R#rule_table.table, Destination),
 		]),
 	?QLCE(Q);
 

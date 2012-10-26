@@ -38,8 +38,8 @@
 
 %% API
 -export([start_link/0,
-	q/1,
 	q/2,
+	q/3,
 	stop/0]).
 
 %% gen_server callbacks
@@ -134,8 +134,8 @@ schedule(Interval) ->
 schedule() ->
 	Paths = mydlp_mnesia:get_discovery_directory(),
 	%Paths = ?CFG(discover_fs_paths),
-	PathList = lists:map(fun(P) -> binary_to_list(P) end, Paths),%string:tokens(Paths,";"),
-	lists:foreach(fun(P) -> q(P) end, PathList),
+	PathList = lists:map(fun({P, Index}) -> {binary_to_list(P), Index} end, Paths),%string:tokens(Paths,";"),
+	lists:foreach(fun(P) -> q(P, P) end, PathList),
 	ok.
 
 consume() -> gen_server:cast(?MODULE, consume).
