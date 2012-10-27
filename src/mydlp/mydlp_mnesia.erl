@@ -104,8 +104,7 @@
 	del_fs_entry/1,
 	add_fs_entry/1,
 	fs_entry_list_dir/1,
-	is_valid_usb_device_id/1,
-	get_destination/0
+	is_valid_usb_device_id/1
 	]).
 
 -endif.
@@ -412,7 +411,7 @@ handle_result({get_rule_table, _Channel}, {atomic, Result}) ->
 		[] -> none;
 		[Table] -> Table end;
 
-handle_result({get_rule_table, _Channel, RuleIndex}, {atomic, Result}) -> 
+handle_result({get_rule_table, _Channel, _RuleIndex}, {atomic, Result}) -> 
 	case Result of
 		[] -> none;
 		[Table] -> Table end;
@@ -429,11 +428,6 @@ handle_result({is_valid_usb_device_id, _DeviceId}, {atomic, Result}) ->
 	case Result of
 		[] -> false;
 		[_|_] -> true end;
-
-%handle_result({get_destination}, {atomic, Result}) ->
-%	case Result of
-%		[] -> none;
-%		[]
 
 handle_result(Query, Result) -> handle_result_common(Query, Result).
 
@@ -763,7 +757,7 @@ handle_query({get_rule_table, Channel, RuleIndex}) ->
 		]),
 	[{Req, IdAndDefaultAction, RuleTables}|_H] = ?QLCE(Q),
 	UniqueRule = lists:nth(RuleIndex+1, RuleTables),
-	[{Reg, IdAndDefaultAction, [UniqueRule]}];
+	[{Req, IdAndDefaultAction, [UniqueRule]}];
 
 handle_query({get_discovery_directory}) ->
 	Q = ?QLCQ([ R#rule_table.destination ||
