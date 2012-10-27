@@ -337,7 +337,7 @@ get_matchers(Source) -> aqc({get_matchers, Source}, nocache).
 
 get_rule_table(Channel) -> aqc({get_rule_table, Channel}, cache).
 
-get_rule_table(Channel, Destination) -> aqc({get_rule_table, Channel, Destination}, cache).
+get_rule_table(Channel, RuleIndex) -> aqc({get_rule_table, Channel, RuleIndex}, cache).
 
 get_discovery_directory() -> aqc({get_discovery_directory}, cache).
 
@@ -412,6 +412,11 @@ handle_result({get_rule_table, _Channel}, {atomic, Result}) ->
 		[] -> none;
 		[Table] -> Table end;
 
+handle_result({get_rule_table, _Channel, RuleIndex}, {atomic, Result}) -> 
+	case Result of
+		[] -> none;
+		[Table] -> Table end;
+
 handle_result({get_fs_entry, _FilePath}, {atomic, Result}) -> 
 	case Result of
 		[] -> none;
@@ -462,7 +467,7 @@ handle_result_common(_Query, {atomic, Objects}) -> Objects.
 
 is_applicable_destination(Destinations, UserDestination) ->
 	R = mydlp_api:reverse_binary(UserDestination),
-	A = lists:filter(fun(D) -> erlang:display(binary_to_list(D)), R1 = mydlp_api:reverse_binary(D),
+	A = lists:filter(fun(D) -> R1 = mydlp_api:reverse_binary(D),
 				is_sub_destination(R, R1) end, 
 				Destinations),
 	length(A) > 0.
@@ -508,6 +513,7 @@ handle_query({get_remote_rule_tables, FilterId, Addr, UserH}) ->
 	DiscoveryRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=discovery}),
 	Directories = get_destinations_for_discovery(DiscoveryRuleIds),
 	DiscoveryRuleTable = get_rule_table(FilterId, DiscoveryRuleIds),
+	erlang:display(Directories),
 	erlang:display(DiscoveryRuleTable),
 	[
 		{endpoint, none, EndpointRuleTable},
@@ -750,12 +756,14 @@ handle_query({get_rule_table, Channel}) ->
 		]),
 	?QLCE(Q);
 
-handle_query({get_rule_table, Channel, Destination}) ->
+handle_query({get_rule_table, Channel, RuleIndex}) ->
 	Q = ?QLCQ([R#rule_table.table ||
 		R <- mnesia:table(rule_table),
 		R#rule_table.channel == Channel
 		]),
-	?QLCE(Q);
+	[{Req, IdAndDefaultAction, RuleTables}|_H] = ?QLCE(Q),
+	UniqueRule = lists:nth(RuleIndex+1, RuleTables),
+	[{Reg, IdAndDefaultAction, [UniqueRule]}];
 
 handle_query({get_discovery_directory}) ->
 	Q = ?QLCQ([ R#rule_table.destination ||

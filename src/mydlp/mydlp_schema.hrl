@@ -97,7 +97,7 @@
 
 -record(rule_table, {
 	channel,
-	destination,
+	destination,% target parent file path for discovery. "none" (atom) for endpoint and printer.
 	table=[]
 }).
 
@@ -107,7 +107,7 @@
 	parent_id,
 	file_size,
 	last_modified,
-	parent_file_path
+	rule_index
 }).
 
 -endif.
