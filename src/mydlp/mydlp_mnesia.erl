@@ -758,7 +758,7 @@ handle_query({get_rule_table, Channel, RuleIndex}) ->
 		R <- mnesia:table(rule_table),
 		R#rule_table.channel == Channel
 		]),
-	[{Req, IdAndDefaultAction, RuleTables}|_H] = ?QLCE(Q),
+	[{Req, IdAndDefaultAction, RuleTables}] = ?QLCE(Q),
 	UniqueRule = lists:nth(RuleIndex+1, RuleTables),
 	[{Req, IdAndDefaultAction, [UniqueRule]}];
 
