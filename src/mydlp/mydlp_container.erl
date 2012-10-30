@@ -159,15 +159,17 @@ handle_call({aclq, ObjId, Timeout}, From, #state{object_tree=OT} = State) ->
 						File = object_to_file(Obj),
 						DFFiles = [File],
 						Channel = get_channel(Obj),
-						RuleIndex = get_discovery_rule_index(Obj),
 						{QRet, Obj1} = case Channel of
 							api ->	IpAddress = get_ip_address(Obj),
 								{UserName, UserHash} = mydlp_mnesia:get_user_from_address(IpAddress),
 								AclQ = #aclq{channel=Channel, src_addr=IpAddress, src_user_h=UserHash},
 								{mydlp_acl:q(AclQ, DFFiles), set_api_user(Obj, UserName)};
+							discovery -> 
+								RuleIndex = get_discovery_rule_index(Obj),
+								{mydlp_acl:qe(Channel, DFFiles, RuleIndex), Obj};
 							_Else -> { case ( ?CFG(archive_inbound) and is_inbound(Obj) ) of
 									true -> mydlp_acl:qi(Channel, DFFiles);
-									false -> mydlp_acl:qe(Channel, DFFiles, RuleIndex) end,
+									false -> mydlp_acl:qe(Channel, DFFiles) end,
 								Obj } end,
 						AclRet = acl_ret(QRet, Obj1, DFFiles),
 						{ok, AclRet}
