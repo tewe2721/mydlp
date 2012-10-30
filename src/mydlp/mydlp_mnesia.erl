@@ -414,6 +414,11 @@ handle_result({get_rule_table, _Channel, _RuleIndex}, {atomic, Result}) ->
 		[] -> none;
 		[Table] -> Table end;
 
+handle_result({get_discovery_directory}, {atomic, Result}) -> 
+	case Result of
+		[] -> none;
+		[Table] -> Table end;
+
 handle_result({get_fs_entry, _FilePath}, {atomic, Result}) -> 
 	case Result of
 		[] -> none;
