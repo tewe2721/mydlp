@@ -492,7 +492,9 @@ filter_rule_ids_by_dest(RuleIds, Destinations) ->
 	RulenD = ?QLCE(Q1),
 	lists:append([RuleaD, RulenD]).
 
-get_destinations_for_discovery(RuleIds) -> get_destinations_for_discovery(RuleIds, 0, []).
+get_destinations_for_discovery(RuleIds) -> 
+	DL =get_destinations_for_discovery(RuleIds, 0, []),
+	lists:reverse(DL).
 
 get_destinations_for_discovery([Id|RuleIds], Index, Acc) ->
 	Q0 = ?QLCQ([{D#dest.destination, Index} ||
