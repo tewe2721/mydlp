@@ -512,8 +512,6 @@ handle_query({get_remote_rule_tables, FilterId, Addr, UserH}) ->
 	DiscoveryRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=discovery}),
 	Directories = get_destinations_for_discovery(DiscoveryRuleIds),
 	DiscoveryRuleTable = get_rule_table(FilterId, DiscoveryRuleIds),
-	erlang:display(Directories),
-	erlang:display(DiscoveryRuleTable),
 	[
 		{endpoint, none, EndpointRuleTable},
 		{printer, none, PrinterRuleTable},
