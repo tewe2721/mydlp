@@ -98,6 +98,8 @@
 % API endpoint 
 -export([
 	get_rule_table/1,
+	get_rule_table/2,
+	get_discovery_directory/0,
 	get_fs_entry/1,
 	del_fs_entry/1,
 	add_fs_entry/1,
@@ -152,7 +154,8 @@
 -define(NONDATA_FUNCTIONAL_TABLES, [
 	filter,
 	rule,
-	ipr, 
+	ipr,
+	dest, 
 	{m_user, ordered_set, 
 		fun() -> mnesia:add_table_index(m_user, un_hash) end},
 	itype,
@@ -220,6 +223,7 @@ get_record_fields_functional(Record) ->
 		filter -> record_info(fields, filter);
 		rule -> record_info(fields, rule);
 		ipr -> record_info(fields, ipr);
+		dest -> record_info(fields, dest);
 		m_user -> record_info(fields, m_user);
 		itype -> record_info(fields, itype);
 		ifeature -> record_info(fields, ifeature);
@@ -332,6 +336,10 @@ get_matchers(Source) -> aqc({get_matchers, Source}, nocache).
 
 get_rule_table(Channel) -> aqc({get_rule_table, Channel}, cache).
 
+get_rule_table(Channel, RuleIndex) -> aqc({get_rule_table, Channel, RuleIndex}, cache).
+
+get_discovery_directory() -> aqc({get_discovery_directory}, cache).
+
 get_fs_entry(FilePath) -> aqc({get_fs_entry, FilePath}, nocache).
 
 del_fs_entry(FilePath) -> aqc({del_fs_entry, FilePath}, nocache).
@@ -401,13 +409,23 @@ handle_result({get_rule_table, _Channel}, {atomic, Result}) ->
 		[] -> none;
 		[Table] -> Table end;
 
+handle_result({get_rule_table, _Channel, _RuleIndex}, {atomic, Result}) -> 
+	case Result of
+		[] -> none;
+		[Table] -> Table end;
+
+handle_result({get_discovery_directory}, {atomic, Result}) -> 
+	case Result of
+		[] -> none;
+		[Table] -> Table end;
+
 handle_result({get_fs_entry, _FilePath}, {atomic, Result}) -> 
 	case Result of
 		[] -> none;
 		[FSEntry] -> FSEntry end;
 
 handle_result({fs_entry_list_dir, _EntryId}, {atomic, Result}) -> 
-	[ FP || #fs_entry{file_path=FP} <- Result ];
+	[ FP || #fs_entry{file_id=FP} <- Result ];
 
 handle_result({is_valid_usb_device_id, _DeviceId}, {atomic, Result}) -> 
 	case Result of
@@ -444,15 +462,62 @@ handle_result_common(_Query, {atomic, Objects}) -> Objects.
 
 -ifdef(__MYDLP_NETWORK).
 
+is_applicable_destination(Destinations, UserDestination) ->
+	R = mydlp_api:reverse_binary(UserDestination),
+	A = lists:filter(fun(D) -> R1 = mydlp_api:reverse_binary(D),
+				is_sub_destination(R, R1) end, 
+				Destinations),
+	length(A) > 0.
+
+is_sub_destination(<<>>, _Dest2) -> true;
+is_sub_destination(<<C/utf8, R/binary>>, <<C1/utf8, R1/binary>>) when C == C1 -> is_sub_destination(R, R1);
+is_sub_destination(_, _) -> false.
+
+filter_rule_ids_by_dest(RuleIds, Destinations) ->
+	Q0 = ?QLCQ([R ||
+		D <- mnesia:table(dest),
+		R <- RuleIds,
+		D#dest.rule_id == R,
+		D#dest.destination == all
+	]),
+	RuleaD = ?QLCE(Q0),
+	
+	Q1 = ?QLCQ([R ||
+		D <- mnesia:table(dest),
+		R <- RuleIds,
+		D#dest.rule_id == R,
+		D#dest.destination /= all,
+		is_applicable_destination(Destinations, D#dest.destination)
+	]),
+	RulenD = ?QLCE(Q1),
+	lists:append([RuleaD, RulenD]).
+
+get_destinations_for_discovery(RuleIds) -> 
+	DL =get_destinations_for_discovery(RuleIds, 0, []),
+	lists:reverse(DL).
+
+get_destinations_for_discovery([Id|RuleIds], Index, Acc) ->
+	Q0 = ?QLCQ([{D#dest.destination, Index} ||
+		D <- mnesia:table(dest),
+		D#dest.rule_id == Id
+	]),
+	Q1 = ?QLCE(Q0),
+	get_destinations_for_discovery(RuleIds, Index+1, [Q1|Acc]);
+get_destinations_for_discovery([], _Index, Acc) ->  lists:flatten(Acc).
+
 handle_query({get_remote_rule_tables, FilterId, Addr, UserH}) ->
 	AclQ = #aclq{src_addr=Addr, src_user_h=UserH},
 	EndpointRuleTable = get_rules(FilterId, AclQ#aclq{channel=endpoint}),
 	PrinterRuleTable = get_rules(FilterId, AclQ#aclq{channel=printer}),
-	DiscoveryRuleTable = get_rules(FilterId, AclQ#aclq{channel=discovery}),
+	DiscoveryRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=discovery}),
+	Directories = get_destinations_for_discovery(DiscoveryRuleIds),
+	DiscoveryRuleTable = get_rule_table(FilterId, DiscoveryRuleIds),
+	erlang:display(Directories),
+	erlang:display(DiscoveryRuleTable),
 	[
-		{endpoint, EndpointRuleTable},
-		{printer, PrinterRuleTable},
-		{discovery, DiscoveryRuleTable}
+		{endpoint, none, EndpointRuleTable},
+		{printer, none, PrinterRuleTable},
+		{discovery, Directories, DiscoveryRuleTable}
 	];
 
 handle_query({get_remote_rule_ids, FilterId, Addr, UserH}) ->
@@ -463,7 +528,7 @@ handle_query({get_remote_rule_ids, FilterId, Addr, UserH}) ->
 	R = lists:flatten([EndpointRuleIds, PrinterRuleIds, DiscoveryRuleIds]),
 	lists:usort(R);
 
-handle_query({get_rule_ids, FilterId, #aclq{channel=Channel} = AclQ}) ->
+handle_query({get_rule_ids, FilterId, #aclq{channel=Channel, destinations=Destinations} = AclQ}) ->
 	Q0 = ?QLCQ([R#rule.id || 
 		R <- mnesia:table(rule),
 		I <- mnesia:table(ipr),
@@ -499,7 +564,15 @@ handle_query({get_rule_ids, FilterId, #aclq{channel=Channel} = AclQ}) ->
 				U#m_user.un_hash == UserH
 				]), ?QLCE(Q2) end,
 
-	lists:usort(lists:append([RulesD, RulesI, RulesU]));
+	RuleIds = lists:append([RulesD, RulesI, RulesU]),
+
+	FinalRuleIds = case Channel of
+				web -> filter_rule_ids_by_dest(RuleIds, Destinations);
+				mail -> filter_rule_ids_by_dest(RuleIds, Destinations);
+				_ -> RuleIds
+			end,
+
+	lists:usort(FinalRuleIds);
 
 handle_query({get_rule_table, FilterId, RuleIDs}) ->
 	Rules = lists:map(fun(I) ->
@@ -673,6 +746,7 @@ handle_query(Query) -> handle_query_common(Query).
 
 -ifdef(__MYDLP_ENDPOINT).
 
+
 % TODO: should be refined for multi-site usage
 handle_query({get_rule_table, Channel}) ->
 	Q = ?QLCQ([ R#rule_table.table ||
@@ -681,17 +755,33 @@ handle_query({get_rule_table, Channel}) ->
 		]),
 	?QLCE(Q);
 
-handle_query({get_fs_entry, FilePath}) ->
-	mnesia:read(fs_entry, FilePath);
+handle_query({get_rule_table, Channel, RuleIndex}) ->
+	Q = ?QLCQ([R#rule_table.table ||
+		R <- mnesia:table(rule_table),
+		R#rule_table.channel == Channel
+		]),
+	[{Req, IdAndDefaultAction, RuleTables}] = ?QLCE(Q),
+	UniqueRule = lists:nth(RuleIndex+1, RuleTables),
+	[{Req, IdAndDefaultAction, [UniqueRule]}];
 
-handle_query({del_fs_entry, FilePath}) ->
-	mnesia:delete({fs_entry, FilePath});
+handle_query({get_discovery_directory}) ->
+	Q = ?QLCQ([ R#rule_table.destination ||
+		R <- mnesia:table(rule_table),
+		R#rule_table.channel == discovery
+		]),
+	?QLCE(Q);
+
+handle_query({get_fs_entry, FileId}) ->
+	mnesia:read(fs_entry, FileId);
+
+handle_query({del_fs_entry, FileId}) ->
+	mnesia:delete({fs_entry, FileId});
 
 handle_query({fs_entry_list_dir, EntryId}) ->
-	mnesia:match_object(#fs_entry{file_path='_', entry_id='_', parent_id=EntryId, file_size='_', last_modified='_'});
+	mnesia:match_object(#fs_entry{file_id='_', entry_id='_', parent_id=EntryId, file_size='_', last_modified='_'});
 
 handle_query({fs_entry_list_dir_dir, EntryId}) ->
-	mnesia:match_object(#fs_entry{file_path='_', entry_id='_', parent_id=EntryId, file_size='_', last_modified='_'});
+	mnesia:match_object(#fs_entry{file_id='_', entry_id='_', parent_id=EntryId, file_size='_', last_modified='_'});
 
 % TODO: should be refined for multi-site usage
 handle_query({is_valid_usb_device_id, DeviceId}) ->
@@ -1337,8 +1427,15 @@ remove_rule(RI) ->
 		]),
 	UIs = ?QLCE(Q4),
 
+	Q5 = ?QLCQ([I#dest.id ||	
+		I <- mnesia:table(dest),
+		I#dest.rule_id == RI
+		]),
+	DIs = ?QLCE(Q5),
+
 	lists:foreach(fun(Id) -> mnesia:delete({ipr, Id}) end, IIs),
 	lists:foreach(fun(Id) -> mnesia:delete({m_user, Id}) end, UIs),
+	lists:foreach(fun(Id) -> mnesia:delete({dest, Id}) end, DIs),
 
 	remove_data_formats(DFIs),
 	remove_itypes(ITIs),
