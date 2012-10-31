@@ -164,6 +164,9 @@ handle_call({aclq, ObjId, Timeout}, From, #state{object_tree=OT} = State) ->
 								{UserName, UserHash} = mydlp_mnesia:get_user_from_address(IpAddress),
 								AclQ = #aclq{channel=Channel, src_addr=IpAddress, src_user_h=UserHash},
 								{mydlp_acl:q(AclQ, DFFiles), set_api_user(Obj, UserName)};
+							discovery -> 
+								RuleIndex = get_discovery_rule_index(Obj),
+								{mydlp_acl:qe(Channel, DFFiles, RuleIndex), Obj};
 							_Else -> { case ( ?CFG(archive_inbound) and is_inbound(Obj) ) of
 									true -> mydlp_acl:qi(Channel, DFFiles);
 									false -> mydlp_acl:qe(Channel, DFFiles) end,
@@ -436,6 +439,12 @@ get_channel(#object{prop_dict=PD}) ->
 	error -> case dict:find("printerName", PD) of
 		{ok, _} -> printer;
 		error -> endpoint end end.
+
+get_discovery_rule_index(#object{prop_dict=PD}) ->
+	case dict:find("rule_index", PD) of
+		{ok, RuleIndex} -> RuleIndex;
+		error -> none
+	end.
 
 get_type(#object{prop_dict=PD}) ->
 	case dict:find("type", PD) of

@@ -45,6 +45,12 @@
 	ipmask
 }).
 
+-record(dest, {
+	id,
+	rule_id,
+	destination
+}).
+
 -record(m_user, {
 	id,
 	rule_id,
@@ -91,11 +97,12 @@
 
 -record(rule_table, {
 	channel,
+	destination,% target parent file path for discovery. "none" (atom) for endpoint and printer.
 	table=[]
 }).
 
 -record(fs_entry, {
-	file_path,
+	file_id,
 	entry_id,
 	parent_id,
 	file_size,

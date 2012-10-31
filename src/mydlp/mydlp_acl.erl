@@ -51,7 +51,8 @@
 
 -export([
 	qi/2,
-	qe/2
+	qe/2,
+	qe/3
 	]).
 
 %% gen_server callbacks
@@ -86,6 +87,8 @@ q(AclQ, Files) -> acl_call({q, AclQ}, Files).
 qi(Channel, Files) -> acl_call({qi, Channel}, Files).
 
 qe(Channel, Files) -> acl_call({qe, Channel}, Files).
+
+qe(Channel, Files, RuleIndex) -> acl_call({qe, Channel, RuleIndex}, Files).
 
 -ifdef(__MYDLP_NETWORK).
 
@@ -201,6 +204,10 @@ handle_acl({qe, _Channel}, [#file{mime_type= <<"mydlp-internal/usb-device;id=", 
 
 handle_acl({qe, Channel}, Files, _State) ->
 	Rules = mydlp_mnesia:get_rule_table(Channel),
+	acl_exec2(Rules, Files);
+
+handle_acl({qe, Channel, RuleIndex}, Files, _State) ->
+	Rules = mydlp_mnesia:get_rule_table(Channel, RuleIndex),
 	acl_exec2(Rules, Files);
 
 handle_acl(Q, _Files, _State) -> throw({error, {undefined_query, Q}}).

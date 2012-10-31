@@ -38,8 +38,8 @@
 
 %% API
 -export([start_link/0,
-	q/1,
 	q/2,
+	q/3,
 	stop/0]).
 
 %% gen_server callbacks
@@ -59,9 +59,9 @@
 
 %%%%%%%%%%%%%  API
 
-q(FilePath) -> q(none, FilePath).
+q(FilePath, RuleIndex) -> q(none, FilePath, RuleIndex).
 
-q(ParentId, FilePath) -> gen_server:cast(?MODULE, {q, ParentId, FilePath}).
+q(ParentId, FilePath, RuleIndex) -> gen_server:cast(?MODULE, {q, ParentId, FilePath, RuleIndex}).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -71,20 +71,20 @@ handle_call(stop, _From, State) ->
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-handle_cast({q, ParentId, FilePath}, #state{discover_queue=Q, discover_inprog=false} = State) ->
-	Q1 = queue:in({ParentId, FilePath}, Q),
+handle_cast({q, ParentId, FilePath, RuleIndex}, #state{discover_queue=Q, discover_inprog=false} = State) ->
+	Q1 = queue:in({ParentId, FilePath, RuleIndex}, Q),
 	consume(),
 	{noreply, State#state{discover_queue=Q1, discover_inprog=true}};
 
-handle_cast({q, ParentId, FilePath}, #state{discover_queue=Q, discover_inprog=true} = State) ->
-	Q1 = queue:in({ParentId, FilePath}, Q),
+handle_cast({q, ParentId, FilePath, RuleIndex}, #state{discover_queue=Q, discover_inprog=true} = State) ->
+	Q1 = queue:in({ParentId, FilePath, RuleIndex}, Q),
 	{noreply,State#state{discover_queue=Q1}};
 
 handle_cast(consume, #state{discover_queue=Q} = State) ->
 	case queue:out(Q) of
-		{{value, {ParentId, FilePath}}, Q1} ->
+		{{value, {ParentId, FilePath, RuleIndex}}, Q1} ->
 			try	case has_discover_rule() of
-					true -> discover(ParentId, FilePath);
+					true -> discover(ParentId, FilePath, RuleIndex);
 					false -> ok end,
 				consume(),
 				{noreply, State#state{discover_queue=Q1}}
@@ -132,9 +132,14 @@ schedule(Interval) ->
 	timer:send_after(Interval, schedule_now).
 
 schedule() ->
-	Paths = ?CFG(discover_fs_paths),
-	PathList = string:tokens(Paths,";"),
-	lists:foreach(fun(P) -> q(P) end, PathList),
+	PathsWithRuleIndex = mydlp_mnesia:get_discovery_directory(), % {Path, IndexInWhichRuleHasThisPath}
+	%Paths = ?CFG(discover_fs_paths),
+	PathList = lists:map(fun({P, Index}) -> 
+			{try unicode:characters_to_list(P)
+				catch _:_ -> binary_to_list(P) end,  %% TODO: log this case
+			Index}
+		end, PathsWithRuleIndex),	
+	lists:foreach(fun({P, I}) -> q(P, I) end, PathList),
 	ok.
 
 consume() -> gen_server:cast(?MODULE, consume).
@@ -164,25 +169,28 @@ meta(FilePath) ->
 	{ok, FileInfo} = file:read_file_info(FilePath),
 	{FileInfo#file_info.mtime, FileInfo#file_info.size}.
 
-is_changed(#fs_entry{file_path=FP, file_size=FSize, last_modified=LMod} = E) ->
+is_changed(#fs_entry{file_id={FP, _RuleIndex}, file_size=FSize, last_modified=LMod} = E) ->
 	{MTime, CSize} = meta(FP),
 	case ( (LMod /= MTime) or (CSize /= FSize) ) of
 		true -> mydlp_mnesia:add_fs_entry(E#fs_entry{file_size=CSize, last_modified=MTime}), % update mnesia entry
 			true;
 		false -> false end.
 
-fs_entry(ParentId, FilePath) ->
-	case mydlp_mnesia:get_fs_entry(FilePath) of
+fs_entry(ParentId, FilePath, RuleIndex) ->
+	FileId = {FilePath, RuleIndex},
+	case mydlp_mnesia:get_fs_entry(FileId) of
 		none -> Id = mydlp_mnesia:get_unique_id(fs_entry),
-			E = #fs_entry{file_path=FilePath, entry_id=Id, parent_id=ParentId},
+			E = #fs_entry{file_id=FileId, entry_id=Id, parent_id=ParentId},
 			mydlp_mnesia:add_fs_entry(E), %% bulk write may improve performance
 			E;
 		#fs_entry{} = FS -> FS end.
 
-discover_file(#fs_entry{file_path=FP}) -> 
+discover_file(#fs_entry{file_id={FP, RuleIndex}}) ->
+        erlang:display({RuleIndex, FP}),	
 	try	timer:sleep(20),
 		{ok, ObjId} = mydlp_container:new(),
 		ok = mydlp_container:setprop(ObjId, "channel", "discovery"),
+		ok = mydlp_container:setprop(ObjId, "rule_index", RuleIndex),
 		ok = mydlp_container:pushfile(ObjId, {raw, FP}),
 		ok = mydlp_container:eof(ObjId),
 		{ok, Action} = mydlp_container:aclq(ObjId),
@@ -197,28 +205,28 @@ discover_file(#fs_entry{file_path=FP}) ->
 	end,
 	ok.
 
-discover_dir(#fs_entry{file_path=FP, entry_id=EId}) ->
+discover_dir(#fs_entry{file_id={FP, RuleIndex}, entry_id=EId}) ->
 	CList = case file:list_dir(FP) of
 		{ok, LD} -> LD;
 		{error, _} -> [] end,
 	OList = mydlp_mnesia:fs_entry_list_dir(EId),
 	MList = lists:umerge([CList, OList]),
-	[ q(EId, filename:absname(FN, FP)) || FN <- MList ],
+	[ q(EId, filename:absname(FN, FP), RuleIndex) || FN <- MList ],
 	ok.
 
-discover_dir_dir(#fs_entry{file_path=FP, entry_id=EId}) ->
+discover_dir_dir(#fs_entry{file_id={FP, RuleIndex}, entry_id=EId}) ->
 	OList = mydlp_mnesia:fs_entry_list_dir(EId),
-	[ q(EId, filename:absname(FN, FP)) || FN <- OList ],
+	[ q(EId, filename:absname(FN, FP), RuleIndex) || FN <- OList ],
 	ok.
 
-discover(ParentId, FilePath) ->
+discover(ParentId, FilePath, RuleIndex) ->
 	case filelib:is_regular(FilePath) of
-		true -> E = fs_entry(ParentId, FilePath),
+		true -> E = fs_entry(ParentId, FilePath, RuleIndex),
 			case is_changed(E) of
 				true -> discover_file(E);
 				false -> ok end;
 	false -> case filelib:is_dir(FilePath) of
-		true -> E = fs_entry(ParentId, FilePath),
+		true -> E = fs_entry(ParentId, FilePath, RuleIndex),
 			case is_changed(E) of
 				true -> discover_dir(E);
 				false -> discover_dir_dir(E) end;
