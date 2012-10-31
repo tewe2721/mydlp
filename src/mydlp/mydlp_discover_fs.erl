@@ -137,8 +137,8 @@ schedule() ->
 	PathList = lists:map(fun({P, Index}) -> 
 			{try unicode:characters_to_list(P)
 				catch _:_ -> binary_to_list(P) end,  %% TODO: log this case
-			Index} 
-		end, PathsWithRuleIndex),%string:tokens(Paths,";"),
+			Index}
+		end, PathsWithRuleIndex),	
 	lists:foreach(fun({P, I}) -> q(P, I) end, PathList),
 	ok.
 
@@ -169,7 +169,7 @@ meta(FilePath) ->
 	{ok, FileInfo} = file:read_file_info(FilePath),
 	{FileInfo#file_info.mtime, FileInfo#file_info.size}.
 
-is_changed(#fs_entry{file_path=FP, file_size=FSize, last_modified=LMod} = E) ->
+is_changed(#fs_entry{file_id={FP, _RuleIndex}, file_size=FSize, last_modified=LMod} = E) ->
 	{MTime, CSize} = meta(FP),
 	case ( (LMod /= MTime) or (CSize /= FSize) ) of
 		true -> mydlp_mnesia:add_fs_entry(E#fs_entry{file_size=CSize, last_modified=MTime}), % update mnesia entry
@@ -177,14 +177,16 @@ is_changed(#fs_entry{file_path=FP, file_size=FSize, last_modified=LMod} = E) ->
 		false -> false end.
 
 fs_entry(ParentId, FilePath, RuleIndex) ->
-	case mydlp_mnesia:get_fs_entry(FilePath) of
+	FileId = {FilePath, RuleIndex},
+	case mydlp_mnesia:get_fs_entry(FileId) of
 		none -> Id = mydlp_mnesia:get_unique_id(fs_entry),
-			E = #fs_entry{file_path=FilePath, entry_id=Id, parent_id=ParentId, rule_index=RuleIndex},
+			E = #fs_entry{file_id=FileId, entry_id=Id, parent_id=ParentId},
 			mydlp_mnesia:add_fs_entry(E), %% bulk write may improve performance
 			E;
 		#fs_entry{} = FS -> FS end.
 
-discover_file(#fs_entry{file_path=FP, rule_index=RuleIndex}) -> 
+discover_file(#fs_entry{file_id={FP, RuleIndex}}) ->
+        erlang:display({RuleIndex, FP}),	
 	try	timer:sleep(20),
 		{ok, ObjId} = mydlp_container:new(),
 		ok = mydlp_container:setprop(ObjId, "channel", "discovery"),
@@ -203,7 +205,7 @@ discover_file(#fs_entry{file_path=FP, rule_index=RuleIndex}) ->
 	end,
 	ok.
 
-discover_dir(#fs_entry{file_path=FP, entry_id=EId, rule_index=RuleIndex}) ->
+discover_dir(#fs_entry{file_id={FP, RuleIndex}, entry_id=EId}) ->
 	CList = case file:list_dir(FP) of
 		{ok, LD} -> LD;
 		{error, _} -> [] end,
@@ -212,7 +214,7 @@ discover_dir(#fs_entry{file_path=FP, entry_id=EId, rule_index=RuleIndex}) ->
 	[ q(EId, filename:absname(FN, FP), RuleIndex) || FN <- MList ],
 	ok.
 
-discover_dir_dir(#fs_entry{file_path=FP, entry_id=EId, rule_index=RuleIndex}) ->
+discover_dir_dir(#fs_entry{file_id={FP, RuleIndex}, entry_id=EId}) ->
 	OList = mydlp_mnesia:fs_entry_list_dir(EId),
 	[ q(EId, filename:absname(FN, FP), RuleIndex) || FN <- OList ],
 	ok.

@@ -102,12 +102,11 @@
 }).
 
 -record(fs_entry, {
-	file_path,
+	file_id,
 	entry_id,
 	parent_id,
 	file_size,
-	last_modified,
-	rule_index
+	last_modified
 }).
 
 -endif.
