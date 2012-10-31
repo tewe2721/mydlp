@@ -473,7 +473,7 @@ is_sub_destination(<<>>, _Dest2) -> true;
 is_sub_destination(<<C/utf8, R/binary>>, <<C1/utf8, R1/binary>>) when C == C1 -> is_sub_destination(R, R1);
 is_sub_destination(_, _) -> false.
 
-filter_rule_ids_by_dest(RuleIds, Destinations) ->
+filter_rule_ids_by_dest(RuleIds, Destinations) -> %TODO: domain names stored as binary. Unicode characters should be examined wheter it is problem or not.
 	Q0 = ?QLCQ([R ||
 		D <- mnesia:table(dest),
 		R <- RuleIds,
