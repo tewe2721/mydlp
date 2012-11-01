@@ -2917,6 +2917,43 @@ quoted_to_raw(<<$=, H1, H2, Rest/binary>>, Acc ) ->
 quoted_to_raw(<<C/integer, Rest/binary>>, Acc ) -> quoted_to_raw(Rest, <<Acc/binary, C/integer>>);
 quoted_to_raw(<<>>, Acc ) -> Acc.
 
+%%-------------------------------------------------------------------------
+%% @doc Removes html tags from given text
+%% @end
+%%-------------------------------------------------------------------------
+remove_html_tags(Text) -> remove_html_tags(Text, none, [],<<>>).
+
+remove_html_tags(Rest, textualize, [<<"br">>|TagStack], Acc) -> remove_html_tags(Rest, none, TagStack, <<Acc/binary, "\n">>);
+remove_html_tags(Rest, textualize, TagStack, Acc) -> remove_html_tags(Rest, none, TagStack, Acc);
+remove_html_tags(<<>>, _, [], Acc) -> Acc;
+remove_html_tags(<<>>, _, TagStack, _Acc) -> throw({error, {there_are_still_tags_in_stack, TagStack}});
+remove_html_tags(<<$\s, Rest/binary>>, wait_direct_end, TagStack, Acc) -> remove_html_tags(Rest, wait_direct_end, TagStack, Acc);
+remove_html_tags(<<$>, Rest/binary>>, wait_direct_end, [Tag|TagStack], Acc) -> 
+	Acc1 = remove_html_tags(<<>>, textualize, [Tag], Acc),
+	remove_html_tags(Rest, none, TagStack, Acc1);
+remove_html_tags(<<_C/integer, _Rest/binary>>, wait_direct_end, _TagStack, _Acc) -> throw({error, inproper_xml_tag_1});
+remove_html_tags(<<$/, Rest/binary>>, wait_end, TagStack, Acc) -> remove_html_tags(Rest, wait_direct_end, TagStack, Acc);
+remove_html_tags(<<$>, Rest/binary>>, wait_end, TagStack, Acc) -> remove_html_tags(Rest, textualize, TagStack, Acc);
+remove_html_tags(<<_C/integer, Rest/binary>>, wait_end, TagStack, Acc) -> remove_html_tags(Rest, wait_end, TagStack, Acc);
+remove_html_tags(<<$<, Rest/binary>>, none, TagStack, Acc) -> remove_html_tags(Rest, <<>>, TagStack, Acc);
+remove_html_tags(<<C/utf8, Rest/binary>>, none, TagStack, Acc) -> remove_html_tags(Rest, none, TagStack, <<Acc/binary, C/utf8>>);
+remove_html_tags(<<C/integer, Rest/binary>>, none, TagStack, Acc) -> remove_html_tags(Rest, none, TagStack, <<Acc/binary, C/integer>>);
+remove_html_tags(<<$\s, Rest/binary>>, close_tag, TagStack, Acc) -> remove_html_tags(Rest, close_tag, TagStack, Acc);
+remove_html_tags(<<$>, Rest/binary>>, close_tag, [<<>>|TagStack], Acc) -> remove_html_tags(Rest, none, TagStack, Acc);
+remove_html_tags(<<C/integer, Rest/binary>>, close_tag, [Tag|TagStack], Acc) -> 
+	C1 = string:to_lower(C),
+	case Tag of
+		<<C1/integer, TagRest/binary>> -> remove_html_tags(Rest, close_tag, [TagRest|TagStack], Acc);
+		_Else -> throw({error, inproper_xml_tag_2}) end;
+remove_html_tags(<<$\s, Rest/binary>>, <<>>, TagStack, Acc) -> remove_html_tags(Rest, <<>>, TagStack, Acc);
+remove_html_tags(<<$/, Rest/binary>>, <<>>, TagStack, Acc) -> remove_html_tags(Rest, close_tag, TagStack, Acc);
+remove_html_tags(<<$\s, Rest/binary>>, LatestTag, TagStack, Acc) -> remove_html_tags(Rest, wait_end, [LatestTag|TagStack], Acc);
+remove_html_tags(<<$/, Rest/binary>>, LatestTag, TagStack, Acc) -> remove_html_tags(Rest, wait_direct_end, [LatestTag|TagStack], Acc);
+remove_html_tags(<<$>, Rest/binary>>, LatestTag, TagStack, Acc) -> remove_html_tags(Rest, textualize, [LatestTag|TagStack], Acc);
+remove_html_tags(<<C/integer, Rest/binary>>, LatestTag, TagStack, Acc) -> 
+	C1 = string:to_lower(C),
+	remove_html_tags(Rest, <<LatestTag/binary, C1/integer>>, TagStack, Acc).
+
 -include_lib("eunit/include/eunit.hrl").
 
 escape_regex_test_() -> [
