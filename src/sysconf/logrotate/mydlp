@@ -2,6 +2,7 @@
 /var/log/mydlp/error.log
 /var/log/mydlp/messages.log
 /var/log/mydlp/smtp.log
+/var/log/mydlp/audit.log
 /var/log/mydlp/report_error.log
 /var/log/mydlp/report_info.log
 /var/log/mydlp/report_warning.log
