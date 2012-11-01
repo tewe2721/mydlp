@@ -186,7 +186,6 @@ fs_entry(ParentId, FilePath, RuleIndex) ->
 		#fs_entry{} = FS -> FS end.
 
 discover_file(#fs_entry{file_id={FP, RuleIndex}}) ->
-        erlang:display({RuleIndex, FP}),	
 	try	timer:sleep(20),
 		{ok, ObjId} = mydlp_container:new(),
 		ok = mydlp_container:setprop(ObjId, "channel", "discovery"),
