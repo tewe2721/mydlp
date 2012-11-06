@@ -1,3 +1,4 @@
+@echo off
 set MYDLP_CONF=C:/workspace/mydlp-endpoint-win/EndPoint/Engine/mydlp/src/mydlp/mydlp-ep.conf
 set MYDLPBEAMDIR=C:/workspace/mydlp-endpoint-win/EndPoint/Engine/mydlp/src/mydlp
 set MYDLP_APPDIR=C:/workspace/mydlp-development-env
