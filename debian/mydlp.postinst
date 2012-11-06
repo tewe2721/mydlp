@@ -57,6 +57,10 @@ generate_keys() {
 	return 0
 }
 
+cleanup_keys() {
+	[ -d $SSLDIR ] && rm -f $SSLDIR/private.pem $SSLDIR/public.pem $SSLDIR/user.der
+}
+
 configure_apache() {
 	/usr/sbin/a2enmod ssl
 	/usr/sbin/a2enmod proxy
@@ -150,7 +154,8 @@ case "$1" in
 		if $DPKGBIN --compare-versions "0.9.140-1" lt "$2"; then
 			restart_rsyslog
 		fi
-		if $DPKGBIN --compare-versions "$2" le "0.9.159-1"; then
+		if $DPKGBIN --compare-versions "$2" le "0.9.163-1"; then
+			cleanup_keys
 			generate_keys
 			cleanup_sslcrtd_db
 		fi
