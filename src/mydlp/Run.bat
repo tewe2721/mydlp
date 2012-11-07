@@ -1,5 +1,5 @@
 @echo off
-set ERLANG_OPTS=+A30 +P 1048576 +fnu
+set ERLANG_OPTS=+A 4 +P 1048576 +fnu -smp auto -env ERL_MAX_ETS_TABLES 16384
 
 if "%ERLBIN%"=="" (
     set ERLBIN=erl.exe
@@ -18,7 +18,6 @@ if not exist "%ERLANG_HOME%\bin\%ERLBIN%" (
 "%ERLANG_HOME%\bin\%ERLBIN%" ^
 %ERLANG_OPTS% ^
 -sname system ^
-
 -workdir %MYDLPBEAMDIR% ^
 -env MYDLP_CONF %MYDLP_CONF% ^
 -env MYDLP_APPDIR %MYDLP_APPDIR% ^
