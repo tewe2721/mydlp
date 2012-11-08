@@ -543,6 +543,9 @@ set_meta_dict(MD, SD) -> set_meta_dict(dict:fetch_keys(MD), MD, SD).
 set_meta_dict([Key|RestOfKeys], MD, SD) ->
 	SD1 = case dict:fetch(Key, MD) of
 		"" -> dict:erase(Key, SD);
+		undefined -> dict:erase(Key, SD);
+		unknown -> dict:erase(Key, SD);
+		nil -> dict:erase(Key, SD);
 		Value -> dict_store(Key, Value, SD) end,
 	set_meta_dict(RestOfKeys, MD, SD1);
 set_meta_dict([], _MD, SD) -> SD.
