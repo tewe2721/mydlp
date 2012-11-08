@@ -151,14 +151,12 @@ case "$1" in
 	if [ -n "$2" ]; then
 		# update
 		patch_mysql_schema $2
-		if $DPKGBIN --compare-versions "0.9.140-1" lt "$2"; then
-			restart_rsyslog
-		fi
 		if $DPKGBIN --compare-versions "$2" le "0.9.163-1"; then
 			cleanup_keys
 			generate_keys
 			cleanup_sslcrtd_db
 		fi
+		restart_rsyslog
 	else
 		# first install
 		generate_init_epoch
