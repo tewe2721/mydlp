@@ -2207,6 +2207,34 @@ binary_size(Obj, _Acc) -> throw({error, bad_element, Obj}).
 %% @end
 %%-------------------------------------------------------------------------
 
+filename_to_list(Filename) ->
+        case Filename of
+                F when is_binary(F) ->
+                        case unicode:characters_to_list(Filename) of
+                                R when is_list(R) -> R;
+                                _ ->    try binary_to_list(Filename)
+                                        catch _:_ ->    ?ERROR_LOG("FTL: Encountered with a filename in an unexpected encoding. Filename: ["?S"]", [Filename]),
+                                                        "noname"
+                                        end
+                        end;
+                F when is_list(F) -> F;
+                Else -> ?ERROR_LOG("Encountered with a filename in an unexpected type. Filename: ["?S"]", [Else]),
+                        "noname" end.
+
+filename_to_bin(Filename) ->
+        case Filename of
+                F when is_list(F) ->
+                        case unicode:characters_to_binary(Filename) of
+                                R when is_binary(R) -> R;
+                                _ ->    try list_to_binary(Filename)
+                                        catch _:_ ->    ?ERROR_LOG("FTB: Encountered with a filename in an unexpected encoding. Filename: ["?S"]", [Filename]),
+                                                        <<"noname">>
+                                        end
+                        end;
+                F when is_binary(F) -> F;
+                Else -> ?ERROR_LOG("Encountered with a filename in an unexpected type. Filename: ["?S"]", [Else]),
+                        <<"noname">> end.
+
 -ifdef(__MYDLP_NETWORK).
 
 heads_to_file_int1(Str, QS, CT) ->
@@ -2271,34 +2299,6 @@ find_char_in_range(_Str, Range, _Char, Range = _Acc) -> not_found;
 find_char_in_range([Char|_Rest], _Range, Char, Acc) -> Acc + 1;
 find_char_in_range([_C|Rest], Range, Char, Acc) -> find_char_in_range(Rest, Range, Char, Acc + 1);
 find_char_in_range([], Range, _Char, Range) -> not_found.
-
-filename_to_list(Filename) ->
-        case Filename of
-                F when is_binary(F) ->
-                        case unicode:characters_to_list(Filename) of
-                                R when is_list(R) -> R;
-                                _ ->    try binary_to_list(Filename)
-                                        catch _:_ ->    ?ERROR_LOG("FTL: Encountered with a filename in an unexpected encoding. Filename: ["?S"]", [Filename]),
-                                                        "noname"
-                                        end
-                        end;
-                F when is_list(F) -> F;
-                Else -> ?ERROR_LOG("Encountered with a filename in an unexpected type. Filename: ["?S"]", [Else]),
-                        "noname" end.
-
-filename_to_bin(Filename) ->
-        case Filename of
-                F when is_list(F) ->
-                        case unicode:characters_to_binary(Filename) of
-                                R when is_binary(R) -> R;
-                                _ ->    try list_to_binary(Filename)
-                                        catch _:_ ->    ?ERROR_LOG("FTB: Encountered with a filename in an unexpected encoding. Filename: ["?S"]", [Filename]),
-                                                        <<"noname">>
-                                        end
-                        end;
-                F when is_binary(F) -> F;
-                Else -> ?ERROR_LOG("Encountered with a filename in an unexpected type. Filename: ["?S"]", [Else]),
-                        <<"noname">> end.
 
 multipart_decode_fn(Filename0) -> 
 	Filename = filename_to_list(list_to_binary(Filename0)),
