@@ -29,6 +29,7 @@ QUARANTINE_DIR=/var/lib/mydlp/quarantine/
 REVISION_DIR=/var/lib/mydlp/revision/
 
 LOG_DIR=/var/log/mydlp/
+LOGFILE_USER_GROUP="syslog.adm"
 
 LSBIN=/bin/ls
 MYSQLC=/usr/bin/mysql
@@ -117,7 +118,12 @@ restart_rsyslog() {
 	do
 		local LOGFILE="$LOG_DIR""$f"
 		echo "Correcting ownership of log file ($f) ..."
-		$CHOWN -f syslog.adm $LOGFILE|| true
+		local CURRENT_USER_GROUP=$(/usr/bin/stat -c "%U.%G")
+		if [ -n "$CURRENT_USER_GROUP" -a "$CURRENT_USER_GROUP" == "$LOGFILE_USER_GROUP" ]; then
+			true
+		else
+			$CHOWN -f $LOGFILE_USER_GROUP $LOGFILE || true
+		fi
 	done
 	/etc/init.d/rsyslog restart 2>&1 > /dev/null
 }
