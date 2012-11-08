@@ -1926,7 +1926,7 @@ do_parse_uenc(<<$+, Tail/binary>>, CurData, CurFile, Files) ->
 
 do_parse_uenc(<<$=, Tail/binary>>, CurData, CurFile, Files) -> 
 	NewData = lists:reverse(CurData),
-	Name = "uenc key: " ++ unicode:characters_to_list(list_to_binary(NewData)),
+	Name = "uenc key: " ++ filename_to_list(list_to_binary(NewData)),
 	do_parse_uenc(Tail, [], CurFile#file{name=Name}, Files);
 
 do_parse_uenc(<<$&, Tail/binary>>, CurData, CurFile, Files) ->
@@ -2272,12 +2272,36 @@ find_char_in_range([Char|_Rest], _Range, Char, Acc) -> Acc + 1;
 find_char_in_range([_C|Rest], Range, Char, Acc) -> find_char_in_range(Rest, Range, Char, Acc + 1);
 find_char_in_range([], Range, _Char, Range) -> not_found.
 
+filename_to_list(Filename) ->
+        case Filename of
+                F when is_binary(F) ->
+                        case unicode:characters_to_list(Filename) of
+                                R when is_list(R) -> R;
+                                _ ->    try binary_to_list(Filename)
+                                        catch _:_ ->    ?ERROR_LOG("FTL: Encountered with a filename in an unexpected encoding. Filename: ["?S"]", [Filename]),
+                                                        "noname"
+                                        end
+                        end;
+                F when is_list(F) -> F;
+                Else -> ?ERROR_LOG("Encountered with a filename in an unexpected type. Filename: ["?S"]", [Else]),
+                        "noname" end.
+
+filename_to_bin(Filename) ->
+        case Filename of
+                F when is_list(F) ->
+                        case unicode:characters_to_binary(Filename) of
+                                R when is_binary(R) -> R;
+                                _ ->    try list_to_binary(Filename)
+                                        catch _:_ ->    ?ERROR_LOG("FTB: Encountered with a filename in an unexpected encoding. Filename: ["?S"]", [Filename]),
+                                                        <<"noname">>
+                                        end
+                        end;
+                F when is_binary(F) -> F;
+                Else -> ?ERROR_LOG("Encountered with a filename in an unexpected type. Filename: ["?S"]", [Else]),
+                        <<"noname">> end.
+
 multipart_decode_fn(Filename0) -> 
-	Filename = try case unicode:characters_to_list(list_to_binary(Filename0)) of
-		[] -> [];
-		[_|_] = L -> L;
-		_ -> Filename0 end
-	catch _Class:_Error -> Filename0 end,
+	Filename = filename_to_list(list_to_binary(Filename0)),
 
 	case Filename of
 		"=?" ++ _Rest -> multipart_decode_fn_rfc2047(Filename);
@@ -2339,14 +2363,12 @@ multipart_decode_fn_rfc2047_3(Charset, quoted_printable, QPStr) ->
 	multipart_decode_fn_rfc2047_4(Charset, DataBin).
 	
 multipart_decode_fn_rfc2047_4(Charset, DataBin) ->
-	try unicode:characters_to_list(DataBin, Charset)
-	catch 	Class:Error ->
-		?ERROR_LOG("Error occured when unicode decoding: "
-			"Class: ["?S"]. Error: ["?S"].~n"
-			"Stacktrace: "?S"~n"
-			"DataBin: "?S"~n",
-			[Class, Error, erlang:get_stacktrace(), DataBin]),
-		binary_to_list(DataBin) end.
+	case unicode:characters_to_list(DataBin, Charset) of
+		R when is_list(R) -> R;
+		_ -> 	?ERROR_LOG("Error occured when unicode decoding: "
+				"DataBin: "?S"~n",
+				[DataBin]),
+			binary_to_list(DataBin) end.
 
 
 multipart_decode_fn_rfc2047_3_1(QPStr) -> multipart_decode_fn_rfc2047_3_1(QPStr, []).

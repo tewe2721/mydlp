@@ -92,10 +92,8 @@ get_mime(Filename, Data) when is_binary(Data) ->
 		true -> <<D:?MMLEN/binary, _/binary>> = Data, D;
 		false -> Data
 	end,
-	Filename1 = case Filename of
-		F when is_list(F) -> unicode:characters_to_binary(Filename);
-		F when is_binary(F) -> F;
-		_Else -> unicode:characters_to_binary("noname") end,
+
+	Filename1 = prettify_filename(Filename),
 
 	try 	call_pool({thrift, java, getMime, [Filename1, Data1]})
 	catch Class:Error ->
@@ -103,11 +101,11 @@ get_mime(Filename, Data) when is_binary(Data) ->
 				[Filename1, Class, Error, erlang:get_stacktrace()]),
 		?MIME_OCTET_STREAM end.
 
+prettify_filename(Filename) -> mydlp_api:filename_to_bin(Filename).
+
 get_text(undefined, MT, Data) -> get_text(<<>>, MT, Data);
-get_text(Filename, MT, Data) when is_list(Filename) ->
-	FilenameB = unicode:characters_to_binary(Filename),
-	get_text(FilenameB, MT, Data);
-get_text(Filename, MT, Data) ->
+get_text(Filename0, MT, Data) ->
+	Filename = prettify_filename(Filename0),
 	try	RawText = call_pool({thrift, java, getText, [Filename, MT, Data]}),
 		Text = case MT of
 			?MIME_TEXT -> try mydlp_api:remove_html_tags(RawText) catch _:_ -> RawText end;
