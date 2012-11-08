@@ -75,7 +75,10 @@ handle_cast({mail, #message{mail_from=From, rcpt_to=Rcpt, message=MessageS}}, St
 				?CFG(smtp_next_hop_host), 
 				?CFG(smtp_next_hop_port), 
 				?CFG(smtp_helo_name), 
-				From, Rcpt, MessageS) end, 600000),
+				From, Rcpt, MessageS),
+		mydlp_spool:consume_next("smtp"),
+		ok
+	end, 600000),
 	{noreply, State};
 
 handle_cast({mail, Ref, #message{mail_from=From, rcpt_to=Rcpt, message=MessageS}}, State) ->
@@ -97,7 +100,10 @@ handle_cast({mail, From, Rcpt, MessageS}, State) ->
 				?CFG(smtp_next_hop_host), 
 				?CFG(smtp_next_hop_port), 
 				?CFG(smtp_helo_name), 
-				From, Rcpt, MessageS) end, 600000),
+				From, Rcpt, MessageS),
+		mydlp_spool:consume_next("smtp"),
+		ok
+	end, 600000),
 	{noreply, State};
 
 handle_cast(_Msg, State) ->

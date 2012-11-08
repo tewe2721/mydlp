@@ -311,9 +311,14 @@ lock_item({SpoolName, NRef}, Locker) ->
 
 acquire_fn([FN|Rest], SpoolDir) ->
 	FilePath = filename:absname(FN, SpoolDir),
-	case lock_item(FilePath, acquire) of
-		true -> FilePath;
-		false -> acquire_fn(Rest, SpoolDir) end;
+	case filelib:file_size(FilePath) of
+		0 -> file:delete(FilePath),
+			acquire_fn(Rest, SpoolDir);
+		_Else -> case lock_item(FilePath, acquire) of
+				true -> FilePath;
+				false -> acquire_fn(Rest, SpoolDir) 
+			end
+	end;
 acquire_fn([], _SpoolDir) -> none.
 
 release_item(FilePath) when is_list(FilePath)->

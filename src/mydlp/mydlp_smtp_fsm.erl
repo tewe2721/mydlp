@@ -339,7 +339,11 @@ is_bypassable(#smtpd_fsm{rcpt=undefined}) -> false;
 is_bypassable(#smtpd_fsm{message_bin=undefined}) -> false;
 is_bypassable(#smtpd_fsm{}) -> true.
 
-deliver_raw(#smtpd_fsm{mail=From, rcpt=Rcpt, message_bin=MessageS}) -> 
+deliver_raw(#smtpd_fsm{mail=From, rcpt=Rcpt, message_bin=MessageS, spool_ref=undefined}) -> 
+	mydlp_smtpc:mail(From, Rcpt, MessageS);
+deliver_raw(#smtpd_fsm{mail=From, rcpt=Rcpt, message_bin=MessageS, spool_ref=Ref}) -> 
+	mydlp_spool:delete(Ref),
+	mydlp_spool:release(Ref),
 	mydlp_smtpc:mail(From, Rcpt, MessageS).
 
 %%-------------------------------------------------------------------------

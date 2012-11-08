@@ -69,6 +69,7 @@ decode(Message) when is_binary(Message) ->
 		%_ -> MIME#mime{header = Headers, body = MIME#mime.body_text, message = Message}
 	end.
 
+rm_trailing_dashes([]) -> [];
 rm_trailing_dashes(<<>>) -> <<>>;
 rm_trailing_dashes(Bin) ->
 	BS = size(Bin) - 1,
