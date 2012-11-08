@@ -2363,12 +2363,14 @@ multipart_decode_fn_rfc2047_3(Charset, quoted_printable, QPStr) ->
 	multipart_decode_fn_rfc2047_4(Charset, DataBin).
 	
 multipart_decode_fn_rfc2047_4(Charset, DataBin) ->
-	case unicode:characters_to_list(DataBin, Charset) of
+	B = list_to_binary([DataBin]),
+	case unicode:characters_to_list(B, Charset) of
 		R when is_list(R) -> R;
-		_ -> 	?ERROR_LOG("Error occured when unicode decoding: "
-				"DataBin: "?S"~n",
-				[DataBin]),
-			binary_to_list(DataBin) end.
+		_ -> 	try binary_to_list(DataBin)
+			catch _:_ -> ?ERROR_LOG("Error occured when unicode decoding: "
+					"DataBin: ["?S"]~n", [DataBin]), "noname" 
+			end
+	end.
 
 
 multipart_decode_fn_rfc2047_3_1(QPStr) -> multipart_decode_fn_rfc2047_3_1(QPStr, []).

@@ -97,8 +97,8 @@ get_mime(Filename, Data) when is_binary(Data) ->
 
 	try 	call_pool({thrift, java, getMime, [Filename1, Data1]})
 	catch Class:Error ->
-		?ERROR_LOG("Error occured when extractiong text. Filename: "?S".~nClass: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
-				[Filename1, Class, Error, erlang:get_stacktrace()]),
+		?ERROR_LOG("Error occured when extractiong text. Filename: "?S".~nData: ["?S"]~nClass: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
+				[Filename1, Data, Class, Error, erlang:get_stacktrace()]),
 		?MIME_OCTET_STREAM end.
 
 prettify_filename(Filename) -> mydlp_api:filename_to_bin(Filename).
@@ -112,8 +112,8 @@ get_text(Filename0, MT, Data) ->
 			_Else -> RawText end,
 		<<" ", Text/binary, " ">>
 	catch Class:Error ->
-		?ERROR_LOG("Error occured when extractiong text. Filename: "?S", Mimetype: "?S".~nClass: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
-				[Filename, MT, Class, Error, erlang:get_stacktrace()]),
+		?ERROR_LOG("Error occured when extractiong text. Filename: "?S", Mimetype: "?S".~nData: ["?S"]~nClass: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
+				[Filename, MT, Data, Class, Error, erlang:get_stacktrace()]),
 		mydlp_api:exception(Class, Error) end.
 
 seclore_initialize(SecloreAppPath, SecloreAddress, SeclorePort, SecloreAppName, SecloreHotFolderCabinetId, SecloreHotFolderCabinetPassphrase, SeclorePoolSize) ->
