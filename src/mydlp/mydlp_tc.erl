@@ -114,7 +114,7 @@ get_text(Filename0, MT, Data) ->
 	catch Class:Error ->
 		?ERROR_LOG("Error occured when extractiong text. Filename: "?S", Mimetype: "?S".~nData: ["?S"]~nClass: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
 				[Filename, MT, Data, Class, Error, erlang:get_stacktrace()]),
-		mydlp_api:exception(Class, Error) end.
+		{error, {Class, Error}} end.
 
 seclore_initialize(SecloreAppPath, SecloreAddress, SeclorePort, SecloreAppName, SecloreHotFolderCabinetId, SecloreHotFolderCabinetPassphrase, SeclorePoolSize) ->
 	try	call_pool({thrift, java, secloreInitialize, [SecloreAppPath, SecloreAddress, SeclorePort, SecloreAppName, SecloreHotFolderCabinetId, SecloreHotFolderCabinetPassphrase, SeclorePoolSize]})
@@ -122,7 +122,6 @@ seclore_initialize(SecloreAppPath, SecloreAddress, SeclorePort, SecloreAppName, 
 		?ERROR_LOG("Error occured when initializing seclore module. "
 			"SecloreAppPath: "?S", SecloreAddress: "?S" SeclorePort: "?S", SecloreAppName: "?S", SecloreHotFolderCabinetId: "?S" SeclorePoolSize: "?S".~nClass: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
 				[SecloreAppPath, SecloreAddress, SeclorePort, SecloreAppName, SecloreHotFolderCabinetId, SeclorePoolSize, Class, Error, erlang:get_stacktrace()]),
-		mydlp_api:exception(Class, Error),
 		"mydlp.backend.secloreInitialize.unexpectedException" end.
 	
 seclore_protect(FilePath, HotFolderId, ActivityComments) ->
@@ -131,7 +130,6 @@ seclore_protect(FilePath, HotFolderId, ActivityComments) ->
 		?ERROR_LOG("Error occured when protecting file with seclore. "
 			"FilePath: "?S", HotFolderId: "?S", ActivityComments: "?S".~nClass: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
 				[FilePath, HotFolderId, ActivityComments, Class, Error, erlang:get_stacktrace()]),
-		mydlp_api:exception(Class, Error),
 		"mydlp.backend.secloreProtect.unexpectedException" end.
 
 seclore_terminate() ->
@@ -139,7 +137,6 @@ seclore_terminate() ->
 	catch Class:Error ->
 		?ERROR_LOG("Error occured when terminating seclore module.~nClass: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
 				[Class, Error, erlang:get_stacktrace()]),
-		mydlp_api:exception(Class, Error),
 		"mydlp.backend.secloreTerminate.unexpectedException" end.
 
 %%%%%%%%%%%%%% gen_server handles
