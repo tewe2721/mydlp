@@ -26,6 +26,9 @@ endpointwin_DATA = \
 	latest.txt \
 	latest.msi
 
-latest.txt latest.msi:
-	./generate_latest.sh
+latest.msi latest.txt:
+	@./generate_latest.sh
+
+clean-local:
+	@rm -f latest.log *.msi
 
