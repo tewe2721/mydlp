@@ -1,1 +1,1 @@
-SUBDIRS = integration resources schema thrift lib backend mydlp ui script sysconf
+SUBDIRS = endpoint integration resources schema thrift lib backend mydlp ui script sysconf
