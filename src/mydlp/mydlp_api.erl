@@ -1235,6 +1235,11 @@ acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, PreFiles, Misc, Pa
 	mydlp_incident:l({Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc, Payload}),
 	ok.
 
+smtp_msg(Format, Args) ->
+	Format1 = "PID=~w " ++ Format ++ "~n",
+        Args1 = [self() | Args],
+        mydlp_logger:notify(smtp_msg, Format1, Args1).
+
 -endif.
 
 -ifdef(__MYDLP_ENDPOINT).

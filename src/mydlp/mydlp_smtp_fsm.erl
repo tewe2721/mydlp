@@ -328,6 +328,7 @@ fsm_call(StateName, Args, StateData) ->
 				[?MODULE, StateName, Class, Error, erlang:get_stacktrace(), StateData]),
 		(catch case is_bypassable(StateData) of
 			true -> deliver_raw(StateData),
+				?SMTP_LOG(bypassed, StateData#smtpd_fsm.message_record),
 				NextStateData = reset_statedata(StateData),
 				{next_state, 'WAIT_FOR_CMD', NextStateData, ?CFG(fsm_timeout)};
 			false -> {stop, normal, StateData} end) end.
@@ -429,6 +430,13 @@ create_smtp_msg(sent_ok, MessageR) ->
 		"Transferred clean message to queue. FROM=~s TO='~s' ",
 		[From, ToList]
 	};
+create_smtp_msg(bypassed, MessageR) ->
+	From = get_from(MessageR),
+	ToList = get_dest_addresses(MessageR),
+	{
+		"An error occurred and bypassed message. FROM=~s TO='~s' ",
+		[From, ToList]
+	};
 create_smtp_msg(sent_deny, MessageR) ->
 	From = get_from(MessageR),
 	{
@@ -457,9 +465,7 @@ requeue_msg(MessageR) -> ?SMTP_LOG(requeue_ok, MessageR).
 
 smtp_msg(Type, Param) ->
 	{Format, Args} = create_smtp_msg(Type, Param),
-	Format1 = "PID=~w " ++ Format ++ "~n",
-	Args1 = [self() | Args],
-	mydlp_logger:notify(smtp_msg, Format1, Args1).
+	mydlp_api:smtp_msg(Format, Args).
 
 read_line(Line, #smtpd_fsm{lbuff=undefined} = State, FSMState, ParseFunc) when is_list(Line) ->
         case lists:last(Line) of
