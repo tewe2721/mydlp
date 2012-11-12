@@ -80,7 +80,7 @@ handle_cast({mail, #message{mail_from=From, rcpt_to=Rcpt, message=MessageS}}, St
 				?CFG(smtp_helo_name), 
 				From, Rcpt, MessageS),
 		mydlp_spool:consume_next("smtp"),
-		?SMTP_LOG(sent_success, {From, Rcpt}),
+		?SMTP_LOG(send_success, {From, Rcpt}),
 		ok
 	end, 600000),
 	{noreply, State};
@@ -95,7 +95,7 @@ handle_cast({mail, Ref, #message{mail_from=From, rcpt_to=Rcpt, message=MessageS}
 		mydlp_spool:delete(Ref),
 		mydlp_spool:release(Ref),
 		mydlp_spool:consume_next("smtp"),
-		?SMTP_LOG(sent_success, {From, Rcpt}),
+		?SMTP_LOG(send_success, {From, Rcpt}),
 		ok
 	end, 600000),
 	{noreply, State};
@@ -108,7 +108,7 @@ handle_cast({mail, From, Rcpt, MessageS}, State) ->
 				?CFG(smtp_helo_name), 
 				From, Rcpt, MessageS),
 		mydlp_spool:consume_next("smtp"),
-		?SMTP_LOG(sent_success, {From, Rcpt}),
+		?SMTP_LOG(send_success, {From, Rcpt}),
 		ok
 	end, 600000),
 	{noreply, State};
