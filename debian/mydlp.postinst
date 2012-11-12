@@ -118,7 +118,7 @@ restart_rsyslog() {
 	do
 		local LOGFILE="$LOG_DIR""$f"
 		echo "Correcting ownership of log file ($f) ..."
-		local CURRENT_USER_GROUP=$(/usr/bin/stat -c "%U.%G")
+		local CURRENT_USER_GROUP=$(/usr/bin/stat -c "%U.%G" $LOGFILE)
 		if [ -n "$CURRENT_USER_GROUP" -a "$CURRENT_USER_GROUP" == "$LOGFILE_USER_GROUP" ]; then
 			true
 		else
