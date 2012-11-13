@@ -23,6 +23,7 @@ endpointdir = $(datadir)/mydlp/endpoint
 endpointwindir = $(endpointdir)/win
 
 endpointwin_DATA = \
+	win/mydlp-dep-conf.vbs \
 	win/latest.txt \
 	win/latest.msi
 
