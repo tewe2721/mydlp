@@ -23,12 +23,12 @@ endpointdir = $(datadir)/mydlp/endpoint
 endpointwindir = $(endpointdir)/win
 
 endpointwin_DATA = \
-	latest.txt \
-	latest.msi
+	win/latest.txt \
+	win/latest.msi
 
-latest.msi latest.txt:
-	@./generate_latest.sh
+win/latest.msi win/latest.txt:
+	@(cd win && ./generate_latest.sh)
 
 clean-local:
-	@rm -f latest.log *.msi
+	@rm -f win/*.msi
 
