@@ -41,8 +41,12 @@ function findLatestVer() {
 EPVER=$(findLatestVer https://github.com/mydlp/mydlp-endpoint-win.git)
 MSIFN=mydlp_$(echo $EPVER|sed -s 's/\./_/g').msi
 
+echo "Generating latest.txt and latest.msi for $EPVER"
 echo $EPVER > latest.txt || exit 1
+echo "Generated: latest.txt"
 [ -f "latest.msi" ] && mv -f latest.msi $MSIFN
-wget -Nc http://ftp/ftp/pub/mydlp/endpoint/$MSIFN || exit 1
-mv -f $MSIFN latest.msi
+wget --quiet -Nc http://ftp/ftp/pub/mydlp/endpoint/$MSIFN || exit 1
+mv -f $MSIFN latest.msi || exit 1
+echo "Generated: latest.msi"
+echo "Generation success."
 
