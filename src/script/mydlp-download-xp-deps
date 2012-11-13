@@ -1,0 +1,9 @@
+#!/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games
+EPDIR=/usr/share/mydlp/endpoint
+WINXPDIR=$EPDIR/deps/win-xp
+AGENTSTR="Mozilla/5.0 (iPad; U; CPU OS 3_2_1 like Mac OS X; en-us) AppleWebKit/531.21.10 (KHTML, like Gecko) Mobile/7B405"
+mkdir -p $WINXPDIR
+(cd $WINXPDIR && wget -Nc -U "$AGENTSTR" 'http://www.mydlp.com/wp-content/uploads/vcredist_x86_2005.exe')
+(cd $WINXPDIR && wget -Nc 'http://download.microsoft.com/download/1/1/1/1116b75a-9ec3-481a-a3c8-1777b5381140/vcredist_x86.exe')
+(cd $WINXPDIR && wget -Nc 'http://download.microsoft.com/download/2/0/E/20E90413-712F-438C-988E-FDAA79A8AC3D/dotnetfx35.exe')

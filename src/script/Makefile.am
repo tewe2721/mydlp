@@ -1,4 +1,5 @@
 sbin_SCRIPTS = \
+	mydlp-download-xp-deps \
 	mydlp-revision-list \
 	mydlp-revision-save \
 	mydlp-revision-restore \
