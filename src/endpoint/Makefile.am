@@ -27,8 +27,8 @@ endpointwin_DATA = \
 	win/latest.txt \
 	win/latest.msi
 
-win/latest.msi win/latest.txt:
-	@(cd win && ./generate_latest.sh)
+win/latest.msi: win/latest.txt
+	@(cd win && ./downloads_msi.sh)
 
 clean-local:
 	@rm -f win/*.msi
