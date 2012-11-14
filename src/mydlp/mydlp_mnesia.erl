@@ -977,6 +977,7 @@ handle_cast(_Msg, State) ->
 	{noreply, State}.
 
 terminate(_Reason, _State) ->
+	mnesia:stop(),
 	ok.
 
 code_change(_OldVsn, State, _Extra) ->
