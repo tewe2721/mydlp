@@ -37,7 +37,6 @@
 -export([start_link/0,
 	stop/0]).
 
-
 %% API common
 -export([
 	get_unique_id/1,
@@ -906,7 +905,7 @@ handle_call({new_authority, AuthorNode}, _From, State) ->
 	{reply, ok, State};
 
 handle_call(mnesia_dir_cleanup, _From, State) ->
-	try 	(catch mnesia:stop()),
+	try 	(catch mnesia_stop()),
 		{ok, MnesiaDir} = application_controller:get_env(mnesia, dir),
 		{ok, MnesiaFiles} = file:list_dir(MnesiaDir),
 		lists:foreach(fun(FN) ->
@@ -934,6 +933,26 @@ handle_info(cleanup_now, State) ->
 		cache_cleanup_handle(),
 		call_timer()
 	end, 15000),
+	{noreply, State};
+
+handle_info({mnesia_system_event,{mnesia_down, _Node}}, State) ->
+	?ERROR_LOG("MNESIA Stopped unexpectedly.", []),
+	?ASYNC(fun() -> mnesia_dir_cleanup() end, 181000),
+	{noreply, State};
+
+handle_info({mnesia_system_event,{mnesia_fatal, Format, Args, _BinaryCore}}, State) ->
+	?ERROR_LOG("MNESIA FATAL: " ++ io_lib:format(Format, Args), []),
+	?ASYNC(fun() -> mnesia_dir_cleanup() end, 181000),
+	{noreply, State};
+
+handle_info({mnesia_system_event,{mnesia_error, Format, Args}}, State) ->
+	?ERROR_LOG("MNESIA ERROR: " ++ io_lib:format(Format, Args), []),
+	?ASYNC(fun() -> mnesia_dir_cleanup() end, 181000),
+	{noreply, State};
+
+handle_info({mnesia_system_event,{inconsistent_database, _Context, _Node}}, State) ->
+	?ERROR_LOG("MNESIA Inconsistant database. Cleaning up and restarting.", []),
+	?ASYNC(fun() -> mnesia_dir_cleanup() end, 181000),
 	{noreply, State};
 
 handle_info(_Info, State) ->
@@ -977,7 +996,7 @@ handle_cast(_Msg, State) ->
 	{noreply, State}.
 
 terminate(_Reason, _State) ->
-	mnesia:stop(),
+	mnesia_stop(),
 	ok.
 
 code_change(_OldVsn, State, _Extra) ->
@@ -1010,7 +1029,7 @@ start_distributed() ->
 	ok.
 
 force_author(AuthorNode) -> 
-	mnesia:stop(),
+	mnesia_stop(),
 	case start_mnesia_with_author(AuthorNode) of
 		ok -> start_tables(true);
 		{error, _} -> start_tables(false) end,
@@ -1084,6 +1103,7 @@ schedule_post_start() ->
 start_tables(IsDistributionInit) ->
 	start_table(IsDistributionInit, {unique_ids, set}),
 	StartResult =  start_tables(IsDistributionInit, ?TABLES),
+	mnesia:subscribe(system),
 
 	case StartResult of
 		{ok, no_change} -> schedule_post_start();
@@ -1151,6 +1171,10 @@ start_tables(IsDistributionInit, [RecordAtom|RAList], true = _IsSchemaChanged) -
 	start_tables(IsDistributionInit, RAList, true);
 start_tables(_IsDistributionInit, [], false = _IsSchemaChanged) -> {ok, no_change};
 start_tables(_IsDistributionInit, [], true = _IsSchemaChanged) -> {ok, schema_changed}.
+
+mnesia_stop() ->
+	mnesia:unsubscribe(system),
+	mnesia:stop().
 
 %get_unique_id(TableName) ->
 %	mnesia:dirty_update_counter(unique_ids, TableName, 1).
