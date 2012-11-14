@@ -61,7 +61,7 @@
 -record(notification_queue, {
 	rule_id,
 	date,
-	status, % if notification sent, status=true; else status=#of notificaitons 
+	status % if notification sent, status=true; else status=#of notificaitons 
 }).
 
 -record(m_user, {
