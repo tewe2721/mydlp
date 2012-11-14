@@ -414,14 +414,14 @@ execute_custom_action(seclore, {HotFolderId, ActivityComments}, Obj) ->
 log_req1(Time, Channel, RuleId, Action, User, Destination, IType, File, Misc) ->
 	case {Channel, Action, Misc, ?CFG(ignore_discover_max_size_exceeded)} of
 		{discovery, log, max_size_exceeded, true} -> ok;
-		_Else2 -> ?ACL_LOG(Time, Channel, RuleId, Action, nil, User, Destination, IType, File, Misc) end.
+		_Else2 -> ?ACL_LOG(#log{time=Time, channel=Channel, rule_id=RuleId, action=Action, ip=nil, user=User, destination=Destination, itype_id=IType, file=File, misc=Misc}) end.
 
 -endif.
 
 -ifdef(__MYDLP_NETWORK).
 
 log_req1(Time, Channel, RuleId, Action, User, Destination, IType, File, Misc) ->
-	?ACL_LOG(Time, Channel, RuleId, Action, nil, User, Destination, IType, File, Misc).
+	?ACL_LOG(#log{time=Time, channel=Channel, rule_id=RuleId, action=Action, ip=nil, user=User, destination=Destination, itype_id=IType, file=File, misc=Misc}).
 
 -endif.
 

@@ -402,7 +402,7 @@ log_req(#smtpd_fsm{message_record=MessageR}, Action, {{rule, RuleId}, {file, Fil
 	Payload = case Action of
 		quarantine -> MessageR;
 		_Else -> none end,
-        ?ACL_LOG_P(Time, mail, RuleId, Action, nil, Src, Dest, IType, File, Misc, Payload).
+        ?ACL_LOG_P(#log{time=Time, channel=mail, rule_id=RuleId, action=Action, ip=nil, user=Src, destination=Dest, itype_id=IType, file=File, misc=Misc, payload=Payload}).
 
 get_dest_domains(#message{rcpt_to=RcptTo, to=ToH, cc=CCH, bcc=BCCH})->
 	RcptToA = lists:map(fun(S) -> mime_util:dec_addr(S) end, RcptTo),

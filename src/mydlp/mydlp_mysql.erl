@@ -315,6 +315,7 @@ init([]) ->
 		{network_by_rule_id, <<"SELECT n.ipBase,n.ipMask FROM Network AS n, RuleItem AS ri WHERE ri.rule_id=? AND n.id=ri.item_id">>},
 		{domain_by_rule_id, <<"SELECT d.destinationString FROM Domain AS d, RuleItem AS ri WHERE ri.rule_id=? AND d.id=ri.item_id">>},
 		{directory_by_rule_id, <<"SELECT d.destinationString FROM FileSystemDirectory AS d, RuleItem AS ri WHERE ri.rule_id=? AND d.id=ri.item_id">>},
+		{email_notification_by_rule_id, <<"SELECT a.email FROM AuthUser AS a, NotificationItem AS ni, EmailNotificationItem AS eni, Rule r WHERE ni.rule_id=? AND ni.id=eni.id AND ni.authUser_id=a.id AND r.id=? AND r.notificationEnabled=1">>},
 		{user_s_by_rule_id, <<"SELECT u.username FROM RuleUserStatic AS u, RuleItem AS ri WHERE ri.rule_id=? AND u.id=ri.item_id">>},
 		{user_ad_u_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=u.id">>},
 		{user_ad_o_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, ADDomainItem i, ADDomainOU o, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=o.id AND o.id=i.parent_id AND i.id=u.id">>},
@@ -495,6 +496,9 @@ populate_rule(OrigId, Channel, Action, FilterId) ->
 	{ok, DQ} = psq(domain_by_rule_id, [OrigId]),
 	{ok, DIRQ} = psq(directory_by_rule_id, [OrigId]),
 	populate_destinations(DQ++DIRQ, RuleId),
+	
+	{ok, ENT} = psq(email_notification_by_rule_id, [OrigId, OrigId]),
+	populate_notifications(ENT, RuleId, email),
 
 	R = #rule{id=RuleId, orig_id=OrigId, channel=Channel, action=Action, filter_id=FilterId},
 	mydlp_mnesia_write(R).
@@ -520,7 +524,7 @@ populate_iprs([[Base, Subnet]| Rows], RuleId) ->
 	populate_iprs(Rows, RuleId);
 populate_iprs([], _RuleId) -> ok.
 
-populate_destinations([[Destination]|Rows], RuleId)->
+populate_destinations([[Destination]|Rows], RuleId) ->
 	Id = mydlp_mnesia:get_unique_id(dest),
 	D = case Destination of
 		<<"all">> -> all; 
@@ -531,15 +535,12 @@ populate_destinations([[Destination]|Rows], RuleId)->
 	populate_destinations(Rows, RuleId);
 populate_destinations([], _RuleId) -> ok.
 
-%populate_directories([[Directories]|Rows], RuleId) ->
-%	Id = mydlp_mnesia:get_unique_id(dir),
-%	D = case Destination of
-%		<<"all">> -> all;
-%		_ -> Destination
-%	end,
-%	I = #dir{id=Id, rule_id=RuleId, destination=D},
-%	populate_directories(Rows, RuleId);
-%populate_directories([], _RuleId) -> ok.
+populate_notifications([[Notification]|Rows], RuleId, Type) ->
+	Id = mydlp_mnesia:get_unique_id(notification),
+	I = #notification{id=Id, rule_id=RuleId, type=Type, target=Notification},
+	mydlp_mnesia_write(I),
+	populate_notifications(Rows, RuleId, Type);
+populate_notifications([], _RuleId, _Type) -> ok.	
 
 populate_rule_users(RuleOrigId, RuleId) -> 
 	{ok, USQ} = psq(user_s_by_rule_id, [RuleOrigId]),

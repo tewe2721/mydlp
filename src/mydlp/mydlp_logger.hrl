@@ -60,11 +60,25 @@
 
 -record(report, {name, facility, format, data}).
 
--define(ACL_LOG(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, File, Misc),
-        ?ACL_LOG_P(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, File, Misc, none)).
+-record(log, {
+                time=undefined,
+                channel=undefined,
+                rule_id=undefined,
+                action=undefined,
+                ip=undefined,
+                user=undefined,
+                destination=undefined,
+                itype_id=undefined,
+                file=undefined,
+                misc=undefined,
+                payload=undefined
+        }).
 
--define(ACL_LOG_P(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, File, Misc, Payload),
-        mydlp_api:acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, File, Misc, Payload)).
+-define(ACL_LOG(Log),
+        ?ACL_LOG_P(Log#log{payload=none})).
+
+-define(ACL_LOG_P(Log),
+        mydlp_api:acl_msg(Log)).
 
 -define(LOGGER_NOTIFY(Tag,Format,Args),
         mydlp_logger:notify(Tag, "~P:~P " ++ Format, lists:append([ [I,32] || I <- ([?MODULE_STRING, ?LINE] ++ Args)]))
