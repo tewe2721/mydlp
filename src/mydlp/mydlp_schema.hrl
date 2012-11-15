@@ -61,7 +61,9 @@
 -record(notification_queue, {
 	rule_id,
 	date,
-	status % if notification sent, status=true; else status=#of notificaitons 
+	status, % if notification sent, status=true; else status=#of notificaitons 
+	event_threshold=3, % threshold value for waiting notification
+	is_shadow=false % true means rule does not occur for specified time interval.
 }).
 
 -record(m_user, {

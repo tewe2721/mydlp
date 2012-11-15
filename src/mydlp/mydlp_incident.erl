@@ -46,6 +46,7 @@
 	handle_info/2,
 	terminate/2,
 	check_notification_queue/0,
+	notify_users_now/1,
 	code_change/3]).
 
 -include_lib("eunit/include/eunit.hrl").
@@ -127,7 +128,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%%%%%%%%%%%%%%%% internal
 check_notification_queue() ->
 	NQI = mydlp_mnesia:get_early_notification_queue_items(),
-	lists:map(fun({R, _S}) -> notify_users_now(R), 
+	lists:foreach(fun(R) -> notify_users_now(R), 
 				update_notification_queue_item(R, true)		
 				end, NQI).
 
@@ -146,11 +147,18 @@ regulate_notifications(RuleId) ->
 	end.
 
 update_notification_queue_item(RuleId, NewStatus) ->
-	mydlp_mnesia:update_notification_queue_item(RuleId, NewStatus).
+	Result = mydlp_mnesia:update_notification_queue_item(RuleId, NewStatus),
+	case Result of
+		notify -> notify_users_now(RuleId);
+		_ -> ok
+	end.
 
 notify_users(RuleId) ->
-	regulate_notifications(RuleId).
-	%notify_users_now(RuleId).
+	NI = mydlp_mnesia:get_notification_items(RuleId),
+	case NI of
+		[] -> ok;
+		_ -> regulate_notifications(RuleId)
+	end.
 
 notify_users_now(RuleId) ->
 	Notifications = mydlp_mnesia:get_notification_items(RuleId),

@@ -540,20 +540,36 @@ handle_query({get_notification_queue_items, OrigRuleId}) ->
 handle_query(get_early_notification_queue_items) ->
 	{_Me, S, _Mi} = erlang:now(),
 	BeforeOneHour = S - 5,
-	Q = ?QLCQ([{N#notification_queue.rule_id, N#notification_queue.status} ||
+	Q0 = ?QLCQ([N#notification_queue.rule_id ||
+		N <- mnesia:table(notification_queue),
+		N#notification_queue.is_shadow == true
+	]),
+	ShadowRuleIds = ?QLCE(Q0),
+	lists:foreach(fun(I) -> mnesia:delete({notification_queue, I}) end, ShadowRuleIds),
+
+	Q1 = ?QLCQ([N ||
+		N <- mnesia:table(notification_queue),
+		N#notification_queue.status == true
+	]),
+	InactiveNotificationQueueItems = ?QLCE(Q1),
+	lists:foreach(fun(E) -> mnesia:write(E#notification_queue{is_shadow=true}) end, InactiveNotificationQueueItems),
+
+	Q2 = ?QLCQ([N#notification_queue.rule_id ||
 		N <- mnesia:table(notification_queue),
 		N#notification_queue.date < BeforeOneHour,
 		N#notification_queue.status /= true
 	]),
-	?QLCE(Q);
+	?QLCE(Q2);
 
-handle_query({update_notification_queue_item, RuleId, NewStatus}) ->
-%	[I] = mnesia:wread({notification_queue, RuleId}),
-	%mnesia:transaction(fun() -> mnesia:write(I#notification_queue{status=NewStatus}) end);
-%	mnesia:write(I#notification_queue{status=NewStatus});
-
-	mnesia:transaction(fun() -> [I] = mnesia:read(notification_queue, RuleId),
-					mnesia:write(I#notification_queue{status=NewStatus}) end );
+handle_query({update_notification_queue_item, RuleId, Status}) ->
+	[I] = mnesia:wread({notification_queue, RuleId}),
+	EventThreshold = I#notification_queue.event_threshold,
+	{NewStatus, NewEventThreshold, Action} = case Status == EventThreshold of
+					true -> {true, EventThreshold*EventThreshold, notify};
+					false -> {Status, EventThreshold, ok}
+				end,
+	mnesia:write(I#notification_queue{status=NewStatus, event_threshold=NewEventThreshold, is_shadow=false}),
+	Action;
 
 handle_query({get_remote_rule_tables, FilterId, Addr, UserH}) ->
 	AclQ = #aclq{src_addr=Addr, src_user_h=UserH},
@@ -1439,13 +1455,27 @@ pdm_hit_count([], _GroupId, Acc) -> Acc.
 remove_filters(FIs) -> lists:foreach(fun(Id) -> remove_filter(Id) end, FIs), ok.
 
 remove_filter(FI) ->
-	Q = ?QLCQ([R#rule.id ||	
+	Q = ?QLCQ([{R#rule.id, R#rule.orig_id} ||	
 		R <- mnesia:table(rule),
 		R#rule.filter_id == FI
 		]),
-	RIs = ?QLCE(Q),
+	AllRIs = ?QLCE(Q),
+	RIs = [X || {X, _Y} <- AllRIs],
+	OrigRIs = [Y || {_X, Y} <- AllRIs],
+	remove_notification_queue_items(OrigRIs),
 	remove_rules(RIs),
 	mnesia:delete({filter, FI}).
+
+remove_notification_queue_items(OrigRIs) -> lists:foreach(fun(Id) -> remove_notification_queue_item(Id) end, OrigRIs), ok.
+
+remove_notification_queue_item(RI) ->
+	Q = ?QLCQ([N#notification_queue.rule_id ||
+		N <- mnesia:table(notification_queue),
+		N#notification_queue.rule_id == RI
+	]),
+	NI = ?QLCE(Q),
+	lists:foreach(fun(I) -> mydlp_incident:notify_users_now(I),
+				mnesia:delete({notification_queue, I}) end, NI).
 
 remove_rules(RIs) -> lists:foreach(fun(Id) -> remove_rule(Id) end, RIs), ok.
 

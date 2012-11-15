@@ -420,6 +420,7 @@ psqt(PreparedKey, Params) ->
 
 populate_site(FilterId) ->
 	set_progress(compile),
+	%TODO: remove notification queue and sent waiting notifications
 	init_mydlp_mnesia_write(),
 	%TODO: refine this
 	%{ok, FQ} = psq(filters_by_cid, [FilterId]),
