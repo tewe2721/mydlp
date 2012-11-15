@@ -100,6 +100,10 @@ handle_info({async_reply, Reply, From}, State) ->
 	gen_server:reply(From, Reply),
 	{noreply, State};
 
+handle_info(check_notifications, State) ->
+	check_notification_queue(),
+	{noreply, State};
+
 handle_info(_Info, State) ->
 	{noreply, State}.
 
@@ -117,6 +121,7 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
+	timer:send_after(60000, check_notifications),
 	{ok, #state{logger_queue=queue:new()}}.
 
 terminate(_Reason, _State) ->
@@ -130,7 +135,8 @@ check_notification_queue() ->
 	NQI = mydlp_mnesia:get_early_notification_queue_items(),
 	lists:foreach(fun(R) -> notify_users_now(R), 
 				update_notification_queue_item(R, true)		
-				end, NQI).
+				end, NQI),
+	timer:send_after(60000, check_notifications).
 
 regulate_notifications(RuleId) ->
 	NQI = mydlp_mnesia:get_notification_queue_items(RuleId),

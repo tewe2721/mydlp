@@ -539,7 +539,7 @@ handle_query({get_notification_queue_items, OrigRuleId}) ->
 
 handle_query(get_early_notification_queue_items) ->
 	{_Me, S, _Mi} = erlang:now(),
-	BeforeOneHour = S - 5,
+	BeforeHalfHour = S - 60,
 	Q0 = ?QLCQ([N#notification_queue.rule_id ||
 		N <- mnesia:table(notification_queue),
 		N#notification_queue.is_shadow == true
@@ -556,7 +556,7 @@ handle_query(get_early_notification_queue_items) ->
 
 	Q2 = ?QLCQ([N#notification_queue.rule_id ||
 		N <- mnesia:table(notification_queue),
-		N#notification_queue.date < BeforeOneHour,
+		N#notification_queue.date < BeforeHalfHour,
 		N#notification_queue.status /= true
 	]),
 	?QLCE(Q2);
