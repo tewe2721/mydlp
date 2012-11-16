@@ -121,7 +121,7 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
-	timer:send_after(60000, check_notifications),
+	timer:send_after(1800000, check_notifications),
 	{ok, #state{logger_queue=queue:new()}}.
 
 terminate(_Reason, _State) ->
@@ -136,7 +136,7 @@ check_notification_queue() ->
 	lists:foreach(fun(R) -> notify_users_now(R), 
 				update_notification_queue_item(R, true)		
 				end, NQI),
-	timer:send_after(60000, check_notifications).
+	timer:send_after(1800000, check_notifications).
 
 regulate_notifications(RuleId) ->
 	NQI = mydlp_mnesia:get_notification_queue_items(RuleId),
