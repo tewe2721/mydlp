@@ -458,6 +458,7 @@ populate_site(FilterId) ->
 populate_configs([[Key, Value]|Rows], FilterId) ->
 	Id = mydlp_mnesia:get_unique_id(config),
 	C = #config{id=Id, filter_id=FilterId, key=Key, value=Value},
+	erlang:display(binary_to_list(Key)),
 	mydlp_mnesia_write(C),
 	populate_configs(Rows, FilterId);
 populate_configs([], _FilterId) -> ok.

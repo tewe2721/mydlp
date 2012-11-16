@@ -171,7 +171,20 @@ notify_users_now(RuleId) ->
 	notify_user(Notifications).
 
 notify_user([{email, EmailAddress}|Notifications]) ->
-	mydlp_smtpc:mail("ozgen@mydlp.com", binary_to_list(EmailAddress), "test message"),
+	EmailBody = [	"From: support@mydlp.com", 
+			"\r\n",
+			"To: ", EmailAddress,
+			"\r\n",
+			"Subject: Notifications from MyDLP"
+			"\r\n",
+			"Content-Type: text/html; charset=utf-8",
+			"\r\n",
+			"Content-Transfer-Encoding: 8bit",
+			"\r\n",
+			"\r\n",
+			?CFG(email_notification_message), 
+			"\r\n"],
+	mydlp_smtpc:mail("support@mydlp.com", binary_to_list(EmailAddress), EmailBody),
 	notify_user(Notifications);
 notify_user([{other, _Target}|Notifications]) -> 
 	notify_user(Notifications);
