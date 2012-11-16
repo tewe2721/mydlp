@@ -32,6 +32,7 @@
 -behaviour(gen_server).
 
 -include("mydlp.hrl").
+-include("mydlp_schema.hrl").
 
 %% API
 -export([start_link/0,
@@ -44,6 +45,8 @@
 	handle_cast/2,
 	handle_info/2,
 	terminate/2,
+	check_notification_queue/0,
+	notify_users_now/1,
 	code_change/3]).
 
 -include_lib("eunit/include/eunit.hrl").
@@ -55,7 +58,7 @@
 
 %%%%%%%%%%%%%  API
 
-l(LogTuple) -> gen_server:cast(?MODULE, {l, LogTuple}).
+l(LogRecord) -> gen_server:cast(?MODULE, {l, LogRecord}).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -97,6 +100,10 @@ handle_info({async_reply, Reply, From}, State) ->
 	gen_server:reply(From, Reply),
 	{noreply, State};
 
+handle_info(check_notifications, State) ->
+	check_notification_queue(),
+	{noreply, State};
+
 handle_info(_Info, State) ->
 	{noreply, State}.
 
@@ -114,6 +121,7 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
+	timer:send_after(60000, check_notifications),
 	{ok, #state{logger_queue=queue:new()}}.
 
 terminate(_Reason, _State) ->
@@ -123,21 +131,79 @@ code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 
 %%%%%%%%%%%%%%%%% internal
+check_notification_queue() ->
+	NQI = mydlp_mnesia:get_early_notification_queue_items(),
+	lists:foreach(fun(R) -> notify_users_now(R), 
+				update_notification_queue_item(R, true)		
+				end, NQI),
+	timer:send_after(60000, check_notifications).
 
-process_log_tuple({Time, web = Channel, RuleId, archive = Action, Ip, User, To, -1 = ITypeId, Files, Misc, Payload}) ->
+regulate_notifications(RuleId) ->
+	NQI = mydlp_mnesia:get_notification_queue_items(RuleId),
+	case NQI of
+		[] ->	notify_users_now(RuleId),
+		 	{_Me, S, _Mi} = erlang:now(),
+			N = #notification_queue{rule_id=RuleId, date=S, status=true},
+			mydlp_mnesia:write(N);
+		[I] -> NewStatus = case I of
+					true -> 1;
+					_ -> I+1
+				end,
+				update_notification_queue_item(RuleId, NewStatus)
+	end.
+
+update_notification_queue_item(RuleId, NewStatus) ->
+	Result = mydlp_mnesia:update_notification_queue_item(RuleId, NewStatus),
+	case Result of
+		notify -> notify_users_now(RuleId);
+		_ -> ok
+	end.
+
+notify_users(RuleId) ->
+	NI = mydlp_mnesia:get_notification_items(RuleId),
+	case NI of
+		[] -> ok;
+		_ -> regulate_notifications(RuleId)
+	end.
+
+notify_users_now(RuleId) ->
+	Notifications = mydlp_mnesia:get_notification_items(RuleId),
+	notify_user(Notifications).
+
+notify_user([{email, EmailAddress}|Notifications]) ->
+	EmailBody = [	"From: support@mydlp.com", 
+			"\r\n",
+			"To: ", EmailAddress,
+			"\r\n",
+			"Subject: Notifications from MyDLP"
+			"\r\n",
+			"Content-Type: text/html; charset=utf-8",
+			"\r\n",
+			"Content-Transfer-Encoding: 8bit",
+			"\r\n",
+			"\r\n",
+			?CFG(email_notification_message), 
+			"\r\n"],
+	mydlp_smtpc:mail("support@mydlp.com", binary_to_list(EmailAddress), EmailBody),
+	notify_user(Notifications);
+notify_user([{other, _Target}|Notifications]) -> 
+	notify_user(Notifications);
+notify_user([]) -> ok.
+
+process_log_tuple(#log{channel=web, action=archieve, itype_id=-1, file=Files} = Log) ->
 	Files1 = lists:filter(fun(F) -> 
 		?BB_S(F#file.dataref) > ?CFG(archive_minimum_size)
 		end, Files),
-	process_log_tuple1({Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files1, Misc, Payload});
-process_log_tuple({Time, mail = Channel, RuleId, Action, Ip, User, {_RcptTo, CompleteRcpts}, ITypeId, Files, Misc, Payload}) ->
-	process_log_tuple1({Time, Channel, RuleId, Action, Ip, User, CompleteRcpts, ITypeId, Files, Misc, Payload});
-process_log_tuple({Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc, Payload}) ->
-	process_log_tuple1({Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc, Payload}).
+	process_log_tuple1(Log#log{file=Files1});
+process_log_tuple(#log{channel=mail, destination={_RcptTo, CompleteRcpts}} = Log) ->
+	process_log_tuple1(Log#log{destination=CompleteRcpts});
+process_log_tuple(Log) -> process_log_tuple1(Log).
 
-process_log_tuple1({_Time, _Channel, _RuleId, _Action, _Ip, _User, _To, _ITypeId, [], _Misc, _Payload}) -> ok;
-process_log_tuple1({Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc, Payload}) ->
+process_log_tuple1(#log{file=[]}) -> ok;
+process_log_tuple1(#log{time=Time, channel=Channel, rule_id=RuleId, action=Action, ip=Ip, user=User, destination=To, file=Files, itype_id = ITypeId, misc=Misc, payload=Payload}) ->
 	IsLogData = mydlp_api:is_store_action(Action),
 	LogId = mydlp_mysql:push_log(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc),
+	notify_users(RuleId),
 	process_log_files(LogId, IsLogData, Files),
 	case {Channel, Action} of
 		{mail, quarantine} -> 	process_payload(LogId, Payload),

@@ -1216,23 +1216,23 @@ is_store_action(archive) -> true.
 
 -ifdef(__MYDLP_NETWORK).
 
-acl_msg(_Time, _Channel, _RuleId, _Action, _Ip, _User, _To, _ITypeId, [], _Misc, _Payload) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="post-data"}, _Misc, _Payload) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="urlencoded-data"}, _Misc, _Payload) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="uri-data"}, _Misc, _Payload) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="seap-data"}, _Misc, _Payload) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="resp-data"}, _Misc, _Payload) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="data"}, _Misc, _Payload) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name=undefined, filename=undefined}, _Misc, _Payload) -> ok;
-acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, #file{} = File, Misc, Payload) ->
-	acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, [File], Misc, Payload);
-acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, PreFiles, Misc, Payload) ->
+acl_msg(#log{file=[]}) -> ok;
+acl_msg(#log{rule_id=-1, action=log, file=#file{name="post-data"}}) -> ok;
+acl_msg(#log{rule_id=-1, action=log, file=#file{name="urlencoded-data"}}) -> ok;
+acl_msg(#log{rule_id=-1, action=log, file=#file{name="uri-data"}}) -> ok;
+acl_msg(#log{rule_id=-1, action=log, file=#file{name="seap-data"}}) -> ok;
+acl_msg(#log{rule_id=-1, action=log, file=#file{name="resp-data"}}) -> ok;
+acl_msg(#log{rule_id=-1, action=log, file=#file{name="data"}}) -> ok;
+acl_msg(#log{rule_id=-1, action=log, file=#file{name=undefined, filename=undefined}}) -> ok;
+acl_msg(#log{file=#file{} = File} = Log) ->
+	acl_msg(Log#log{file=[File]});
+acl_msg(#log{action=Action, file=PreFiles}=Log) ->
 	PreFiles1 = metafy_files(PreFiles),
 	Files = case is_store_action(Action) of
 		false -> remove_all_data(PreFiles1);
 		true -> remove_mem_data(PreFiles1) end,
-	acl_msg_logger(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc),
-	mydlp_incident:l({Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc, Payload}),
+	acl_msg_logger(Log#log{file=Files}),
+	mydlp_incident:l(Log),
 	ok.
 
 smtp_msg(Format, Args) ->
@@ -1244,24 +1244,25 @@ smtp_msg(Format, Args) ->
 
 -ifdef(__MYDLP_ENDPOINT).
 
-acl_msg(_Time, _Channel, _RuleId, _Action, _Ip, _User, _To, _ITypeId, [], _Misc, _Payload) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="post-data"}, _Misc, _Payload) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="urlencoded-data"}, _Misc, _Payload) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="uri-data"}, _Misc, _Payload) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="seap-data"}, _Misc, _Payload) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="resp-data"}, _Misc, _Payload) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="data"}, _Misc, _Payload) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name=undefined, filename=undefined}, _Misc, _Payload) -> ok;
-acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, #file{} = File, Misc, Payload) ->
-	acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, [File], Misc, Payload);
-acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, PreFiles, Misc, _Payload) ->
+acl_msg(#log{file=[]}) -> ok;
+acl_msg(#log{rule_id=-1, action=log, file=#file{name="post-data"}}) -> ok;
+acl_msg(#log{rule_id=-1, action=log, file=#file{name="urlencoded-data"}}) -> ok;
+acl_msg(#log{rule_id=-1, action=log, file=#file{name="uri-data"}}) -> ok;
+acl_msg(#log{rule_id=-1, action=log, file=#file{name="seap-data"}}) -> ok;
+acl_msg(#log{rule_id=-1, action=log, file=#file{name="resp-data"}}) -> ok;
+acl_msg(#log{rule_id=-1, action=log, file=#file{name="data"}}) -> ok;
+acl_msg(#log{rule_id=-1, action=log, file=#file{name=undefined, filename=undefined}}) -> ok;
+acl_msg(#log{file=#file{}=File}=Log) ->
+	acl_msg(Log#log{file=[File]});
+acl_msg(#log{action=Action, file=PreFiles}=Log) ->
 	PreFiles1 = metafy_files(PreFiles),
 	Files = case is_store_action(Action) of
 		false -> remove_all_data(PreFiles1);
 		true -> remove_crs(PreFiles1) end,
 	LogTerm = {Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc},
-	acl_msg_logger(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc),
-	mydlp_item_push:p({endpoint_log, LogTerm}),
+	Log#log{file=Files},
+	acl_msg_logger(Log),
+	mydlp_item_push:p({endpoint_log, Log}),
 	ok.
 
 -endif.
@@ -1416,7 +1417,7 @@ get_message(_, _) -> "Check MyDLP Logs using management console for details.".
 
 -endif.
 
-acl_msg_logger(Time, Channel, RuleId, Action, SrcIp, SrcUser, To, ITypeId, Files, Misc) ->
+acl_msg_logger(#log{time=Time, channel=Channel, rule_id=RuleId, action=Action, ip=SrcIp, user=SrcUser, destination=To, itype_id=ITypeId, file=Files, misc=Misc}) ->
 	FormatHead=["CEF:0|Medra Inc.|MyDLP|1.0|~B|~ts|~B|rt=~s cn1Label=~ts cn1=~B cn2Label=~ts cn2=~B proto=~s"],
 	GeneratedMessage = get_message(Channel, Action),
 	Severity = 10,

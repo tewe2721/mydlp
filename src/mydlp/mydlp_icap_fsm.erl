@@ -750,7 +750,7 @@ log_req(#state{icap_headers=#icap_headers{x_client_ip=Addr},
 		username=UserName}, Action,
 		{{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
 	Time = erlang:universaltime(),
-	?ACL_LOG(Time, web, RuleId, Action, Addr, UserName, Uri, IType, File, Misc).
+	?ACL_LOG(#log{time=Time, channel=web, rule_id=RuleId, action=Action, ip=Addr, user=UserName, destination=Uri, itype_id=IType, file=File, misc=Misc}).
 
 get_path(("/" ++ _Str) = Uri) -> Uri;
 get_path("icap://" ++ Str) ->

@@ -82,5 +82,4 @@
 		src_user_h=unknown,
 		destinations=[]
         }).
-
 -endif.
