@@ -29,6 +29,7 @@ QUARANTINE_DIR=/var/lib/mydlp/quarantine/
 REVISION_DIR=/var/lib/mydlp/revision/
 
 LOG_DIR=/var/log/mydlp/
+LOGFILE_USER_GROUP="syslog.adm"
 
 LSBIN=/bin/ls
 MYSQLC=/usr/bin/mysql
@@ -55,6 +56,10 @@ generate_keys() {
 	[ -e $SSLDIR/user.der ] || $OPENSSL x509 -in $SSLDIR/public.pem -outform DER -out $SSLDIR/user.der
 	
 	return 0
+}
+
+cleanup_keys() {
+	[ -d $SSLDIR ] && rm -f $SSLDIR/private.pem $SSLDIR/public.pem $SSLDIR/user.der
 }
 
 configure_apache() {
@@ -113,7 +118,12 @@ restart_rsyslog() {
 	do
 		local LOGFILE="$LOG_DIR""$f"
 		echo "Correcting ownership of log file ($f) ..."
-		$CHOWN -f syslog.adm $LOGFILE|| true
+		local CURRENT_USER_GROUP=$(/usr/bin/stat -c "%U.%G" $LOGFILE)
+		if [ -n "$CURRENT_USER_GROUP" -a "$CURRENT_USER_GROUP" == "$LOGFILE_USER_GROUP" ]; then
+			true
+		else
+			$CHOWN -f $LOGFILE_USER_GROUP $LOGFILE || true
+		fi
 	done
 	/etc/init.d/rsyslog restart 2>&1 > /dev/null
 }
@@ -147,13 +157,12 @@ case "$1" in
 	if [ -n "$2" ]; then
 		# update
 		patch_mysql_schema $2
-		if $DPKGBIN --compare-versions "0.9.140-1" lt "$2"; then
-			restart_rsyslog
-		fi
-		if $DPKGBIN --compare-versions "$2" le "0.9.159-1"; then
+		if $DPKGBIN --compare-versions "$2" le "0.9.163-1"; then
+			cleanup_keys
 			generate_keys
 			cleanup_sslcrtd_db
 		fi
+		restart_rsyslog
 	else
 		# first install
 		generate_init_epoch

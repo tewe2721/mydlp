@@ -217,8 +217,9 @@ get_text(#file{mime_type=MimeType, filename=Filename, data=Data}) ->
 		audio-> {error, audio};
 		video-> {error, video};
 		image-> {error, image};
-		_ -> 	try 	Text = mydlp_tc:get_text(Filename, MimeType, Data),
-				{ok, Text}
+		_ -> 	try 	case mydlp_tc:get_text(Filename, MimeType, Data) of
+					{error, E} -> {error, E};
+					Text -> {ok, Text} end
 			catch Class:Error -> {error, {Class,Error}} end
 	end.
 
@@ -1215,47 +1216,53 @@ is_store_action(archive) -> true.
 
 -ifdef(__MYDLP_NETWORK).
 
-acl_msg(_Time, _Channel, _RuleId, _Action, _Ip, _User, _To, _ITypeId, [], _Misc, _Payload) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="post-data"}, _Misc, _Payload) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="urlencoded-data"}, _Misc, _Payload) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="uri-data"}, _Misc, _Payload) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="seap-data"}, _Misc, _Payload) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="resp-data"}, _Misc, _Payload) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="data"}, _Misc, _Payload) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name=undefined, filename=undefined}, _Misc, _Payload) -> ok;
-acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, #file{} = File, Misc, Payload) ->
-	acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, [File], Misc, Payload);
-acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, PreFiles, Misc, Payload) ->
+acl_msg(#log{file=[]}) -> ok;
+acl_msg(#log{rule_id=-1, action=log, file=#file{name="post-data"}}) -> ok;
+acl_msg(#log{rule_id=-1, action=log, file=#file{name="urlencoded-data"}}) -> ok;
+acl_msg(#log{rule_id=-1, action=log, file=#file{name="uri-data"}}) -> ok;
+acl_msg(#log{rule_id=-1, action=log, file=#file{name="seap-data"}}) -> ok;
+acl_msg(#log{rule_id=-1, action=log, file=#file{name="resp-data"}}) -> ok;
+acl_msg(#log{rule_id=-1, action=log, file=#file{name="data"}}) -> ok;
+acl_msg(#log{rule_id=-1, action=log, file=#file{name=undefined, filename=undefined}}) -> ok;
+acl_msg(#log{file=#file{} = File} = Log) ->
+	acl_msg(Log#log{file=[File]});
+acl_msg(#log{action=Action, file=PreFiles}=Log) ->
 	PreFiles1 = metafy_files(PreFiles),
 	Files = case is_store_action(Action) of
 		false -> remove_all_data(PreFiles1);
 		true -> remove_mem_data(PreFiles1) end,
-	acl_msg_logger(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc),
-	mydlp_incident:l({Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc, Payload}),
+	acl_msg_logger(Log#log{file=Files}),
+	mydlp_incident:l(Log),
 	ok.
+
+smtp_msg(Format, Args) ->
+	Format1 = "PID=~w " ++ Format ++ "~n",
+        Args1 = [self() | Args],
+        mydlp_logger:notify(smtp_msg, Format1, Args1).
 
 -endif.
 
 -ifdef(__MYDLP_ENDPOINT).
 
-acl_msg(_Time, _Channel, _RuleId, _Action, _Ip, _User, _To, _ITypeId, [], _Misc, _Payload) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="post-data"}, _Misc, _Payload) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="urlencoded-data"}, _Misc, _Payload) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="uri-data"}, _Misc, _Payload) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="seap-data"}, _Misc, _Payload) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="resp-data"}, _Misc, _Payload) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name="data"}, _Misc, _Payload) -> ok;
-acl_msg(_Time, _Channel, -1, log, _Ip, _User, _To, _ITypeId, #file{name=undefined, filename=undefined}, _Misc, _Payload) -> ok;
-acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, #file{} = File, Misc, Payload) ->
-	acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, [File], Misc, Payload);
-acl_msg(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, PreFiles, Misc, _Payload) ->
+acl_msg(#log{file=[]}) -> ok;
+acl_msg(#log{rule_id=-1, action=log, file=#file{name="post-data"}}) -> ok;
+acl_msg(#log{rule_id=-1, action=log, file=#file{name="urlencoded-data"}}) -> ok;
+acl_msg(#log{rule_id=-1, action=log, file=#file{name="uri-data"}}) -> ok;
+acl_msg(#log{rule_id=-1, action=log, file=#file{name="seap-data"}}) -> ok;
+acl_msg(#log{rule_id=-1, action=log, file=#file{name="resp-data"}}) -> ok;
+acl_msg(#log{rule_id=-1, action=log, file=#file{name="data"}}) -> ok;
+acl_msg(#log{rule_id=-1, action=log, file=#file{name=undefined, filename=undefined}}) -> ok;
+acl_msg(#log{file=#file{}=File}=Log) ->
+	acl_msg(Log#log{file=[File]});
+acl_msg(#log{action=Action, file=PreFiles}=Log) ->
 	PreFiles1 = metafy_files(PreFiles),
 	Files = case is_store_action(Action) of
 		false -> remove_all_data(PreFiles1);
 		true -> remove_crs(PreFiles1) end,
 	LogTerm = {Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc},
-	acl_msg_logger(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc),
-	mydlp_item_push:p({endpoint_log, LogTerm}),
+	Log#log{file=Files},
+	acl_msg_logger(Log),
+	mydlp_item_push:p({endpoint_log, Log}),
 	ok.
 
 -endif.
@@ -1410,7 +1417,7 @@ get_message(_, _) -> "Check MyDLP Logs using management console for details.".
 
 -endif.
 
-acl_msg_logger(Time, Channel, RuleId, Action, SrcIp, SrcUser, To, ITypeId, Files, Misc) ->
+acl_msg_logger(#log{time=Time, channel=Channel, rule_id=RuleId, action=Action, ip=SrcIp, user=SrcUser, destination=To, itype_id=ITypeId, file=Files, misc=Misc}) ->
 	FormatHead=["CEF:0|Medra Inc.|MyDLP|1.0|~B|~ts|~B|rt=~s cn1Label=~ts cn1=~B cn2Label=~ts cn2=~B proto=~s"],
 	GeneratedMessage = get_message(Channel, Action),
 	Severity = 10,
@@ -1926,7 +1933,7 @@ do_parse_uenc(<<$+, Tail/binary>>, CurData, CurFile, Files) ->
 
 do_parse_uenc(<<$=, Tail/binary>>, CurData, CurFile, Files) -> 
 	NewData = lists:reverse(CurData),
-	Name = "uenc key: " ++ unicode:characters_to_list(list_to_binary(NewData)),
+	Name = "uenc key: " ++ filename_to_list(list_to_binary(NewData)),
 	do_parse_uenc(Tail, [], CurFile#file{name=Name}, Files);
 
 do_parse_uenc(<<$&, Tail/binary>>, CurData, CurFile, Files) ->
@@ -2207,6 +2214,34 @@ binary_size(Obj, _Acc) -> throw({error, bad_element, Obj}).
 %% @end
 %%-------------------------------------------------------------------------
 
+filename_to_list(Filename) ->
+        case Filename of
+                F when is_binary(F) ->
+                        case unicode:characters_to_list(Filename) of
+                                R when is_list(R) -> R;
+                                _ ->    try binary_to_list(Filename)
+                                        catch _:_ ->    ?ERROR_LOG("FTL: Encountered with a filename in an unexpected encoding. Filename: ["?S"]", [Filename]),
+                                                        "noname"
+                                        end
+                        end;
+                F when is_list(F) -> F;
+                Else -> ?ERROR_LOG("Encountered with a filename in an unexpected type. Filename: ["?S"]", [Else]),
+                        "noname" end.
+
+filename_to_bin(Filename) ->
+        case Filename of
+                F when is_list(F) ->
+                        case unicode:characters_to_binary(Filename) of
+                                R when is_binary(R) -> R;
+                                _ ->    try list_to_binary(Filename)
+                                        catch _:_ ->    ?ERROR_LOG("FTB: Encountered with a filename in an unexpected encoding. Filename: ["?S"]", [Filename]),
+                                                        <<"noname">>
+                                        end
+                        end;
+                F when is_binary(F) -> F;
+                Else -> ?ERROR_LOG("Encountered with a filename in an unexpected type. Filename: ["?S"]", [Else]),
+                        <<"noname">> end.
+
 -ifdef(__MYDLP_NETWORK).
 
 heads_to_file_int1(Str, QS, CT) ->
@@ -2273,11 +2308,7 @@ find_char_in_range([_C|Rest], Range, Char, Acc) -> find_char_in_range(Rest, Rang
 find_char_in_range([], Range, _Char, Range) -> not_found.
 
 multipart_decode_fn(Filename0) -> 
-	Filename = try case unicode:characters_to_list(list_to_binary(Filename0)) of
-		[] -> [];
-		[_|_] = L -> L;
-		_ -> Filename0 end
-	catch _Class:_Error -> Filename0 end,
+	Filename = filename_to_list(list_to_binary(Filename0)),
 
 	case Filename of
 		"=?" ++ _Rest -> multipart_decode_fn_rfc2047(Filename);
@@ -2339,14 +2370,14 @@ multipart_decode_fn_rfc2047_3(Charset, quoted_printable, QPStr) ->
 	multipart_decode_fn_rfc2047_4(Charset, DataBin).
 	
 multipart_decode_fn_rfc2047_4(Charset, DataBin) ->
-	try unicode:characters_to_list(DataBin, Charset)
-	catch 	Class:Error ->
-		?ERROR_LOG("Error occured when unicode decoding: "
-			"Class: ["?S"]. Error: ["?S"].~n"
-			"Stacktrace: "?S"~n"
-			"DataBin: "?S"~n",
-			[Class, Error, erlang:get_stacktrace(), DataBin]),
-		binary_to_list(DataBin) end.
+	B = list_to_binary([DataBin]),
+	case unicode:characters_to_list(B, Charset) of
+		R when is_list(R) -> R;
+		_ -> 	try binary_to_list(DataBin)
+			catch _:_ -> ?ERROR_LOG("Error occured when unicode decoding: "
+					"DataBin: ["?S"]~n", [DataBin]), "noname" 
+			end
+	end.
 
 
 multipart_decode_fn_rfc2047_3_1(QPStr) -> multipart_decode_fn_rfc2047_3_1(QPStr, []).
@@ -2916,6 +2947,43 @@ quoted_to_raw(<<$=, H1, H2, Rest/binary>>, Acc ) ->
 	quoted_to_raw(Rest, <<Acc/binary, I/integer>>);
 quoted_to_raw(<<C/integer, Rest/binary>>, Acc ) -> quoted_to_raw(Rest, <<Acc/binary, C/integer>>);
 quoted_to_raw(<<>>, Acc ) -> Acc.
+
+%%-------------------------------------------------------------------------
+%% @doc Removes html tags from given text
+%% @end
+%%-------------------------------------------------------------------------
+remove_html_tags(Text) -> remove_html_tags(Text, none, [],<<>>).
+
+remove_html_tags(Rest, textualize, [<<"br">>|TagStack], Acc) -> remove_html_tags(Rest, none, TagStack, <<Acc/binary, "\n">>);
+remove_html_tags(Rest, textualize, TagStack, Acc) -> remove_html_tags(Rest, none, TagStack, Acc);
+remove_html_tags(<<>>, _, [], Acc) -> Acc;
+remove_html_tags(<<>>, _, TagStack, _Acc) -> throw({error, {there_are_still_tags_in_stack, TagStack}});
+remove_html_tags(<<$\s, Rest/binary>>, wait_direct_end, TagStack, Acc) -> remove_html_tags(Rest, wait_direct_end, TagStack, Acc);
+remove_html_tags(<<$>, Rest/binary>>, wait_direct_end, [Tag|TagStack], Acc) -> 
+	Acc1 = remove_html_tags(<<>>, textualize, [Tag], Acc),
+	remove_html_tags(Rest, none, TagStack, Acc1);
+remove_html_tags(<<_C/integer, _Rest/binary>>, wait_direct_end, _TagStack, _Acc) -> throw({error, inproper_xml_tag_1});
+remove_html_tags(<<$/, Rest/binary>>, wait_end, TagStack, Acc) -> remove_html_tags(Rest, wait_direct_end, TagStack, Acc);
+remove_html_tags(<<$>, Rest/binary>>, wait_end, TagStack, Acc) -> remove_html_tags(Rest, textualize, TagStack, Acc);
+remove_html_tags(<<_C/integer, Rest/binary>>, wait_end, TagStack, Acc) -> remove_html_tags(Rest, wait_end, TagStack, Acc);
+remove_html_tags(<<$<, Rest/binary>>, none, TagStack, Acc) -> remove_html_tags(Rest, <<>>, TagStack, Acc);
+remove_html_tags(<<C/utf8, Rest/binary>>, none, TagStack, Acc) -> remove_html_tags(Rest, none, TagStack, <<Acc/binary, C/utf8>>);
+remove_html_tags(<<C/integer, Rest/binary>>, none, TagStack, Acc) -> remove_html_tags(Rest, none, TagStack, <<Acc/binary, C/integer>>);
+remove_html_tags(<<$\s, Rest/binary>>, close_tag, TagStack, Acc) -> remove_html_tags(Rest, close_tag, TagStack, Acc);
+remove_html_tags(<<$>, Rest/binary>>, close_tag, [<<>>|TagStack], Acc) -> remove_html_tags(Rest, none, TagStack, Acc);
+remove_html_tags(<<C/integer, Rest/binary>>, close_tag, [Tag|TagStack], Acc) -> 
+	C1 = string:to_lower(C),
+	case Tag of
+		<<C1/integer, TagRest/binary>> -> remove_html_tags(Rest, close_tag, [TagRest|TagStack], Acc);
+		_Else -> throw({error, inproper_xml_tag_2}) end;
+remove_html_tags(<<$\s, Rest/binary>>, <<>>, TagStack, Acc) -> remove_html_tags(Rest, <<>>, TagStack, Acc);
+remove_html_tags(<<$/, Rest/binary>>, <<>>, TagStack, Acc) -> remove_html_tags(Rest, close_tag, TagStack, Acc);
+remove_html_tags(<<$\s, Rest/binary>>, LatestTag, TagStack, Acc) -> remove_html_tags(Rest, wait_end, [LatestTag|TagStack], Acc);
+remove_html_tags(<<$/, Rest/binary>>, LatestTag, TagStack, Acc) -> remove_html_tags(Rest, wait_direct_end, [LatestTag|TagStack], Acc);
+remove_html_tags(<<$>, Rest/binary>>, LatestTag, TagStack, Acc) -> remove_html_tags(Rest, textualize, [LatestTag|TagStack], Acc);
+remove_html_tags(<<C/integer, Rest/binary>>, LatestTag, TagStack, Acc) -> 
+	C1 = string:to_lower(C),
+	remove_html_tags(Rest, <<LatestTag/binary, C1/integer>>, TagStack, Acc).
 
 -include_lib("eunit/include/eunit.hrl").
 

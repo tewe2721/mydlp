@@ -69,6 +69,14 @@ decode(Message) when is_binary(Message) ->
 		%_ -> MIME#mime{header = Headers, body = MIME#mime.body_text, message = Message}
 	end.
 
+rm_trailing_dashes([]) -> [];
+rm_trailing_dashes(<<>>) -> <<>>;
+rm_trailing_dashes(Bin) ->
+	BS = size(Bin) - 1,
+	case Bin of
+		<<B:BS/binary, "-">> -> rm_trailing_dashes(B);
+		Else -> Else end.
+
 decode_multipart(MIME, Boundary) ->
 	Content0 = case re:run(MIME#mime.body_text, 
 			mydlp_api:escape_regex(Boundary), 
@@ -80,7 +88,8 @@ decode_multipart(MIME, Boundary) ->
 		{match,[{I,_}]} -> 
 			CSize = I - 2,
 			<<C:CSize/binary, _/binary>> = MIME#mime.body_text, C end,
-	Content = mydlp_api:rm_trailing_crlf(Content0),
+	Content1 = rm_trailing_dashes(Content0),
+	Content = mydlp_api:rm_trailing_crlf(Content1),
 	Parts = split_multipart(Boundary,MIME#mime.body_text),
 	MIMEParts = lists:map(fun(P) ->
 			decode(P)

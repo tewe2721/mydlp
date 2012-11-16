@@ -92,28 +92,29 @@ get_mime(Filename, Data) when is_binary(Data) ->
 		true -> <<D:?MMLEN/binary, _/binary>> = Data, D;
 		false -> Data
 	end,
-	Filename1 = case Filename of
-		F when is_list(F) -> unicode:characters_to_binary(Filename);
-		F when is_binary(F) -> F;
-		_Else -> unicode:characters_to_binary("noname") end,
+
+	Filename1 = prettify_filename(Filename),
 
 	try 	call_pool({thrift, java, getMime, [Filename1, Data1]})
 	catch Class:Error ->
-		?ERROR_LOG("Error occured when extractiong text. Filename: "?S".~nClass: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
-				[Filename1, Class, Error, erlang:get_stacktrace()]),
+		?ERROR_LOG("Error occured when extractiong text. Filename: "?S".~nData: ["?S"]~nClass: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
+				[Filename1, Data, Class, Error, erlang:get_stacktrace()]),
 		?MIME_OCTET_STREAM end.
 
+prettify_filename(Filename) -> mydlp_api:filename_to_bin(Filename).
+
 get_text(undefined, MT, Data) -> get_text(<<>>, MT, Data);
-get_text(Filename, MT, Data) when is_list(Filename) ->
-	FilenameB = unicode:characters_to_binary(Filename),
-	get_text(FilenameB, MT, Data);
-get_text(Filename, MT, Data) ->
-	try	Text = call_pool({thrift, java, getText, [Filename, MT, Data]}),
+get_text(Filename0, MT, Data) ->
+	Filename = prettify_filename(Filename0),
+	try	RawText = call_pool({thrift, java, getText, [Filename, MT, Data]}),
+		Text = case MT of
+			?MIME_TEXT -> try mydlp_api:remove_html_tags(RawText) catch _:_ -> RawText end;
+			_Else -> RawText end,
 		<<" ", Text/binary, " ">>
 	catch Class:Error ->
-		?ERROR_LOG("Error occured when extractiong text. Filename: "?S", Mimetype: "?S".~nClass: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
-				[Filename, MT, Class, Error, erlang:get_stacktrace()]),
-		mydlp_api:exception(Class, Error) end.
+		?ERROR_LOG("Error occured when extractiong text. Filename: "?S", Mimetype: "?S".~nData: ["?S"]~nClass: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
+				[Filename, MT, Data, Class, Error, erlang:get_stacktrace()]),
+		{error, {Class, Error}} end.
 
 seclore_initialize(SecloreAppPath, SecloreAddress, SeclorePort, SecloreAppName, SecloreHotFolderCabinetId, SecloreHotFolderCabinetPassphrase, SeclorePoolSize) ->
 	try	call_pool({thrift, java, secloreInitialize, [SecloreAppPath, SecloreAddress, SeclorePort, SecloreAppName, SecloreHotFolderCabinetId, SecloreHotFolderCabinetPassphrase, SeclorePoolSize]})
@@ -121,7 +122,6 @@ seclore_initialize(SecloreAppPath, SecloreAddress, SeclorePort, SecloreAppName, 
 		?ERROR_LOG("Error occured when initializing seclore module. "
 			"SecloreAppPath: "?S", SecloreAddress: "?S" SeclorePort: "?S", SecloreAppName: "?S", SecloreHotFolderCabinetId: "?S" SeclorePoolSize: "?S".~nClass: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
 				[SecloreAppPath, SecloreAddress, SeclorePort, SecloreAppName, SecloreHotFolderCabinetId, SeclorePoolSize, Class, Error, erlang:get_stacktrace()]),
-		mydlp_api:exception(Class, Error),
 		"mydlp.backend.secloreInitialize.unexpectedException" end.
 	
 seclore_protect(FilePath, HotFolderId, ActivityComments) ->
@@ -130,7 +130,6 @@ seclore_protect(FilePath, HotFolderId, ActivityComments) ->
 		?ERROR_LOG("Error occured when protecting file with seclore. "
 			"FilePath: "?S", HotFolderId: "?S", ActivityComments: "?S".~nClass: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
 				[FilePath, HotFolderId, ActivityComments, Class, Error, erlang:get_stacktrace()]),
-		mydlp_api:exception(Class, Error),
 		"mydlp.backend.secloreProtect.unexpectedException" end.
 
 seclore_terminate() ->
@@ -138,7 +137,6 @@ seclore_terminate() ->
 	catch Class:Error ->
 		?ERROR_LOG("Error occured when terminating seclore module.~nClass: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
 				[Class, Error, erlang:get_stacktrace()]),
-		mydlp_api:exception(Class, Error),
 		"mydlp.backend.secloreTerminate.unexpectedException" end.
 
 %%%%%%%%%%%%%% gen_server handles

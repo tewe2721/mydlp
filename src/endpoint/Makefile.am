@@ -1,5 +1,5 @@
 ###
-###    Copyright (C) 2011 Huseyin Kerem Cevahir <kerem@medra.com.tr>
+###    Copyright (C) 2012 Huseyin Kerem Cevahir <kerem@mydlp.com>
 ###
 ###--------------------------------------------------------------------------
 ###    This file is part of MyDLP.
@@ -18,14 +18,18 @@
 ###    along with MyDLP.  If not, see <http://www.gnu.org/licenses/>.
 ###--------------------------------------------------------------------------
 
-management_server_address	127.0.0.1
+endpointdir = $(datadir)/mydlp/endpoint
 
-# MYDLP_APPDIR environment variable overwrites app_dir config directive.
-#app_dir	C:/Program Files/MyDLP
+endpointwindir = $(endpointdir)/win
 
-#log_dir	%APPDIR%/logs/
-#pid_file	%APPDIR%/run/mydlp.pid
-#work_dir	%TEMP%/mydlp
+endpointwin_DATA = \
+	win/mydlp-dep-conf.vbs \
+	win/latest.txt \
+	win/latest.msi
 
-#mnesia_dir	%APPDIR%/mnesia
+win/latest.msi: win/latest.txt
+	@(cd win && ./downloads_msi.sh)
+
+clean-local:
+	@rm -f win/*.msi
 

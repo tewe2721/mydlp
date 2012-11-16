@@ -414,14 +414,14 @@ execute_custom_action(seclore, {HotFolderId, ActivityComments}, Obj) ->
 log_req1(Time, Channel, RuleId, Action, User, Destination, IType, File, Misc) ->
 	case {Channel, Action, Misc, ?CFG(ignore_discover_max_size_exceeded)} of
 		{discovery, log, max_size_exceeded, true} -> ok;
-		_Else2 -> ?ACL_LOG(Time, Channel, RuleId, Action, nil, User, Destination, IType, File, Misc) end.
+		_Else2 -> ?ACL_LOG(#log{time=Time, channel=Channel, rule_id=RuleId, action=Action, ip=nil, user=User, destination=Destination, itype_id=IType, file=File, misc=Misc}) end.
 
 -endif.
 
 -ifdef(__MYDLP_NETWORK).
 
 log_req1(Time, Channel, RuleId, Action, User, Destination, IType, File, Misc) ->
-	?ACL_LOG(Time, Channel, RuleId, Action, nil, User, Destination, IType, File, Misc).
+	?ACL_LOG(#log{time=Time, channel=Channel, rule_id=RuleId, action=Action, ip=nil, user=User, destination=Destination, itype_id=IType, file=File, misc=Misc}).
 
 -endif.
 
@@ -542,7 +542,10 @@ set_meta_dict(MD, SD) -> set_meta_dict(dict:fetch_keys(MD), MD, SD).
 
 set_meta_dict([Key|RestOfKeys], MD, SD) ->
 	SD1 = case dict:fetch(Key, MD) of
-		"" -> dict:store(Key, undefined, SD);
+		"" -> dict:erase(Key, SD);
+		undefined -> dict:erase(Key, SD);
+		unknown -> dict:erase(Key, SD);
+		nil -> dict:erase(Key, SD);
 		Value -> dict_store(Key, Value, SD) end,
 	set_meta_dict(RestOfKeys, MD, SD1);
 set_meta_dict([], _MD, SD) -> SD.

@@ -151,7 +151,6 @@ init([], ChildSpecs) ->
 %%--------------------------------------------------------------------
 stop(_S) ->
 	application:stop(mydlp),
-	mnesia:stop(),
 	ok.
 
 %% @spec () -> string()

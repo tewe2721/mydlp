@@ -220,7 +220,7 @@ http_req1(ReqRet) ->
                 Else -> ?ERROR_LOG("ITEMPUSH: An error occured during HTTP req: Obj="?S"~n", [Else]),
 				{error, {http_req_not_ok, Else}} end.
 
-predict_serialized_size({endpoint_log, {_Time, _Channel, _RuleId, _Action, _Ip, _User, _To, _ITypeId, Files, _Misc}}) ->
+predict_serialized_size({endpoint_log, #log{file= Files}}) ->
 	300 + lists:sum([predict_file_size(F)||F <- Files]);
 predict_serialized_size({endpoint_log, _LogTerm}) -> 300;
 predict_serialized_size(Else) -> 
@@ -231,9 +231,9 @@ predict_file_size(#file{data=undefined}) -> 0;
 predict_file_size(#file{data=Data}) -> size(Data).
 
 
-strip_item({endpoint_log, {Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc}}) ->
+strip_item({endpoint_log, #log{file=Files}=LogTerm}) ->
 	StrippedFiles = mydlp_api:remove_all_data(Files),
-	{endpoint_log, {Time, Channel, RuleId, Action, Ip, User, To, ITypeId, StrippedFiles, Misc}}.
+	{endpoint_log, LogTerm#log{file=StrippedFiles}}.
 
 
 -endif.

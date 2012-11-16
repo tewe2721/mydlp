@@ -37,7 +37,6 @@
 -export([start_link/0,
 	stop/0]).
 
-
 %% API common
 -export([
 	get_unique_id/1,
@@ -79,6 +78,10 @@
 	get_remote_default_rule_ids/0,
 	get_remote_rule_tables/3,
 	get_remote_rule_ids/3,
+	get_notification_items/1,
+	get_notification_queue_items/1,
+	get_early_notification_queue_items/0,
+	update_notification_queue_item/2,
 	get_remote_mc_module/3,
 	get_fid/1,
 	remove_site/1,
@@ -155,7 +158,9 @@
 	filter,
 	rule,
 	ipr,
-	dest, 
+	dest,
+	notification, 
+	notification_queue,
 	{m_user, ordered_set, 
 		fun() -> mnesia:add_table_index(m_user, un_hash) end},
 	itype,
@@ -224,6 +229,8 @@ get_record_fields_functional(Record) ->
 		rule -> record_info(fields, rule);
 		ipr -> record_info(fields, ipr);
 		dest -> record_info(fields, dest);
+		notification -> record_info(fields, notification);
+		notification_queue -> record_info(fields, notification_queue);
 		m_user -> record_info(fields, m_user);
 		itype -> record_info(fields, itype);
 		ifeature -> record_info(fields, ifeature);
@@ -300,6 +307,14 @@ get_remote_user_rule_ids() -> aqc(get_remote_user_rule_ids, nocache, dirty).
 get_remote_ipr_rule_ids() -> aqc(get_remote_ipr_rule_ids, nocache, dirty).
 
 get_remote_default_rule_ids() -> aqc(get_remote_default_rule_ids, nocache, dirty).
+
+get_notification_items(RuleId) -> aqc({get_notification_items, RuleId}, cache). 
+
+get_notification_queue_items(RuleId) -> aqc({get_notification_queue_items, RuleId}, nocache). 
+
+get_early_notification_queue_items() -> aqc(get_early_notification_queue_items, nocache).
+
+update_notification_queue_item(RuleId, NewStatus) -> aqc({update_notification_queue_item, RuleId, NewStatus}, nocache). 
 
 get_remote_mc_module(FilterId, Addr, UserH) -> 
 	RuleIDs = get_remote_rule_ids(FilterId, Addr, UserH),
@@ -505,6 +520,56 @@ get_destinations_for_discovery([Id|RuleIds], Index, Acc) ->
 	get_destinations_for_discovery(RuleIds, Index+1, [Q1|Acc]);
 get_destinations_for_discovery([], _Index, Acc) ->  lists:flatten(Acc).
 
+handle_query({get_notification_items, OrigRuleId}) ->
+	Q = ?QLCQ([{N#notification.type, N#notification.target} ||
+		N <- mnesia:table(notification),
+		R <- mnesia:table(rule),
+		N#notification.rule_id == R#rule.id,
+		R#rule.orig_id == OrigRuleId
+	]),
+	?QLCE(Q);
+
+handle_query({get_notification_queue_items, OrigRuleId}) ->
+	Q = ?QLCQ([N#notification_queue.status ||
+		N <- mnesia:table(notification_queue),
+		N#notification_queue.rule_id == OrigRuleId
+	]),
+	?QLCE(Q);
+
+handle_query(get_early_notification_queue_items) ->
+	{_Me, S, _Mi} = erlang:now(),
+	BeforeHalfHour = S - 60,
+	Q0 = ?QLCQ([N#notification_queue.rule_id ||
+		N <- mnesia:table(notification_queue),
+		N#notification_queue.is_shadow == true
+	]),
+	ShadowRuleIds = ?QLCE(Q0),
+	lists:foreach(fun(I) -> mnesia:delete({notification_queue, I}) end, ShadowRuleIds),
+
+	Q1 = ?QLCQ([N ||
+		N <- mnesia:table(notification_queue),
+		N#notification_queue.status == true
+	]),
+	InactiveNotificationQueueItems = ?QLCE(Q1),
+	lists:foreach(fun(E) -> mnesia:write(E#notification_queue{is_shadow=true}) end, InactiveNotificationQueueItems),
+
+	Q2 = ?QLCQ([N#notification_queue.rule_id ||
+		N <- mnesia:table(notification_queue),
+		N#notification_queue.date < BeforeHalfHour,
+		N#notification_queue.status /= true
+	]),
+	?QLCE(Q2);
+
+handle_query({update_notification_queue_item, RuleId, Status}) ->
+	[I] = mnesia:wread({notification_queue, RuleId}),
+	EventThreshold = I#notification_queue.event_threshold,
+	{NewStatus, NewEventThreshold, Action} = case Status == EventThreshold of
+					true -> {true, EventThreshold*EventThreshold, notify};
+					false -> {Status, EventThreshold, ok}
+				end,
+	mnesia:write(I#notification_queue{status=NewStatus, event_threshold=NewEventThreshold, is_shadow=false}),
+	Action;
+
 handle_query({get_remote_rule_tables, FilterId, Addr, UserH}) ->
 	AclQ = #aclq{src_addr=Addr, src_user_h=UserH},
 	EndpointRuleTable = get_rules(FilterId, AclQ#aclq{channel=endpoint}),
@@ -512,8 +577,6 @@ handle_query({get_remote_rule_tables, FilterId, Addr, UserH}) ->
 	DiscoveryRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=discovery}),
 	Directories = get_destinations_for_discovery(DiscoveryRuleIds),
 	DiscoveryRuleTable = get_rule_table(FilterId, DiscoveryRuleIds),
-	erlang:display(Directories),
-	erlang:display(DiscoveryRuleTable),
 	[
 		{endpoint, none, EndpointRuleTable},
 		{printer, none, PrinterRuleTable},
@@ -908,7 +971,7 @@ handle_call({new_authority, AuthorNode}, _From, State) ->
 	{reply, ok, State};
 
 handle_call(mnesia_dir_cleanup, _From, State) ->
-	try 	(catch mnesia:stop()),
+	try 	(catch mnesia_stop()),
 		{ok, MnesiaDir} = application_controller:get_env(mnesia, dir),
 		{ok, MnesiaFiles} = file:list_dir(MnesiaDir),
 		lists:foreach(fun(FN) ->
@@ -936,6 +999,26 @@ handle_info(cleanup_now, State) ->
 		cache_cleanup_handle(),
 		call_timer()
 	end, 15000),
+	{noreply, State};
+
+handle_info({mnesia_system_event,{mnesia_down, _Node}}, State) ->
+	?ERROR_LOG("MNESIA Stopped unexpectedly.", []),
+	?ASYNC(fun() -> mnesia_dir_cleanup() end, 181000),
+	{noreply, State};
+
+handle_info({mnesia_system_event,{mnesia_fatal, Format, Args, _BinaryCore}}, State) ->
+	?ERROR_LOG("MNESIA FATAL: " ++ io_lib:format(Format, Args), []),
+	?ASYNC(fun() -> mnesia_dir_cleanup() end, 181000),
+	{noreply, State};
+
+handle_info({mnesia_system_event,{mnesia_error, Format, Args}}, State) ->
+	?ERROR_LOG("MNESIA ERROR: " ++ io_lib:format(Format, Args), []),
+	?ASYNC(fun() -> mnesia_dir_cleanup() end, 181000),
+	{noreply, State};
+
+handle_info({mnesia_system_event,{inconsistent_database, _Context, _Node}}, State) ->
+	?ERROR_LOG("MNESIA Inconsistant database. Cleaning up and restarting.", []),
+	?ASYNC(fun() -> mnesia_dir_cleanup() end, 181000),
 	{noreply, State};
 
 handle_info(_Info, State) ->
@@ -979,6 +1062,7 @@ handle_cast(_Msg, State) ->
 	{noreply, State}.
 
 terminate(_Reason, _State) ->
+	mnesia_stop(),
 	ok.
 
 code_change(_OldVsn, State, _Extra) ->
@@ -1011,7 +1095,7 @@ start_distributed() ->
 	ok.
 
 force_author(AuthorNode) -> 
-	mnesia:stop(),
+	mnesia_stop(),
 	case start_mnesia_with_author(AuthorNode) of
 		ok -> start_tables(true);
 		{error, _} -> start_tables(false) end,
@@ -1085,6 +1169,7 @@ schedule_post_start() ->
 start_tables(IsDistributionInit) ->
 	start_table(IsDistributionInit, {unique_ids, set}),
 	StartResult =  start_tables(IsDistributionInit, ?TABLES),
+	mnesia:subscribe(system),
 
 	case StartResult of
 		{ok, no_change} -> schedule_post_start();
@@ -1152,6 +1237,10 @@ start_tables(IsDistributionInit, [RecordAtom|RAList], true = _IsSchemaChanged) -
 	start_tables(IsDistributionInit, RAList, true);
 start_tables(_IsDistributionInit, [], false = _IsSchemaChanged) -> {ok, no_change};
 start_tables(_IsDistributionInit, [], true = _IsSchemaChanged) -> {ok, schema_changed}.
+
+mnesia_stop() ->
+	mnesia:unsubscribe(system),
+	mnesia:stop().
 
 %get_unique_id(TableName) ->
 %	mnesia:dirty_update_counter(unique_ids, TableName, 1).
@@ -1391,13 +1480,27 @@ pdm_hit_count([], _GroupId, Acc) -> Acc.
 remove_filters(FIs) -> lists:foreach(fun(Id) -> remove_filter(Id) end, FIs), ok.
 
 remove_filter(FI) ->
-	Q = ?QLCQ([R#rule.id ||	
+	Q = ?QLCQ([{R#rule.id, R#rule.orig_id} ||	
 		R <- mnesia:table(rule),
 		R#rule.filter_id == FI
 		]),
-	RIs = ?QLCE(Q),
+	AllRIs = ?QLCE(Q),
+	RIs = [X || {X, _Y} <- AllRIs],
+	OrigRIs = [Y || {_X, Y} <- AllRIs],
+	remove_notification_queue_items(OrigRIs),
 	remove_rules(RIs),
 	mnesia:delete({filter, FI}).
+
+remove_notification_queue_items(OrigRIs) -> lists:foreach(fun(Id) -> remove_notification_queue_item(Id) end, OrigRIs), ok.
+
+remove_notification_queue_item(RI) ->
+	Q = ?QLCQ([N#notification_queue.rule_id ||
+		N <- mnesia:table(notification_queue),
+		N#notification_queue.rule_id == RI
+	]),
+	NI = ?QLCE(Q),
+	lists:foreach(fun(I) -> mydlp_incident:notify_users_now(I),
+				mnesia:delete({notification_queue, I}) end, NI).
 
 remove_rules(RIs) -> lists:foreach(fun(Id) -> remove_rule(Id) end, RIs), ok.
 
@@ -1433,9 +1536,16 @@ remove_rule(RI) ->
 		]),
 	DIs = ?QLCE(Q5),
 
+	Q6 = ?QLCQ([N#notification.id ||
+		N <- mnesia:table(notification),
+		N#notification.rule_id == RI
+		]),
+	NIs = ?QLCE(Q6),
+
 	lists:foreach(fun(Id) -> mnesia:delete({ipr, Id}) end, IIs),
 	lists:foreach(fun(Id) -> mnesia:delete({m_user, Id}) end, UIs),
 	lists:foreach(fun(Id) -> mnesia:delete({dest, Id}) end, DIs),
+	lists:foreach(fun(Id) -> mnesia:delete({notification, Id}) end, NIs),
 
 	remove_data_formats(DFIs),
 	remove_itypes(ITIs),
