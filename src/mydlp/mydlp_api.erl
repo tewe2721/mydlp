@@ -1259,10 +1259,9 @@ acl_msg(#log{action=Action, file=PreFiles}=Log) ->
 	Files = case is_store_action(Action) of
 		false -> remove_all_data(PreFiles1);
 		true -> remove_crs(PreFiles1) end,
-	LogTerm = {Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Files, Misc},
-	Log#log{file=Files},
-	acl_msg_logger(Log),
-	mydlp_item_push:p({endpoint_log, Log}),
+	Log1 = Log#log{file=Files},
+	acl_msg_logger(Log1),
+	mydlp_item_push:p({endpoint_log, Log1}),
 	ok.
 
 -endif.
