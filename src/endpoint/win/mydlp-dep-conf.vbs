@@ -69,8 +69,11 @@ End If
 strKeyPath = "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{FF66E9F6-83E7-3A3E-AF14-8DE9A809A6A4}"
 objRegistry.GetStringValue HKEY_LOCAL_MACHINE,strKeyPath,strValueName,strValue
 
+
+'using vcredist_x86 instead of vcredist_x86_2008
+
 If IsNull(strValue) Then 
-    oShell.Run MYDLP_SHARE & "\deps\win-xp\vcredist_x86_2008.exe /q", 1, True
+    oShell.Run MYDLP_SHARE & "\deps\win-xp\vcredist_x86.exe /q", 1, True
 End If
 
 
