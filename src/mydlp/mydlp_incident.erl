@@ -234,11 +234,17 @@ process_log_files(LogId, false = IsLogData, [File|Files]) ->
 	process_log_files(LogId, IsLogData, Files);
 process_log_files(LogId, true = IsLogData, [File|Files]) ->
 	File1 = mydlp_api:load_files(File),
-	{Filename, MimeType, Size, Hash} = get_meta(File1),
-	{ok, Path} = mydlp_api:quarantine(File1),
-	mydlp_api:clean_files(File1),
 
-	mydlp_mysql:insert_log_data(LogId, Filename, MimeType, Size, Hash, Path),
+	case File1#file.data of
+		undefined -> process_log_files(LogId, false, [File1]);
+		<<>> -> process_log_files(LogId, false, [File1]);
+		D when is_binary(D), size(D) == 0 -> process_log_files(LogId, false, [File1]);
+		_Else -> 
+			{Filename, MimeType, Size, Hash} = get_meta(File1),
+			{ok, Path} = mydlp_api:quarantine(File1),
+			mydlp_api:clean_files(File1),
+			mydlp_mysql:insert_log_data(LogId, Filename, MimeType, Size, Hash, Path)
+	end,
 
 	process_log_files(LogId, IsLogData, Files);
 process_log_files(_LogId, _IsLogData, []) -> ok.
