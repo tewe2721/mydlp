@@ -438,7 +438,7 @@ get_channel(#object{prop_dict=PD}) ->
 		{ok, "api"} -> api;
 	error -> case dict:find("printerName", PD) of
 		{ok, _} -> printer;
-		error -> endpoint end end.
+		error -> removable end end.
 
 get_discovery_rule_index(#object{prop_dict=PD}) ->
 	case dict:find("rule_index", PD) of
@@ -457,7 +457,7 @@ get_destination(#object{filepath=undefined}) -> undefined;
 get_destination(#object{filepath=FP} = Obj) ->
 	case get_channel(Obj) of
 		discovery -> FP;
-		endpoint -> FP;
+		removable -> FP;
 		_Else -> undefined end.
 
 get_ip_address(#object{prop_dict=PD}) ->

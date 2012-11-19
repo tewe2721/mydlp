@@ -572,23 +572,23 @@ handle_query({update_notification_queue_item, RuleId, Status}) ->
 
 handle_query({get_remote_rule_tables, FilterId, Addr, UserH}) ->
 	AclQ = #aclq{src_addr=Addr, src_user_h=UserH},
-	EndpointRuleTable = get_rules(FilterId, AclQ#aclq{channel=endpoint}),
+	RemovableStorageRuleTable = get_rules(FilterId, AclQ#aclq{channel=removable}),
 	PrinterRuleTable = get_rules(FilterId, AclQ#aclq{channel=printer}),
 	DiscoveryRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=discovery}),
 	Directories = get_destinations_for_discovery(DiscoveryRuleIds),
 	DiscoveryRuleTable = get_rule_table(FilterId, DiscoveryRuleIds),
 	[
-		{endpoint, none, EndpointRuleTable},
+		{removable, none, RemovableStorageRuleTable},
 		{printer, none, PrinterRuleTable},
 		{discovery, Directories, DiscoveryRuleTable}
 	];
 
 handle_query({get_remote_rule_ids, FilterId, Addr, UserH}) ->
 	AclQ = #aclq{src_addr=Addr, src_user_h=UserH},
-	EndpointRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=endpoint}),
+	RemovableStorageRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=removable}),
 	PrinterRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=printer}),
 	DiscoveryRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=discovery}),
-	R = lists:flatten([EndpointRuleIds, PrinterRuleIds, DiscoveryRuleIds]),
+	R = lists:flatten([RemovableStorageRuleIds, PrinterRuleIds, DiscoveryRuleIds]),
 	lists:usort(R);
 
 handle_query({get_rule_ids, FilterId, #aclq{channel=Channel, destinations=Destinations} = AclQ}) ->

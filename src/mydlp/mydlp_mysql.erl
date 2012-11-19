@@ -969,7 +969,7 @@ rule_action_to_atom(Else) -> throw({error, unsupported_action_type, Else}).
 
 rule_dtype_to_channel(<<"WebRule">>) -> web;
 rule_dtype_to_channel(<<"MailRule">>) -> mail;
-rule_dtype_to_channel(<<"EndpointRule">>) -> endpoint;
+rule_dtype_to_channel(<<"RemovableStorageRule">>) -> removable;
 rule_dtype_to_channel(<<"PrinterRule">>) -> printer;
 rule_dtype_to_channel(<<"DiscoveryRule">>) -> discovery;
 rule_dtype_to_channel(<<"ApiRule">>) -> api;
@@ -987,11 +987,11 @@ validate_action_for_channel(mail, archive) -> ok;
 validate_action_for_channel(mail, quarantine) -> ok;
 validate_action_for_channel(mail, {custom, {seclore, pass, _, {HotFolderId, _}}}) 
 		when is_integer(HotFolderId)-> ok;
-validate_action_for_channel(endpoint, pass) -> ok;
-validate_action_for_channel(endpoint, log) -> ok;
-validate_action_for_channel(endpoint, block) -> ok;
-validate_action_for_channel(endpoint, archive) -> ok;
-validate_action_for_channel(endpoint, quarantine) -> ok;
+validate_action_for_channel(removable, pass) -> ok;
+validate_action_for_channel(removable, log) -> ok;
+validate_action_for_channel(removable, block) -> ok;
+validate_action_for_channel(removable, archive) -> ok;
+validate_action_for_channel(removable, quarantine) -> ok;
 validate_action_for_channel(printer, pass) -> ok;
 validate_action_for_channel(printer, log) -> ok;
 validate_action_for_channel(printer, block) -> ok;
@@ -1083,7 +1083,7 @@ pre_push_log(RuleId, Ip, User, Destination, Action, Channel, Misc) ->
 	ChannelS = case Channel of
 		web -> <<"W">>;
 		mail -> <<"M">>;
-		endpoint -> <<"E">>;
+		removable -> <<"E">>;
 		printer -> <<"P">>;
 		discovery -> <<"D">>;
 		api -> <<"A">> 

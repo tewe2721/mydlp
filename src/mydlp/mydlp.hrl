@@ -77,7 +77,7 @@
         }).
 
 -record(aclq, {
-		channel :: 'web' | 'mail' | 'endpoint' | 'printer' | 'discovery',
+		channel :: 'web' | 'mail' | 'removable' | 'printer' | 'discovery',
 		src_addr=unknown,
 		src_user_h=unknown,
 		destinations=[]

@@ -1306,7 +1306,7 @@ acl_suser(User) -> {[" suser=~s"], [escape_es(User)]}.
 
 str_channel(web) -> "Web";
 str_channel(mail) -> "Mail";
-str_channel(endpoint) -> "Endpoint";
+str_channel(removable) -> "Removable Storage";
 str_channel(printer) -> "Printer";
 str_channel(discovery) -> "Discovery";
 str_channel(api) -> "API";
@@ -1369,25 +1369,25 @@ acl_misc(Misc) -> {[" cs6Label=~ts cs6=~ts"], ["Misc", escape_es(Misc)]}.
 get_message(_Channel, pass) -> "No action taken.";
 get_message(web, block) -> "Transfer of sensitive information to web has been blocked.";
 get_message(mail, block) -> "Transfer of e-mail has been blocked because of containing sensitive information.";
-get_message(endpoint, block) -> "Transfer of file to a removable storage device on endpoint has been blocked because of containing sensitive information.";
+get_message(removable, block) -> "Transfer of file to a removable storage device on endpoint has been blocked because of containing sensitive information.";
 get_message(discovery, block) -> "A file containing sensitive information on endpoint has been discovered and deleted from endpoint file system.";
-get_message(printer, block) -> "Prevented printing of document containing sensitive information on endpoint.";
+get_message(printer, block) -> "Prevented printing of document containing sensitive information on removable.";
 get_message(api, block) -> "Specified file should be blocked in response to API query.";
 get_message(web, log) -> "Transfer of sensitive information to web has been logged.";
 get_message(mail, log) -> "Transfer of e-mail containing sensitive information has been logged.";
-get_message(endpoint, log) -> "Transfer of file containing sensitive information to a removable storage device on endpoint has been logged.";
+get_message(removable, log) -> "Transfer of file containing sensitive information to a removable storage device on endpoint has been logged.";
 get_message(discovery, log) -> "A file containing sensitive information on endpoint has been discovered and logged.";
 get_message(printer, log) -> "Printing of document containing sensitive information on endpoint has been logged.";
 get_message(api, log) -> "Specified file should not be blocked in response to API query and logged query.";
 get_message(web, quarantined) -> "Transfer of sensitive information to web has been blocked and a copy of file has been quarantined at central data store.";
 get_message(mail, quarantine) -> "Because of containing sensitive information, transfer of e-mail has been blocked and a copy of file has been quarantined at central data store.";
-get_message(endpoint, quarantine) -> "Because of containing sensitive information, transfer of file to a removable storage device on endpoint has been blocked and a copy has been quarantined at central data store.";
+get_message(removable, quarantine) -> "Because of containing sensitive information, transfer of file to a removable storage device on endpoint has been blocked and a copy has been quarantined at central data store.";
 get_message(discovery, quarantine) -> "A file containing sensitive information on endpoint has been discovered, deleted from endpoint file system and a copy has been quarantined at central data store.";
 get_message(printer, quarantine) -> "Prevented printing of document containing sensitive information on endpoint and a copy has been quarantined at central data store.";
 get_message(api, quarantine) -> "Specified file should be blocked in response to API query and a copy of file has been quarantined in central data store.";
 get_message(web, archive) -> "Transfer of sensitive information to web has been logged and a copy of file has been archived in central data store.";
 get_message(mail, archive) -> "Transfer of e-mail containing sensitive information has been logged and a copy of file has been archived in central data store.";
-get_message(endpoint, archive) -> "Transfer of file containing sensitive information to a removable storage devicea on endpoint has been logged and a copy has been archived in central data store.";
+get_message(removable, archive) -> "Transfer of file containing sensitive information to a removable storage devicea on endpoint has been logged and a copy has been archived in central data store.";
 get_message(discovery, archive) -> "A file containing sensitive information on endpoint has been discovered, logged and a copy has been archived in central data store.";
 get_message(printer, archive) -> "Printing of document containing sensitive information on endpoint has been logged and a copy has been archived in data store.";
 get_message(api, archive) -> "Specified file should not be blocked in response to API query, logged query and a copy of file has been archived in central data store.";
@@ -1400,16 +1400,16 @@ get_message(_, _) -> "Check MyDLP Logs using management console for details.".
 -ifdef(__MYDLP_ENDPOINT).
 
 get_message(_Channel, pass) -> "No action taken.";
-get_message(endpoint, block) -> "Transfer of file to a removable storage device has been blocked because of containing sensitive information.";
+get_message(removable, block) -> "Transfer of file to a removable storage device has been blocked because of containing sensitive information.";
 get_message(discovery, block) -> "A file containing sensitive information has been discovered and deleted from file system.";
 get_message(printer, block) -> "Prevented printing of document containing sensitive information.";
-get_message(endpoint, log) -> "Transfer of file containing sensitive information to a removable storage device has been logged.";
+get_message(removable, log) -> "Transfer of file containing sensitive information to a removable storage device has been logged.";
 get_message(discovery, log) -> "A file containing sensitive information has been discovered and logged.";
 get_message(printer, log) -> "Printing of document containing sensitive information has been logged.";
-get_message(endpoint, quarantine) -> "Because of containing sensitive information, transfer of file to a removable storage device has been blocked and a copy has been sent to central data store to be quaratined.";
+get_message(removable, quarantine) -> "Because of containing sensitive information, transfer of file to a removable storage device has been blocked and a copy has been sent to central data store to be quaratined.";
 get_message(discovery, quarantine) -> "A file containing sensitive information has been discovered, deleted from file system and a copy has been sent to central data store to be quaratined.";
 get_message(printer, quarantine) -> "Prevented printing of document containing sensitive information and a copy has been sent to central data store to be quaratined.";
-get_message(endpoint, archive) -> "Transfer of file containing sensitive information to a removable storage device has been logged and a copy has been sent to central data store to be archived.";
+get_message(removable, archive) -> "Transfer of file containing sensitive information to a removable storage device has been logged and a copy has been sent to central data store to be archived.";
 get_message(discovery, archive) -> "A file containing sensitive information has been discovered, logged and a copy has been sent to central data store to be archived.";
 get_message(printer, archive) -> "Printing of document containing sensitive information has been logged and a copy has been sent to central data store to be archived.";
 get_message(discovery, {custom, {seclore, pass, _, _}}) -> "A file containing sensitive information has been discovered, logged and protected with Seclore FileSecure IRM.";
@@ -2882,11 +2882,11 @@ use_client_policy(CDBBin) ->
 
 get_client_policy_revision_id() ->
 	% sequence should be same with mydlp_mnesia:get_remote_rule_tables
-	EndpointRuleTable = mydlp_mnesia:get_rule_table(endpoint),
+	RemovableStorageRuleTable = mydlp_mnesia:get_rule_table(removable),
 	PrinterRuleTable = mydlp_mnesia:get_rule_table(printer),
 	DiscoveryRuleTable = mydlp_mnesia:get_rule_table(discovery),
 	RuleTables = [
-		{endpoint, EndpointRuleTable},
+		{removable, RemovableStorageRuleTable},
 		{printer, PrinterRuleTable},
 		{discovery, DiscoveryRuleTable}
 	],
