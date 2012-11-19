@@ -429,7 +429,7 @@ is_inbound(#object{prop_dict=PD}) ->
 	case dict:find("direction", PD) of
 		{ok, "in"} -> true;
 		{ok, "out"} -> false;
-		{ok, _Else} -> false;
+		{ok, _else} -> false;
 		error -> false end.
 
 get_channel(#object{prop_dict=PD}) ->
@@ -439,6 +439,13 @@ get_channel(#object{prop_dict=PD}) ->
 	error -> case dict:find("printerName", PD) of
 		{ok, _} -> printer;
 		error -> removable end end.
+
+get_printer_name(#object{prop_dict=PD} = Obj) ->
+	case dict:find("printerName", PD) of
+		{ok, QPPrinterName} -> qp_decode(QPPrinterName);
+		error ->
+			?ERROR_LOG("Unexpected state for Obj: "?S, [Obj]),
+			"Unknown printer" end.
 
 get_discovery_rule_index(#object{prop_dict=PD}) ->
 	case dict:find("rule_index", PD) of
@@ -458,6 +465,7 @@ get_destination(#object{filepath=FP} = Obj) ->
 	case get_channel(Obj) of
 		discovery -> FP;
 		removable -> FP;
+		printer -> get_printer_name(Obj);
 		_Else -> undefined end.
 
 get_ip_address(#object{prop_dict=PD}) ->
