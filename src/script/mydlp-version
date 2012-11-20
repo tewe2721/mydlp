@@ -1,0 +1,6 @@
+#!/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games
+DPKGNAME=mydlp
+
+dpkg -s $DPKGNAME|grep Version:|head -1|cut -f2 -d' '
+
