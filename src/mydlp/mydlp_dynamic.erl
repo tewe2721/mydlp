@@ -509,9 +509,7 @@ populate_blocked_app_names([{AppName, RuleIndex}|Rest], RuleTable, Acc) ->
 		block -> populate_blocked_app_names(Rest, RuleTable, lists:umerge([AppNameS], Acc));
 		pass -> populate_blocked_app_names(Rest, RuleTable, lists:subtract(Acc, [AppNameS]))
 	end;
-populate_blocked_app_names([], _RuleTable, Acc) -> 
-	%Acc1 = lists:flatten(Acc),
-	string:join(Acc, ", ");
+populate_blocked_app_names([], _RuleTable, Acc) -> string:join(Acc, ", ");
 populate_blocked_app_names(none, _RuleTable, _Acc) -> [].
 
 populate_win32reg() -> 
@@ -546,8 +544,6 @@ populate_win32reg(RegHandle, [prtscr_block|Rest]) ->
 						[] -> {0, ""};
 						_ -> {1, BlockedProcesses}
 					end,
-	erlang:display({blockRegValue, BlockRegValue}),
-	erlang:display({processes, BlockedProcesses}),
 	win32reg:set_value(RegHandle, "prtscr_block", BlockRegValue),
 	win32reg:set_value(RegHandle, "prtscr_processes", ProcessRegVal),
 	populate_win32reg(RegHandle, Rest);	
