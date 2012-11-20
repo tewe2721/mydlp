@@ -538,7 +538,7 @@ populate_win32reg(RegHandle, [archive_inbound|Rest]) ->
 		end,
 	win32reg:set_value(RegHandle, "archieve_inbound", RegVal),
 	populate_win32reg(RegHandle, Rest);
-populate_win32reg(RegHandler, [prtsrc_block|Rest]) ->
+populate_win32reg(RegHandle, [prtscr_block|Rest]) ->
 	AppNames = mydlp_mnesia:get_prtsrc_app_name(),
 	{_, _, RuleTable} = mydlp_mnesia:get_rule_table(screenshot),
 	BlockedProcesses = get_blocked_app_names(AppNames, RuleTable),
@@ -548,9 +548,9 @@ populate_win32reg(RegHandler, [prtsrc_block|Rest]) ->
 					end,
 	erlang:display({blockRegValue, BlockRegValue}),
 	erlang:display({processes, BlockedProcesses}),
-	win32reg:set_value(RegHandler, "prtscr_block", BlockRegValue),
-	win32reg:set_value(RegHandler, "prtscr_processes", ProcessRegVal),
-	populate_win32reg(RegHandler, Rest);	
+	win32reg:set_value(RegHandle, "prtscr_block", BlockRegValue),
+	win32reg:set_value(RegHandle, "prtscr_processes", ProcessRegVal),
+	populate_win32reg(RegHandle, Rest);	
 populate_win32reg(RegHandle, [ConfKey|Rest]) ->
 	ConfKeyS = atom_to_list(ConfKey),
 	RegVal = case ?CFG(ConfKey) of
