@@ -328,6 +328,7 @@ init([]) ->
 		{network_by_rule_id, <<"SELECT n.ipBase,n.ipMask FROM Network AS n, RuleItem AS ri WHERE ri.rule_id=? AND n.id=ri.item_id">>},
 		{domain_by_rule_id, <<"SELECT d.destinationString FROM Domain AS d, RuleItem AS ri WHERE ri.rule_id=? AND d.id=ri.item_id">>},
 		{directory_by_rule_id, <<"SELECT d.destinationString FROM FileSystemDirectory AS d, RuleItem AS ri WHERE ri.rule_id=? AND d.id=ri.item_id">>},
+		{app_name_by_rule_id, <<"SELECT a.destinationString FROM ApplicationName AS a, RuleItem AS ri WHERE ri.rule_id=? AND a.id=ri.item_id">>},
 		{email_notification_by_rule_id, <<"SELECT a.email FROM AuthUser AS a, NotificationItem AS ni, EmailNotificationItem AS eni, Rule r WHERE ni.rule_id=? AND ni.id=eni.id AND ni.authUser_id=a.id AND r.id=? AND r.notificationEnabled=1">>},
 		{user_s_by_rule_id, <<"SELECT u.username FROM RuleUserStatic AS u, RuleItem AS ri WHERE ri.rule_id=? AND u.id=ri.item_id">>},
 		{user_ad_u_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=u.id">>},
@@ -509,7 +510,8 @@ populate_rule(OrigId, Channel, Action, FilterId) ->
 
 	{ok, DQ} = psq(domain_by_rule_id, [OrigId]),
 	{ok, DIRQ} = psq(directory_by_rule_id, [OrigId]),
-	populate_destinations(DQ++DIRQ, RuleId),
+	{ok, AppName} = psq(app_name_by_rule_id, [OrigId]),
+	populate_destinations(DQ++DIRQ++AppName, RuleId),
 	
 	{ok, ENT} = psq(email_notification_by_rule_id, [OrigId, OrigId]),
 	populate_notifications(ENT, RuleId, email),

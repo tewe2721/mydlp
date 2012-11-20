@@ -299,7 +299,8 @@ load_src(Src) ->
 	usb_serial_access_control,
 	print_monitor,
 	log_level,
-	log_limit
+	log_limit,
+	prtscr_block
 ]).
 
 -endif.
@@ -497,6 +498,22 @@ mydlp_config_prestart_default([], SrcAcc) -> SrcAcc.
 
 -ifdef(__PLATFORM_WINDOWS).
 
+get_blocked_app_names(AppNames, RuleTable) ->
+	AppNames1 = lists:reverse(AppNames),
+	populate_blocked_app_names(AppNames1, RuleTable, []).
+
+populate_blocked_app_names([{AppName, RuleIndex}|Rest], RuleTable, Acc) ->
+	AppNameS = binary_to_list(AppName),
+	{_, Action, _} = lists:nth(RuleTable, RuleIndex+1),
+	case Action of
+		block -> populate_blocked_app_names(Rest, RuleTable, lists:umerge([AppNames], Acc));
+		pass -> populate_blocked_app_names(Rest, RuleTable, lists:subtract(Acc, [AppNames]))
+	end;
+populate_blocked_app_names([], _RuleTable, Acc) -> 
+	Acc1 = lists:flatten(Acc),
+	string:join(Acc1, ", ");
+populate_blocked_app_names(none, _RuleTable, Acc) -> [].
+
 populate_win32reg() -> 
 	{ok, RegHandle} = win32reg:open([read,write]),
 	win32reg:change_key_create(RegHandle, "\\hklm\\software\\MyDLP"),
@@ -510,6 +527,30 @@ populate_win32reg(RegHandle, [print_monitor|Rest]) ->
 			false -> 0 end,
 	win32reg:set_value(RegHandle, "print_monitor", RegVal),
 	populate_win32reg(RegHandle, Rest);
+populate_win32reg(RegHandle, [archive_inbound|Rest]) ->
+	ActionVal = case mydlp_mnesia:get_rule_table(inbound) of
+			{_, _, [{_, Action, _}|_]} -> Action;
+			_Else -> pass
+		end,
+	RegVal = case ActionVal of
+			pass -> 0;
+			_Else -> 1
+		end,
+	win32reg:set_value(RegHandle, "archieve_inbound", RegVal),
+	populate_win32reg(RegHandle, Rest);
+populate_win32reg(RegHandle, [prtsrc_block|Rest]) ->
+	AppNames = mydlp_mnesia:get_prtsrc_app_name(),
+	{_, _, RuleTable} = mydlp_mnesia:get_rule_table(screenshot),
+	BlockedProcess = get_blocked_app_names(AppNames, RuleTable),
+	BlockRegValue = case BlockedProcess of
+				[] -> 0;
+				_ -> 1
+			end,
+	erlang:display({blockRegValue, BlockRegValue}),
+	erlang:display({processes, BlockedProcess}),
+	win32reg:set_value(RegHandler, "prtscr_block", BlockRegValue),
+	win32reg:set_value(RegHandler, "prtscr_processes", Processes),
+	populate_win32reg(RegHandle, Rest);	
 populate_win32reg(RegHandle, [ConfKey|Rest]) ->
 	ConfKeyS = atom_to_list(ConfKey),
 	RegVal = case ?CFG(ConfKey) of
