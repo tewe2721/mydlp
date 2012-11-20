@@ -504,14 +504,14 @@ get_blocked_app_names(AppNames, RuleTable) ->
 
 populate_blocked_app_names([{AppName, RuleIndex}|Rest], RuleTable, Acc) ->
 	AppNameS = binary_to_list(AppName),
-	{_, Action, _} = lists:nth(RuleTable, RuleIndex+1),
+	{_, Action, _} = lists:nth(RuleIndex+1, RuleTable),
 	case Action of
 		block -> populate_blocked_app_names(Rest, RuleTable, lists:umerge([AppNameS], Acc));
 		pass -> populate_blocked_app_names(Rest, RuleTable, lists:subtract(Acc, [AppNameS]))
 	end;
 populate_blocked_app_names([], _RuleTable, Acc) -> 
-	Acc1 = lists:flatten(Acc),
-	string:join(Acc1, ", ");
+	%Acc1 = lists:flatten(Acc),
+	string:join(Acc, ", ");
 populate_blocked_app_names(none, _RuleTable, _Acc) -> [].
 
 populate_win32reg() -> 
@@ -536,10 +536,10 @@ populate_win32reg(RegHandle, [archive_inbound|Rest]) ->
 			pass -> 0;
 			_AnyAction -> 1
 		end,
-	win32reg:set_value(RegHandle, "archieve_inbound", RegVal),
+	win32reg:set_value(RegHandle, "archive_inbound", RegVal),
 	populate_win32reg(RegHandle, Rest);
 populate_win32reg(RegHandle, [prtscr_block|Rest]) ->
-	AppNames = mydlp_mnesia:get_prtsrc_app_name(),
+	AppNames = mydlp_mnesia:get_prtscr_app_name(),
 	{_, _, RuleTable} = mydlp_mnesia:get_rule_table(screenshot),
 	BlockedProcesses = get_blocked_app_names(AppNames, RuleTable),
 	{BlockRegValue, ProcessRegVal} = case BlockedProcesses of
