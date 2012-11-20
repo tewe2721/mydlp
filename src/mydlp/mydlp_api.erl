@@ -2884,10 +2884,14 @@ get_client_policy_revision_id() ->
 	RemovableStorageRuleTable = mydlp_mnesia:get_rule_table(removable),
 	PrinterRuleTable = mydlp_mnesia:get_rule_table(printer),
 	DiscoveryRuleTable = mydlp_mnesia:get_rule_table(discovery),
+	ScreenshotRuleTable = mydlp_mnesia:get_rule_table(screenshot),
+	InboundRuleTable = mydlp_mnesia:get_rule_table(inbound),
 	RuleTables = [
 		{removable, RemovableStorageRuleTable},
 		{printer, PrinterRuleTable},
-		{discovery, DiscoveryRuleTable}
+		{discovery, DiscoveryRuleTable},
+		{screenshot, ScreenshotRuleTable},
+		{inbound, InboundRuleTable}
 	],
 	ItemDump = mydlp_mnesia:dump_client_tables(),
 	MCMods = mydlp_mnesia:get_mc_module(),

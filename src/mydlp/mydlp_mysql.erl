@@ -985,6 +985,8 @@ rule_dtype_to_channel(<<"RemovableStorageRule">>) -> removable;
 rule_dtype_to_channel(<<"PrinterRule">>) -> printer;
 rule_dtype_to_channel(<<"DiscoveryRule">>) -> discovery;
 rule_dtype_to_channel(<<"ApiRule">>) -> api;
+rule_dtype_to_channel(<<"RemovableStorageInboundRule">>) -> inbound;
+rule_dtype_to_channel(<<"ScreenshotRule">>) -> screenshot;
 rule_dtype_to_channel(Else) -> throw({error, unsupported_rule_type, Else}).
 
 validate_action_for_channel(web, pass) -> ok;
@@ -1021,6 +1023,11 @@ validate_action_for_channel(api, log) -> ok;
 validate_action_for_channel(api, block) -> ok;
 validate_action_for_channel(api, archive) -> ok;
 validate_action_for_channel(api, quarantine) -> ok;
+validate_action_for_channel(inbound, pass) -> ok;
+validate_action_for_channel(inbound, log) -> ok;
+validate_action_for_channel(inbound, archive) -> ok;
+validate_action_for_channel(screenshot, pass) -> ok;
+validate_action_for_channel(screenshot, block) -> ok;
 validate_action_for_channel(Channel, Action) -> throw({error, {unexpected_action_for_channel, Channel, Action}}).
 
 mydlp_mnesia_write(I) when is_list(I) ->
@@ -1095,10 +1102,12 @@ pre_push_log(RuleId, Ip, User, Destination, Action, Channel, Misc) ->
 	ChannelS = case Channel of
 		web -> <<"W">>;
 		mail -> <<"M">>;
-		removable -> <<"E">>;
+		removable -> <<"R">>;
 		printer -> <<"P">>;
 		discovery -> <<"D">>;
-		api -> <<"A">> 
+		api -> <<"A">> ;
+		inbound -> <<"I">>;
+		screenshot -> <<"S">>
 	end,
 	Visible = case RuleId of
 		-1 -> 0;

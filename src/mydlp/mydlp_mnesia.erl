@@ -507,18 +507,18 @@ filter_rule_ids_by_dest(RuleIds, Destinations) -> %TODO: domain names stored as 
 	RulenD = ?QLCE(Q1),
 	lists:append([RuleaD, RulenD]).
 
-get_destinations_for_discovery(RuleIds) -> 
-	DL =get_destinations_for_discovery(RuleIds, 0, []),
+get_rule_destinations(RuleIds) -> 
+	DL =get_rule_destinations(RuleIds, 0, []),
 	lists:reverse(DL).
 
-get_destinations_for_discovery([Id|RuleIds], Index, Acc) ->
+get_rule_destinations([Id|RuleIds], Index, Acc) ->
 	Q0 = ?QLCQ([{D#dest.destination, Index} ||
 		D <- mnesia:table(dest),
 		D#dest.rule_id == Id
 	]),
 	Q1 = ?QLCE(Q0),
-	get_destinations_for_discovery(RuleIds, Index+1, [Q1|Acc]);
-get_destinations_for_discovery([], _Index, Acc) ->  lists:flatten(Acc).
+	get_rule_destinations(RuleIds, Index+1, [Q1|Acc]);
+get_rule_destinations([], _Index, Acc) ->  lists:flatten(Acc).
 
 handle_query({get_notification_items, OrigRuleId}) ->
 	Q = ?QLCQ([{N#notification.type, N#notification.target} ||
@@ -574,13 +574,19 @@ handle_query({get_remote_rule_tables, FilterId, Addr, UserH}) ->
 	AclQ = #aclq{src_addr=Addr, src_user_h=UserH},
 	RemovableStorageRuleTable = get_rules(FilterId, AclQ#aclq{channel=removable}),
 	PrinterRuleTable = get_rules(FilterId, AclQ#aclq{channel=printer}),
+	InboundRuleTable = get_rules(FilterId, AclQ#aclq{channel=inbound}),
 	DiscoveryRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=discovery}),
-	Directories = get_destinations_for_discovery(DiscoveryRuleIds),
+	ScreenshotRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=screenshot}),
+	ApplicationNames = get_rule_destinations(ScreenshotRuleIds),
+	Directories = get_rule_destinations(DiscoveryRuleIds),
 	DiscoveryRuleTable = get_rule_table(FilterId, DiscoveryRuleIds),
+	ScreenshotRuleTable = get_rule_table(FilterId, ScreenshotRuleIds),
 	[
 		{removable, none, RemovableStorageRuleTable},
 		{printer, none, PrinterRuleTable},
-		{discovery, Directories, DiscoveryRuleTable}
+		{discovery, Directories, DiscoveryRuleTable},
+		{screenshot, ApplicationNames, ScreenshotRuleTable},
+		{inbound, none, InboundRuleTable}
 	];
 
 handle_query({get_remote_rule_ids, FilterId, Addr, UserH}) ->
@@ -588,7 +594,9 @@ handle_query({get_remote_rule_ids, FilterId, Addr, UserH}) ->
 	RemovableStorageRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=removable}),
 	PrinterRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=printer}),
 	DiscoveryRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=discovery}),
-	R = lists:flatten([RemovableStorageRuleIds, PrinterRuleIds, DiscoveryRuleIds]),
+	ScreenshotRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=screenshot}),
+	InboundRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=inbound}),
+	R = lists:flatten([RemovableStorageRuleIds, PrinterRuleIds, DiscoveryRuleIds, ScreenshotRuleIds, InboundRuleIds]),
 	lists:usort(R);
 
 handle_query({get_rule_ids, FilterId, #aclq{channel=Channel, destinations=Destinations} = AclQ}) ->
