@@ -448,7 +448,7 @@ handle_result({get_fs_entry, _FilePath}, {atomic, Result}) ->
 		[FSEntry] -> FSEntry end;
 
 handle_result({fs_entry_list_dir, _EntryId}, {atomic, Result}) -> 
-	[ FP || #fs_entry{file_id=FP} <- Result ];
+	[ FP || #fs_entry{file_id={FP,_RuleIndex}} <- Result ];
 
 handle_result({is_valid_usb_device_id, _DeviceId}, {atomic, Result}) -> 
 	case Result of
@@ -864,9 +864,6 @@ handle_query({del_fs_entry, FileId}) ->
 	mnesia:delete({fs_entry, FileId});
 
 handle_query({fs_entry_list_dir, EntryId}) ->
-	mnesia:match_object(#fs_entry{file_id='_', entry_id='_', parent_id=EntryId, file_size='_', last_modified='_'});
-
-handle_query({fs_entry_list_dir_dir, EntryId}) ->
 	mnesia:match_object(#fs_entry{file_id='_', entry_id='_', parent_id=EntryId, file_size='_', last_modified='_'});
 
 % TODO: should be refined for multi-site usage
