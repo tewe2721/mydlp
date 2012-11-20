@@ -255,7 +255,6 @@ load_src(Src) ->
 	{maximum_push_size, integer, "1048576"},
 	{sync_interval, integer, "300000"},
 	{discover_fs_interval, integer, "7200000"},
-	{discover_fs_paths, string, "C:/Users;C:/Documents and Settings"},
 	{discover_fs_on_startup, boolean, "false"},
 	{ignore_discover_max_size_exceeded, boolean, "true"},
 	{log_level, integer, "0"},

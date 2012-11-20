@@ -133,7 +133,6 @@ schedule(Interval) ->
 
 schedule() ->
 	PathsWithRuleIndex = mydlp_mnesia:get_discovery_directory(), % {Path, IndexInWhichRuleHasThisPath}
-	%Paths = ?CFG(discover_fs_paths),
 	PathList = lists:map(fun({P, Index}) -> 
 			{try unicode:characters_to_list(P)
 				catch _:_ -> binary_to_list(P) end,  %% TODO: log this case
