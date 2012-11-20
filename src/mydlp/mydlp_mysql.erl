@@ -248,24 +248,37 @@ handle_info({async_reply, Reply, From}, State) ->
 	{noreply, State};
 
 handle_info({'DOWN', _, _, MPid , _}, #state{master_pid=MPid} = State) ->
-	{stop, normalStop, State};
+	?ERROR_LOG("Master connection to MySQL is dead, restarting MySQL module.", []),
+	case init([]) of
+		{ok, NewState} -> {noreply, NewState};
+		Err ->	?ERROR_LOG("Error occurred when trying to restart MySQL module. Error: "?S, [Err]),
+			{stop, normalStop, State} end;
 
 handle_info({'DOWN', _, _, Pid , _}, #state{host=Host,
 		user=User, password=Password, database=DB, database_l=LDB,
 		pool_pids=PoolPids, pool_pids_l=PoolPidsL} = State) ->
-	PPTuple  = case lists:any(fun(P) -> P == Pid end, PoolPids) of
+	PPTuple  = case lists:member(Pid, PoolPids) of
 		true -> PoolPids1 = lists:delete(Pid, PoolPids),
-			case mysql:connect(pp, Host, undefined, User, Password, DB, true) of
-				{ok, NewPid} -> {[NewPid|PoolPids1], PoolPidsL};
+			case mysql:connect(pp, Host, undefined, User, Password, DB, utf8, true) of
+				{ok, NewPid} -> 
+					erlang:monitor(NewPid),
+					{[NewPid|PoolPids1], PoolPidsL};
 				_ -> error end;
-		false -> PoolPidsL1 = lists:delete(Pid, PoolPidsL),
-			case mysql:connect(pl, Host, undefined, User, Password, LDB, true) of
-				{ok, NewPid} -> {PoolPids, [NewPid|PoolPidsL1]};
-				_ -> error end
+		false -> case lists:member(Pid, PoolPidsL) of
+		true -> PoolPidsL1 = lists:delete(Pid, PoolPidsL),
+			case mysql:connect(pl, Host, undefined, User, Password, LDB, utf8, true) of
+				{ok, NewPid} -> 
+					erlang:monitor(NewPid),
+					{PoolPids, [NewPid|PoolPidsL1]};
+				_ -> error end;
+		false -> orphan end
 	end,
 
 	case PPTuple of
-		error -> {stop, normalStop, State};
+		orphan -> ?ERROR_LOG("Dead pid is orphan. Ignoring.~nDeadPid: "?S", State: "?S, [Pid, State]),
+			{noreply, State};
+		error -> ?ERROR_LOG("An error occurred when trying to create a new connection instead of dead one.~nState: "?S, [State]) ,
+			{stop, normalStop, State};
 		{PP, PPL} -> {noreply, State#state{pool_pids=PP, pool_pids_l=PPL}}
 	end;
 
@@ -362,7 +375,7 @@ init([]) ->
 	{ok, #state{host=Host, port=Port, 
 			user=User, password=Password, 
 			database=DB, database_l=LDB, pool_size=PoolSize, 
-			master_pid=MPid, pool_pids=PPids, pool_pids_l=PPids,
+			master_pid=MPid, pool_pids=PPids, pool_pids_l=PPids2,
 			compile_progress=done}}.
 
 terminate(_Reason, _State) ->
