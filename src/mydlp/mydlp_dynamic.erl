@@ -506,8 +506,8 @@ populate_blocked_app_names([{AppName, RuleIndex}|Rest], RuleTable, Acc) ->
 	AppNameS = binary_to_list(AppName),
 	{_, Action, _} = lists:nth(RuleTable, RuleIndex+1),
 	case Action of
-		block -> populate_blocked_app_names(Rest, RuleTable, lists:umerge([AppNames], Acc));
-		pass -> populate_blocked_app_names(Rest, RuleTable, lists:subtract(Acc, [AppNames]))
+		block -> populate_blocked_app_names(Rest, RuleTable, lists:umerge([AppNameS], Acc));
+		pass -> populate_blocked_app_names(Rest, RuleTable, lists:subtract(Acc, [AppNameS]))
 	end;
 populate_blocked_app_names([], _RuleTable, Acc) -> 
 	Acc1 = lists:flatten(Acc),
@@ -534,22 +534,22 @@ populate_win32reg(RegHandle, [archive_inbound|Rest]) ->
 		end,
 	RegVal = case ActionVal of
 			pass -> 0;
-			_Else -> 1
+			_AnyAction -> 1
 		end,
 	win32reg:set_value(RegHandle, "archieve_inbound", RegVal),
 	populate_win32reg(RegHandle, Rest);
-populate_win32reg(RegHandle, [prtsrc_block|Rest]) ->
+populate_win32reg(RegHandler, [prtsrc_block|Rest]) ->
 	AppNames = mydlp_mnesia:get_prtsrc_app_name(),
 	{_, _, RuleTable} = mydlp_mnesia:get_rule_table(screenshot),
-	BlockedProcess = get_blocked_app_names(AppNames, RuleTable),
-	BlockRegValue = case BlockedProcess of
-				[] -> 0;
-				_ -> 1
-			end,
+	BlockedProcesses = get_blocked_app_names(AppNames, RuleTable),
+	{BlockRegValue, ProcessRegVal} = case BlockedProcesses of
+						[] -> {0, ""};
+						_ -> {1, BlockedProcesses}
+					end,
 	erlang:display({blockRegValue, BlockRegValue}),
 	erlang:display({processes, BlockedProcess}),
 	win32reg:set_value(RegHandler, "prtscr_block", BlockRegValue),
-	win32reg:set_value(RegHandler, "prtscr_processes", Processes),
+	win32reg:set_value(RegHandler, "prtscr_processes", ProcessRegVal),
 	populate_win32reg(RegHandle, Rest);	
 populate_win32reg(RegHandle, [ConfKey|Rest]) ->
 	ConfKeyS = atom_to_list(ConfKey),

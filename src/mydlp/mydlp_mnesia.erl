@@ -853,7 +853,7 @@ handle_query({get_discovery_directory}) ->
 handle_query({get_prtscr_app_name}) ->
 	Q = ?QLCQ([R#rule_table.destination ||
 		R <- mnesia:table(rule_table),
-		R#rule_table.channel = screenshot
+		R#rule_table.channel == screenshot
 		]),
 	?QLCE(Q);
 
