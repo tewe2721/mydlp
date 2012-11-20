@@ -5,4 +5,5 @@ sbin_SCRIPTS = \
 	mydlp-revision-restore \
 	mydlp-reset-db \
 	mydlp-index \
+	mydlp-version \
 	mydlp-watchdog
