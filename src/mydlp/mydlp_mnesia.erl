@@ -435,7 +435,13 @@ handle_result({get_rule_table, _Channel, _RuleIndex}, {atomic, Result}) ->
 handle_result({get_discovery_directory}, {atomic, Result}) -> 
 	case Result of
 		[] -> none;
-		[Table] -> Table end;
+		[Table] -> lists:map(fun({P, I}) ->
+						case P of
+							all -> {<<"C:/">>, I};
+				       			_ -> {P, I}
+						end
+					end, Table)	
+	end;
 
 handle_result({get_prtscr_app_name}, {atomic, Result}) -> 
 	case Result of
@@ -848,12 +854,7 @@ handle_query({get_discovery_directory}) ->
 		R <- mnesia:table(rule_table),
 		R#rule_table.channel == discovery
 		]),
-	Directories = ?QLCE(Q),
-	lists:map(fun({D, I}) -> case D of
-					all -> {<<"C:/">>, I};
-					_ -> {D, I}
-				end
-			end, Directories).
+	?QLCE(Q);
 
 handle_query({get_prtscr_app_name}) ->
 	Q = ?QLCQ([R#rule_table.destination ||
