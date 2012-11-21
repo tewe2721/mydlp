@@ -167,10 +167,9 @@ handle_call({aclq, ObjId, Timeout}, From, #state{object_tree=OT} = State) ->
 							discovery -> 
 								RuleIndex = get_discovery_rule_index(Obj),
 								{mydlp_acl:qe(Channel, DFFiles, RuleIndex), Obj};
-							_Else -> { case ( ?CFG(archive_inbound) and is_inbound(Obj) ) of
-									true -> mydlp_acl:qi(Channel, DFFiles);
-									false -> mydlp_acl:qe(Channel, DFFiles) end,
-								Obj } end,
+							inbound -> {mydlp_acl:qi(Channel, DFFiles), Obj};
+							removable -> {mydlp_acl:qe(Channel, DFFiles), Obj}
+							end,
 						AclRet = acl_ret(QRet, Obj1, DFFiles),
 						{ok, AclRet}
 					catch	throw:{error, eacces} -> {ok, pass};
@@ -432,13 +431,15 @@ is_inbound(#object{prop_dict=PD}) ->
 		{ok, _else} -> false;
 		error -> false end.
 
-get_channel(#object{prop_dict=PD}) ->
+get_channel(#object{prop_dict=PD} = Obj) ->
 	case dict:find("channel", PD) of
 		{ok, "discovery"} -> discovery;
 		{ok, "api"} -> api;
 	error -> case dict:find("printerName", PD) of
 		{ok, _} -> printer;
-		error -> removable end end.
+		error -> case is_inbound(Obj) of
+				true -> inbound;
+				false -> removable end end end.
 
 get_printer_name(#object{prop_dict=PD} = Obj) ->
 	case dict:find("printerName", PD) of

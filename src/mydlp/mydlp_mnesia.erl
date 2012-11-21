@@ -84,6 +84,7 @@
 	update_notification_queue_item/2,
 	get_remote_mc_module/3,
 	get_fid/1,
+	get_inbound_action/0,
 	remove_site/1,
 	add_fhash/3,
 	save_user_address/3,
@@ -317,6 +318,8 @@ get_early_notification_queue_items() -> aqc(get_early_notification_queue_items, 
 
 update_notification_queue_item(RuleId, NewStatus) -> aqc({update_notification_queue_item, RuleId, NewStatus}, nocache). 
 
+get_inbound_action() -> aqc(get_inbound_action, cache). 
+
 get_remote_mc_module(FilterId, Addr, UserH) -> 
 	RuleIDs = get_remote_rule_ids(FilterId, Addr, UserH),
 	Mods = case get_mc_module(RuleIDs) of
@@ -410,6 +413,8 @@ flush_cache() -> cache_clean0().
 -ifdef(__MYDLP_NETWORK).
 
 handle_result({get_matchers, _Source}, {atomic, Result}) -> lists:usort(Result);
+
+handle_result(get_inbound_action, {atomic, [Action|_]}) -> Action;
 
 handle_result({get_user_from_address, _IpAddress}, {atomic, Result}) -> 
 	case Result of
@@ -583,6 +588,13 @@ handle_query({update_notification_queue_item, RuleId, Status}) ->
 				end,
 	mnesia:write(I#notification_queue{status=NewStatus, event_threshold=NewEventThreshold, is_shadow=false}),
 	Action;
+
+handle_query(get_inbound_action) ->
+	Q = ?QLCQ([R#rule.action ||
+		R <- mnesia:table(rule),
+		R#rule.channel == inbound
+	]),
+	?QLCE(Q);
 
 handle_query({get_remote_rule_tables, FilterId, Addr, UserH}) ->
 	AclQ = #aclq{src_addr=Addr, src_user_h=UserH},
