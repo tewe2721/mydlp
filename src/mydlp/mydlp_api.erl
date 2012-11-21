@@ -1487,11 +1487,22 @@ load_files(#file{} = File) -> [Ret] = load_files([File]), Ret;
 load_files(Files) when is_list(Files) ->
 	lists:map(fun(F) -> load_file(F) end, Files).
 
-load_file(#file{dataref=undefined} = File) -> File;
-load_file(#file{data=undefined} = File) ->
+load_file(#file{} = File) ->
+	File1 = load_file_data(File),
+	File2 = load_file_hash(File1),
+	File2.
+
+load_file_data(#file{dataref=undefined} = File) -> File;
+load_file_data(#file{data=undefined} = File) ->
 	Data = ?BB_R(File#file.dataref),
 	File#file{data=Data};
-load_file(#file{} = File) -> File.
+load_file_data(#file{} = File) -> File.
+
+load_file_hash(#file{data=undefined} = File) -> File;
+load_file_hash(#file{md5_hash=undefined, data=Data} = File) ->
+	Hash = mydlp_api:md5_hex(Data),
+	File#file{md5_hash=Hash};
+load_file_hash(File) -> File.
 
 %%--------------------------------------------------------------------
 %% @doc Cleans cache references.
