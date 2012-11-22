@@ -57,4 +57,6 @@ debian/mydlp
 debian/mydlp.*.debhelper
 debian/stamp-autotools-files
 debian/stamp-makefile-build
+debian/stamp-autotools
+debian/stamp-makefile-install
 tmp/

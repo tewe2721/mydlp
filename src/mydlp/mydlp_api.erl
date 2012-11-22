@@ -1487,11 +1487,22 @@ load_files(#file{} = File) -> [Ret] = load_files([File]), Ret;
 load_files(Files) when is_list(Files) ->
 	lists:map(fun(F) -> load_file(F) end, Files).
 
-load_file(#file{dataref=undefined} = File) -> File;
-load_file(#file{data=undefined} = File) ->
+load_file(#file{} = File) ->
+	File1 = load_file_data(File),
+	File2 = load_file_hash(File1),
+	File2.
+
+load_file_data(#file{dataref=undefined} = File) -> File;
+load_file_data(#file{data=undefined} = File) ->
 	Data = ?BB_R(File#file.dataref),
 	File#file{data=Data};
-load_file(#file{} = File) -> File.
+load_file_data(#file{} = File) -> File.
+
+load_file_hash(#file{data=undefined} = File) -> File;
+load_file_hash(#file{md5_hash=undefined, data=Data} = File) ->
+	Hash = mydlp_api:md5_hex(Data),
+	File#file{md5_hash=Hash};
+load_file_hash(File) -> File.
 
 %%--------------------------------------------------------------------
 %% @doc Cleans cache references.
@@ -2884,10 +2895,14 @@ get_client_policy_revision_id() ->
 	RemovableStorageRuleTable = mydlp_mnesia:get_rule_table(removable),
 	PrinterRuleTable = mydlp_mnesia:get_rule_table(printer),
 	DiscoveryRuleTable = mydlp_mnesia:get_rule_table(discovery),
+	ScreenshotRuleTable = mydlp_mnesia:get_rule_table(screenshot),
+	InboundRuleTable = mydlp_mnesia:get_rule_table(inbound),
 	RuleTables = [
 		{removable, RemovableStorageRuleTable},
 		{printer, PrinterRuleTable},
-		{discovery, DiscoveryRuleTable}
+		{discovery, DiscoveryRuleTable},
+		{screenshot, ScreenshotRuleTable},
+		{inbound, InboundRuleTable}
 	],
 	ItemDump = mydlp_mnesia:dump_client_tables(),
 	MCMods = mydlp_mnesia:get_mc_module(),

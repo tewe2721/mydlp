@@ -79,10 +79,12 @@ handle_cast({p, Item}, State) ->
 			{ok, Ref} = mydlp_spool:push("log", Item),
 			p(Ref, Item);
 		S when S < HardLimit -> 
+			?ERROR_LOG("Spool soft limit had been reached, stripping logs.", []),
 			StrippedItem = strip_item(Item),
 			{ok, Ref} = mydlp_spool:push("log", StrippedItem),
 			p(Ref, Item);
-		_Else -> ok end,
+		_ ->	?ERROR_LOG("Spool hard limit had been reached, ignoring logs.", []),
+			ok end,
 	{noreply, State};
 
 handle_cast({p, Ref, Item}, #state{item_queue=Q, queue_size=QS, has_failure=HF} = State) ->

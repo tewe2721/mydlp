@@ -1,0 +1,11 @@
+#!/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games
+DPKGNAME=mydlp
+VERSION=$(dpkg -s $DPKGNAME|grep Version:|head -1|cut -f2 -d' ')
+
+if [ -n "$1" -a -f "$1" ]; then
+	echo $VERSION > $1
+else
+	echo $VERSION
+fi
+

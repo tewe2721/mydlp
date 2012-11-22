@@ -248,24 +248,37 @@ handle_info({async_reply, Reply, From}, State) ->
 	{noreply, State};
 
 handle_info({'DOWN', _, _, MPid , _}, #state{master_pid=MPid} = State) ->
-	{stop, normalStop, State};
+	?ERROR_LOG("Master connection to MySQL is dead, restarting MySQL module.", []),
+	case init([]) of
+		{ok, NewState} -> {noreply, NewState};
+		Err ->	?ERROR_LOG("Error occurred when trying to restart MySQL module. Error: "?S, [Err]),
+			{stop, normalStop, State} end;
 
 handle_info({'DOWN', _, _, Pid , _}, #state{host=Host,
 		user=User, password=Password, database=DB, database_l=LDB,
 		pool_pids=PoolPids, pool_pids_l=PoolPidsL} = State) ->
-	PPTuple  = case lists:any(fun(P) -> P == Pid end, PoolPids) of
+	PPTuple  = case lists:member(Pid, PoolPids) of
 		true -> PoolPids1 = lists:delete(Pid, PoolPids),
-			case mysql:connect(pp, Host, undefined, User, Password, DB, true) of
-				{ok, NewPid} -> {[NewPid|PoolPids1], PoolPidsL};
+			case mysql:connect(pp, Host, undefined, User, Password, DB, utf8, true) of
+				{ok, NewPid} -> 
+					erlang:monitor(NewPid),
+					{[NewPid|PoolPids1], PoolPidsL};
 				_ -> error end;
-		false -> PoolPidsL1 = lists:delete(Pid, PoolPidsL),
-			case mysql:connect(pl, Host, undefined, User, Password, LDB, true) of
-				{ok, NewPid} -> {PoolPids, [NewPid|PoolPidsL1]};
-				_ -> error end
+		false -> case lists:member(Pid, PoolPidsL) of
+		true -> PoolPidsL1 = lists:delete(Pid, PoolPidsL),
+			case mysql:connect(pl, Host, undefined, User, Password, LDB, utf8, true) of
+				{ok, NewPid} -> 
+					erlang:monitor(NewPid),
+					{PoolPids, [NewPid|PoolPidsL1]};
+				_ -> error end;
+		false -> orphan end
 	end,
 
 	case PPTuple of
-		error -> {stop, normalStop, State};
+		orphan -> ?ERROR_LOG("Dead pid is orphan. Ignoring.~nDeadPid: "?S", State: "?S, [Pid, State]),
+			{noreply, State};
+		error -> ?ERROR_LOG("An error occurred when trying to create a new connection instead of dead one.~nState: "?S, [State]) ,
+			{stop, normalStop, State};
 		{PP, PPL} -> {noreply, State#state{pool_pids=PP, pool_pids_l=PPL}}
 	end;
 
@@ -315,6 +328,7 @@ init([]) ->
 		{network_by_rule_id, <<"SELECT n.ipBase,n.ipMask FROM Network AS n, RuleItem AS ri WHERE ri.rule_id=? AND n.id=ri.item_id">>},
 		{domain_by_rule_id, <<"SELECT d.destinationString FROM Domain AS d, RuleItem AS ri WHERE ri.rule_id=? AND d.id=ri.item_id">>},
 		{directory_by_rule_id, <<"SELECT d.destinationString FROM FileSystemDirectory AS d, RuleItem AS ri WHERE ri.rule_id=? AND d.id=ri.item_id">>},
+		{app_name_by_rule_id, <<"SELECT a.destinationString FROM ApplicationName AS a, RuleItem AS ri WHERE ri.rule_id=? AND a.id=ri.item_id">>},
 		{email_notification_by_rule_id, <<"SELECT a.email FROM AuthUser AS a, NotificationItem AS ni, EmailNotificationItem AS eni, Rule r WHERE ni.rule_id=? AND ni.id=eni.id AND ni.authUser_id=a.id AND r.id=? AND r.notificationEnabled=1">>},
 		{user_s_by_rule_id, <<"SELECT u.username FROM RuleUserStatic AS u, RuleItem AS ri WHERE ri.rule_id=? AND u.id=ri.item_id">>},
 		{user_ad_u_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=u.id">>},
@@ -362,7 +376,7 @@ init([]) ->
 	{ok, #state{host=Host, port=Port, 
 			user=User, password=Password, 
 			database=DB, database_l=LDB, pool_size=PoolSize, 
-			master_pid=MPid, pool_pids=PPids, pool_pids_l=PPids,
+			master_pid=MPid, pool_pids=PPids, pool_pids_l=PPids2,
 			compile_progress=done}}.
 
 terminate(_Reason, _State) ->
@@ -496,7 +510,8 @@ populate_rule(OrigId, Channel, Action, FilterId) ->
 
 	{ok, DQ} = psq(domain_by_rule_id, [OrigId]),
 	{ok, DIRQ} = psq(directory_by_rule_id, [OrigId]),
-	populate_destinations(DQ++DIRQ, RuleId),
+	{ok, AppName} = psq(app_name_by_rule_id, [OrigId]),
+	populate_destinations(DQ++DIRQ++AppName, RuleId),
 	
 	{ok, ENT} = psq(email_notification_by_rule_id, [OrigId, OrigId]),
 	populate_notifications(ENT, RuleId, email),
@@ -972,6 +987,8 @@ rule_dtype_to_channel(<<"RemovableStorageRule">>) -> removable;
 rule_dtype_to_channel(<<"PrinterRule">>) -> printer;
 rule_dtype_to_channel(<<"DiscoveryRule">>) -> discovery;
 rule_dtype_to_channel(<<"ApiRule">>) -> api;
+rule_dtype_to_channel(<<"RemovableStorageInboundRule">>) -> inbound;
+rule_dtype_to_channel(<<"ScreenshotRule">>) -> screenshot;
 rule_dtype_to_channel(Else) -> throw({error, unsupported_rule_type, Else}).
 
 validate_action_for_channel(web, pass) -> ok;
@@ -1008,6 +1025,11 @@ validate_action_for_channel(api, log) -> ok;
 validate_action_for_channel(api, block) -> ok;
 validate_action_for_channel(api, archive) -> ok;
 validate_action_for_channel(api, quarantine) -> ok;
+validate_action_for_channel(inbound, pass) -> ok;
+validate_action_for_channel(inbound, log) -> ok;
+validate_action_for_channel(inbound, archive) -> ok;
+validate_action_for_channel(screenshot, pass) -> ok;
+validate_action_for_channel(screenshot, block) -> ok;
 validate_action_for_channel(Channel, Action) -> throw({error, {unexpected_action_for_channel, Channel, Action}}).
 
 mydlp_mnesia_write(I) when is_list(I) ->
@@ -1082,10 +1104,12 @@ pre_push_log(RuleId, Ip, User, Destination, Action, Channel, Misc) ->
 	ChannelS = case Channel of
 		web -> <<"W">>;
 		mail -> <<"M">>;
-		removable -> <<"E">>;
+		removable -> <<"R">>;
 		printer -> <<"P">>;
 		discovery -> <<"D">>;
-		api -> <<"A">> 
+		api -> <<"A">> ;
+		inbound -> <<"I">>;
+		screenshot -> <<"S">>
 	end,
 	Visible = case RuleId of
 		-1 -> 0;

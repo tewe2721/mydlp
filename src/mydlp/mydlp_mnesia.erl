@@ -84,6 +84,7 @@
 	update_notification_queue_item/2,
 	get_remote_mc_module/3,
 	get_fid/1,
+	get_inbound_action/0,
 	remove_site/1,
 	add_fhash/3,
 	save_user_address/3,
@@ -103,6 +104,7 @@
 	get_rule_table/1,
 	get_rule_table/2,
 	get_discovery_directory/0,
+	get_prtscr_app_name/0,
 	get_fs_entry/1,
 	del_fs_entry/1,
 	add_fs_entry/1,
@@ -316,6 +318,8 @@ get_early_notification_queue_items() -> aqc(get_early_notification_queue_items, 
 
 update_notification_queue_item(RuleId, NewStatus) -> aqc({update_notification_queue_item, RuleId, NewStatus}, nocache). 
 
+get_inbound_action() -> aqc(get_inbound_action, cache). 
+
 get_remote_mc_module(FilterId, Addr, UserH) -> 
 	RuleIDs = get_remote_rule_ids(FilterId, Addr, UserH),
 	Mods = case get_mc_module(RuleIDs) of
@@ -354,6 +358,8 @@ get_rule_table(Channel) -> aqc({get_rule_table, Channel}, cache).
 get_rule_table(Channel, RuleIndex) -> aqc({get_rule_table, Channel, RuleIndex}, cache).
 
 get_discovery_directory() -> aqc({get_discovery_directory}, cache).
+
+get_prtscr_app_name() -> aqc({get_prtscr_app_name}, cache).
 
 get_fs_entry(FilePath) -> aqc({get_fs_entry, FilePath}, nocache).
 
@@ -408,6 +414,8 @@ flush_cache() -> cache_clean0().
 
 handle_result({get_matchers, _Source}, {atomic, Result}) -> lists:usort(Result);
 
+handle_result(get_inbound_action, {atomic, [Action|_]}) -> Action;
+
 handle_result({get_user_from_address, _IpAddress}, {atomic, Result}) -> 
 	case Result of
 		[] -> {nil, unknown};
@@ -432,6 +440,17 @@ handle_result({get_rule_table, _Channel, _RuleIndex}, {atomic, Result}) ->
 handle_result({get_discovery_directory}, {atomic, Result}) -> 
 	case Result of
 		[] -> none;
+		[Table] -> lists:map(fun({P, I}) ->
+						case P of
+							all -> {<<"C:/">>, I};
+				       			_ -> {P, I}
+						end
+					end, Table)	
+	end;
+
+handle_result({get_prtscr_app_name}, {atomic, Result}) -> 
+	case Result of
+		[] -> none;
 		[Table] -> Table end;
 
 handle_result({get_fs_entry, _FilePath}, {atomic, Result}) -> 
@@ -440,7 +459,7 @@ handle_result({get_fs_entry, _FilePath}, {atomic, Result}) ->
 		[FSEntry] -> FSEntry end;
 
 handle_result({fs_entry_list_dir, _EntryId}, {atomic, Result}) -> 
-	[ FP || #fs_entry{file_id=FP} <- Result ];
+	[ FP || #fs_entry{file_id={FP,_RuleIndex}} <- Result ];
 
 handle_result({is_valid_usb_device_id, _DeviceId}, {atomic, Result}) -> 
 	case Result of
@@ -507,18 +526,18 @@ filter_rule_ids_by_dest(RuleIds, Destinations) -> %TODO: domain names stored as 
 	RulenD = ?QLCE(Q1),
 	lists:append([RuleaD, RulenD]).
 
-get_destinations_for_discovery(RuleIds) -> 
-	DL =get_destinations_for_discovery(RuleIds, 0, []),
+get_rule_destinations(RuleIds) -> 
+	DL =get_rule_destinations(RuleIds, 0, []),
 	lists:reverse(DL).
 
-get_destinations_for_discovery([Id|RuleIds], Index, Acc) ->
+get_rule_destinations([Id|RuleIds], Index, Acc) ->
 	Q0 = ?QLCQ([{D#dest.destination, Index} ||
 		D <- mnesia:table(dest),
 		D#dest.rule_id == Id
 	]),
 	Q1 = ?QLCE(Q0),
-	get_destinations_for_discovery(RuleIds, Index+1, [Q1|Acc]);
-get_destinations_for_discovery([], _Index, Acc) ->  lists:flatten(Acc).
+	get_rule_destinations(RuleIds, Index+1, [Q1|Acc]);
+get_rule_destinations([], _Index, Acc) ->  lists:flatten(Acc).
 
 handle_query({get_notification_items, OrigRuleId}) ->
 	Q = ?QLCQ([{N#notification.type, N#notification.target} ||
@@ -570,17 +589,30 @@ handle_query({update_notification_queue_item, RuleId, Status}) ->
 	mnesia:write(I#notification_queue{status=NewStatus, event_threshold=NewEventThreshold, is_shadow=false}),
 	Action;
 
+handle_query(get_inbound_action) ->
+	Q = ?QLCQ([R#rule.action ||
+		R <- mnesia:table(rule),
+		R#rule.channel == inbound
+	]),
+	?QLCE(Q);
+
 handle_query({get_remote_rule_tables, FilterId, Addr, UserH}) ->
 	AclQ = #aclq{src_addr=Addr, src_user_h=UserH},
 	RemovableStorageRuleTable = get_rules(FilterId, AclQ#aclq{channel=removable}),
 	PrinterRuleTable = get_rules(FilterId, AclQ#aclq{channel=printer}),
+	InboundRuleTable = get_rules(FilterId, AclQ#aclq{channel=inbound}),
 	DiscoveryRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=discovery}),
-	Directories = get_destinations_for_discovery(DiscoveryRuleIds),
+	ScreenshotRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=screenshot}),
+	ApplicationNames = get_rule_destinations(ScreenshotRuleIds),
+	Directories = get_rule_destinations(DiscoveryRuleIds),
 	DiscoveryRuleTable = get_rule_table(FilterId, DiscoveryRuleIds),
+	ScreenshotRuleTable = get_rule_table(FilterId, ScreenshotRuleIds),
 	[
 		{removable, none, RemovableStorageRuleTable},
 		{printer, none, PrinterRuleTable},
-		{discovery, Directories, DiscoveryRuleTable}
+		{discovery, Directories, DiscoveryRuleTable},
+		{screenshot, ApplicationNames, ScreenshotRuleTable},
+		{inbound, none, InboundRuleTable}
 	];
 
 handle_query({get_remote_rule_ids, FilterId, Addr, UserH}) ->
@@ -588,7 +620,9 @@ handle_query({get_remote_rule_ids, FilterId, Addr, UserH}) ->
 	RemovableStorageRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=removable}),
 	PrinterRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=printer}),
 	DiscoveryRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=discovery}),
-	R = lists:flatten([RemovableStorageRuleIds, PrinterRuleIds, DiscoveryRuleIds]),
+	ScreenshotRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=screenshot}),
+	InboundRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=inbound}),
+	R = lists:flatten([RemovableStorageRuleIds, PrinterRuleIds, DiscoveryRuleIds, ScreenshotRuleIds, InboundRuleIds]),
 	lists:usort(R);
 
 handle_query({get_rule_ids, FilterId, #aclq{channel=Channel, destinations=Destinations} = AclQ}) ->
@@ -834,6 +868,13 @@ handle_query({get_discovery_directory}) ->
 		]),
 	?QLCE(Q);
 
+handle_query({get_prtscr_app_name}) ->
+	Q = ?QLCQ([R#rule_table.destination ||
+		R <- mnesia:table(rule_table),
+		R#rule_table.channel == screenshot
+		]),
+	?QLCE(Q);
+
 handle_query({get_fs_entry, FileId}) ->
 	mnesia:read(fs_entry, FileId);
 
@@ -841,9 +882,6 @@ handle_query({del_fs_entry, FileId}) ->
 	mnesia:delete({fs_entry, FileId});
 
 handle_query({fs_entry_list_dir, EntryId}) ->
-	mnesia:match_object(#fs_entry{file_id='_', entry_id='_', parent_id=EntryId, file_size='_', last_modified='_'});
-
-handle_query({fs_entry_list_dir_dir, EntryId}) ->
 	mnesia:match_object(#fs_entry{file_id='_', entry_id='_', parent_id=EntryId, file_size='_', last_modified='_'});
 
 % TODO: should be refined for multi-site usage

@@ -255,7 +255,6 @@ load_src(Src) ->
 	{maximum_push_size, integer, "1048576"},
 	{sync_interval, integer, "300000"},
 	{discover_fs_interval, integer, "7200000"},
-	{discover_fs_paths, string, "C:/Users;C:/Documents and Settings"},
 	{discover_fs_on_startup, boolean, "false"},
 	{ignore_discover_max_size_exceeded, boolean, "true"},
 	{log_level, integer, "0"},
@@ -273,7 +272,6 @@ load_src(Src) ->
 	{error_action, atom, "pass"},
 	{maximum_object_size, integer, "10485760"},
 	{archive_minimum_size, integer, "256"},
-	{archive_inbound, boolean, "false"},
 	{maximum_memory_object, integer, "204800"},
 	{maximum_chunk_size, integer, "1048576"},
 	{query_cache_maximum_size, integer, "1500000"},
@@ -300,7 +298,8 @@ load_src(Src) ->
 	usb_serial_access_control,
 	print_monitor,
 	log_level,
-	log_limit
+	log_limit,
+	prtscr_block
 ]).
 
 -endif.
@@ -498,6 +497,20 @@ mydlp_config_prestart_default([], SrcAcc) -> SrcAcc.
 
 -ifdef(__PLATFORM_WINDOWS).
 
+get_blocked_app_names(AppNames, RuleTable) ->
+	AppNames1 = lists:reverse(AppNames),
+	populate_blocked_app_names(AppNames1, RuleTable, []).
+
+populate_blocked_app_names([{AppName, RuleIndex}|Rest], RuleTable, Acc) ->
+	AppNameS = binary_to_list(AppName),
+	{_, Action, _} = lists:nth(RuleIndex+1, RuleTable),
+	case Action of
+		block -> populate_blocked_app_names(Rest, RuleTable, lists:umerge([AppNameS], Acc));
+		pass -> populate_blocked_app_names(Rest, RuleTable, lists:subtract(Acc, [AppNameS]))
+	end;
+populate_blocked_app_names([], _RuleTable, Acc) -> string:join(Acc, ", ");
+populate_blocked_app_names(none, _RuleTable, _Acc) -> [].
+
 populate_win32reg() -> 
 	{ok, RegHandle} = win32reg:open([read,write]),
 	win32reg:change_key_create(RegHandle, "\\hklm\\software\\MyDLP"),
@@ -511,6 +524,28 @@ populate_win32reg(RegHandle, [print_monitor|Rest]) ->
 			false -> 0 end,
 	win32reg:set_value(RegHandle, "print_monitor", RegVal),
 	populate_win32reg(RegHandle, Rest);
+populate_win32reg(RegHandle, [archive_inbound|Rest]) ->
+	ActionVal = case mydlp_mnesia:get_rule_table(inbound) of
+			{_, _, [{_, Action, _}|_]} -> Action;
+			_Else -> pass
+		end,
+	RegVal = case ActionVal of
+			pass -> 0;
+			_AnyAction -> 1
+		end,
+	win32reg:set_value(RegHandle, "archive_inbound", RegVal),
+	populate_win32reg(RegHandle, Rest);
+populate_win32reg(RegHandle, [prtscr_block|Rest]) ->
+	AppNames = mydlp_mnesia:get_prtscr_app_name(),
+	{_, _, RuleTable} = mydlp_mnesia:get_rule_table(screenshot),
+	BlockedProcesses = get_blocked_app_names(AppNames, RuleTable),
+	{BlockRegValue, ProcessRegVal} = case BlockedProcesses of
+						[] -> {0, ""};
+						_ -> {1, BlockedProcesses}
+					end,
+	win32reg:set_value(RegHandle, "prtscr_block", BlockRegValue),
+	win32reg:set_value(RegHandle, "prtscr_processes", ProcessRegVal),
+	populate_win32reg(RegHandle, Rest);	
 populate_win32reg(RegHandle, [ConfKey|Rest]) ->
 	ConfKeyS = atom_to_list(ConfKey),
 	RegVal = case ?CFG(ConfKey) of

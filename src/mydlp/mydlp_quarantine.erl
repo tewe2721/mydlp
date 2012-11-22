@@ -53,7 +53,7 @@
 
 -define(QUARANTINE_TIMEOUT, 60000).
 
-q(Data) -> gen_server:call(?MODULE, {q, Data}, ?QUARANTINE_TIMEOUT).
+q(Data) -> gen_server:call(?MODULE, {q, Data}, 90000).
 
 q(Hash, Data) -> gen_server:call(?MODULE, {q, Hash, Data}, ?QUARANTINE_TIMEOUT).
 
@@ -64,10 +64,13 @@ l(Cat, Id) -> gen_server:call(?MODULE, {l, Cat, Id}, ?QUARANTINE_TIMEOUT).
 %%%%%%%%%%%%%% gen_server handles
 
 handle_call({q, Data}, From, State) ->
-	?ASYNC0(fun() ->
+	Worker = self(),
+	?ASYNC(fun() ->
 		Hash = mydlp_api:md5_hex(Data),
-		handle_call({q, Hash, Data}, From, State)
-	end),
+		Reply = q(Hash, Data),
+
+		Worker ! {async_reply, Reply, From}
+	end, 90000),
 	{noreply, State};
 
 handle_call({q, Hash, Data}, From, #state{quarantine_dir=Dir, quarantine_uid=Uid, quarantine_gid=Gid} = State) ->
