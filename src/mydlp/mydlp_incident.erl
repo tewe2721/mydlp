@@ -179,12 +179,12 @@ notify_user([{email, EmailAddress}|Notifications]) ->
 			"\r\n",
 			"Content-Type: text/html; charset=utf-8",
 			"\r\n",
-			"Content-Transfer-Encoding: 8bit",
+			"Content-Transfer-Encoding: base64",
 			"\r\n",
 			"\r\n",
 			?CFG(email_notification_message), 
 			"\r\n"],
-	mydlp_smtpc:mail("support@mydlp.com", binary_to_list(EmailAddress), EmailBody),
+	mydlp_smtpc:mail("support@mydlp.com", binary_to_list(EmailAddress), base64:encode(EmailBody)),
 	notify_user(Notifications);
 notify_user([{other, _Target}|Notifications]) -> 
 	notify_user(Notifications);
