@@ -181,7 +181,7 @@ find_an_authority(Nodes, Priority, InitEpoch) ->
 	case Nodes of
 		[] -> none;
 		Nodes -> {Replies, _BadNodes} = gen_server:multi_call(Nodes, ?MODULE, 
-					{are_you_my_authority, Priority, InitEpoch}),
+					{are_you_my_authority, Priority, InitEpoch}, 12000),
 			case replies_to_nodes(Replies) of 
 				[] -> none ;
 				NodeList -> select_random(NodeList) end end.
