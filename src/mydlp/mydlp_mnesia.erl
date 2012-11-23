@@ -84,7 +84,6 @@
 	update_notification_queue_item/2,
 	get_remote_mc_module/3,
 	get_fid/1,
-	get_inbound_action/0,
 	remove_site/1,
 	add_fhash/3,
 	save_user_address/3,
@@ -105,6 +104,7 @@
 	get_rule_table/2,
 	get_discovery_directory/0,
 	get_prtscr_app_name/0,
+	get_inbound_action/0,
 	get_fs_entry/1,
 	del_fs_entry/1,
 	add_fs_entry/1,
@@ -318,8 +318,6 @@ get_early_notification_queue_items() -> aqc(get_early_notification_queue_items, 
 
 update_notification_queue_item(RuleId, NewStatus) -> aqc({update_notification_queue_item, RuleId, NewStatus}, nocache). 
 
-get_inbound_action() -> aqc(get_inbound_action, cache). 
-
 get_remote_mc_module(FilterId, Addr, UserH) -> 
 	RuleIDs = get_remote_rule_ids(FilterId, Addr, UserH),
 	Mods = case get_mc_module(RuleIDs) of
@@ -360,6 +358,8 @@ get_rule_table(Channel, RuleIndex) -> aqc({get_rule_table, Channel, RuleIndex}, 
 get_discovery_directory() -> aqc({get_discovery_directory}, cache).
 
 get_prtscr_app_name() -> aqc({get_prtscr_app_name}, cache).
+
+get_inbound_action() -> aqc(get_inbound_action, cache). 
 
 get_fs_entry(FilePath) -> aqc({get_fs_entry, FilePath}, nocache).
 
@@ -414,7 +414,6 @@ flush_cache() -> cache_clean0().
 
 handle_result({get_matchers, _Source}, {atomic, Result}) -> lists:usort(Result);
 
-handle_result(get_inbound_action, {atomic, [Action|_]}) -> Action;
 
 handle_result({get_user_from_address, _IpAddress}, {atomic, Result}) -> 
 	case Result of
@@ -452,6 +451,11 @@ handle_result({get_prtscr_app_name}, {atomic, Result}) ->
 	case Result of
 		[] -> none;
 		[Table] -> Table end;
+
+handle_result(get_inbound_action, {atomic, Result}) ->
+	case Result of
+		[{_,_,[]}] -> pass;
+		[{_,_,[{_, Action,_}|_]}|_] -> Action end;
 
 handle_result({get_fs_entry, _FilePath}, {atomic, Result}) -> 
 	case Result of
@@ -588,13 +592,6 @@ handle_query({update_notification_queue_item, RuleId, Status}) ->
 				end,
 	mnesia:write(I#notification_queue{status=NewStatus, event_threshold=NewEventThreshold, is_shadow=false}),
 	Action;
-
-handle_query(get_inbound_action) ->
-	Q = ?QLCQ([R#rule.action ||
-		R <- mnesia:table(rule),
-		R#rule.channel == inbound
-	]),
-	?QLCE(Q);
 
 handle_query({get_remote_rule_tables, FilterId, Addr, UserH}) ->
 	AclQ = #aclq{src_addr=Addr, src_user_h=UserH},
@@ -872,6 +869,13 @@ handle_query({get_prtscr_app_name}) ->
 	Q = ?QLCQ([R#rule_table.destination ||
 		R <- mnesia:table(rule_table),
 		R#rule_table.channel == screenshot
+		]),
+	?QLCE(Q);
+
+handle_query(get_inbound_action) ->
+	Q = ?QLCQ([R#rule_table.table ||
+		R <- mnesia:table(rule_table),
+		R#rule_table.channel == inbound
 		]),
 	?QLCE(Q);
 
