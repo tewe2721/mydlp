@@ -49,10 +49,10 @@ case "$1" in
 esac
 
 if [[ $LOGFILE = *.gz ]]; then
-	ENABLEGZ="zcat"
+	READCOMMAND="zcat"
 fi
 
-$READCOMMAND $LOGFILE|sed -s "s/#012/\t\n/g" $LOGFILE
+$READCOMMAND $LOGFILE|sed -s 's/#012/\t\n/g'
 
 
 
