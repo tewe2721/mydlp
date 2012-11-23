@@ -1,0 +1,58 @@
+#!/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games
+LOGDIR=/var/log/mydlp
+
+if [ -z "$1" ]; then
+	echo "    Usage: $0 [shortlogname][filename]"
+	echo "shortlogname: acl backend error messages report_error report_info report_warning smtp"
+	echo "Examples:"
+	echo "  $0 acl"
+	echo "  $0 error"
+	echo "  $0 error.log"
+	echo "  $0 error.log-20121109.gz"
+fi
+
+LOGFILE=""
+READCOMMAND="cat"
+
+case "$1" in
+  acl)
+	LOGFILE=$LOGDIR/$1.log
+        ;;
+  backend)
+	LOGFILE=$LOGDIR/$1.log
+        ;;
+  error)
+	LOGFILE=$LOGDIR/$1.log
+        ;;
+  messages)
+	LOGFILE=$LOGDIR/$1.log
+        ;;
+  report_error)
+	LOGFILE=$LOGDIR/$1.log
+        ;;
+  report_info)
+	LOGFILE=$LOGDIR/$1.log
+        ;;
+  report_warning)
+	LOGFILE=$LOGDIR/$1.log
+        ;;
+  report_smtp)
+	LOGFILE=$LOGDIR/$1.log
+        ;;
+  *)
+	if [[ "$1" = /* ]]; then
+		LOGFILE=$1
+	else
+		LOGFILE=$LOGDIR/$1
+	fi
+esac
+
+if [[ $LOGFILE = *.gz ]]; then
+	ENABLEGZ="zcat"
+fi
+
+$READCOMMAND $LOGFILE|sed -s "s/#012/\t\n/g" $LOGFILE
+
+
+
