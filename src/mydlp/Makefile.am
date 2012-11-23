@@ -49,7 +49,7 @@ dist_erl_DATA = \
 	mydlp_mysql.erl \
 	mydlp_nlp.erl \
 	mydlp_pdm.erl \
-	mydlp_pg_sup.erl \
+	mydlp_pool.erl \
 	mydlp_quarantine.erl \
 	mydlp_regex.erl \
 	mydlp_seap_fsm.erl \

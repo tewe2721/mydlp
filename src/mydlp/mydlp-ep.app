@@ -39,7 +39,7 @@
         mydlp_matchers,
         mydlp_mnesia,
         mydlp_pdm,
-        mydlp_pg_sup,
+        mydlp_pool,
         mydlp_regex,
         mydlp_seap_fsm,
         mydlp_sup,

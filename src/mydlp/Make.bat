@@ -2,7 +2,7 @@
 @set ERLC=erlc
 @set ERLCARGS=-W -D__MYDLP_ENDPOINT -D__PLATFORM_WINDOWS
 
-@set ERLSOURCES=dynamic_compile.erl mydlp_acl.erl mydlp_container.erl mydlp_fsm.erl mydlp_item_push.erl mydlp_logger.erl mydlp_logger_file.erl mydlp_sync.erl mydlp_acceptor.erl mydlp_sup.erl mydlp_matchers.erl mydlp_mnesia.erl mydlp_tc.erl mydlp_api.erl mydlp_app.erl mydlp_workdir.erl mydlp_worker_sup.erl mydlp_pg_sup.erl mydlp_seap_fsm.erl mydlp_dynamic.erl mydlp_regex.erl mydlp_pdm.erl mydlp_nlp.erl mydlp_mc.erl mydlp_discover_fs.erl mydlp_spool.erl ..\thrift\gen-erl\mydlp_thrift.erl ..\thrift\gen-erl\mydlp_types.erl
+@set ERLSOURCES=dynamic_compile.erl mydlp_acl.erl mydlp_container.erl mydlp_fsm.erl mydlp_item_push.erl mydlp_logger.erl mydlp_logger_file.erl mydlp_sync.erl mydlp_acceptor.erl mydlp_sup.erl mydlp_matchers.erl mydlp_mnesia.erl mydlp_tc.erl mydlp_api.erl mydlp_app.erl mydlp_workdir.erl mydlp_worker_sup.erl mydlp_pool.erl mydlp_seap_fsm.erl mydlp_dynamic.erl mydlp_regex.erl mydlp_pdm.erl mydlp_nlp.erl mydlp_mc.erl mydlp_discover_fs.erl mydlp_spool.erl ..\thrift\gen-erl\mydlp_thrift.erl ..\thrift\gen-erl\mydlp_types.erl
 
 @FOR %%s in (%ERLSOURCES%) do @(
 	@echo Compiling %%s...

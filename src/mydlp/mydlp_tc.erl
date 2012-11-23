@@ -33,15 +33,14 @@
 -include_lib("stdlib/include/zip.hrl").
 
 %% API
--export([start_link/0,
-	pre_init/1,
-	get_mime/2,
-	get_text/3,
-	seclore_initialize/7,
-	seclore_protect/3,
-	seclore_terminate/0,
-	load/0,
-	stop/0]).
+-export([	start_link/0,
+		get_mime/2,
+		get_text/3,
+		seclore_initialize/7,
+		seclore_protect/3,
+		seclore_terminate/0,
+		load/0
+	]).
 
 %% gen_server callbacks
 -export([init/1,
@@ -56,6 +55,8 @@
 -record(state, {backend_java}).
 
 %%%%%%%%%%%%% MyDLP Thrift RPC API
+
+start_link() -> mydlp_pool:start_link(?MODULE, get_thrift_pool_size()).
 
 -define(MMLEN, 4096).
 
@@ -142,6 +143,7 @@ seclore_terminate() ->
 %%%%%%%%%%%%%% gen_server handles
 
 handle_call({thrift, java, Func, Params}, _From, #state{backend_java=TS} = State) ->
+	timer:sleep(20000),
 	{TS1, Reply} = try
 		thrift_client:call(TS, Func, Params)
 	catch _:{TSE, _Exception} ->
@@ -162,14 +164,6 @@ handle_info(_Info, State) ->
 
 %%%%%%%%%%%%%%%% Implicit functions
 
-pre_init(_Args) -> ok.
-
-start_link() ->
-	mydlp_pg_sup:start_link(?MODULE, [], []).
-
-stop() ->
-	gen_server:call(?MODULE, stop).
-
 init([]) ->
 	{ok, Java} = thrift_client_util:new("localhost",9090, mydlp_thrift, []),
 	{ok, #state{backend_java=Java}}.
@@ -184,8 +178,7 @@ code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 
 call_pool(Req) ->
-	Pid = pg2:get_closest_pid(?MODULE),
-	case gen_server:call(Pid, Req, 180000) of
+	case mydlp_pool:call(?MODULE, Req, 180000) of
 		{ok, <<"mydlp-internal/error">>} -> throw({error, exception_at_backend});
 		{ok, Ret} -> Ret;
 		{error, Reason} -> throw({error, Reason});
@@ -193,7 +186,7 @@ call_pool(Req) ->
 
 -ifdef(__MYDLP_NETWORK).
 
-load() -> 
+load_seclore() -> 
 	case ?CFG(seclore_fs_enable) of
 		true ->	seclore_initialize(	?CFG(seclore_dir), 
 						?CFG(seclore_fs_address),
@@ -209,7 +202,7 @@ load() ->
 
 -ifdef(__MYDLP_ENDPOINT).
 
-load() -> case ?CFG(seclore_fs_enable) of
+load_seclore() -> case ?CFG(seclore_fs_enable) of
 		true ->	seclore_initialize(	?CFG(seclore_dir), 
 						?CFG(seclore_fs_address),
 						?CFG(seclore_fs_port),
@@ -223,4 +216,20 @@ load() -> case ?CFG(seclore_fs_enable) of
 -endif.
 
 
+-ifdef(__MYDLP_NETWORK).
+
+get_thrift_pool_size() -> try ?CFG(thrift_server_pool_size) catch _:_ -> 4 end.
+
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
+get_thrift_pool_size() -> try ?CFG(thrift_endpoint_pool_size) catch _:_ -> 2 end.
+
+-endif.
+
+load() ->
+	mydlp_pool:set_pool_size(?MODULE, get_thrift_pool_size()),
+	load_seclore(),
+	ok.
 
