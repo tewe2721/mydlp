@@ -19,11 +19,11 @@ READCOMMAND="cat"
 
 case "$1" in
   -l)
-	ls $LOGDIR
+	ls --color=auto $LOGDIR
 	exit 0
 	;;
   --list)
-	ls $LOGDIR
+	ls --color=auto $LOGDIR
 	exit 0
 	;;
   acl)
