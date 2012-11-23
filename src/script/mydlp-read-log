@@ -3,9 +3,11 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games
 LOGDIR=/var/log/mydlp
 
 if [ -z "$1" ]; then
-	echo "    Usage: $0 [shortlogname][filename]"
+	echo "    Usage: $0 [shortlogname|filename][-l|--list]"
 	echo "shortlogname: acl backend error messages report_error report_info report_warning smtp"
 	echo "Examples:"
+	echo "  $0 -l"
+	echo "  $0 --list"
 	echo "  $0 acl"
 	echo "  $0 error"
 	echo "  $0 error.log"
@@ -16,6 +18,14 @@ LOGFILE=""
 READCOMMAND="cat"
 
 case "$1" in
+  -l)
+	ls $LOGDIR
+	exit 0
+	;;
+  --list)
+	ls $LOGDIR
+	exit 0
+	;;
   acl)
 	LOGFILE=$LOGDIR/$1.log
         ;;
