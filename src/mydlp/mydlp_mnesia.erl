@@ -104,7 +104,7 @@
 	get_rule_table/2,
 	get_discovery_directory/0,
 	get_prtscr_app_name/0,
-	get_inbound_action/0,
+	get_inbound_rule/0,
 	get_fs_entry/1,
 	del_fs_entry/1,
 	add_fs_entry/1,
@@ -359,7 +359,7 @@ get_discovery_directory() -> aqc({get_discovery_directory}, cache).
 
 get_prtscr_app_name() -> aqc({get_prtscr_app_name}, cache).
 
-get_inbound_action() -> aqc(get_inbound_action, cache). 
+get_inbound_rule() -> aqc(get_inbound_rule, cache). 
 
 get_fs_entry(FilePath) -> aqc({get_fs_entry, FilePath}, nocache).
 
@@ -452,10 +452,10 @@ handle_result({get_prtscr_app_name}, {atomic, Result}) ->
 		[] -> none;
 		[Table] -> Table end;
 
-handle_result(get_inbound_action, {atomic, Result}) ->
+handle_result(get_inbound_rule, {atomic, Result}) ->
 	case Result of
-		[{_,_,[]}] -> pass;
-		[{_,_,[{_, Action,_}|_]}|_] -> Action end;
+		[{_,_,[]}] -> {-1, pass};
+		[{_,_,[{RuleId, Action,_}|_]}|_] -> {RuleId,Action} end;
 
 handle_result({get_fs_entry, _FilePath}, {atomic, Result}) -> 
 	case Result of
@@ -872,7 +872,7 @@ handle_query({get_prtscr_app_name}) ->
 		]),
 	?QLCE(Q);
 
-handle_query(get_inbound_action) ->
+handle_query(get_inbound_rule) ->
 	Q = ?QLCQ([R#rule_table.table ||
 		R <- mnesia:table(rule_table),
 		R#rule_table.channel == inbound

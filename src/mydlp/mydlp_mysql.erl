@@ -511,7 +511,7 @@ populate_rule(OrigId, Channel, Action, FilterId) ->
 	{ok, DQ} = psq(domain_by_rule_id, [OrigId]),
 	{ok, DIRQ} = psq(directory_by_rule_id, [OrigId]),
 	{ok, AppName} = psq(app_name_by_rule_id, [OrigId]),
-	populate_destinations(DQ++DIRQ++AppName, RuleId),
+	populate_destinations(DQ++DIRQ++AppName, RuleId, Channel),
 	
 	{ok, ENT} = psq(email_notification_by_rule_id, [OrigId, OrigId]),
 	populate_notifications(ENT, RuleId, email),
@@ -540,7 +540,12 @@ populate_iprs([[Base, Subnet]| Rows], RuleId) ->
 	populate_iprs(Rows, RuleId);
 populate_iprs([], _RuleId) -> ok.
 
-populate_destinations([[Destination]|Rows], RuleId) ->
+populate_destinations([[Destination]|Rows], RuleId, Channel=screenshot) ->
+	Id = mydlp_mnesia:get_unique_id(dest),
+	I = #dest{id=Id, rule_id=RuleId, destination=Destination},
+	mydlp_mnesia_write(I),
+	populate_destinations(Rows, RuleId, Channel);
+populate_destinations([[Destination]|Rows], RuleId, Channel) ->
 	Id = mydlp_mnesia:get_unique_id(dest),
 	D = case Destination of
 		<<"all">> -> all; 
@@ -548,8 +553,8 @@ populate_destinations([[Destination]|Rows], RuleId) ->
 	end,
 	I = #dest{id=Id, rule_id=RuleId, destination=D},
 	mydlp_mnesia_write(I),
-	populate_destinations(Rows, RuleId);
-populate_destinations([], _RuleId) -> ok.
+	populate_destinations(Rows, RuleId,Channel);
+populate_destinations([], _RuleId, _Channel) -> ok.
 
 populate_notifications([[Notification]|Rows], RuleId, Type) ->
 	Id = mydlp_mnesia:get_unique_id(notification),
