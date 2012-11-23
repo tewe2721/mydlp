@@ -143,7 +143,6 @@ seclore_terminate() ->
 %%%%%%%%%%%%%% gen_server handles
 
 handle_call({thrift, java, Func, Params}, _From, #state{backend_java=TS} = State) ->
-	timer:sleep(20000),
 	{TS1, Reply} = try
 		thrift_client:call(TS, Func, Params)
 	catch _:{TSE, _Exception} ->
