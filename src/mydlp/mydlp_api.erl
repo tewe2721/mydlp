@@ -2680,7 +2680,6 @@ empty_aclr(Files) -> empty_aclr(Files, "").
 
 empty_aclr(Files, Misc) -> {{rule, -1}, {file, Files}, {itype, -1}, {misc, Misc}}.
 
-
 %%-------------------------------------------------------------------------
 %% @doc Spawns a process, monitors it and kills after timeout
 %% @end

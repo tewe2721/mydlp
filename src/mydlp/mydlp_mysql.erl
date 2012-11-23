@@ -1111,8 +1111,9 @@ pre_push_log(RuleId, Ip, User, Destination, Action, Channel, Misc) ->
 		inbound -> <<"I">>;
 		screenshot -> <<"S">>
 	end,
-	Visible = case RuleId of
-		-1 -> 0;
+	Visible = case {Channel, RuleId} of
+		{inbound, _} -> 0;
+		{_, -1} -> 0;
 		_Else -> 1 end,
 	Misc1 = case Misc of
 		M when is_list(M) -> unicode:characters_to_binary(M);
