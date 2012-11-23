@@ -2681,6 +2681,14 @@ empty_aclr(Files) -> empty_aclr(Files, "").
 empty_aclr(Files, Misc) -> {{rule, -1}, {file, Files}, {itype, -1}, {misc, Misc}}.
 
 %%-------------------------------------------------------------------------
+%% @doc Creates an empty acl result tuple with given rule id,  files and itype id
+%% @end
+%%-------------------------------------------------------------------------
+
+empty_aclr(RuleId, Files, Misc) -> {{rule, RuleId}, {file, Files}, {itype, -1}, {misc, Misc}}.
+
+
+%%-------------------------------------------------------------------------
 %% @doc Spawns a process, monitors it and kills after timeout
 %% @end
 %%-------------------------------------------------------------------------
