@@ -172,19 +172,20 @@ notify_users_now(RuleId) ->
 
 notify_user([{email, EmailAddress}|Notifications]) ->
 	EmailBody = [	"From: support@mydlp.com", 
-			"\r\n",
+			"\n",
 			"To: ", EmailAddress,
-			"\r\n",
-			"Subject: Notifications from MyDLP"
-			"\r\n",
-			"Content-Type: text/html; charset=utf-8",
-			"\r\n",
+			"\n",
+			"Subject: ",
+			?CFG(email_notification_message_subject),
+			"\n",
+			"Content-Type: text/plain; charset=utf-8",
+			"\n",
 			"Content-Transfer-Encoding: base64",
-			"\r\n",
-			"\r\n",
-			?CFG(email_notification_message), 
-			"\r\n"],
-	mydlp_smtpc:mail("support@mydlp.com", binary_to_list(EmailAddress), base64:encode(EmailBody)),
+			"\n",
+			"\n",
+			base64:encode(?CFG(email_notification_message)), 
+			"\n"],
+	mydlp_smtpc:mail("support@mydlp.com", binary_to_list(EmailAddress), EmailBody),
 	notify_user(Notifications);
 notify_user([{other, _Target}|Notifications]) -> 
 	notify_user(Notifications);

@@ -245,6 +245,7 @@ load_src(Src) ->
 	{syslog_report_facility, syslog_facility, "local7"},
 	{seclore_fs_server_pool_size, integer, "8"},
 	{thrift_server_pool_size, integer, "8"},
+	{email_notification_message_subject, string, "Notifications from MyDLP"},
 	{email_notification_message, string, "Hello,\r\nThis is an auto-generated message. This message aims to inform you about some incidents that have been recently occurred and logged in your MyDLP system.\r\nYou are recieving this message because you have subscribed to be notified for incidents related to a rule in MyDLP.\r\nFor details, please log on to MyDLP Management Console and go to Logs screen.\r\nIf you do not want to recieve these emails, please contact to your system administrator."}
 ]).
 
