@@ -131,10 +131,10 @@ process_item({_IpAddress, []}) -> ok;
 process_item({IpAddress, [Item|Rest]}) -> 
 	process_item({IpAddress, Item}),
 	process_item({IpAddress, Rest});
-process_item({_IpAddress, {endpoint_log, LogTerm} }) -> 
+process_item({IpAddress, {endpoint_log, LogTerm} }) -> 
 	#log{file=Files} = LogTerm,
 	Files1 = [ mydlp_api:reconstruct_cr(F) || F <- Files ], % To clean invalid cachrefs
-	?ACL_LOG(LogTerm#log{file=Files1});
+	?ACL_LOG(LogTerm#log{ip=IpAddress, file=Files1});
 process_item(_Item) -> ok. % TODO log unkown item.
 
 -endif.
