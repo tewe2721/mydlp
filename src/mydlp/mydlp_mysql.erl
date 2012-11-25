@@ -263,20 +263,22 @@ handle_info({'DOWN', _, _, Pid , _}, #state{host=Host,
 				{ok, NewPid} -> 
 					erlang:monitor(NewPid),
 					{[NewPid|PoolPids1], PoolPidsL};
-				_ -> error end;
+				Err -> {error, Err} end;
 		false -> case lists:member(Pid, PoolPidsL) of
 		true -> PoolPidsL1 = lists:delete(Pid, PoolPidsL),
 			case mysql:connect(pl, Host, undefined, User, Password, LDB, utf8, true) of
 				{ok, NewPid} -> 
 					erlang:monitor(NewPid),
 					{PoolPids, [NewPid|PoolPidsL1]};
-				_ -> error end;
+				Err2 -> {error, Err2} end;
 		false -> orphan end
 	end,
 
 	case PPTuple of
 		orphan -> ?ERROR_LOG("Dead pid is orphan. Ignoring.~nDeadPid: "?S", State: "?S, [Pid, State]),
 			{noreply, State};
+		{error, Error} -> ?ERROR_LOG("An error occurred when trying to create a new connection instead of dead one.~nError: "?S"~nState: "?S, [Error,State]) ,
+			{stop, normalStop, State};
 		error -> ?ERROR_LOG("An error occurred when trying to create a new connection instead of dead one.~nState: "?S, [State]) ,
 			{stop, normalStop, State};
 		{PP, PPL} -> {noreply, State#state{pool_pids=PP, pool_pids_l=PPL}}
