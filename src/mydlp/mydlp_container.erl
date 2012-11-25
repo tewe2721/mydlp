@@ -167,6 +167,7 @@ handle_call({aclq, ObjId, Timeout}, From, #state{object_tree=OT} = State) ->
 							discovery -> 
 								RuleIndex = get_discovery_rule_index(Obj),
 								{mydlp_acl:qe(Channel, DFFiles, RuleIndex), Obj};
+							printer -> {mydlp_acl:qe(Channel, DFFiles), Obj};
 							inbound -> {mydlp_acl:qi(Channel, DFFiles), Obj};
 							removable -> {mydlp_acl:qe(Channel, DFFiles), Obj}
 							end,
