@@ -1078,6 +1078,43 @@ un7zc(ZFNDir, ZFN) ->
 	Ret.
 
 %%--------------------------------------------------------------------
+%% @doc Untnefs an Erlang binary, this can be used for winmail.dat files.
+%% @end
+%%----------------------------------------------------------------------
+-ifdef(__PLATFORM_LINUX).
+
+-define(TNEFBIN, "/usr/bin/tnef").
+
+-endif.
+
+-ifdef(__PLATFORM_WINDOWS).
+
+-define(TNEFBIN, ?CFG(app_dir) ++ "/cygwin/bin/tnef.exe").
+
+-endif.
+
+-define(TNEFARGS(WorkDir, TNEFFN), ["--overwrite", "--use-paths", "-f", TNEFFN, "-C", WorkDir] ).
+
+untnef(Arg) -> untnef(Arg, "nofilename").
+
+untnef(Arg, FN) -> uncompress(untnefc, Arg, FN).
+
+untnefc(TNEFDir, TNEFFN) -> 
+	{ok, WorkDir} = mktempdir(),
+	WorkDir1 = WorkDir ++ "/",
+	Port = open_port({spawn_executable, ?TNEFBIN}, 
+			[{args, ?TNEFARGS(WorkDir1, TNEFFN)},
+			use_stdio,
+			exit_status,
+			stderr_to_stdout]),
+
+	Ret = case get_port_resp(Port) of
+		ok -> {ok, rr_files(WorkDir1)};
+		Else -> rmrf_dir(WorkDir1), Else end,
+	ok = rmrf_dir(TNEFDir),
+	Ret.
+
+%%--------------------------------------------------------------------
 %% @doc Ungzips an Erlang binary, this can be used for GZIP format.
 %% @end
 %%----------------------------------------------------------------------
@@ -1620,6 +1657,13 @@ comp_to_files([#file{mime_type= <<"application/x-archive">>, compressed_copy=fal
 			ctf_ok(Files, File, ExtFiles, Processed, New);
 		{error, _ShouldBeLogged} -> 
 			ctf_err_enc(Files, File, Processed, New) end;
+comp_to_files([#file{mime_type= <<"application/vnd.ms-tnef">>, compressed_copy=false, is_encrypted=false} = File|Files], Processed, New) ->
+	case untnef(File#file.dataref, File#file.filename) of
+		{ok, Ext} -> 
+			ExtFiles = ext_to_file(Ext),
+			ctf_ok(Files, File, ExtFiles, Processed, New);
+		{error, _ShouldBeLogged} -> 
+			ctf_err_enc(Files, File, Processed, New) end;
 comp_to_files([#file{mime_type= MimeType, compressed_copy=false, is_encrypted=false} = File | Rest ] = Files, Processed, New) -> 
 		case is_compression_mime(MimeType) of
 			true -> use_un7z(Files, Processed, New);
@@ -2115,6 +2159,7 @@ mime_category(<<"application/x-lzma">>) -> compression;
 mime_category(<<"application/x-xz">>) -> compression;
 mime_category(<<"application/x-winzip">>) -> compression;
 mime_category(<<"application/vnd.ms-cab-compressed">>) -> compression;
+mime_category(<<"application/vnd.ms-tnef">>) -> compression;
 mime_category(<<"application/x-executable">>) -> cobject;
 mime_category(<<"application/x-sharedlib">>) -> cobject;
 mime_category(<<"application/x-object">>) -> cobject;
@@ -2633,7 +2678,6 @@ rb_to_fie(Filename) when is_list(Filename) ->
 %% @doc Extracts texts from file and inner files and concats them.
 %% @end
 %%-------------------------------------------------------------------------
-
 concat_texts(#file{} = File) -> concat_texts([File]);
 concat_texts(Files) when is_list(Files) -> 
 	Files1 = extract_all(Files),
