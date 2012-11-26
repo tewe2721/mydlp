@@ -60,7 +60,7 @@ decode(Message) when is_binary(Message) ->
 				true -> 
 					Boundary = case re:run(Value, ?MP_BOUNDARY_KEY, [{capture,first}]) of
 						nomatch -> get_wo_quote_after(Value);
-						{match,[{S,9}]} -> get_wo_quote_after(Value, S+10) end,
+						{match,[{S,9}]} -> get_wo_quote_after(Value, S+9) end,
 					MIME1 = decode_multipart(MIME, Boundary),
 					MIME1#mime{header = Headers};
 				false -> MIME#mime{header = Headers, content = MIME#mime.body_text}

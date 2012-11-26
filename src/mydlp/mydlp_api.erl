@@ -1664,6 +1664,13 @@ comp_to_files([#file{mime_type= <<"application/vnd.ms-tnef">>, compressed_copy=f
 			ctf_ok(Files, File, ExtFiles, Processed, New);
 		{error, _ShouldBeLogged} -> 
 			ctf_err_enc(Files, File, Processed, New) end;
+comp_to_files([#file{mime_type= <<"message/rfc822">>, compressed_copy=false, is_encrypted=false} = File|Files], Processed, New) ->
+	try	ExtFiles = rfc822_to_files(File#file.data),
+		ctf_ok(Files, File, ExtFiles, Processed, New)
+	catch Class:Error ->
+		?ERROR_LOG("Error occurred when parsing rfc822 to files. Class: "?S". Error: "?S". Stacktrace:"?S"~nFile: "?S, 
+				[Class, Error, erlang:get_stacktrace(), File]),
+		ctf_err_enc(Files, File, Processed, New) end; % may be returned as plain text but this will introduce false positives
 comp_to_files([#file{mime_type= MimeType, compressed_copy=false, is_encrypted=false} = File | Rest ] = Files, Processed, New) -> 
 		case is_compression_mime(MimeType) of
 			true -> use_un7z(Files, Processed, New);
@@ -1806,6 +1813,10 @@ parse_multipart(HttpContent, H, Req) ->
 			?DEBUG("Can't parse multipart if get a "?S, [Other]), []
 	end,
 	mime_to_files(Res).
+
+rfc822_to_files(Bin) when is_binary(Bin)-> 
+	MIME = mime_util:decode(Bin),
+	mime_to_files(MIME).
 
 %%%%% multipart parsing
 parse_arg_line(Line) ->
@@ -2160,6 +2171,7 @@ mime_category(<<"application/x-xz">>) -> compression;
 mime_category(<<"application/x-winzip">>) -> compression;
 mime_category(<<"application/vnd.ms-cab-compressed">>) -> compression;
 mime_category(<<"application/vnd.ms-tnef">>) -> compression;
+mime_category(<<"message/rfc822">>) -> compression;
 mime_category(<<"application/x-executable">>) -> cobject;
 mime_category(<<"application/x-sharedlib">>) -> cobject;
 mime_category(<<"application/x-object">>) -> cobject;
