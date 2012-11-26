@@ -30,9 +30,11 @@
 -ifdef(__MYDLP_NETWORK).
 
 -include("mydlp_http.hrl").
--include("mydlp_smtp.hrl").
 
 -endif.
+
+-include("mydlp_smtp.hrl").
+
 
 -include_lib("xmerl/include/xmerl.hrl").
 
@@ -1788,6 +1790,8 @@ rfc822_to_files(Bin) when is_binary(Bin)->
 	MIME = mime_util:decode(Bin),
 	mime_to_files(MIME).
 
+-ifdef(__MYDLP_NETWORK).
+
 %%% imported from yaws (may be refactored for binary operation)
 parse_multipart(HttpContent, H, Req) ->
 	CT = H#http_headers.content_type,
@@ -1810,6 +1814,8 @@ parse_multipart(HttpContent, H, Req) ->
 			?DEBUG("Can't parse multipart if get a "?S, [Other]), []
 	end,
 	mime_to_files(Res).
+
+-endif.
 
 %%%%% multipart parsing
 parse_arg_line(Line) ->

@@ -18,18 +18,13 @@
 %%%    along with MyDLP.  If not, see <http://www.gnu.org/licenses/>.
 %%%--------------------------------------------------------------------------
 
--ifdef(__MYDLP_NETWORK).
 
 -ifndef(_MYDLP_SMTP_HRL).
 -define(_MYDLP_SMTP_HRL, true).
 
 -include("mydlp.hrl").
 
--define(CRLF,[13,10]).
--define(CRLF_BIN, <<13,10>>).
-
--define(D_CRLF_BIN, <<13,10,13,10>>).
-
+-ifdef(__MYDLP_NETWORK).
 
 -define(SMTPD_PORT,25).
 -define(SMTPD_MAX_CONN,25).
@@ -37,7 +32,16 @@
 -define(SMTP_DATA_END_BIN, <<13,10,46,13,10>>). % End of data command "\r\n.\r\n"
 -define(SMTP_DATA_END_REGEX, <<13,10,92,46,13,10>>). % End of data command "\r\n\.\r\n"
 
+-endif.
+
+-define(CRLF,[13,10]).
+-define(CRLF_BIN, <<13,10>>).
+
+-define(D_CRLF_BIN, <<13,10,13,10>>).
+
 -define(MP_BOUNDARY_KEY, <<"boundary=">>).
+
+-ifdef(__MYDLP_NETWORK).
 
 -record(smtpc,{
 	socket = [],
@@ -70,6 +74,8 @@
 	data        = undefined
 	}).
 
+-endif.
+
 -record(message,{
         mail_from    = [], % mail from value
         from         = [], % single address for sender
@@ -97,8 +103,6 @@
         domainname  = [],
         description = []
         }).
-
--endif.
 
 -endif.
 
