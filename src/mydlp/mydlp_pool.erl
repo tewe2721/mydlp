@@ -134,7 +134,7 @@ handle_info({async_reply, Reply, From}, State) ->
 
 handle_info({inactivate, Pid}, #state{inactive=IQ, workers=WS} = State) ->
 	IQ1 = case gb_sets:is_element(Pid, WS) of
-		true -> erlang:display(hede), queue:in(Pid, IQ);
+		true -> queue:in(Pid, IQ);
 		false -> IQ end,
 	{noreply, State#state{inactive=IQ1}};
 
