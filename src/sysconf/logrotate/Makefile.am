@@ -20,5 +20,7 @@
 
 logrotatedir = $(sysconfdir)/logrotate.d
 
-logrotate_DATA = mydlp
+logrotate_DATA = \
+	mydlp \
+	mydlp-apache2
 
