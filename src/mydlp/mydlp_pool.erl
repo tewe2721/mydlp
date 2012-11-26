@@ -132,8 +132,10 @@ handle_info({async_reply, Reply, From}, State) ->
 	gen_server:reply(From, Reply),
 	{noreply, State};
 
-handle_info({inactivate, Pid}, #state{inactive=IQ} = State) ->
-	IQ1 = queue:in(Pid, IQ),
+handle_info({inactivate, Pid}, #state{inactive=IQ, workers=WS} = State) ->
+	IQ1 = case gb_sets:is_element(Pid, WS) of
+		true -> erlang:display(hede), queue:in(Pid, IQ);
+		false -> IQ end,
 	{noreply, State#state{inactive=IQ1}};
 
 handle_info({'EXIT', FromPid, _Reason}, #state{module_name=ModuleName} = State) ->
@@ -148,7 +150,7 @@ handle_info(_Info, State) ->
 %%%%%%%%%%%%%%%% Implicit functions
 
 init([ModuleName, PoolSize]) ->
-	State = #state{inactive=queue:new(), module_name=ModuleName, pool_size=PoolSize, workers=[]},
+	State = #state{inactive=queue:new(), module_name=ModuleName, pool_size=PoolSize, workers=gb_sets:new()},
 	process_flag(trap_exit, true),
 	State1 = start_workers(State),
 	{ok, State1}.
@@ -161,31 +163,31 @@ code_change(_OldVsn, State, _Extra) ->
 
 %%%%%%%%%%%%%%%%% internal
 
-start_workers(#state{pool_size=PoolSize, workers=Workers} = State) ->
-	NumOfWorkers = length(Workers),
+start_workers(#state{pool_size=PoolSize, workers=WS} = State) ->
+	NumOfWorkers = gb_sets:size(WS),
 	case NumOfWorkers >= PoolSize of
 		false -> case start_worker(State) of
 				{S1, {ok, _Pid}} -> start_workers(S1);
 				{_S1, Else} -> throw({error, {can_not_start_worker, Else}}) end;
 		true -> State end.
 
-start_worker(#state{module_name=ModuleName, inactive=IQ, workers=WL} = State) ->
+start_worker(#state{module_name=ModuleName, inactive=IQ, workers=WS} = State) ->
 	case gen_server:start_link(ModuleName, [], []) of
 		{ok, Pid} ->
-			WL1 = lists:umerge(WL, [Pid]),
+			WS1 = gb_sets:add(Pid, WS),
 			IQ1 = queue:in(Pid, IQ),
-			{State#state{inactive=IQ1, workers=WL1}, {ok, Pid}};
+			{State#state{inactive=IQ1, workers=WS1}, {ok, Pid}};
 		Else -> ?ERROR_LOG("Worker didn't start. ReturnVal: "?S". State: "?S, [Else, State]),
 			{State, Else} end.
 
-release_worker(FromPid, #state{inactive=IQ, workers=WL} = State) ->
-	WL1 = lists:delete(FromPid, WL),
+release_worker(FromPid, #state{inactive=IQ, workers=WS} = State) ->
+	WS1 = gb_sets:delete_any(FromPid, WS),
 	
 	QL = queue:to_list(IQ),
 	QL1 = lists:delete(FromPid, QL),
 	IQ1 = queue:from_list(QL1),
 
-	State#state{inactive=IQ1, workers=WL1}.
+	State#state{inactive=IQ1, workers=WS1}.
 
 execute(cast, Pid, Request, _Timeout) -> gen_server:cast(Pid, Request);
 execute({call, _From}, Pid, Request, Timeout) -> gen_server:call(Pid, Request, Timeout).
