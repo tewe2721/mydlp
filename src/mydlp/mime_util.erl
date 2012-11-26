@@ -34,8 +34,6 @@
 %%%
 %%%---------------------------------------------------------------------------------------
 
--ifdef(__MYDLP_NETWORK).
-
 -module(mime_util).
 -author('kerem@mydlp.com').
 -author('sjackson@simpleenigma.com').
@@ -319,6 +317,4 @@ multipart_test() ->
 	?_assertEqual(ParsedMessage, decode(RawMessage)),
 	?_assertEqual(ParsedMessage2, decode(RawMessage2))
 	].
-
--endif.
 

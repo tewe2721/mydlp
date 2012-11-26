@@ -1776,8 +1776,6 @@ unquote(String) ->
         S2 = string:strip(String,both,32),
         string:strip(S2,both,34).
 
--ifdef(__MYDLP_NETWORK).
-
 split_email(Atom) when is_atom(Atom) -> split_email(atom_to_list(Atom));
 split_email([]) -> {[],[]};
 split_email(EmailAddress) ->
@@ -1786,10 +1784,9 @@ split_email(EmailAddress) ->
                 _AnythingsElse -> {[],[]}
         end.
 
--endif.
-
-
--ifdef(__MYDLP_NETWORK).
+rfc822_to_files(Bin) when is_binary(Bin)-> 
+	MIME = mime_util:decode(Bin),
+	mime_to_files(MIME).
 
 %%% imported from yaws (may be refactored for binary operation)
 parse_multipart(HttpContent, H, Req) ->
@@ -1813,10 +1810,6 @@ parse_multipart(HttpContent, H, Req) ->
 			?DEBUG("Can't parse multipart if get a "?S, [Other]), []
 	end,
 	mime_to_files(Res).
-
-rfc822_to_files(Bin) when is_binary(Bin)-> 
-	MIME = mime_util:decode(Bin),
-	mime_to_files(MIME).
 
 %%%%% multipart parsing
 parse_arg_line(Line) ->
@@ -1870,8 +1863,6 @@ make_parse_line_reply(Key, Value, Rest) ->
     X = {{list_to_atom(mydlp_api:funreverse(Key, {mydlp_api, to_lowerchar})),
           lists:reverse(Value)}, Rest},
     X.
-
--endif.
 
 metafy_files(Files) -> metafy_files(Files, []).
 
@@ -2309,8 +2300,6 @@ filename_to_bin(Filename) ->
                 Else -> ?ERROR_LOG("Encountered with a filename in an unexpected type. Filename: ["?S"]", [Else]),
                         <<"noname">> end.
 
--ifdef(__MYDLP_NETWORK).
-
 heads_to_file_int1(Str, QS, CT) ->
 	case string:str(Str, QS) of
 		0 -> ?ERROR_LOG("Improper composition of Content-Type line "
@@ -2631,14 +2620,10 @@ get_random_string() ->
                             ++ Acc
                 end, [], lists:seq(1, Length)).
 
--endif.
-
 %%-------------------------------------------------------------------------
 %% @doc Extracts filename from value of content disposition header
 %% @end
 %%-------------------------------------------------------------------------
-
--ifdef(__MYDLP_NETWORK).
 
 cd_to_fn(ContentDisposition) ->
 	case string:str(ContentDisposition, "filename=") of
@@ -2657,8 +2642,6 @@ cd_to_fn(ContentDisposition) ->
 					"\"" = string:substr(Str, Len),
 					string:substr(Str, 1, Len - 1);
 				Str -> Str end end.
-
--endif.
 
 %%-------------------------------------------------------------------------
 %% @doc Select chuck from files
