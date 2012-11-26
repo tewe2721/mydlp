@@ -1,0 +1,19 @@
+#!/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games
+
+BACKOFF_MAILX_OPTS="-S smtp=smtp://127.0.0.1:25"
+
+[ -f /etc/defaults/mydlp ] && . /etc/defaults/mydlp
+
+if [ $# -ne 4 ]; then
+	echo "Usage: $0 from@mydlpserver to@destinationserver subject file_that_includes_mail_body"
+	exit
+fi
+
+MAILFROM=$1
+MAILTO=$2
+SUBJECT=$3
+MAILBODY=$4
+
+mailx $BACKOFF_MAILX_OPTS -r "$MAILFROM" -s "$SUBJECT" "$MAILTO" < $MAILBODY
+

@@ -17,6 +17,17 @@ WATCHDOGLOGFILE=/var/log/mydlp/watchdog.log
 
 MQLIMIT=100
 
+
+# Mailx from address format for MyDLP Watchdog emails
+WATCHDOG_FROM_ADDRESS='support@mydlp.com(Your MyDLP Server)'
+
+# Mailx from address format for MyDLP Watchdog emails
+WATCHDOG_TO_ADDRESS="root@""$(hostname)"
+
+# Mailx subject for MyDLP Watchdog emails
+WATCHDOG_SUBJECT='MyDLP Watchdog Report'
+
+
 if test -f /etc/default/mydlp; then
         . /etc/default/mydlp
 fi
@@ -116,9 +127,7 @@ function startSquid {
 	if [ -n "$NOSQUID" -a "$NOSQUID" == "true" ]; then
 		return 0	
 	fi
-        echo "Starting Squid..."
         $SQUIDINIT start > /dev/null 2>&1
-        echo "Started Squid."
 }
 
 function stopMyDLP {
@@ -131,22 +140,14 @@ function stopMyDLP {
 }
 
 function startMyDLP {
-        echo "Starting MyDLP..."
-        $INITSCRIPT start > /dev/null 2>&1
-        waitForIcap
-        echo "Started MyDLP."
-	if [ -n "$NOSQUID" -a "$NOSQUID" == "true" ]; then
-		true 
-	else
-		echo "Reconfiguring Squid..."
-		squid3 -k reconfigure
-        fi
+        $INITSCRIPT start 
 }
 
 function stopPostfix {
 	if [ -n "$NOPOSTFIX" -a "$NOPOSTFIX" == "true" ]; then
 		return 0
 	fi
+        echo "Stopping Postfix..."
         $POSTFIXINIT stop > /dev/null 2>&1
 }
 
@@ -154,11 +155,7 @@ function startPostfix {
 	if [ -n "$NOPOSTFIX" -a "$NOPOSTFIX" == "true" ]; then
 		return 0
 	fi
-        $POSTFIXINIT start > /dev/null 2>&1
-}
-
-function logRestart {
-        echo "$(date) -> MyDLP is not running! Restarting. " >> $WATCHDOGLOGFILE
+        $POSTFIXINIT start
 }
 
 function getMQSize {
@@ -183,6 +180,7 @@ function doesNotMQhaveConnRefusedMsg() {
 		return 0
 	fi
 	if postqueue -p|grep -q -F '(connect to 127.0.0.1[127.0.0.1]:10026: Connection refused)'; then
+		echo "Postfix can not access to MyDLP mail content filter on port 10026!"
 		return 1
 	else
 		return 0
@@ -194,6 +192,7 @@ function doesNotMQhaveConversationTimedOutMsg() {
 		return 0
 	fi
 	if postqueue -p|grep -q -F '(delivery temporarily suspended: conversation with 127.0.0.1[127.0.0.1] timed out while receiving the initial server greeting)'; then
+		echo "MyDLP mail content filter is listening 10026, but it is not responding to Postfix connections!"
 		return 1
 	else
 		return 0
@@ -258,17 +257,32 @@ function isSquidAlive {
         isSquidProcAlive && isCachePortOpen
 }
 
-isMyDLPAlive || ( echo "MyDLP is not properly running. Restarting MyDLP..." && restartMyDLP )
+function watchdogAction {
+	isMyDLPAlive || ( echo "MyDLP is not properly running. Restarting MyDLP..." && restartMyDLP )
 
-if [ -n "$NOSQUID" -a "$NOSQUID" == "true" ]; then
-	true
-else
-	isSquidAlive || ( echo "Squid is not properly running. Restarting Squid..." && restartSquid )
+	if [ -n "$NOSQUID" -a "$NOSQUID" == "true" ]; then
+		true
+	else
+		isSquidAlive || ( echo "Squid is not properly running. Restarting Squid..." && restartSquid )
+	fi
+
+	if [ -n "$NOPOSTFIX" -a "$NOPOSTFIX" == "true" ]; then
+		true
+	else
+		isMQSane || flushMQ
+	fi
+}
+
+TMPFILE=$(mktemp)
+
+watchdogAction > $TMPFILE 2>&1
+
+if [ -n "$(cat $TMPFILE)" ]; then
+	echo >> $TMPFILE
+	echo "Watchdog action completed at $(date)" >> $TMPFILE
+
+	mydlp-backoff-mail "$WATCHDOG_FROM_ADDRESS" "$WATCHDOG_TO_ADDRESS" "$WATCHDOG_SUBJECT" $TMPFILE
 fi
 
-if [ -n "$NOPOSTFIX" -a "$NOPOSTFIX" == "true" ]; then
-	true
-else
-	isMQSane || flushMQ
-fi
+rm -f $TMPFILE
 

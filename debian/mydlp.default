@@ -26,3 +26,18 @@ NOPOSTFIX="false"
 # you have to set variables below to communicate license server.
 #LICENSE_PROXY_HOST="proxy.hostname.com"
 #LICENSE_PROXY_PORT="3128"
+
+# Mailx configuration to send email through an external SMTP server
+# This will be used to send watchdog and system status emails.
+BACKOFF_MAILX_OPTS="-S smtp=smtp://127.0.0.1:25"
+
+# Mailx from address format for MyDLP Watchdog emails
+WATCHDOG_FROM_ADDRESS='support@mydlp.com(Your MyDLP Server)'
+
+# Mailx from address format for MyDLP Watchdog emails
+WATCHDOG_TO_ADDRESS="root@""$(hostname)"
+
+# Mailx subject for MyDLP Watchdog emails
+WATCHDOG_SUBJECT='MyDLP Watchdog Report'
+
+
