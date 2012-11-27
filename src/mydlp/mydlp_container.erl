@@ -67,6 +67,7 @@
 -record(object, {
 	buffer=[],
 	data,
+	size,
 	eof_flag=false,
 	filepath=undefined,
 	prop_dict=dict:new()
@@ -77,6 +78,14 @@
 	ep_meta,  % defined keys are: user , version
 	object_tree
 	}).
+
+-define(ACLQ_TIMEOUT_SEAP_DIFF, 10000).
+
+-define(ACLQ_TIMEOUT_MIN, 20000).
+
+-define(ACLQ_TIMEOUT_MAX, 140000).
+
+-define(ACLQ_TIMEOUT_CONST, 0.01144).
 
 %%%% API
 
@@ -106,11 +115,32 @@ pushfile(ObjId, FilePath) -> gen_server:cast(?MODULE, {pushfile, ObjId, FilePath
 
 pushchunk(ObjId, ChunkPath) -> gen_server:cast(?MODULE, {pushchunk, ObjId, ChunkPath}).
 
-eof(ObjId) -> gen_server:cast(?MODULE, {eof, ObjId}).
+eof(ObjId) -> 
+	ok = gen_server:cast(?MODULE, {eof, ObjId}),
+	ObjSize = case obj_size(ObjId) of
+		{error, _Else} -> 0;
+		{ok, I} -> I end,
+	AgentTimeout = aclq_timeout(ObjSize) + ?ACLQ_TIMEOUT_SEAP_DIFF,
+	{ok, AgentTimeout}.
 
 getdata(ObjId) -> gen_server:call(?MODULE, {getdata, ObjId}).
 
-aclq(ObjId) -> aclq(ObjId, 1500000).
+obj_size(ObjId) -> gen_server:call(?MODULE, {obj_size, ObjId}).
+
+aclq_timeout(Size) -> 
+	CalcSize = ?ACLQ_TIMEOUT_MIN + ( Size * ?ACLQ_TIMEOUT_CONST ),
+	SizeF = case CalcSize of
+		I when I < ?ACLQ_TIMEOUT_MIN -> ?ACLQ_TIMEOUT_MIN;
+		I when I > ?ACLQ_TIMEOUT_MAX -> ?ACLQ_TIMEOUT_MAX;
+		I when is_integer(I)-> I end,
+	round(SizeF).
+
+aclq(ObjId) -> 
+	ObjSize = case obj_size(ObjId) of
+		{error, _Else} -> 0;
+		{ok, I} -> I end,
+	Timeout = aclq_timeout(ObjSize),
+	aclq(ObjId, Timeout).
 
 aclq(ObjId, Timeout) ->
 	case gen_server:call(?MODULE, {aclq, ObjId, Timeout}, Timeout) of
@@ -188,12 +218,26 @@ handle_call({aclq, ObjId, Timeout}, From, #state{object_tree=OT} = State) ->
 		none -> gen_server:reply(From, {error, not_in_object_tree}) end,
 	{noreply, State};
 
+handle_call({obj_size, ObjId}, _From, #state{object_tree=OT} = State) ->
+	Reply = case gb_trees:lookup(ObjId, OT) of
+		{value, #object{eof_flag=true, size=Size}} -> 
+			case Size of
+				error -> {error, na};
+				0 -> {error, na};
+				I when is_integer(I) -> {ok, I} end;
+		{value, #object{eof_flag=false} = Obj} -> 
+			?ERROR_LOG("SIZE: eof_flag is not true, can not SIZE before EOF: ObjId="?S", Obj="?S" OT="?S"~n",
+				[ObjId, Obj, OT]),
+			{error, eof_flag_is_not_true};
+		none -> {error, not_in_object_tree} end,
+	{reply, Reply, State};
+
 handle_call({getdata, ObjId}, _From, #state{object_tree=OT} = State) ->
 	Reply = case gb_trees:lookup(ObjId, OT) of
 		{value, #object{eof_flag=true, data=Data}} -> 
 			{ok, Data};
 		{value, #object{eof_flag=false} = Obj} -> 
-			?ERROR_LOG("ACLQ: eof_flag is not true, can not GETDATA before EOF: ObjId="?S", Obj="?S" OT="?S"~n",
+			?ERROR_LOG("SIZE: eof_flag is not true, can not GETDATA before EOF: ObjId="?S", Obj="?S" OT="?S"~n",
 				[ObjId, Obj, OT]),
 			{error, eof_flag_is_not_true};
 		none -> {error, not_in_object_tree} end,
@@ -291,10 +335,12 @@ handle_cast({eof, ObjId}, #state{object_tree=OT} = State) ->
 	case gb_trees:lookup(ObjId, OT) of
 		{value, #object{eof_flag=false, filepath=undefined, buffer=Buffer} = Obj} -> 
 			Data = list_to_binary(lists:reverse(Buffer)),
-			OT1 = gb_trees:enter(ObjId, Obj#object{buffer=[], eof_flag=true, data=Data}, OT),
+			Size = predict_size(Obj),
+			OT1 = gb_trees:enter(ObjId, Obj#object{buffer=[], eof_flag=true, data=Data, size=Size}, OT),
 			{noreply, State#state{object_tree=OT1}};
 		{value, #object{eof_flag=false} = Obj} ->  % END after PUSHFILE
-			OT1 = gb_trees:enter(ObjId, Obj#object{eof_flag=true}, OT),
+			Size = predict_size(Obj),
+			OT1 = gb_trees:enter(ObjId, Obj#object{eof_flag=true, size=Size}, OT),
 			{noreply, State#state{object_tree=OT1}};
 		{value, #object{eof_flag=true} = Obj} -> 
 			?ERROR_LOG("EOF: eof_flag is already true, doing nothing: ObjId="?S", Object="?S"~n",
@@ -488,26 +534,34 @@ get_api_user(#object{prop_dict=PD}) ->
 %	case dict:find("user", PD) of
 %		{ok, User} -> User;
 %		error -> nil  end.
+predict_size(#object{filepath=undefined, data=undefined}) -> error;
+predict_size(#object{filepath=undefined, data=Data}) -> size(Data);
+predict_size(#object{filepath=FilePath}) -> filelib:file_size(FilePath).
 
 object_to_file(Obj) ->
 	Type = get_type(Obj),
 	object_to_file(Type, Obj).
 
-object_to_file(regular, #object{prop_dict=PD, filepath=undefined, data=Data}) ->
-	Filename = case dict:find("filename", PD) of
+get_filename(#object{prop_dict=PD}) ->
+	case dict:find("filename", PD) of
 		{ok, FN} -> qp_decode(FN);
 		error -> case dict:find("filename_unicode", PD) of
 			{ok, UFN} -> UFN;
-			error -> "seap-data" end end,
+			error -> error end end.
+
+object_to_file(regular, #object{filepath=undefined, data=Data} = Obj) ->
+	Filename = case get_filename(Obj) of
+		error -> "seap-data";
+		Else -> Else end,
 	?BF_C(#file{filename=Filename}, Data);
 
-object_to_file(regular, #object{prop_dict=PD, filepath=FilePath}) ->  % created with PUSHFILE
-	Filename = case dict:find("filename", PD) of
-		{ok, FN} -> qp_decode(FN);
-		error -> filename:basename(FilePath) end,
+object_to_file(regular, #object{prop_dict=PD, filepath=FilePath} = Obj) ->  % created with PUSHFILE
+	Filename = case get_filename(Obj) of
+		error -> filename:basename(FilePath);
+		Else -> Else end,
 	URef = case dict:find("burn_after_reading", PD) of
 		{ok, "true"} ->	{tmpfile, FilePath};
-		_Else -> {regularfile, FilePath} end,
+		_Else2 -> {regularfile, FilePath} end,
 	?BF_C(#file{filename=Filename}, URef);
 
 object_to_file(usb_device, #object{prop_dict=PD}) ->

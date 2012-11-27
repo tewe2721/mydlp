@@ -156,12 +156,12 @@ init([]) ->
 	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
 
 'END_RESP'(State, ObjId) ->
-	ok = mydlp_container:eof(ObjId),
-	send_ok(State),
+	{ok, AgentTimeout} = mydlp_container:eof(ObjId),
+	send_ok(State, AgentTimeout),
 	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
 
 'ACLQ_RESP'(State, ObjId) ->
-	{ok, Action} = mydlp_container:aclq(ObjId, 29000),
+	{ok, Action} = mydlp_container:aclq(ObjId),
 	send_ok(State, Action),
 	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
 
