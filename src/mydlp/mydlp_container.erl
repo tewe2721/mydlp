@@ -115,13 +115,7 @@ pushfile(ObjId, FilePath) -> gen_server:cast(?MODULE, {pushfile, ObjId, FilePath
 
 pushchunk(ObjId, ChunkPath) -> gen_server:cast(?MODULE, {pushchunk, ObjId, ChunkPath}).
 
-eof(ObjId) -> 
-	ok = gen_server:cast(?MODULE, {eof, ObjId}),
-	ObjSize = case obj_size(ObjId) of
-		{error, _Else} -> 0;
-		{ok, I} -> I end,
-	AgentTimeout = aclq_timeout(ObjSize) + ?ACLQ_TIMEOUT_SEAP_DIFF,
-	{ok, AgentTimeout}.
+eof(ObjId) -> gen_server:cast(?MODULE, {eof, ObjId}).
 
 getdata(ObjId) -> gen_server:call(?MODULE, {getdata, ObjId}).
 
