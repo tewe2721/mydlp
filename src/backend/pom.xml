@@ -11,7 +11,21 @@
   
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    
+    <log.root.appender>STDOUT</log.root.appender>
   </properties>
+  
+  <profiles>
+    <profile>
+      <id>endpoint-win32</id>
+      <activation>
+        <os><family>windows</family></os>
+      </activation>
+      <properties>
+        <log.root.appender>SYSLOG_ROOT</log.root.appender>
+      </properties>
+    </profile>
+  </profiles>
 
   <build>
     <plugins>
@@ -45,6 +59,12 @@
         </executions>
       </plugin>
     </plugins>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+        <filtering>true</filtering>
+      </resource>
+    </resources>
   </build>
   
   <dependencies>

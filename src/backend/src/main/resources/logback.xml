@@ -12,6 +12,6 @@
     <suffixPattern>[%thread]: [backend] %msg</suffixPattern>
   </appender>
   <root level="error">
-    <appender-ref ref="SYSLOG_ROOT"/>
+    <appender-ref ref="${log.root.appender}"/>
   </root>
 </configuration>
