@@ -427,18 +427,19 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 	QRet = mydlp_acl:qi(web,DFFiles),
 	acl_ret(QRet, DFFiles, State);
 'REQ_OK'(#state{icap_headers=#icap_headers{x_client_ip=CAddr},
-		http_request=#http_request{path=Uri},
+		http_request=#http_request{method=Method, path=Uri},
 		http_req_headers=#http_headers{host=DestHost},
 		un_hash=UserHash } = State) ->
 	DFFiles = df_to_files(State),
 
 	DestHost1 = case DestHost of
-		undefined -> mydlp_api:get_host(Uri);
-		DH -> DH end,
+		undefined -> get_host(Method, Uri);
+		DH -> mydlp_api:drop_host_port(DH) end,
 	DestList = [list_to_binary(DestHost1)],
-	AclQ = #aclq{channel=web, src_addr=CAddr, src_user_h=UserHash, destinations=DestList},
 
+	AclQ = #aclq{channel=web, src_addr=CAddr, src_user_h=UserHash, destinations=DestList},
 	QRet = mydlp_acl:q(AclQ, DFFiles),
+
 	acl_ret(QRet, DFFiles, State).
 
 acl_ret(QRet, DFFiles, State) -> 
@@ -819,6 +820,10 @@ encap_pl_res(CacheDataResH, CacheDataResB) ->
 		_Else -> { [<<"Encapsulated: res-hdr=0, res-body=">>, 
 			integer_to_list(size(CacheDataResH))],
 			[CacheDataResH, CacheDataResB] } end.
+
+get_host('CONNECT', Uri) -> mydlp_api:drop_host_port(Uri);
+get_host(_Method, Uri) -> mydlp_api:get_host(Uri).
+
 
 -endif.
 

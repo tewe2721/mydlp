@@ -2069,9 +2069,16 @@ get_host(Uri) ->
 				_ -> throw({error, not_a_uri_with_fqdn}) end;
 		_ -> throw({error, not_a_uri_with_fqdn}) end,
 
-	case string:chr(Str, $@) of
+	Str2 = case string:chr(Str, $@) of
 		0 -> Str;
-		I3 -> string:substr(Str, I3 + 1) end.
+		I3 -> string:substr(Str, I3 + 1) end,
+
+	drop_host_port(Str2).
+
+drop_host_port(Host) ->
+	case string:chr(Host, $:) of
+		0 -> Host;
+		I -> string:substr(Host, 1, I - 1) end.
 
 prettify_uenc_data1(D) ->
 	case prettify_uenc_data(D) of 
