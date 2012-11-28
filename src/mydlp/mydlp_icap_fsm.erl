@@ -704,14 +704,20 @@ parse_urlencoded(#state{http_req_content=HttpContent}) ->
 
 df_to_files(#state{icap_mod_mode=reqmod, files=Files, 
 		http_request=#http_request{path=Uri},
+		http_req_headers=#http_headers{content_disposition=CDisposition},
 		http_req_content=ReqData}) ->
-	UFile = case mydlp_api:uri_to_hr_file(Uri) of
+	UFiles = case mydlp_api:uri_to_hr_file(Uri) of
 		none -> [];
 		F -> [F] end,
+	
 	OFiles = case Files of
-		[] -> DFile = ?BF_C(#file{name= "post-data"}, ReqData), [DFile];
+		[] -> 	FN = case cd_to_fn1(CDisposition) of
+				none -> "post-data";
+				CDFN -> CDFN end,
+			DFile = ?BF_C(#file{name=FN}, ReqData), [DFile];
 		_ -> Files end,
-	lists:append([UFile, OFiles]);
+
+	lists:append([UFiles, OFiles]);
 df_to_files(#state{icap_mod_mode=respmod, http_res_content= <<>>}) -> [];
 df_to_files(#state{icap_mod_mode=respmod,
 		http_request=#http_request{path=Uri},

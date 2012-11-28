@@ -2324,8 +2324,7 @@ heads_to_file([{'content-disposition', "inline"}|Rest], #file{filename=undefined
 heads_to_file([{'content-disposition', CD}|Rest], #file{filename=undefined} = File) ->
 	case cd_to_fn(CD) of
 		none -> heads_to_file(Rest, File);
-		FN -> 	FN1 = multipart_decode_fn(FN),
-			heads_to_file(Rest, File#file{filename=FN1})
+		FN -> 	heads_to_file(Rest, File#file{filename=FN})
 	end;
 heads_to_file([{'content-type', "text/html"}|Rest], #file{filename=undefined, name=undefined} = File) ->
 	case lists:keysearch('content-disposition',1,Rest) of
@@ -2632,7 +2631,7 @@ get_random_string() ->
 %%-------------------------------------------------------------------------
 
 cd_to_fn(ContentDisposition) ->
-	case string:str(ContentDisposition, "filename=") of
+	ExtFN = case string:str(ContentDisposition, "filename=") of
 		0 -> none; 
 		I ->	FNVal = string:strip(string:substr(ContentDisposition, I + 9)),
 			FNVal1 = string:strip(FNVal, right, $;),
@@ -2647,7 +2646,10 @@ cd_to_fn(ContentDisposition) ->
 					Len = string:len(Str),
 					"\"" = string:substr(Str, Len),
 					string:substr(Str, 1, Len - 1);
-				Str -> Str end end.
+				Str -> Str end end,
+	case ExtFN of
+		none -> none;
+		_Else -> multipart_decode_fn(ExtFN) end.
 
 %%-------------------------------------------------------------------------
 %% @doc Select chuck from files
