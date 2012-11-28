@@ -132,7 +132,7 @@ command({saml = _Command,_Param},State) ->
 	State;
 
 command({Command,Param},State) ->
-	io:format("Unknown Command: ~p ~p~n",[Command,Param]),
+	?ERROR_LOG("SMTP: Unknown Command: "?S" "?S,[Command,Param]),
 	send(State,500),
 	State.
 
@@ -172,11 +172,21 @@ parse(Line) when is_list(Line)  ->
 
 
 clean_email(String) -> 
-	case re:run(String,"<(.*)>",[{capture,[1]}]) of
+	Ret = case re:run(String,"<(.*)>",[{capture,[1]}]) of
 		{match,[{Start,Length}]} -> string:substr(String,Start+1,Length);
-		{match,[{-1,_Length}]} -> {error,nomatch};
-		nomatch -> {error,nomatch}
-	end.
+		{match,[{-1,_Length}]} -> nomatch;
+		nomatch -> nomatch end,
+
+	Ret2 = case Ret of 
+		nomatch -> case re:run(String,"([^ ]{1,}@[^ ]{1,})",[{capture,[1]}]) of
+			{match,[{Start2,Length2}]} -> string:substr(String,Start2+1,Length2);
+			{match,[{-1,_Length2}]} -> nomatch;
+			nomatch -> nomatch end;
+		_Else -> Ret end,
+
+	case Ret2 of
+		notmatch -> throw({error, not_a_clean_email});
+		_Else2 -> Ret2 end.
 
 resp(211) -> "System Status"; % Need more info
 resp(214) -> "For help please go to http://erlsoft.org/modules/erlmail/";
