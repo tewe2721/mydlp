@@ -122,12 +122,12 @@ getdata(ObjId) -> gen_server:call(?MODULE, {getdata, ObjId}).
 obj_size(ObjId) -> gen_server:call(?MODULE, {obj_size, ObjId}).
 
 aclq_timeout(Size) -> 
-	CalcSize = ?ACLQ_TIMEOUT_MIN + ( Size * ?ACLQ_TIMEOUT_CONST ),
-	SizeF = case CalcSize of
+	CalcSizeF = ?ACLQ_TIMEOUT_MIN + ( Size * ?ACLQ_TIMEOUT_CONST ),
+	CalcSize = round(CalcSizeF),
+	case CalcSize of
 		I when I < ?ACLQ_TIMEOUT_MIN -> ?ACLQ_TIMEOUT_MIN;
 		I when I > ?ACLQ_TIMEOUT_MAX -> ?ACLQ_TIMEOUT_MAX;
-		I when is_integer(I)-> I end,
-	round(SizeF).
+		I when is_integer(I)-> I end.
 
 aclq(ObjId) -> 
 	ObjSize = case obj_size(ObjId) of
