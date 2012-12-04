@@ -151,8 +151,11 @@ init([]) ->
 %%-------------------------------------------------------------------------
 'WAIT_FOR_SOCKET'({socket_ready, Socket, _CommType}, State) when is_port(Socket) ->
 	inet:setopts(Socket, [{active, once}, {packet, line}, list]),
-	{ok, {IP, _Port}} = inet:peername(Socket),
-	{next_state, 'ICAP_REQ_LINE', State#state{socket=Socket, addr=IP}, ?CFG(fsm_timeout)};
+	case inet:peername(Socket) of
+		{ok, {IP, _Port}} -> 
+			{next_state, 'ICAP_REQ_LINE', State#state{socket=Socket, addr=IP}, ?CFG(fsm_timeout)};
+		Else -> ?ERROR_LOG("Can not get ip address and port. Ret: "?S, [Else]),
+			{stop, normal, State} end;
 'WAIT_FOR_SOCKET'(Other, State) ->
 	?DEBUG("ICAP FSM: 'WAIT_FOR_SOCKET'. Unexpected message: "?S, [Other]),
 	%% Allow to receive async messages
