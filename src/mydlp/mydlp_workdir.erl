@@ -68,13 +68,10 @@ raw_to_obj(#file{} = File, Data) ->
 	Ref = raw_to_obj(Data),
 	Hash = case get_obj_size(Ref) > ?CFG(maximum_memory_object) of
 		true -> undefined;
-		false -> case RawData of
-			{_,_} -> undefined;
-			_Else ->
-				Bin = case Data of
-					B when is_binary(B) -> B;
-					_Else -> read_obj(Ref) end,
-				mydlp_api:md5_hex(Bin) end end,
+		false -> Bin = case Data of
+				B when is_binary(B) -> B;
+				_Else -> read_obj(Ref) end,
+			mydlp_api:md5_hex(Bin) end,
 	File#file{dataref=Ref, md5_hash=Hash}.
 
 raw_to_obj({regularfile, FilePath}) -> 
@@ -111,7 +108,7 @@ read_obj({cacheref, Ref}) ->
 	case file:read_file(FN) of
 		{ok, Bin} -> Bin;
 		Err -> throw(Err) end;
-read_obj(RawData) -> list_to_binary([RawData]);
+read_obj(RawData) -> list_to_binary([RawData]).
 
 get_obj_fp({regularfile, FilePath}) -> FilePath;
 get_obj_fp({tmpfile, FilePath}) -> FilePath;

@@ -254,7 +254,7 @@ handle_info({'DOWN', _, _, MPid , _}, #state{master_pid=MPid} = State) ->
 		Err ->	?ERROR_LOG("Error occurred when trying to restart MySQL module. Error: "?S, [Err]),
 			{stop, normalStop, State} end;
 
-handle_info({'DOWN', _, _, Pid , _}, #state{host=Host,
+handle_info({'DOWN', _, _, Pid , _} = Msg, #state{host=Host,
 		user=User, password=Password, database=DB, database_l=LDB,
 		pool_pids=PoolPids, pool_pids_l=PoolPidsL} = State) ->
 	PPTuple  = case lists:member(Pid, PoolPids) of
@@ -278,7 +278,9 @@ handle_info({'DOWN', _, _, Pid , _}, #state{host=Host,
 		orphan -> ?ERROR_LOG("Dead pid is orphan. Ignoring.~nDeadPid: "?S", State: "?S, [Pid, State]),
 			{noreply, State};
 		{error, Error} -> ?ERROR_LOG("An error occurred when trying to create a new connection instead of dead one.~nError: "?S"~nState: "?S, [Error,State]) ,
-			{stop, normalStop, State};
+			?ERROR_LOG("Retrying to create connection. Msg: "?S, [Msg]),
+			handle_info(Msg, State);
+			%{stop, normalStop, State};
 		error -> ?ERROR_LOG("An error occurred when trying to create a new connection instead of dead one.~nState: "?S, [State]) ,
 			{stop, normalStop, State};
 		{PP, PPL} -> {noreply, State#state{pool_pids=PP, pool_pids_l=PPL}}
