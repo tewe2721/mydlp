@@ -133,6 +133,12 @@ receiveChunk(_Ipaddress, Itemid, Chunkdata, _Chunknum, _Chunknumtotal) ->
 		_Else -> <<"error">> end.
 
 generateFingerprints(DocumentId, Filename, Data) -> 
+	generateFingerprintsFunc(DocumentId, Filename, Data).
+
+generateFingerprintsWithFile(DocumentId, Filename, Filepath) -> 
+	generateFingerprintsFunc(DocumentId, Filename, {tmpfile, Filepath}).
+
+generateFingerprintsFunc(DocumentId, Filename, Data) -> 
 	F = ?BF_C(#file{filename=Filename}, Data),
 	Text = mydlp_api:concat_texts(F),
 	FList = mydlp_pdm:fingerprint(Text),

@@ -2069,9 +2069,16 @@ get_host(Uri) ->
 				_ -> throw({error, not_a_uri_with_fqdn}) end;
 		_ -> throw({error, not_a_uri_with_fqdn}) end,
 
-	case string:chr(Str, $@) of
+	Str2 = case string:chr(Str, $@) of
 		0 -> Str;
-		I3 -> string:substr(Str, I3 + 1) end.
+		I3 -> string:substr(Str, I3 + 1) end,
+
+	drop_host_port(Str2).
+
+drop_host_port(Host) ->
+	case string:chr(Host, $:) of
+		0 -> Host;
+		I -> string:substr(Host, 1, I - 1) end.
 
 prettify_uenc_data1(D) ->
 	case prettify_uenc_data(D) of 
@@ -2324,8 +2331,7 @@ heads_to_file([{'content-disposition', "inline"}|Rest], #file{filename=undefined
 heads_to_file([{'content-disposition', CD}|Rest], #file{filename=undefined} = File) ->
 	case cd_to_fn(CD) of
 		none -> heads_to_file(Rest, File);
-		FN -> 	FN1 = multipart_decode_fn(FN),
-			heads_to_file(Rest, File#file{filename=FN1})
+		FN -> 	heads_to_file(Rest, File#file{filename=FN})
 	end;
 heads_to_file([{'content-type', "text/html"}|Rest], #file{filename=undefined, name=undefined} = File) ->
 	case lists:keysearch('content-disposition',1,Rest) of
@@ -2632,7 +2638,7 @@ get_random_string() ->
 %%-------------------------------------------------------------------------
 
 cd_to_fn(ContentDisposition) ->
-	case string:str(ContentDisposition, "filename=") of
+	ExtFN = case string:str(ContentDisposition, "filename=") of
 		0 -> none; 
 		I ->	FNVal = string:strip(string:substr(ContentDisposition, I + 9)),
 			FNVal1 = string:strip(FNVal, right, $;),
@@ -2647,7 +2653,10 @@ cd_to_fn(ContentDisposition) ->
 					Len = string:len(Str),
 					"\"" = string:substr(Str, Len),
 					string:substr(Str, 1, Len - 1);
-				Str -> Str end end.
+				Str -> Str end end,
+	case ExtFN of
+		none -> none;
+		_Else -> multipart_decode_fn(ExtFN) end.
 
 %%-------------------------------------------------------------------------
 %% @doc Select chuck from files

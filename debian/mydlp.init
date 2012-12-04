@@ -51,8 +51,8 @@ BACKENDPORT=9090
 
 . /lib/lsb/init-functions
 
-ERLANG_EXTRA_OPTS="+K true +P 524288 -env ERL_MAX_ETS_TABLES 32768"
-JSVC_EXTRA_OPTS="-Xmx2g"
+ERLANG_EXTRA_OPTS="+fnu +K true +P 524288 +A 30 -smp auto -env ERL_MAX_ETS_TABLES 32768 -env ERL_MAX_PORTS 1048576"
+JSVC_EXTRA_OPTS="-Xmx3g"
 
 if test -f /etc/default/mydlp; then
 	. /etc/default/mydlp

@@ -44,6 +44,7 @@ mydlpresources_DATA = \
 	personal_finance_terms.txt \
 	pricing_terms.txt \
 	sensitive_diseases.txt \
+	sensitive_drugs.txt \
 	surnames.txt \
 	strategic_business_documents.txt
 

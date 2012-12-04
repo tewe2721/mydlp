@@ -33,6 +33,9 @@ case "$1" in
   backend)
 	LOGFILE=$LOGDIR/$1.log
         ;;
+  backend-error)
+	LOGFILE=$LOGDIR/$1.log
+        ;;
   error)
 	LOGFILE=$LOGDIR/$1.log
         ;;
@@ -63,7 +66,7 @@ if [[ $LOGFILE = *.gz ]]; then
 	READCOMMAND="zcat"
 fi
 
-$READCOMMAND $LOGFILE|sed -s 's/#012/\t\n/g'
+$READCOMMAND $LOGFILE|sed -s 's/#012/\n/g;s/#011/\t/g'
 
 
 
