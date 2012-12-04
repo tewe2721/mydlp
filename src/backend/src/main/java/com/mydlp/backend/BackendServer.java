@@ -34,7 +34,7 @@ public class BackendServer {
 			logger.debug("Starting server on port 9090.");
 			server.serve();
 		} catch (TTransportException e) {
-			e.printStackTrace();
+			logger.error("Error occurred when listening.", e);
 		}
 	}
 	
