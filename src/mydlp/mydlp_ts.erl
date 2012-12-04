@@ -42,6 +42,7 @@
 
 -export([
 	generateFingerprints/3,
+	generateFingerprintsWithFile/3,
 	compileCustomer/1,
 	getCompileStatus/0,
 	getRuletable/3,
