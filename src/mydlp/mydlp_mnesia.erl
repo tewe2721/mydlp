@@ -284,13 +284,15 @@ get_dfid() -> 1.
 
 get_drid() -> 0.
 
-wait_for_tables() ->
+wait_for_tables() -> wait_for_tables(15000).
+
+wait_for_tables(Timeout) ->
 	TableList = lists:map( fun
 			({RecordAtom,_,_}) -> RecordAtom;
 			({RecordAtom,_}) -> RecordAtom;
 			(RecordAtom) when is_atom(RecordAtom) -> RecordAtom
 		end, ?TABLES),
-	mnesia:wait_for_tables(TableList, 15000).
+	mnesia:wait_for_tables(TableList, Timeout).
 
 -ifdef(__MYDLP_NETWORK).
 
@@ -1020,7 +1022,7 @@ handle_call(mnesia_dir_cleanup, _From, State) ->
 				AbsFileName = filename:absname(FN, MnesiaDir),
 				file:delete(AbsFileName) end
 			, MnesiaFiles),
-		init([])
+		boot_mnesia()
 	catch  	Class:Error ->
 		?ERROR_LOG("MNESIA_CLEANUP: Error occured: Class: ["?S"]. Error: ["?S"].~n"
 			"Stack trace: "?S"~n", [Class, Error, erlang:get_stacktrace()]) end,
@@ -1089,16 +1091,30 @@ is_mydlp_distributed() -> false.
 
 -endif.
 
-init([]) ->
-	mnesia_configure(),
+init([]) -> 
+	schedule_boot_mnesia(),
+	{ok, #state{}}.
 
+schedule_boot_mnesia() ->
+	?ASYNC0(fun() -> boot_mnesia() end), ok.
+
+boot_mnesia() ->
+	mnesia_configure(),
 	case is_mydlp_distributed() of
 		true -> start_distributed();
 		false -> start_single() end,
 
 	cache_start(),
 	call_timer(),
-	{ok, #state{}}.
+	ok.
+
+handle_cast(wait_for_tables, State) ->
+	WaitTimeout = 10000,
+	?ERROR_LOG("MNESIA Waiting for tables to start. Timeout: "?S, [WaitTimeout]),
+	case wait_for_tables(WaitTimeout) of
+		ok -> ?ERROR_LOG("MNESIA Tables are ready.", []);
+		Else -> ?ERROR_LOG("MNESIA didn't started within "?S"ms. Ret: "?S, [WaitTimeout, Else]) end,
+	{noreply, State};
 
 handle_cast(_Msg, State) ->
 	{noreply, State}.
@@ -1154,11 +1170,11 @@ start_mnesia_distributed(false = _IsAlreadyDistributed) ->
 
 start_mnesia_simple() ->
 	mnesia:create_schema([node()]), 
-	mnesia:start().
+	mnesia_start().
 
 start_mnesia_with_author(AuthorNode) ->
 	mnesia:delete_schema([node()]),
-	mnesia:start(),
+	mnesia_start(),
 	case mnesia:change_config(extra_db_nodes, [AuthorNode]) of
 		{ok, []} -> {error, cannot_connect_to_any_other_node};
 		{ok, [_|_]} -> mnesia:change_table_copy_type(schema, node(), disc_copies), ok;
@@ -1211,7 +1227,6 @@ schedule_post_start() ->
 start_tables(IsDistributionInit) ->
 	start_table(IsDistributionInit, {unique_ids, set}),
 	StartResult =  start_tables(IsDistributionInit, ?TABLES),
-	mnesia:subscribe(system),
 
 	case StartResult of
 		{ok, no_change} -> schedule_post_start();
@@ -1283,6 +1298,11 @@ start_tables(_IsDistributionInit, [], true = _IsSchemaChanged) -> {ok, schema_ch
 mnesia_stop() ->
 	mnesia:unsubscribe(system),
 	mnesia:stop().
+
+mnesia_start() ->
+	mnesia:start(),
+	gen_server:cast(?MODULE, wait_for_tables),
+	mnesia:subscribe(system).
 
 %get_unique_id(TableName) ->
 %	mnesia:dirty_update_counter(unique_ids, TableName, 1).
