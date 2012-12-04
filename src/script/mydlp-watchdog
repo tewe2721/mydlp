@@ -194,6 +194,9 @@ function doesNotMQhaveConversationTimedOutMsg() {
 	if postqueue -p|grep -q -F '(delivery temporarily suspended: conversation with 127.0.0.1[127.0.0.1] timed out while receiving the initial server greeting)'; then
 		echo "MyDLP mail content filter is listening 10026, but it is not responding to Postfix connections!"
 		return 1
+	elif postqueue -p|grep -q -F '(lost connection with 127.0.0.1[127.0.0.1] while receiving the initial server greeting)'; then
+		echo "MyDLP mail content filter is listening 10026, but it is becoming late for responding to Postfix connections!"
+		return 1
 	else
 		return 0
 	fi
