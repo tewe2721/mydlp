@@ -1096,27 +1096,26 @@ init([]) ->
 	{ok, #state{}}.
 
 schedule_boot_mnesia() ->
-	cache_start(),
-	call_timer(),
-	?ASYNC0(fun() -> boot_mnesia_async() end), ok.
+	?ASYNC0(fun() -> boot_mnesia() end), ok.
 
 boot_mnesia() ->
-	cache_start(),
-	call_timer(),
-	boot_mnesia_async().
-
-boot_mnesia_async() ->
 	mnesia_configure(),
 	case is_mydlp_distributed() of
 		true -> start_distributed();
 		false -> start_single() end,
 	ok.
 
-handle_cast(wait_for_tables, State) ->
+boot_after_tables_ops() ->
+	cache_start(),
+	call_timer(),
+	ok.
+
+handle_cast(schedule_after_tables_ops, State) ->
 	WaitTimeout = 10000,
 	?ERROR_LOG("MNESIA Waiting for tables to start. Timeout: "?S, [WaitTimeout]),
-	case wait_for_tables(WaitTimeout) of
-		ok -> ?ERROR_LOG("MNESIA Tables are ready.", []);
+	case catch wait_for_tables(WaitTimeout) of
+		ok -> 	?ERROR_LOG("MNESIA Tables are ready.", []),
+			boot_after_tables_ops();
 		Else -> ?ERROR_LOG("MNESIA didn't started within "?S"ms. Ret: "?S, [WaitTimeout, Else]) end,
 	{noreply, State};
 
@@ -1306,7 +1305,7 @@ mnesia_stop() ->
 mnesia_start() ->
 	mnesia:start(),
 	mnesia_subscribe_system(),
-	gen_server:cast(?MODULE, wait_for_tables).
+	gen_server:cast(?MODULE, schedule_after_tables_ops).
 
 mnesia_subscribe_system() ->
 	case mnesia:subscribe(system) of
