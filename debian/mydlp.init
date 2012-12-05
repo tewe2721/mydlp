@@ -14,20 +14,6 @@
 PATH=/usr/bin:/usr/sbin:/bin:/sbin
 
 ERLANG=/usr/bin/erl
-JSVCBIN=/usr/bin/jsvc
-
-JAVA_HOME=/usr/lib/jvm/java-6-openjdk
-if [ "x86_64" == "$(uname -p)" -a -e "$JAVA_HOME""-amd64" ]; then
-	JAVA_HOME="$JAVA_HOME""-amd64"
-fi
-
-CDJAR=/usr/share/java/commons-daemon.jar
-MBJAR=/usr/share/mydlp/backend/mydlp-backend.jar
-TXJAR=/usr/share/mydlp/backend/tika-xps.jar
-
-BERRLOG=/var/log/mydlp/backend-error.log
-BOUTLOG=/var/log/mydlp/backend.log
-BDAEMON=com.mydlp.backend.Bootstrap
 
 HOMEDIR=/etc/mydlp
 
@@ -49,10 +35,9 @@ ICAPPORT=1344
 JETTYPORT=8009
 BACKENDPORT=9090
 
-. /lib/lsb/init-functions
-
 ERLANG_EXTRA_OPTS="+fnu +K true +P 524288 +A 30 -smp auto -env ERL_MAX_ETS_TABLES 32768 -env ERL_MAX_PORTS 1048576"
-JSVC_EXTRA_OPTS="-Xmx3g"
+
+. /lib/lsb/init-functions
 
 if test -f /etc/default/mydlp; then
 	. /etc/default/mydlp
@@ -67,8 +52,7 @@ fi
 ERLANG_NODE_NAME="-sname system"
 ERLANG_OPTS="$ERLANG_NODE_NAME -noshell -detached $ERLANG_EXTRA_OPTS $ERLANG_MYDLP_OPTS"
 
-JSVC="$JSVCBIN $JSVC_EXTRA_OPTS -home $JAVA_HOME -cp $CDJAR:$MBJAR:$TXJAR -pidfile $PIDFILE2"
-JSVC_STARTOPTS="-outfile $BOUTLOG -errfile $BERRLOG $BDAEMON"
+BACKEND_CTL=/usr/sbin/mydlp-backend-ctl
 
 check_piddir() {
 	[ -d $PIDDIR ] || \
@@ -211,7 +195,7 @@ cleanpids() {
 
 start_backend() {
 	log_daemon_msg "Starting MyDLP Backend" "mydlp"
-        if $JSVC $JSVC_STARTOPTS; then
+        if $BACKEND_CTL start; then
             log_end_msg 0
         else
             log_end_msg 1
@@ -222,7 +206,7 @@ start_backend() {
 stop_backend() {
 	if status_backend; then
 		log_daemon_msg "Stopping MyDLP Backend" "mydlp"
-		if $JSVC -stop $BDAEMON; then
+		if $BACKEND_CTL stop; then
 		    log_end_msg 0
 		else
 		    log_end_msg 1
