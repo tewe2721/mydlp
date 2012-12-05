@@ -1013,6 +1013,9 @@ handle_call({new_authority, AuthorNode}, _From, State) ->
 		true -> ok end,
 	{reply, ok, State};
 
+handle_call(ping, _From, State) ->
+	{reply, pong, State};
+
 handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
 
@@ -1211,16 +1214,26 @@ repopulate_mnesia() -> schedule_post_start().
 
 -endif.
 
+wait_ready() -> 
+	case gen_server:call(?MODULE, ping, 60000) of
+		pong -> ok;
+		Err -> ?ERROR_LOG("Mnesia didn't get ready in 60000ms. Err: "?S, [Err]) end.
+
 post_start() ->
-	post_start(mnesia),
-	post_start(mc),
+	wait_ready(),
+	post_start0(mnesia),
+	post_start0(mc),
 	ok.
 
-post_start(mnesia) ->
+post_start(Mod) ->
+	wait_ready(),
+	post_start0(Mod).
+
+post_start0(mnesia) ->
 	consistency_chk(),
 	mydlp_dynamic:load(),
 	ok;
-post_start(mc) ->
+post_start0(mc) ->
 	mydlp_mc:mc_load_mnesia(),
 	ok.
 
