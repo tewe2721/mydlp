@@ -406,7 +406,7 @@ truncate_all() -> gen_server:call(?MODULE, truncate_all, 15000).
 
 truncate_nondata() -> gen_server:call(?MODULE, truncate_nondata, 15000).
 
-mnesia_dir_cleanup() -> gen_server:call(?MODULE, mnesia_dir_cleanup, 180000).
+mnesia_dir_cleanup() -> gen_server:cast(?MODULE, mnesia_dir_cleanup).
 
 flush_cache() -> cache_clean0().
 
@@ -842,7 +842,6 @@ handle_query(Query) -> handle_query_common(Query).
 
 -ifdef(__MYDLP_ENDPOINT).
 
-
 % TODO: should be refined for multi-site usage
 handle_query({get_rule_table, Channel}) ->
 	Q = ?QLCQ([ R#rule_table.table ||
@@ -1014,20 +1013,6 @@ handle_call({new_authority, AuthorNode}, _From, State) ->
 		true -> ok end,
 	{reply, ok, State};
 
-handle_call(mnesia_dir_cleanup, _From, State) ->
-	try 	(catch mnesia_stop()),
-		{ok, MnesiaDir} = application_controller:get_env(mnesia, dir),
-		{ok, MnesiaFiles} = file:list_dir(MnesiaDir),
-		lists:foreach(fun(FN) ->
-				AbsFileName = filename:absname(FN, MnesiaDir),
-				file:delete(AbsFileName) end
-			, MnesiaFiles),
-		boot_mnesia()
-	catch  	Class:Error ->
-		?ERROR_LOG("MNESIA_CLEANUP: Error occured: Class: ["?S"]. Error: ["?S"].~n"
-			"Stack trace: "?S"~n", [Class, Error, erlang:get_stacktrace()]) end,
-	{reply, ok, State};
-
 handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
 
@@ -1047,22 +1032,22 @@ handle_info(cleanup_now, State) ->
 
 handle_info({mnesia_system_event,{mnesia_down, _Node}}, State) ->
 	?ERROR_LOG("MNESIA Stopped unexpectedly.", []),
-	?ASYNC(fun() -> mnesia_dir_cleanup() end, 181000),
+	mnesia_dir_cleanup(),
 	{noreply, State};
 
 handle_info({mnesia_system_event,{mnesia_fatal, Format, Args, _BinaryCore}}, State) ->
 	?ERROR_LOG("MNESIA FATAL: " ++ io_lib:format(Format, Args), []),
-	?ASYNC(fun() -> mnesia_dir_cleanup() end, 181000),
+	mnesia_dir_cleanup(),
 	{noreply, State};
 
 handle_info({mnesia_system_event,{mnesia_error, Format, Args}}, State) ->
 	?ERROR_LOG("MNESIA ERROR: " ++ io_lib:format(Format, Args), []),
-	?ASYNC(fun() -> mnesia_dir_cleanup() end, 181000),
+	mnesia_dir_cleanup(),
 	{noreply, State};
 
 handle_info({mnesia_system_event,{inconsistent_database, _Context, _Node}}, State) ->
 	?ERROR_LOG("MNESIA Inconsistant database. Cleaning up and restarting.", []),
-	?ASYNC(fun() -> mnesia_dir_cleanup() end, 181000),
+	mnesia_dir_cleanup(),
 	{noreply, State};
 
 handle_info(_Info, State) ->
@@ -1079,21 +1064,45 @@ start_link() ->
 stop() ->
 	gen_server:call(?MODULE, stop).
 
--ifdef(__MYDLP_NETWORK).
-
-is_mydlp_distributed() -> mydlp_distributor:is_distributed().
-
--endif.
-
--ifdef(__MYDLP_ENDPOINT).
-
-is_mydlp_distributed() -> false.
-
--endif.
-
 init([]) -> 
 	schedule_boot_mnesia(),
 	{ok, #state{}}.
+
+handle_cast(mnesia_dir_cleanup, State) ->
+	try 	(catch mnesia_stop()),
+		{ok, MnesiaDir} = application_controller:get_env(mnesia, dir),
+		{ok, MnesiaFiles} = file:list_dir(MnesiaDir),
+		lists:foreach(fun(FN) ->
+				AbsFileName = filename:absname(FN, MnesiaDir),
+				file:delete(AbsFileName) end
+			, MnesiaFiles),
+		boot_mnesia()
+	catch  	Class:Error ->
+		?ERROR_LOG("MNESIA_CLEANUP: Error occured: Class: ["?S"]. Error: ["?S"].~n"
+			"Stack trace: "?S"~n", [Class, Error, erlang:get_stacktrace()]) end,
+	{noreply, State};
+
+handle_cast(schedule_after_tables_ops, State) ->
+	WaitTimeout = 10000,
+	?ERROR_LOG("MNESIA Waiting for tables to start. Timeout: "?S, [WaitTimeout]),
+	case catch wait_for_tables(WaitTimeout) of
+		ok -> 	?ERROR_LOG("MNESIA Tables are ready.", []),
+			boot_after_tables_ops();
+		Else -> mnesia_dir_cleanup(),
+			?ERROR_LOG("MNESIA didn't started within "?S"ms. Scheduled cleanup. Err: "?S, [WaitTimeout, Else]) end,
+	{noreply, State};
+
+handle_cast(_Msg, State) ->
+	{noreply, State}.
+
+terminate(_Reason, _State) ->
+	mnesia_stop(),
+	ok.
+
+code_change(_OldVsn, State, _Extra) ->
+	{ok, State}.
+
+%%%%%%%%%%%%%%%%%
 
 schedule_boot_mnesia() ->
 	?ASYNC0(fun() -> boot_mnesia() end), ok.
@@ -1110,27 +1119,6 @@ boot_after_tables_ops() ->
 	call_timer(),
 	ok.
 
-handle_cast(schedule_after_tables_ops, State) ->
-	WaitTimeout = 10000,
-	?ERROR_LOG("MNESIA Waiting for tables to start. Timeout: "?S, [WaitTimeout]),
-	case catch wait_for_tables(WaitTimeout) of
-		ok -> 	?ERROR_LOG("MNESIA Tables are ready.", []),
-			boot_after_tables_ops();
-		Else -> ?ERROR_LOG("MNESIA didn't started within "?S"ms. Ret: "?S, [WaitTimeout, Else]) end,
-	{noreply, State};
-
-handle_cast(_Msg, State) ->
-	{noreply, State}.
-
-terminate(_Reason, _State) ->
-	mnesia_stop(),
-	ok.
-
-code_change(_OldVsn, State, _Extra) ->
-	{ok, State}.
-
-%%%%%%%%%%%%%%%%%
-
 mnesia_configure() ->
         MnesiaDir = case os:getenv("MYDLP_MNESIA_DIR") of
                 false -> ?CFG(mnesia_dir);
@@ -1140,6 +1128,18 @@ mnesia_configure() ->
 	ok.
 
 get_mnesia_nodes() -> mnesia:system_info(db_nodes).
+
+-ifdef(__MYDLP_NETWORK).
+
+is_mydlp_distributed() -> mydlp_distributor:is_distributed().
+
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
+is_mydlp_distributed() -> false.
+
+-endif.
 
 start_single() ->
 	start_mnesia_simple(),
