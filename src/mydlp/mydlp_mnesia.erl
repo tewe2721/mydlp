@@ -1096,16 +1096,20 @@ init([]) ->
 	{ok, #state{}}.
 
 schedule_boot_mnesia() ->
-	?ASYNC0(fun() -> boot_mnesia() end), ok.
+	cache_start(),
+	call_timer(),
+	?ASYNC0(fun() -> boot_mnesia_async() end), ok.
 
 boot_mnesia() ->
+	cache_start(),
+	call_timer(),
+	boot_mnesia_async().
+
+boot_mnesia_async() ->
 	mnesia_configure(),
 	case is_mydlp_distributed() of
 		true -> start_distributed();
 		false -> start_single() end,
-
-	cache_start(),
-	call_timer(),
 	ok.
 
 handle_cast(wait_for_tables, State) ->
@@ -1301,8 +1305,19 @@ mnesia_stop() ->
 
 mnesia_start() ->
 	mnesia:start(),
-	gen_server:cast(?MODULE, wait_for_tables),
-	mnesia:subscribe(system).
+	mnesia_subscribe_system(),
+	gen_server:cast(?MODULE, wait_for_tables).
+
+mnesia_subscribe_system() ->
+	case mnesia:subscribe(system) of
+		{error,{node_not_running, _}} ->
+			?ERROR_LOG("Mnesia didn't started. Can not subscribe. Waiting 100ms to retry.",[]),
+			timer:sleep(100),
+			mnesia_subscribe_system();
+		{error, _} = Error ->
+			?ERROR_LOG("Can not subscribe to mnesia. Error: "?S, [Error]),
+			Error;
+		{ok, _} -> ok end.
 
 %get_unique_id(TableName) ->
 %	mnesia:dirty_update_counter(unique_ids, TableName, 1).
