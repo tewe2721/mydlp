@@ -166,10 +166,22 @@ code_change(_OldVsn, State, _Extra) ->
 start_workers(#state{pool_size=PoolSize, workers=WS} = State) ->
 	NumOfWorkers = gb_sets:size(WS),
 	case NumOfWorkers >= PoolSize of
-		false -> case start_worker(State) of
+		false -> case start_worker_wait(State) of
 				{S1, {ok, _Pid}} -> start_workers(S1);
 				{_S1, Else} -> throw({error, {can_not_start_worker, Else}}) end;
 		true -> State end.
+
+start_worker_wait(State) -> start_worker_wait(State, 500, 10).
+
+start_worker_wait(State, _Interval, 0) ->
+	case start_worker(State) of
+		{S1, {ok, Pid}} -> {S1, {ok, Pid}};
+		{S1, Else} -> ?ERROR_LOG("Can not start worker even after waiting.", []), {S1, Else} end;
+start_worker_wait(State, Interval, Count) ->
+	case start_worker(State) of
+		{S1, {ok, Pid}} -> {S1, {ok, Pid}};
+		{S1, _Else} -> 	?ERROR_LOG("Waiting "?S"ms before trying to start worker.", [Interval]),
+				start_worker_wait(S1, Interval, Count - 1) end.
 
 start_worker(#state{module_name=ModuleName, inactive=IQ, workers=WS} = State) ->
 	case gen_server:start_link(ModuleName, [], []) of
