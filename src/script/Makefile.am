@@ -1,4 +1,5 @@
 sbin_SCRIPTS = \
+	mydlp-backend-ctl \
 	mydlp-backoff-mail \
 	mydlp-download-xp-deps \
 	mydlp-index \
