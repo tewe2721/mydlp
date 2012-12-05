@@ -171,16 +171,17 @@ start_workers(#state{pool_size=PoolSize, workers=WS} = State) ->
 				{_S1, Else} -> throw({error, {can_not_start_worker, Else}}) end;
 		true -> State end.
 
-start_worker_wait(State) -> start_worker_wait(State, 500, 10).
+start_worker_wait(State) -> start_worker_wait(State, 750, 6).
 
 start_worker_wait(State, _Interval, 0) ->
 	case start_worker(State) of
 		{S1, {ok, Pid}} -> {S1, {ok, Pid}};
 		{S1, Else} -> ?ERROR_LOG("Can not start worker even after waiting.", []), {S1, Else} end;
-start_worker_wait(State, Interval, Count) ->
+start_worker_wait(#state{module_name=ModuleName} = State, Interval, Count) ->
 	case start_worker(State) of
 		{S1, {ok, Pid}} -> {S1, {ok, Pid}};
-		{S1, _Else} -> 	?ERROR_LOG("Waiting "?S"ms before trying to start worker.", [Interval]),
+		{S1, _Else} -> 	(catch ModuleName:restart_backoff()),
+				?ERROR_LOG("Waiting "?S"ms after calling restart_backoff to start worker.", [Interval]),
 				start_worker_wait(S1, Interval, Count - 1) end.
 
 start_worker(#state{module_name=ModuleName, inactive=IQ, workers=WS} = State) ->

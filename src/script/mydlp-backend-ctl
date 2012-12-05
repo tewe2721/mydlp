@@ -48,8 +48,21 @@ JSVC="$JSVCBIN $JSVC_EXTRA_OPTS -home $JAVA_HOME -cp $CDJAR:$MBJAR:$TXJAR -pidfi
 JSVC_STARTOPTS="-outfile $BOUTLOG -errfile $BERRLOG $BDAEMON "
 JSVC_OOME="-XX:OnOutOfMemoryError=/usr/sbin/mydlp-backend-ctl restart"
 
+is_port_open() {
+        local PORTNUM=$1
+        netstat -nltp 2>/dev/null|grep LISTEN|awk '-F ' '{print $4;}'|awk -F: '{print $NF;}'|grep -qe "^$PORTNUM$"
+}
+
+wait_for_backend() {
+        for i in $(seq 15); do
+            sleep 1
+            if is_port_open $BACKENDPORT; then break; fi
+        done
+}
+
 start_backend() {
         $JSVC "$JSVC_OOME" $JSVC_STARTOPTS;
+	wait_for_backend
 }
 
 stop_backend() {

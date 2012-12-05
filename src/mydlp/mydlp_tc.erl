@@ -39,7 +39,8 @@
 		seclore_initialize/7,
 		seclore_protect/3,
 		seclore_terminate/0,
-		load/0
+		load/0,
+		restart_backoff/0
 	]).
 
 %% gen_server callbacks
@@ -57,6 +58,18 @@
 %%%%%%%%%%%%% MyDLP Thrift RPC API
 
 start_link() -> mydlp_pool:start_link(?MODULE, get_thrift_pool_size()).
+
+-ifdef(__MYDLP_NETWORK).
+
+restart_backoff() -> os:cmd("/usr/sbin/mydlp-backend-ctl restart"), ok.
+
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
+restart_backoff() -> ok.
+
+-endif.
 
 -define(MMLEN, 4096).
 
@@ -143,13 +156,18 @@ seclore_terminate() ->
 %%%%%%%%%%%%%% gen_server handles
 
 handle_call({thrift, java, Func, Params}, _From, #state{backend_java=TS} = State) ->
-	{TS1, Reply} = try
+	Ret = try
 		thrift_client:call(TS, Func, Params)
-	catch _:{TSE, _Exception} ->
-			?ERROR_LOG("Error in thrift backend. \n", []),
+	catch 	_:{_TSE, {error,closed}} ->
+			?ERROR_LOG("Connection is closed. Stopping.", []),
+			stop;
+		_:{TSE, Exception} ->
+			?ERROR_LOG("Error in thrift backend. Exception: "?S, [Exception]),
 			{TSE, {error, exception_at_backend}} end,
-		
-	{reply, Reply, State#state{backend_java=TS1}};
+
+	case Ret of
+		{TS1, Reply} ->	{reply, Reply, State#state{backend_java=TS1}};
+		stop -> {stop, normal, State} end;
 
 handle_call(stop, _From, #state{backend_java=Java} = State) ->
 	thrift_client:close(Java),
