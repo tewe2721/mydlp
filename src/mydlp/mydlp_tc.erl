@@ -160,14 +160,14 @@ handle_call({thrift, java, Func, Params}, _From, #state{backend_java=TS} = State
 		thrift_client:call(TS, Func, Params)
 	catch 	_:{_TSE, {error,closed}} ->
 			?ERROR_LOG("Connection is closed. Stopping.", []),
-			stop;
+			stop_killall;
 		_:{TSE, Exception} ->
 			?ERROR_LOG("Error in thrift backend. Exception: "?S, [Exception]),
 			{TSE, {error, exception_at_backend}} end,
 
 	case Ret of
 		{TS1, Reply} ->	{reply, Reply, State#state{backend_java=TS1}};
-		stop -> {stop, normal, State} end;
+		stop_killall -> {stop, {reschedule, killall}, State} end;
 
 handle_call(stop, _From, #state{backend_java=Java} = State) ->
 	thrift_client:close(Java),

@@ -54,9 +54,13 @@ is_port_open() {
 }
 
 wait_for_backend() {
-        for i in $(seq 15); do
-            sleep 1
-            if is_port_open $BACKENDPORT; then break; fi
+	for i in $(seq 15); do
+		if is_port_open $BACKENDPORT; then
+			break
+		else
+			sleep 1
+			true
+		fi
         done
 }
 

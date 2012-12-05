@@ -87,12 +87,31 @@ handle_request(Type, Request, Timeout, #state{inactive=IQ, module_name=ModuleNam
 	Parent = self(),
 	InactiveQ = case queue:out(IQ) of
 		{{value, Pid}, IQ1} -> ?ASYNC(fun() ->
-					Result = try execute(Type, Pid, Request, Timeout - 500)
-						catch Class:Error -> 
-							?ERROR_LOG("An error occurred when dispatcing pool req. Type: "?S", Request: "?S", Pid: "?S"~nClass: "?S", Error: "?S"~nStacktrace:"?S, 
-								[Type, Request, Pid, Class, Error, erlang:get_stacktrace()]),
-							{ierror, Class, Error} end,
-					return_result(Parent, Type, Pid, Result)
+					try 	Result = execute(Type, Pid, Request, Timeout - 500),
+						return_result(Parent, Type, Pid, Result)
+					catch 	exit:{{reschedule, R}, _} = Error -> 
+						case R of
+							killall -> killall(Parent)
+						end,
+						?ERROR_LOG(	"Worker stopped when dispatching pool req. Rescheduling. "
+								"Type: "?S", Request: "?S", Pid: "?S"~n, Error: "?S"~nStacktrace:"?S, 
+							[Type, Request, Pid, Error, erlang:get_stacktrace()]),
+							timer:sleep(1000),
+							reschedule(ModuleName, Type, Request, Timeout - 1000),
+							ok;
+						exit:{noproc, _} ->
+						?ERROR_LOG(	"Currently no process exists. Rescheduling. "
+								"Type: "?S", Request: "?S, [Type, Request]),
+							timer:sleep(500),
+							reschedule(ModuleName, Type, Request, Timeout - 500),
+							ok;
+						Class:Error -> 
+						?ERROR_LOG(	"An error occurred when dispatching pool req. "
+								"Type: "?S", Request: "?S", Pid: "?S"~nClass: "?S", Error: "?S"~nStacktrace:"?S, 
+							[Type, Request, Pid, Class, Error, erlang:get_stacktrace()]),
+						Result2 = {ierror, Class, Error} ,
+						return_result(Parent, Type, Pid, Result2)
+					end
 				end, Timeout - 250), IQ1;
 		{empty, IQ1} -> ?ERROR_LOG("Pool ("?S") is exhausted. Waiting for to dispatch request. Request: "?S, [ModuleName, Request]),
 				?ASYNC(fun() ->
@@ -139,10 +158,15 @@ handle_info({inactivate, Pid}, #state{inactive=IQ, workers=WS} = State) ->
 	{noreply, State#state{inactive=IQ1}};
 
 handle_info({'EXIT', FromPid, _Reason}, #state{module_name=ModuleName} = State) ->
-	?ERROR_LOG("A worker ("?S") from pool ("?S") is dead. Recreating a worker.", [FromPid, ModuleName]),
+	?ERROR_LOG("A worker ("?S") from pool ("?S") is dead. Calling start_workers.", [FromPid, ModuleName]),
 	State1 = release_worker(FromPid, State),
 	State2 = start_workers(State1),
 	{noreply, State2};
+
+handle_info(killall, #state{module_name=ModuleName, workers=WS} = State) ->
+	?ERROR_LOG("Killing all workers from pool ("?S").", [ModuleName]),
+	lists:foreach(fun(P) -> exit(P, parent_kill) end, gb_sets:to_list(WS)),
+	{noreply, State#state{inactive=queue:new(), workers=gb_sets:new()}};
 
 handle_info(_Info, State) ->
 	{noreply, State}.
@@ -213,6 +237,9 @@ return_result(Parent, _Type, Pid, _Result) ->
 
 return_result1(Parent, Pid) ->
 	Parent ! {inactivate, Pid}.
+
+killall(Parent) ->
+	Parent ! killall.
 
 reschedule(ModuleName, Type, Request, Timeout) -> gen_server:cast(ModuleName, {reschedule, Type, Request, Timeout}).
 
