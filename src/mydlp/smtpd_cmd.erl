@@ -185,7 +185,9 @@ clean_email(String) ->
 		_Else -> Ret end,
 
 	case Ret2 of
-		notmatch -> throw({error, not_a_clean_email});
+		nomatch -> 
+			?ERROR_LOG("Can not extract an email address from client command. Str: "?S, [String]),
+			throw({error, not_a_clean_address});
 		_Else2 -> Ret2 end.
 
 resp(211) -> "System Status"; % Need more info
