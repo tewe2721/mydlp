@@ -9,7 +9,7 @@ SOLRBASEURL="http://127.0.0.1:8010/solr"
 SOLRUPDATEURL="$SOLRBASEURL/update"
 SOLREXTRACTURL="$SOLRUPDATEURL/extract"
 SOLRIDKEY="literal.id"
-SOLREXTRACTOPTS="literal.category=archive"
+SOLREXTRACTOPTS="fmap.content=text&literal.category=archive"
 MYSQLC=/usr/bin/mysql
 MYSQLOPTS="-N"
 
@@ -33,6 +33,8 @@ MYSQLPW=$(grep -e "^mysql_password" $MYDLPCONF|cut -f 2)
 MYSQLDB=$(grep -e "^mysql_log_database" $MYDLPCONF|cut -f 2)
 
 MYSQLARGS="$MYSQLOPTS "
+
+VALIDSOLRRESPREGEX="^<?xml version=\"1.0\" encoding=\"UTF-8\"?> <response> <lst name=\"responseHeader\"><int name=\"status\">0</int><int name=\"QTime\">[0-9][0-9]*</int></lst> </response>$"
 
 if [ "$MYSQLHOST" != "localhost" ]; then
 	MYSQLARGS="$MYSQLARGS -h $MYSQLHOST"
@@ -60,7 +62,13 @@ function updateLastIndex() {
 function solrUpdate() {
 	local id=$1
 	local file=$2
-	$CURL "$SOLREXTRACTURL?$SOLRIDKEY=$id&$SOLREXTRACTOPTS" -F "myfile=@$file" >/dev/null || exit 1
+	CURLOUTPUT=$($CURL "$SOLREXTRACTURL?$SOLRIDKEY=$id&$SOLREXTRACTOPTS" -F "myfile=@$file") || exit 1
+	if echo $(echo "$CURLOUTPUT")|grep -q "$VALIDSOLRRESPREGEX"; then
+		true
+	else
+		logger -p local6.error -t mydlp-index[$$] "Unexpected result from SOLR API. Item id: $id. Resp: $CURLOUTPUT"
+	fi
+	
 	updateLastIndex $id
 }
 
