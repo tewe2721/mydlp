@@ -117,7 +117,7 @@ chown_solr_data() {
 configure_tomcat() {
 	/etc/init.d/tomcat6 stop > /dev/null
 	/usr/sbin/update-rc.d tomcat6 disable 2345
-	/bin/cp -f /usr/share/mydlp/sysconf/jetty/tomcat6.default /etc/default/tomcat6
+	/bin/cp -f /usr/share/mydlp/sysconf/tomcat/tomcat6.default /etc/default/tomcat6
 	/bin/cp -f /usr/share/mydlp/sysconf/tomcat/server.xml /etc/tomcat6/server.xml
 }
 
