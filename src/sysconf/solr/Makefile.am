@@ -31,10 +31,10 @@ solrlib_DATA = \
 backenddir = $(datadir)/mydlp/backend
 
 apache-solr-4.0.0.tgz:
-	@WGET -q http://ftp/ftp/mydlp/mydlp-distro/solr/apache-solr-4.0.0.tgz
+	@$(WGET) -q http://ftp/ftp/mydlp/mydlp-distro/solr/apache-solr-4.0.0.tgz
 
-apache-solr-4.0.0: apache-solr-4.0.0.tgz
-	@TAR -zxf apache-solr-4.0.0.tgz
+apache-solr-4.0.0/dist/apache-solr-4.0.0.war apache-solr-4.0.0/dist/apache-solr-cell-4.0.0.jar: apache-solr-4.0.0.tgz
+	@$(TAR) -zxf apache-solr-4.0.0.tgz
 	
 
 install-data-hook:
