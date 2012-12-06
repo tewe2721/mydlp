@@ -261,14 +261,14 @@ handle_info({'DOWN', _, _, Pid , _} = Msg, #state{host=Host,
 		true -> PoolPids1 = lists:delete(Pid, PoolPids),
 			case mysql:connect(pp, Host, undefined, User, Password, DB, utf8, true) of
 				{ok, NewPid} -> 
-					erlang:monitor(NewPid),
+					erlang:monitor(process, NewPid),
 					{[NewPid|PoolPids1], PoolPidsL};
 				Err -> {error, Err} end;
 		false -> case lists:member(Pid, PoolPidsL) of
 		true -> PoolPidsL1 = lists:delete(Pid, PoolPidsL),
 			case mysql:connect(pl, Host, undefined, User, Password, LDB, utf8, true) of
 				{ok, NewPid} -> 
-					erlang:monitor(NewPid),
+					erlang:monitor(process, NewPid),
 					{PoolPids, [NewPid|PoolPidsL1]};
 				Err2 -> {error, Err2} end;
 		false -> orphan end
