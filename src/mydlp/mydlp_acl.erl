@@ -149,12 +149,8 @@ acl_exec3(Req, AllRules, [], ExNewFiles, CleanFiles) ->
 acl_exec3(Req, AllRules, Files, ExNewFiles, CleanFiles) ->
 	{InChunk, RestOfFiles} = mydlp_api:get_chunk(Files),
 	Files1 = mydlp_api:load_files(InChunk),
-	Files2 = drop_whitefile(Files1),
 
-	{PFiles, NewFiles} = mydlp_api:analyze(Files2),
-	PFiles1 = case CleanFiles of
-		true -> mydlp_api:clean_files(PFiles); % Cleaning newly created files.
-		false -> PFiles end,
+	{PFiles1, NewFiles} = mydlp_api:analyze(Files1),
 
 	PFiles2 = drop_nodata(PFiles1),
 	PFiles3 = case Req of
@@ -176,6 +172,11 @@ acl_exec3(Req, AllRules, Files, ExNewFiles, CleanFiles) ->
 				lists:append(ExNewFiles, NewFiles), CleanFiles);
 		Else -> Else end,
 	ctx_cache_stop(CTX),
+
+	%PFiles1 = case CleanFiles of
+	%	true -> mydlp_api:clean_files(PFiles); % Cleaning newly created files.
+	%	false -> PFiles end,
+	
 	AclR.
 
 -ifdef(__MYDLP_NETWORK).
@@ -528,13 +529,6 @@ mc_text_f(#file{normal_text=undefined}, _Opts) -> [];
 mc_text_f(#file{normal_text=NormalText}, all) -> mydlp_mc:mc_search(NormalText);
 mc_text_f(#file{normal_text=NormalText}, kw) -> mydlp_mc:mc_search(kw, NormalText);
 mc_text_f(#file{normal_text=NormalText}, pd) -> mydlp_mc:mc_search(pd, NormalText).
-
-is_whitefile(_File) ->
-	%Hash = erlang:md5(File#file.data),
-	%mydlp_mnesia:is_fhash_of_gid(Hash, [mydlp_mnesia:get_pgid()])
-	false.
-
-drop_whitefile(Files) -> lists:filter(fun(F) -> not is_whitefile(F) end, Files).
 
 has_data(#file{dataref={cacheref, _Ref}}) -> true;
 has_data(#file{dataref={memory, Bin}}) -> size(Bin) > 0;
