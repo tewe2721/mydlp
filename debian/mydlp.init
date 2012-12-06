@@ -21,6 +21,7 @@ PIDDIR=/var/run/mydlp
 PIDFILE=$PIDDIR/mydlp.pid
 PIDFILE2=$PIDDIR/backend.pid
 PIDFILE3=/var/run/jetty.pid
+PIDFILE4=/var/run/tomcat6.pid
 
 SERV=/usr/sbin/service
 MYSQLC=/usr/bin/mysql
@@ -34,6 +35,7 @@ SQUIDSSLCRTDDIR=/var/lib/ssl_db/
 ICAPPORT=1344
 JETTYPORT=8009
 BACKENDPORT=9090
+TOMCATPORT=8010
 
 ERLANG_EXTRA_OPTS="+fnu +K true +P 524288 +A 30 -smp auto -env ERL_MAX_ETS_TABLES 32768 -env ERL_MAX_PORTS 1048576"
 
@@ -97,25 +99,35 @@ is_port_open() {
 	netstat -nltp 2>/dev/null|grep LISTEN|awk '-F ' '{print $4;}'|awk -F: '{print $NF;}'|grep -qe "^$PORTNUM$"
 }
 
-wait_for_jetty() {
-	for i in $(seq 30); do
+wait_for_port() {
+	local PORTNUM=$1
+	local TRYCOUNT=$2
+	for i in $(seq $TRYCOUNT); do
 	    sleep 1
-	    if is_port_open $JETTYPORT; then break; fi
+		if is_port_open $PORTNUM; then
+			break
+		else
+			sleep 1
+			true
+		fi
 	done
+}
+
+
+wait_for_jetty() {
+	wait_for_port $JETTYPORT 30
+}
+
+wait_for_tomcat() {
+	wait_for_port $TOMCATPORT 30
 }
 
 wait_for_icap() {
-	for i in $(seq 15); do
-	    sleep 1
-	    if is_port_open $ICAPPORT; then break; fi
-	done
+	wait_for_port $ICAPPORT 15
 }
 
 wait_for_backend() {
-	for i in $(seq 15); do
-	    sleep 1
-	    if is_port_open $BACKENDPORT; then break; fi
-	done
+	wait_for_port $BACKENDPORT 15
 }
 
 start_mysql() {
@@ -191,6 +203,7 @@ cleanpids() {
 	status_mydlp || rm -f $PIDFILE
 	status_backend || rm -f $PIDFILE2
 	status_jetty || rm -f $PIDFILE3
+	status_tomcat || rm -f $PIDFILE4
 }
 
 start_backend() {
@@ -254,6 +267,33 @@ status_jetty() {
 	$SERV jetty status 2>&1 > /dev/null
 }
 
+start_tomcat() {
+	if [ -n "$NOJETTY" -a "$NOJETTY" == "true" ]; then
+		return 0;
+	fi
+	echo " * Starting Tomcat..."
+	$SERV tomcat6 start > /dev/null
+}
+
+stop_tomcat() {
+	if [ -n "$NOJETTY" -a "$NOJETTY" == "true" ]; then
+		return 0;
+	fi
+	if status_tomcat; then
+		echo " * Stopping Tomcat..."
+		$SERV tomcat6 stop 2>&1 > /dev/null
+	else
+		echo " * Tomcat is not running..."
+	fi
+}
+
+status_tomcat() {
+	if [ -n "$NOJETTY" -a "$NOJETTY" == "true" ]; then
+		return 0;
+	fi
+	$SERV tomcat6 status 2>&1 > /dev/null
+}
+
 is_squid_alive() {
 	if [ -n "$NOSQUID" -a "$NOSQUID" == "true" ]; then
 		return 0;
@@ -315,6 +355,8 @@ ensure_apache() {
 	if [ -n "$NOJETTY" -a "$NOJETTY" == "true" ]; then
                 return 0;
         fi
+	echo " * Waiting for Tomcat to load context..."
+	wait_for_tomcat
 	echo " * Waiting for Jetty to load context..."
 	wait_for_jetty
 	if is_apache_alive; then
@@ -360,6 +402,7 @@ appliance_stop() {
 	cleanpids
 	stop_apache
 	stop_jetty
+	stop_tomcat
 	stop_mydlp
 	stop_backend
 	cleanpids
@@ -372,6 +415,7 @@ appliance_start() {
 	start_backend
 	ensure_postfix
 	start_mydlp
+	start_tomcat
 	start_jetty
 	cleanpids
 	ensure_squid

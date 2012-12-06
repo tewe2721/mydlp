@@ -21,7 +21,8 @@
 tomcatsysconfdir = $(datadir)/mydlp/sysconf/tomcat
 
 tomcatsysconf_DATA = \
-	server.xml
+	server.xml \
+	tomcat6.default
 
 catalinadir = $(sysconfdir)/tomcat6/Catalina/localhost
 

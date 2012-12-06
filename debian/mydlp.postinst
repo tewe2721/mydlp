@@ -98,9 +98,10 @@ remove_root_webapp() {
 configure_jetty() {
 	/etc/init.d/jetty stop > /dev/null
 	/usr/sbin/update-rc.d jetty disable 2345
-	/bin/cp -f /usr/share/mydlp/ui/jetty.defaults /etc/default/jetty
-	/bin/cp -f /usr/share/mydlp/ui/jetty.conf /etc/jetty/jetty.conf
-	/bin/cp -f /usr/share/mydlp/ui/jetty-ajp.xml /etc/jetty/jetty-ajp.xml
+	/bin/cp -f /usr/share/mydlp/sysconf/jetty/jetty.default /etc/default/jetty
+	/bin/cp -f /usr/share/mydlp/sysconf/jetty/jetty.conf /etc/jetty/jetty.conf
+	/bin/cp -f /usr/share/mydlp/sysconf/jetty/jetty-ajp.xml /etc/jetty/jetty-ajp.xml
+	/bin/cp -f /usr/share/mydlp/sysconf/jetty/jetty.xml /etc/jetty/jetty.xml
 }
 
 install_webapp() {
@@ -108,9 +109,16 @@ install_webapp() {
 	/bin/cp -f /usr/share/mydlp/ui/mydlp-ui-webapp.war /var/lib/jetty/webapps/root.war
 }
 
-configure_solr() {
-	/etc/init.d/jetty stop > /dev/null
-	/bin/cp -f /usr/share/mydlp/ui/solr.schema.xml /etc/solr/conf/schema.xml
+chown_solr_data() {
+	/etc/init.d/tomcat6 stop > /dev/null
+	$CHOWN -R tomcat6.tomcat6 /var/lib/mydlp/solr 
+}
+
+configure_tomcat() {
+	/etc/init.d/tomcat6 stop > /dev/null
+	/usr/sbin/update-rc.d tomcat6 disable 2345
+	/bin/cp -f /usr/share/mydlp/sysconf/jetty/tomcat6.default /etc/default/tomcat6
+	/bin/cp -f /usr/share/mydlp/sysconf/tomcat/server.xml /etc/tomcat6/server.xml
 }
 
 restart_rsyslog() {
@@ -162,6 +170,11 @@ case "$1" in
 			generate_keys
 			cleanup_sslcrtd_db
 		fi
+		if $DPKGBIN --compare-versions "$2" le "0.9.193-1"; then
+			configure_jetty
+			chown_solr_data
+			configure_tomcat
+		fi
 		restart_rsyslog
 	else
 		# first install
@@ -172,8 +185,9 @@ case "$1" in
 		chown_quarantine
 		configure_apache
 		configure_jetty
-		configure_solr
 		chown_revision
+		chown_solr_data
+		configure_tomcat
 		restart_rsyslog
 	fi
 	remove_root_webapp
