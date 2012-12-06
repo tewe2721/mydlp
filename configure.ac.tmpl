@@ -45,6 +45,7 @@ AC_ERLANG_SUBST_INSTALL_LIB_SUBDIR([mydlp], [%%%VERSION%%%])
 AC_PATH_PROG(THRIFT, thrift, thrift, $PATH:/usr/local/bin:/usr/bin)
 AC_PATH_PROG(MVN, mvn, mvn, $PATH:/usr/local/bin:/usr/bin:/opt/maven/bin)
 AC_PATH_PROG(WGET, wget, wget, $PATH:/usr/local/bin:/usr/bin:/bin)
+AC_PATH_PROG(TAR, tar, tar, $PATH:/usr/local/bin:/usr/bin:/bin)
 AC_PROG_LN_S
 
 AC_CONFIG_FILES([
@@ -62,8 +63,12 @@ AC_CONFIG_FILES([
 		src/script/Makefile
 		src/schema/Makefile
 		src/sysconf/Makefile
-		src/sysconf/rsyslog/Makefile
+		src/sysconf/apache/Makefile
+		src/sysconf/jetty/Makefile
 		src/sysconf/logrotate/Makefile
+		src/sysconf/rsyslog/Makefile
+		src/sysconf/solr/Makefile
+		src/sysconf/tomcat/Makefile
 		src/resources/Makefile
 		src/integration/Makefile
 		src/integration/seclore/Makefile
