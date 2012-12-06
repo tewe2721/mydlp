@@ -78,7 +78,7 @@ function solrReset() {
 
 
 function solrCommit() {
-	$CURL "$SOLRUPDATEURL" -H "Content-Type: text/xml" --data-binary '<commit waitFlush="false"/>' >/dev/null
+	$CURL "$SOLRUPDATEURL" -H "Content-Type: text/xml" --data-binary '<commit />' >/dev/null
 }
 
 function queryNewContent() {
