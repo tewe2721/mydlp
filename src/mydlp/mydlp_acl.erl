@@ -173,10 +173,11 @@ acl_exec3(Req, AllRules, Files, ExNewFiles, CleanFiles) ->
 		Else -> Else end,
 	ctx_cache_stop(CTX),
 
-	%PFiles1 = case CleanFiles of
-	%	true -> mydlp_api:clean_files(PFiles); % Cleaning newly created files.
-	%	false -> PFiles end,
-	
+	case AclR of
+		return -> mydlp_api:clean_files(FFiles);
+		{_, {{rule, _}, {file, #file{dataref=DRef}}, {itype, _}, {misc, _}}} ->
+			mydlp_api:clean_files_excluding(FFiles, DRef) end,
+
 	AclR.
 
 -ifdef(__MYDLP_NETWORK).

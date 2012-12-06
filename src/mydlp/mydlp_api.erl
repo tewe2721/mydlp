@@ -1556,6 +1556,16 @@ clean_file(#file{} = File) ->
 	?BB_D(File#file.dataref), % no need for reference to exist
 	File#file{dataref=undefined}.
 
+clean_files_excluding(#file{} = File, DRef) -> [Ret] = clean_files_excluding([File], DRef), Ret;
+clean_files_excluding(Files, DRef) when is_list(Files) -> clean_files_excluding(Files, DRef, []).
+
+clean_files_excluding([#file{dataref=DRef} = File|Rest], DRef, Acc) -> clean_files_excluding(Rest, DRef, [File|Acc]);
+clean_files_excluding([File|Rest], DRef, Acc) -> 
+	File1 = clean_file(File),
+	clean_files_excluding(Rest, DRef, [File1|Acc]);
+clean_files_excluding([], _DRef, Acc) -> lists:reverse(Acc).
+
+
 %%--------------------------------------------------------------------
 %% @doc Remove cache references.
 %% @end
