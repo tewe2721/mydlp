@@ -237,7 +237,7 @@ start_jetty() {
 	if [ -n "$NOJETTY" -a "$NOJETTY" == "true" ]; then
 		return 0;
 	fi
-	echo " * Starting Jetty..."
+	echo " * Starting MyDLP UI..."
 	$SERV jetty start > /dev/null
 	if is_tables_initialized ; then
 		true
@@ -253,10 +253,10 @@ stop_jetty() {
 		return 0;
 	fi
 	if status_jetty; then
-		echo " * Stopping Jetty..."
+		echo " * Stopping MyDLP UI..."
 		$SERV jetty stop 2>&1 > /dev/null
 	else
-		echo " * Jetty is not running..."
+		echo " * MyDLP UI is not running..."
 	fi
 }
 
@@ -271,7 +271,7 @@ start_tomcat() {
 	if [ -n "$NOJETTY" -a "$NOJETTY" == "true" ]; then
 		return 0;
 	fi
-	echo " * Starting Tomcat..."
+	echo " * Starting SOLR..."
 	$SERV tomcat6 start > /dev/null
 }
 
@@ -280,10 +280,10 @@ stop_tomcat() {
 		return 0;
 	fi
 	if status_tomcat; then
-		echo " * Stopping Tomcat..."
+		echo " * Stopping SOLR..."
 		$SERV tomcat6 stop 2>&1 > /dev/null
 	else
-		echo " * Tomcat is not running..."
+		echo " * SOLR is not running..."
 	fi
 }
 
@@ -355,9 +355,9 @@ ensure_apache() {
 	if [ -n "$NOJETTY" -a "$NOJETTY" == "true" ]; then
                 return 0;
         fi
-	echo " * Waiting for Tomcat to load context..."
+	echo " * Waiting for SOLR to load.."
 	wait_for_tomcat
-	echo " * Waiting for Jetty to load context..."
+	echo " * Waiting for MyDLP UI to load context..."
 	wait_for_jetty
 	if is_apache_alive; then
 		reload_apache
@@ -370,7 +370,7 @@ reload_apache() {
 	if [ -n "$NOJETTY" -a "$NOJETTY" == "true" ]; then
                 return 0;
         fi
-	echo " * Reloading Apache Web Server..."
+	echo " * Reloading Web Server..."
 	$SERV apache2 reload 2>&1 > /dev/null
 }
 
@@ -378,7 +378,7 @@ start_apache() {
 	if [ -n "$NOJETTY" -a "$NOJETTY" == "true" ]; then
                 return 0;
         fi
-	echo " * Starting Apache Web Server..."
+	echo " * Starting Web Server..."
 	$SERV apache2 start 2>&1 > /dev/null
 }
 
@@ -393,7 +393,7 @@ stop_apache() {
 	if [ -n "$NOJETTY" -a "$NOJETTY" == "true" ]; then 
                 return 0;
         fi
-	echo " * Stopping Apache Web Server..."
+	echo " * Stopping Web Server..."
 	$SERV apache2 stop 2>&1 > /dev/null
 }
 
