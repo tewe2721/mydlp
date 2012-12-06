@@ -159,12 +159,12 @@ check_mysql_db() {
 	# Import MySQL schema
 	if (echo|$MYSQLC); then
 		if [ -z "$(echo 'show databases'|$MYSQLC|grep -e '^mydlp$')" ]; then
-			echo " * Creating MySQL database (mydlp)..."
+			echo " * Initializing MyDLP Policy database..."
 			create_db mydlp
 			$MYSQLC mydlp < $SCHEMADIR/HEAD_mydlp.sql
 		fi
 		if [ -z "$(echo 'show databases'|$MYSQLC|grep -e '^mydlp_log$')" ]; then
-			echo " * Creating MySQL database (mydlp_log)..."
+			echo " * Initializing MyDLP Log database..."
 			create_db mydlp_log
 			$MYSQLC mydlp_log < $SCHEMADIR/HEAD_mydlp_log.sql
 		fi
@@ -309,7 +309,7 @@ reload_squid() {
 	fi
 	wait_for_icap
 	if is_squid_alive; then
-		echo " * Reloading Squid..."
+		echo " * Reloading proxy server..."
 		[ -x $SQUIDBIN ] && $SQUIDBIN -k reconfigure
 	fi
 }
@@ -370,7 +370,7 @@ reload_apache() {
 	if [ -n "$NOJETTY" -a "$NOJETTY" == "true" ]; then
                 return 0;
         fi
-	echo " * Reloading Web Server..."
+	echo " * Reloading web server..."
 	$SERV apache2 reload 2>&1 > /dev/null
 }
 
@@ -378,7 +378,7 @@ start_apache() {
 	if [ -n "$NOJETTY" -a "$NOJETTY" == "true" ]; then
                 return 0;
         fi
-	echo " * Starting Web Server..."
+	echo " * Starting web server..."
 	$SERV apache2 start 2>&1 > /dev/null
 }
 
@@ -393,7 +393,7 @@ stop_apache() {
 	if [ -n "$NOJETTY" -a "$NOJETTY" == "true" ]; then 
                 return 0;
         fi
-	echo " * Stopping Web Server..."
+	echo " * Stopping web server..."
 	$SERV apache2 stop 2>&1 > /dev/null
 }
 
