@@ -2193,6 +2193,7 @@ mime_category(<<"application/x-winzip">>) -> compression;
 mime_category(<<"application/vnd.ms-cab-compressed">>) -> compression;
 mime_category(<<"application/vnd.ms-tnef">>) -> compression;
 mime_category(<<"message/rfc822">>) -> compression;
+mime_category(<<"application/vnd.android.package-archive">>) -> compression;
 mime_category(<<"application/x-executable">>) -> cobject;
 mime_category(<<"application/x-sharedlib">>) -> cobject;
 mime_category(<<"application/x-object">>) -> cobject;
