@@ -163,12 +163,12 @@ init([]) ->
 'REQ_OK'(#smtpd_fsm{files=Files, message_record=(#message{mail_from=MailFrom} = MessageR)} = State) ->
 	UserH = mydlp_api:hash_un(MailFrom),
 	Destinations = get_dest_domains(MessageR),
+	pre_query(State, Files),
 	AclQ = #aclq{channel=mail, src_user_h=UserH, destinations=Destinations},
 	AclRet = mydlp_acl:q(AclQ, Files),
 	process_aclret(AclRet, State).
 
 process_aclret(AclRet, #smtpd_fsm{files=Files} = State) ->
-	pre_query(State, Files),
 	case case AclRet of
 		pass -> {pass, mydlp_api:empty_aclr(Files)};
 		log -> {log, mydlp_api:empty_aclr(Files)};
