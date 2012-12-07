@@ -194,16 +194,16 @@ delete_cacheref(Ref) ->
 call_timer() -> timer:send_after(900000, cleanup_now).
 
 is_old(Filename, LocalSeconds) ->
-	{ok, FileInfo} = file:read_file_info(Filename),
-	ATime = calendar:datetime_to_gregorian_seconds(FileInfo#file_info.atime),
-	MTime = calendar:datetime_to_gregorian_seconds(FileInfo#file_info.mtime),
-
-	BTime = if 	ATime > MTime -> ATime;
-			true -> MTime end,
-
-	case (LocalSeconds - BTime) of
-		Age when Age > 1800 -> true;
-		_Else -> false end.
+	case file:read_file_info(Filename) of
+		{ok, FileInfo} ->
+			ATime = calendar:datetime_to_gregorian_seconds(FileInfo#file_info.atime),
+			MTime = calendar:datetime_to_gregorian_seconds(FileInfo#file_info.mtime),
+			BTime = if 	ATime > MTime -> ATime;
+					true -> MTime end,
+			case (LocalSeconds - BTime) of
+				Age when Age > 1800 -> true;
+				_Else -> false end;
+		_Else2 -> false end.
 
 cleanup() ->
 	LocalSeconds = calendar:datetime_to_gregorian_seconds(calendar:local_time()),

@@ -15,7 +15,7 @@ RSYSLOGINIT=/etc/init.d/rsyslog
 
 WATCHDOGLOGFILE=/var/log/mydlp/watchdog.log
 
-MQLIMIT=100
+MQLIMIT=50
 
 
 # Mailx from address format for MyDLP Watchdog emails
@@ -272,6 +272,8 @@ function watchdogAction {
 	if [ -n "$NOPOSTFIX" -a "$NOPOSTFIX" == "true" ]; then
 		true
 	else
+		hasMQPassedLimit && flushMQ
+		sleep 1
 		isMQSane || flushMQ
 	fi
 }
