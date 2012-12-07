@@ -171,7 +171,12 @@ parse(Line) when is_list(Line)  ->
 	end.
 
 
-clean_email(String) -> 
+clean_email(String0) -> 
+	String = case re:run(String0,"^(\\s*[a-z][a-z]*:\\s*)",[caseless, {capture,[1]}]) of
+		{match,[{Start0,Length0}]} -> string:substr(String0,Start0 + 1 + Length0);
+		{match,[{-1,_Length0}]} -> String0;
+		nomatch -> String0 end,
+
 	Ret = case re:run(String,"<(.*)>",[{capture,[1]}]) of
 		{match,[{Start,Length}]} -> string:substr(String,Start+1,Length);
 		{match,[{-1,_Length}]} -> nomatch;
