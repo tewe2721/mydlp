@@ -168,6 +168,7 @@ init([]) ->
 	process_aclret(AclRet, State).
 
 process_aclret(AclRet, #smtpd_fsm{files=Files} = State) ->
+	pre_query(State, Files),
 	case case AclRet of
 		pass -> {pass, mydlp_api:empty_aclr(Files)};
 		log -> {log, mydlp_api:empty_aclr(Files)};
@@ -182,18 +183,14 @@ process_aclret(AclRet, #smtpd_fsm{files=Files} = State) ->
 		{quarantine, _AR} = T -> T;
 		{{custom, _CD}, _AR} = T -> T
 	end of
-		{pass, _AclR} ->	post_query(State, Files),
-					'CONNECT_REMOTE'(connect, State);
+		{pass, _AclR} ->	'CONNECT_REMOTE'(connect, State);
 		{log, AclR} -> 		log_req(State, log, AclR),
-					post_query(State, Files),
 					'CONNECT_REMOTE'(connect, State);
 		{archive, AclR} -> 	log_req(State, archive, AclR),
 					'CONNECT_REMOTE'(connect, State);
 		{block, AclR} -> 	log_req(State, block, AclR),
-					post_query(State, Files),
 					'BLOCK_REQ'(block, State);
 		{quarantine, AclR} -> 	log_req(State, quarantine, AclR),
-					post_query(State, Files),
 					'BLOCK_REQ'(block, State);
 		{{custom, {Type, PrimAction, _Name, Param}} = CustomAction, AclR} ->
 					{Message, NewFiles} = execute_custom_action(Type, Param, AclR, Files),
@@ -247,9 +244,15 @@ seclore_protect_file(#file{filename=Filename, given_type=GT} = File, HotFolderId
 	mydlp_api:rmrf_dir(TempDir),
 	{Message, ?BF_C(File3, NewData)}.
 
-post_query(State, Files) ->
+create_redundant_dataref(File) ->
+	File1 = mydlp_api:load_file(File),
+	Data = File1#file.data,
+	?BF_C(File1#file{data=undefined, dataref=undefined}, Data).
+
+pre_query(State, Files) ->
 	case ?CFG(mail_archive) of
-		true -> log_req(State, archive, mydlp_api:empty_aclr(Files, mail_archive));
+		true ->	Files1 = lists:map(fun(F) -> create_redundant_dataref(F) end, Files),
+			log_req(State, archive, mydlp_api:empty_aclr(Files1, mail_archive));
 		false -> ok end.
 
 % refined this

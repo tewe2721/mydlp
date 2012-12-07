@@ -1270,8 +1270,12 @@ acl_msg(#log{action=Action, file=PreFiles}=Log) ->
 	Files = case is_store_action(Action) of
 		false -> remove_all_data(PreFiles1);
 		true -> remove_mem_data(PreFiles1) end,
-	acl_msg_logger(Log#log{file=Files}),
-	mydlp_incident:l(Log),
+	Log1 = Log#log{file=Files},
+	case Log1 of
+		#log{channel=inbound} -> ok;
+		#log{rule_id=-1} -> ok;
+		_Else -> acl_msg_logger(Log1) end,
+	mydlp_incident:l(Log1),
 	ok.
 
 smtp_msg(Format, Args) ->
@@ -1299,7 +1303,10 @@ acl_msg(#log{action=Action, file=PreFiles}=Log) ->
 		false -> remove_all_data(PreFiles1);
 		true -> remove_crs(PreFiles1) end,
 	Log1 = Log#log{file=Files},
-	acl_msg_logger(Log1),
+	case Log1 of
+		#log{channel=inbound} -> ok;
+		#log{rule_id=-1} -> ok;
+		_Else -> acl_msg_logger(Log1) end,
 	mydlp_item_push:p({endpoint_log, Log1}),
 	ok.
 
