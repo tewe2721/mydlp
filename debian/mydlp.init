@@ -32,7 +32,11 @@ SQUIDBIN=/usr/sbin/squid3
 SQUIDBINNAME=squid3
 SQUIDSSLCRTDDIR=/var/lib/ssl_db/
 
+POSTQUEUEBIN=/usr/sbin/postqueue
+
 ICAPPORT=1344
+SMTPCFPORT=10026
+SMTPINTPORT=10027
 JETTYPORT=8009
 BACKENDPORT=9090
 TOMCATPORT=8010
@@ -124,6 +128,14 @@ wait_for_tomcat() {
 
 wait_for_icap() {
 	wait_for_port $ICAPPORT 15
+}
+
+wait_for_smtpcf() {
+	wait_for_port $SMTPCFPORT 15
+}
+
+wait_for_smtpint() {
+	wait_for_port $SMTPINTPORT 15
 }
 
 wait_for_backend() {
@@ -329,6 +341,10 @@ ensure_postfix() {
 		return 0;
 	fi
 	is_postfix_alive || $SERV postfix start
+	wait_for_smtpcf
+	wait_for_smtpint
+	echo " * Flushing mail queue..."
+	[ -x $POSTQUEUEBIN ] && $POSTQUEUEBIN -f > /dev/null
 }
 
 is_postfix_alive_i() {
@@ -413,11 +429,11 @@ appliance_start() {
 	cleanpids
 	start_mysql
 	start_backend
-	ensure_postfix
 	start_mydlp
 	start_tomcat
 	start_jetty
 	cleanpids
+	ensure_postfix
 	ensure_squid
 	reload_squid
 	ensure_apache
