@@ -91,7 +91,7 @@ insert_log_data(LogId, Filename, MimeType, Size, Hash, Path) ->
 	gen_server:cast(?MODULE, {insert_log_data, LogId, Filename, MimeType, Size, Hash, Path}).
 
 save_fingerprints(DocumentId, FingerprintList) -> 
-	gen_server:call(?MODULE, {save_fingerprints, DocumentId, FingerprintList}).
+	gen_server:call(?MODULE, {save_fingerprints, DocumentId, FingerprintList}, 60000).
 
 requeued(LogId) -> 
 	gen_server:cast(?MODULE, {requeued, LogId}).
@@ -278,7 +278,8 @@ handle_info({'DOWN', _, _, Pid , _} = Msg, #state{host=Host,
 		orphan -> ?ERROR_LOG("Dead pid is orphan. Ignoring.~nDeadPid: "?S", State: "?S, [Pid, State]),
 			{noreply, State};
 		{error, Error} -> ?ERROR_LOG("An error occurred when trying to create a new connection instead of dead one.~nError: "?S"~nState: "?S, [Error,State]) ,
-			?ERROR_LOG("Retrying to create connection. Msg: "?S, [Msg]),
+			?ERROR_LOG("Waiting 500ms and retrying to create connection. Msg: "?S, [Msg]),
+			timer:tc(500),
 			handle_info(Msg, State);
 			%{stop, normalStop, State};
 		error -> ?ERROR_LOG("An error occurred when trying to create a new connection instead of dead one.~nState: "?S, [State]) ,
