@@ -1086,11 +1086,9 @@ handle_cast(mnesia_dir_cleanup, State) ->
 	{noreply, State};
 
 handle_cast(schedule_after_tables_ops, State) ->
-	WaitTimeout = 10000,
-	?ERROR_LOG("MNESIA Waiting for tables to start. Timeout: "?S, [WaitTimeout]),
+	WaitTimeout = 30000,
 	case catch wait_for_tables(WaitTimeout) of
-		ok -> 	?ERROR_LOG("MNESIA Tables are ready.", []),
-			boot_after_tables_ops();
+		ok -> 	boot_after_tables_ops();
 		Else -> mnesia_dir_cleanup(),
 			?ERROR_LOG("MNESIA didn't started within "?S"ms. Scheduled cleanup. Err: "?S, [WaitTimeout, Else]) end,
 	{noreply, State};
