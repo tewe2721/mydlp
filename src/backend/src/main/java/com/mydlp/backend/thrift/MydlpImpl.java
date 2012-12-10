@@ -10,10 +10,8 @@ import java.nio.charset.Charset;
 
 import org.apache.thrift.TException;
 import org.apache.tika.Tika;
-import org.apache.tika.fork.ForkParser;
 import org.apache.tika.io.IOUtils;
 import org.apache.tika.metadata.Metadata;
-import org.apache.tika.parser.Parser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,23 +32,10 @@ public class MydlpImpl implements Mydlp.Iface {
 	protected static final String MIME_NOT_FOUND = "mydlp-internal/not-found";
 	
 	protected Tika tika = new Tika();
-	protected ForkParser forkParser = new ForkParser();
 	
 	protected FileSecureConfigBuilder secloreConfig = null;
 	
 	protected FileSecureProtect secloreProtect = null;
-	
-	public int tikaParserPoolSize = 2;
-
-	protected Parser getParser() {
-		if (forkParser == null)
-		{
-			forkParser = new ForkParser(MydlpImpl.class.getClassLoader(), tika.getParser());
-			forkParser.setPoolSize(2);
-		}
-		return forkParser;
-	}
-
 		
 	protected InputStream getInputStream(final ByteBuffer buf) {
 		return new InputStream() {
