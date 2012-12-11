@@ -257,27 +257,28 @@ handle_info({'DOWN', _, _, MPid , _}, #state{master_pid=MPid} = State) ->
 handle_info({'DOWN', _, _, Pid , _} = Msg, #state{host=Host,
 		user=User, password=Password, database=DB, database_l=LDB,
 		pool_pids=PoolPids, pool_pids_l=PoolPidsL} = State) ->
-	PPTuple  = case lists:member(Pid, PoolPids) of
-		true -> PoolPids1 = lists:delete(Pid, PoolPids),
-			case mysql:connect(pp, Host, undefined, User, Password, DB, utf8, true) of
-				{ok, NewPid} -> 
-					erlang:monitor(process, NewPid),
-					{[NewPid|PoolPids1], PoolPidsL};
-				Err -> {error, Err} end;
-		false -> case lists:member(Pid, PoolPidsL) of
-		true -> PoolPidsL1 = lists:delete(Pid, PoolPidsL),
-			case mysql:connect(pl, Host, undefined, User, Password, LDB, utf8, true) of
-				{ok, NewPid} -> 
-					erlang:monitor(process, NewPid),
-					{PoolPids, [NewPid|PoolPidsL1]};
-				Err2 -> {error, Err2} end;
-		false -> orphan end
-	end,
+	PPTuple  = try case lists:member(Pid, PoolPids) of
+			true -> PoolPids1 = lists:delete(Pid, PoolPids),
+				case mysql:connect(pp, Host, undefined, User, Password, DB, utf8, true) of
+					{ok, NewPid} -> 
+						erlang:monitor(process, NewPid),
+						{[NewPid|PoolPids1], PoolPidsL};
+					Err -> {error, Err} end;
+			false -> case lists:member(Pid, PoolPidsL) of
+			true -> PoolPidsL1 = lists:delete(Pid, PoolPidsL),
+				case mysql:connect(pl, Host, undefined, User, Password, LDB, utf8, true) of
+					{ok, NewPid} -> 
+						erlang:monitor(process, NewPid),
+						{PoolPids, [NewPid|PoolPidsL1]};
+					Err2 -> {error, Err2} end;
+			false -> orphan end end
+		catch Class:Error -> {error, Class, Error} end,
 
 	case PPTuple of
 		orphan -> ?ERROR_LOG("Dead pid is orphan. Ignoring.~nDeadPid: "?S", State: "?S, [Pid, State]),
 			{noreply, State};
-		{error, Error} -> ?ERROR_LOG("An error occurred when trying to create a new connection instead of dead one.~nError: "?S"~nState: "?S, [Error,State]) ,
+		{error, C, E} -> ?ERROR_LOG("An error occurred when trying to create a new connection instead of dead one.~nClass: "?S" Error: "?S"~nState: "?S, [C, E,State]);
+		{error, E} -> ?ERROR_LOG("An error occurred when trying to create a new connection instead of dead one.~nError: "?S"~nState: "?S, [E,State]) ,
 			?ERROR_LOG("Waiting 500ms and retrying to create connection. Msg: "?S, [Msg]),
 			timer:tc(500),
 			handle_info(Msg, State);
