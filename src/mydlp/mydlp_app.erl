@@ -56,13 +56,13 @@
 
 -endif.
 
--ifdef(__MYDLP_NETWORK).
+-ifdef(__PLATFORM_LINUX).
 
 -define(LOGGER_MODULE, mydlp_logger_syslog).
 
 -endif.
 
--ifdef(__MYDLP_ENDPOINT).
+-ifdef(__PLATFORM_WINDOWS).
 
 -define(LOGGER_MODULE, mydlp_logger_file).
 
