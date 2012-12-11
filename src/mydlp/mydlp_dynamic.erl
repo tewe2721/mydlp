@@ -176,7 +176,16 @@ load_src(Src) ->
 -ifdef(__MYDLP_ENDPOINT).
 
 -define(CONFDEF_FILE_OTHER, [
-	{management_server_address, string, "127.0.0.1"} % TODO: validation IP address
+	{management_server_address, string, "127.0.0.1"}, % TODO: validation IP address
+	{syslog_acl_host, ip, "127.0.0.1"}, % refine
+	{syslog_acl_port, integer, "514"},
+	{syslog_acl_facility, syslog_facility, "local6"},
+	{syslog_diag_host, ip, "127.0.0.1"},
+	{syslog_diag_port, integer, "514"},
+	{syslog_diag_facility, syslog_facility, "local6"},
+	{syslog_report_host, ip, "127.0.0.1"},
+	{syslog_report_port, integer, "514"},
+	{syslog_report_facility, syslog_facility, "local7"}
 ]).
 
 -endif.

@@ -18,7 +18,7 @@
 %%%    along with MyDLP.  If not, see <http://www.gnu.org/licenses/>.
 %%%--------------------------------------------------------------------------
 
--ifdef(__MYDLP_NETWORK).
+-ifdef(__PLATFORM_LINUX).
 
 -module(mydlp_logger_syslog).
 -author('kerem@mydlp.com').

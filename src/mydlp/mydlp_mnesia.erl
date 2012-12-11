@@ -286,13 +286,18 @@ get_drid() -> 0.
 
 wait_for_tables() -> wait_for_tables(15000).
 
-wait_for_tables(Timeout) ->
+wait_for_tables(Timeout) when Timeout > 0 ->
 	TableList = lists:map( fun
 			({RecordAtom,_,_}) -> RecordAtom;
 			({RecordAtom,_}) -> RecordAtom;
 			(RecordAtom) when is_atom(RecordAtom) -> RecordAtom
 		end, ?TABLES),
-	mnesia:wait_for_tables(TableList, Timeout).
+	CurTables = mnesia:system_info(tables),
+	DoTablesExist = lists:all(fun(T) -> lists:member(T, CurTables) end, TableList),
+
+	case DoTablesExist of
+		true -> mnesia:wait_for_tables(TableList, Timeout);
+		_Else -> timer:sleep(500), wait_for_tables(Timeout-500) end.
 
 -ifdef(__MYDLP_NETWORK).
 
@@ -1117,7 +1122,7 @@ boot_mnesia() ->
 
 boot_after_tables_ops() ->
 	cache_start(),
-	call_timer(),
+	call_timer(15000),
 	ok.
 
 mnesia_configure() ->
@@ -1393,8 +1398,8 @@ cache_cleanup_handle() ->
 		I when I > MaxSize -> cache_clean();
 		_Else -> ok end.
 	
-call_timer() -> timer:send_after(5000, cleanup_now).
-%call_timer() -> timer:send_after(?CFG(query_cache_cleanup_interval), cleanup_now).
+call_timer() -> call_timer(?CFG(query_cache_cleanup_interval)).
+call_timer(Time) -> timer:send_after(Time, cleanup_now).
 
 -ifdef(__MYDLP_NETWORK).
 

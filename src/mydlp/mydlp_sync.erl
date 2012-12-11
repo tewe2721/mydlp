@@ -80,6 +80,11 @@ handle_info({async_reply, Reply, From}, State) ->
 	gen_server:reply(From, Reply),
 	{noreply, State};
 
+handle_info(sync_now, #state{policy_id=undefined} = State) ->
+	PolicyId = mydlp_api:get_client_policy_revision_id(),
+	call_timer(100),
+        {noreply, State#state{policy_id=PolicyId}};
+
 handle_info(sync_now, #state{policy_id=PolicyId} = State) ->
 	sync(PolicyId),
 	call_timer(),
@@ -100,10 +105,9 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
-	PolicyId = mydlp_api:get_client_policy_revision_id(),
 	inets:start(),
 	call_timer(15000),
-	{ok, #state{policy_id=PolicyId}}.
+	{ok, #state{}}.
 
 terminate(_Reason, _State) ->
 	ok.
