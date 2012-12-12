@@ -166,6 +166,8 @@ acl_exec3(Req, AllRules, Files, ExNewFiles, CleanFiles) ->
 
 	FFiles = PFiles4,
 
+	lists:map(fun(F) -> erlang:display({size, F#file.filename}) end, FFiles),
+
 	CTX = ctx_cache(),
 	AclR = case apply_rules(CTX, AllRules, FFiles) of
 		return -> acl_exec3(Req, AllRules, RestOfFiles,
@@ -341,8 +343,8 @@ execute_ifeatures(CTX, Distance, IFeatures, File) ->
 			undefined -> false;
 			_Else -> lists:all(fun({_Threshold, {_MId, Func, _FuncParams}}) ->
 						is_distance_applicable(Func) end, IFeatures) end,
-	
-		PAllRet = mydlp_api:pall(fun({Threshold, {MId, Func, FuncParams}}) ->
+
+		PAllRet = mydlp_api:pall(fun({Threshold, {MId, Func, FuncParams}}) -> 
 						apply_m(CTX, Threshold, Distance, UseDistance, {MId, Func, FuncParams, File}) end,
 					IFeatures, 800000),
 		%%%% TODO: Check for PAnyRet whether contains error
@@ -419,7 +421,7 @@ regulate_results([], _Number, AccIndex, AccThreshold) ->
 		
 regulate_results([Head|Tail], Number, AccIndex, AccThreshold) ->
 	NewNumber = Number + 1,
-	{pos, Threshold, {_Score, IndexList}} = Head, 
+	{pos, Threshold, {_Score, IndexList}} = Head,
 	IndexesWithNumbers = lists:map(fun(I) -> {I, Number} end, IndexList),
 	regulate_results(Tail, NewNumber, [IndexesWithNumbers|AccIndex], [Threshold|AccThreshold]).
 
@@ -451,15 +453,26 @@ apply_m(CTX, Threshold, Distance, IsDistanceApplicable, {MatcherId, Func, FuncPa
 apply_m_cached(CTX, Threshold, Distance, IsDistanceApplicable, {MatcherId, Func, FuncParams, File}) ->
 	CacheKey = {File#file.md5_hash, Func, FuncParams},
 	case ctx_start(CTX, CacheKey) of
-		{ok, reserved} ->	Result = apply_func(Threshold, Distance, IsDistanceApplicable, {MatcherId, Func, FuncParams, File}),
-					ctx_finish(CTX, CacheKey, Result), Result;
+		{ok, reserved} ->	{Result, IRet} = apply_func_iret(Threshold, Distance, IsDistanceApplicable, {MatcherId, Func, FuncParams, File}),
+					ctx_finish(CTX, CacheKey, IRet), Result;
 		{error, wait} ->	case ctx_wait(CTX, CacheKey) of
-						{ok, Result} -> Result;
+						{ok, IRet} -> apply_func(Threshold, Distance, IsDistanceApplicable, {MatcherId, Func, FuncParams, File}, IRet);
 						{error, process_down} -> apply_m_cached(CTX, Threshold, Distance, IsDistanceApplicable, {MatcherId, Func, FuncParams, File})
 					end;
-		{error, result, Result} -> Result end.
+		{error, iret, IRet} -> apply_func(Threshold, Distance, IsDistanceApplicable, {MatcherId, Func, FuncParams, File}, IRet) end.
 
 apply_func(Threshold, Distance, IsDistanceApplicable, {MatcherId, Func, FuncParams, File}) ->
+	{Result, _IRet} = apply_func_iret(Threshold, Distance, IsDistanceApplicable, {MatcherId, Func, FuncParams, File}),
+	Result.
+
+apply_func(Threshold, Distance, IsDistanceApplicable, {MatcherId, Func, FuncParams, File}, IRet) ->
+	{Result, IRet} = apply_func_iret(Threshold, Distance, IsDistanceApplicable, {MatcherId, Func, FuncParams, File}, IRet),
+	Result.
+
+apply_func_iret(Threshold, Distance, IsDistanceApplicable, {MatcherId, Func, FuncParams, File}) ->
+	apply_func_iret(Threshold, Distance, IsDistanceApplicable, {MatcherId, Func, FuncParams, File}, undefined).
+
+apply_func_iret(Threshold, Distance, IsDistanceApplicable, {MatcherId, Func, FuncParams, File}, IndexRet0) ->
 	EarlyNeg = case is_text_func(Func) of
 		false -> false;
 		true -> not mydlp_api:has_text(File) end,
@@ -467,10 +480,12 @@ apply_func(Threshold, Distance, IsDistanceApplicable, {MatcherId, Func, FuncPara
 		true -> neg;
 		false ->
 			FuncOpts = get_func_opts(Func, FuncParams),
-			IndexRet = case is_mc_func(Func) of
-				true ->  apply(mydlp_matchers, mc_match, [MatcherId, Func, FuncOpts, File]);
-				false -> apply(mydlp_matchers, Func, [FuncOpts, File]) end,
-			case IndexRet of
+			IndexRet = case IndexRet0 of
+				undefined -> case is_mc_func(Func) of
+					true ->  apply(mydlp_matchers, mc_match, [MatcherId, Func, FuncOpts, File]);
+					false -> apply(mydlp_matchers, Func, [FuncOpts, File]) end;
+				_Else -> IndexRet0 end,
+			Result = case IndexRet of
 				{Score, IndexList} ->
 						EarlyNegForDistance = case IsDistanceApplicable of
 										false -> true;
@@ -485,7 +500,8 @@ apply_func(Threshold, Distance, IsDistanceApplicable, {MatcherId, Func, FuncPara
 							true -> {pos, Threshold, {Score, dna}}; % TODO: Scores should be logged.
 							false -> neg
 						end
-			end
+			end,
+			{Result, IndexRet}
 	end.
 
 is_mc_func(Func) ->
@@ -583,7 +599,7 @@ ctx_cache_func_start(Timeout, From, Key) ->
 					put(Key, {processing, From}),
 					ctx_cache_func_reply(From, {ok, reserved});
 		{processing, _From} -> 	ctx_cache_func_reply(From, {error, wait});
-		{result, Result} -> 	ctx_cache_func_reply(From, {error, result, Result}) end,
+		{iret, Result} -> 	ctx_cache_func_reply(From, {error, iret, Result}) end,
 	ctx_cache_func(Timeout).
 
 ctx_cache_func_notify_waiting(Key, Result) ->
@@ -596,11 +612,11 @@ ctx_cache_func_notify_waiting(Key, Result) ->
 ctx_cache_func_finish(Timeout, From, Key, Result) ->
 	case get(Key) of
 		undefined -> 		exit({error, finishing_non_present_key});
-		{processing, From} ->	put(Key, {result, Result}),
+		{processing, From} ->	put(Key, {iret, Result}),
 					ctx_cache_func_notify_waiting(Key, Result),
 					ctx_cache_func_reply(From, ok);
 		{processing, _Else} ->	exit({error, finishing_some_other_processes_key});
-		{result, _Result} -> 	exit({error, finishing_alrady_finished_key}) end,
+		{iret, _Result} -> 	exit({error, finishing_alrady_finished_key}) end,
 	ctx_cache_func(Timeout).
 
 ctx_cache_func_add_queue(Key, From) ->
@@ -613,7 +629,7 @@ ctx_cache_func_wait(Timeout, From, Key) ->
 		undefined -> 		exit({error, waiting_for_non_present_key});
 		{processing, _From} ->	ctx_cache_func_add_queue(Key, From),
 					ctx_cache_func_reply(From, ok);
-		{result, Result} -> 	ctx_cache_func_reply(From, {error, result, Result}) end,
+		{iret, Result} -> 	ctx_cache_func_reply(From, {error, iret, Result}) end,
 	ctx_cache_func(Timeout).
 
 
@@ -621,7 +637,7 @@ ctx_start(CTX, Key) -> ctx_query(CTX, {start, Key}).
 
 ctx_wait(CTX, Key) -> 
 	case ctx_query(CTX, {wait, Key}) of
-		{error, result, Result} -> {ok, Result};
+		{error, iret, Result} -> {ok, Result};
 		ok ->	receive
 				{finished, Result} -> {ok, Result};
 				process_down -> {error, process_down};
