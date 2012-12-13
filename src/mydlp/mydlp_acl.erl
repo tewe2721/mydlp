@@ -166,8 +166,6 @@ acl_exec3(Req, AllRules, Files, ExNewFiles, CleanFiles) ->
 
 	FFiles = PFiles4,
 
-	lists:map(fun(F) -> erlang:display({size, F#file.filename}) end, FFiles),
-
 	CTX = ctx_cache(),
 	AclR = case apply_rules(CTX, AllRules, FFiles) of
 		return -> acl_exec3(Req, AllRules, RestOfFiles,

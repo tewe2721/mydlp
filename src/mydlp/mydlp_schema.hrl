@@ -66,6 +66,12 @@
 	is_shadow=false % true means rule does not occur for specified time interval.
 }).
 
+-record(source_domain, {
+	id,
+	rule_id,
+	domain_name
+}).
+
 -record(m_user, {
 	id,
 	rule_id,

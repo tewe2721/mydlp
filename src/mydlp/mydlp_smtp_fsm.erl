@@ -161,10 +161,11 @@ init([]) ->
 
 % {Action, {{rule, Id}, {file, File}, {matcher, Func}, {misc, Misc}}}
 'REQ_OK'(#smtpd_fsm{files=Files, message_record=(#message{mail_from=MailFrom} = MessageR)} = State) ->
+	SrcDomainName = get_from_domainname(MessageR),
 	UserH = mydlp_api:hash_un(MailFrom),
 	Destinations = get_dest_domains(MessageR),
 	pre_query(State, Files),
-	AclQ = #aclq{channel=mail, src_user_h=UserH, destinations=Destinations},
+	AclQ = #aclq{channel=mail, src_domain = SrcDomainName, src_user_h=UserH, destinations=Destinations},
 	AclRet = mydlp_acl:q(AclQ, Files),
 	process_aclret(AclRet, State).
 
@@ -384,7 +385,17 @@ reset_statedata(#smtpd_fsm{} = State) ->
 		        files       = [],
 			data  = undefined}.
 
-get_from(MessageR) -> MessageR#message.mail_from.
+get_from(MessageR) -> 
+	{_, User, DomainName, _} = MessageR#message.from,
+	case ((User /= undefined) and (DomainName /= undefined)) of
+		true -> User ++ "@" ++ DomainName;
+		false -> MessageR#message.mail_from
+	end.
+
+get_from_domainname(MessageR) -> 
+	{_ , _ , DomainName, _} = MessageR#message.from,
+	list_to_binary(DomainName).
+			
 
 get_dest_addresses(MessageR) ->
 	DestList = ["rcpt to: <" ++ MessageR#message.rcpt_to ++ ">"] ++ 

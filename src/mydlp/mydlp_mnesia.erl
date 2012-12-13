@@ -165,6 +165,8 @@
 	notification_queue,
 	{m_user, ordered_set, 
 		fun() -> mnesia:add_table_index(m_user, un_hash) end},
+	{source_domain, ordered_set, 
+		fun() -> mnesia:add_table_index(source_domain, domain_name) end},
 	itype,
 	ifeature,
 	match, 
@@ -233,6 +235,7 @@ get_record_fields_functional(Record) ->
 		dest -> record_info(fields, dest);
 		notification -> record_info(fields, notification);
 		notification_queue -> record_info(fields, notification_queue);
+		source_domain -> record_info(fields, source_domain);
 		m_user -> record_info(fields, m_user);
 		itype -> record_info(fields, itype);
 		ifeature -> record_info(fields, ifeature);
@@ -665,7 +668,18 @@ handle_query({get_rule_ids, FilterId, #aclq{channel=Channel, destinations=Destin
 				U#m_user.un_hash == UserH
 				]), ?QLCE(Q2) end,
 
-	RuleIds = lists:append([RulesD, RulesI, RulesU]),
+	RulesDU = case AclQ#aclq.src_domain of
+		undefined -> [];
+		DomainName -> Q4 = ?QLCQ([R#rule.id ||
+				R <- mnesia:table(rule),
+				U <- mnesia:table(source_domain),
+				R#rule.filter_id == FilterId,
+				R#rule.channel == Channel,
+				U#source_domain.rule_id == R#rule.id,
+				U#source_domain.domain_name == DomainName
+				]), ?QLCE(Q4) end, 
+
+	RuleIds = lists:append([RulesD, RulesI, RulesU, RulesDU]),
 
 	FinalRuleIds = case Channel of
 				web -> filter_rule_ids_by_dest(RuleIds, Destinations);
@@ -1634,10 +1648,17 @@ remove_rule(RI) ->
 		]),
 	NIs = ?QLCE(Q6),
 
+	Q7 = ?QLCQ([S#source_domain.id ||	
+		S <- mnesia:table(source_domain),
+		S#source_domain.rule_id == RI
+		]),
+	SDs = ?QLCE(Q7),
+
 	lists:foreach(fun(Id) -> mnesia:delete({ipr, Id}) end, IIs),
 	lists:foreach(fun(Id) -> mnesia:delete({m_user, Id}) end, UIs),
 	lists:foreach(fun(Id) -> mnesia:delete({dest, Id}) end, DIs),
 	lists:foreach(fun(Id) -> mnesia:delete({notification, Id}) end, NIs),
+	lists:foreach(fun(Id) -> mnesia:delete({source_domain, Id}) end, SDs),
 
 	remove_data_formats(DFIs),
 	remove_itypes(ITIs),
