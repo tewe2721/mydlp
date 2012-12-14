@@ -118,6 +118,10 @@ get_mime(Filename, Data) when is_binary(Data) ->
 prettify_filename(Filename) -> mydlp_api:filename_to_bin(Filename).
 
 get_text(undefined, MT, Data) -> get_text(<<>>, MT, Data);
+get_text(Filename, ?MIME_OCTET_STREAM, Data) -> 
+	case catch unicode:characters_to_binary(Data, unicode, unicode) of
+		Data -> get_text(Filename, ?MIME_TEXT, Data);
+		_Else -> get_text(Filename, ?MIME_OCTET_STREAM, Data) end;
 get_text(Filename0, MT, Data) ->
 	Filename = prettify_filename(Filename0),
 	try	RawText = call_pool({thrift, java, getText, [Filename, MT, Data]}),
