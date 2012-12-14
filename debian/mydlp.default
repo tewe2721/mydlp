@@ -8,7 +8,8 @@
 ERLANG_EXTRA_OPTS="+fnu +K true +P 524288 +A 30 -smp auto -env ERL_MAX_ETS_TABLES 32768 -env ERL_MAX_PORTS 1048576"
 
 # Extra options for Jsvc
-JSVC_EXTRA_OPTS="-Xmx3g"
+# It is recommended to increase this to 4g or more.
+JSVC_EXTRA_OPTS="-Xmx2g"
 
 # Set true to disable control of Jetty
 NOJETTY="false"
