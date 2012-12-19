@@ -2955,7 +2955,7 @@ use_client_policy(CDBBin) ->
 		( catch mydlp_mnesia:write([ #rule_table{channel=C, destination=D,table = RT} || {C, D, RT} <- RuleTables ]) ),
 
 		mydlp_mnesia:post_start(),
-		mydlp_dynamic:populate_win32reg(),
+		populate_win32reg(),
 		mydlp_tc:load(),
 		mydlp_container:schedule_confupdate(),
 
@@ -2968,6 +2968,18 @@ use_client_policy(CDBBin) ->
 		mydlp_sync:set_policy_id(RevisionId)
 	end,
 	ok.
+
+-ifdef(__PLATFORM_WINDOWS).
+
+populate_win32reg() -> mydlp_dynamic:populate_win32reg().
+
+-endif.
+
+-ifdef(__PLATFORM_LINUX).
+
+populate_win32reg() -> ok.
+
+-endif.
 
 get_client_policy_revision_id() ->
 	% sequence should be same with mydlp_mnesia:get_remote_rule_tables
