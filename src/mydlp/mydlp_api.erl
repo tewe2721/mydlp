@@ -1360,10 +1360,10 @@ str_channel(_) -> "Unknown".
 acl_act(_Channel, pass) -> {[], []};
 acl_act(discovery, block) -> {[" act=~s"], ["Deleted"]};
 acl_act(discovery, {custom, {seclore, pass, Name, {HotFolderId, ActivityComment}}}) -> 
-	{[" act=~s cn3Label=~ts cn3=~B cs1Label=~ts cs1=~ts cs2Label=~ts cs2=~ts cs3Label=~ts cs3=~ts"], 
+	{[" act=~s cn3Label=~ts cn3=~B cs2Label=~ts cs2=~ts cs3Label=~ts cs3=~ts cs4Label=~ts cs4=~ts"], 
 	["Encrypted", "HotFolder Id", HotFolderId, "Name of Custom Action", escape_es(Name), "IRM Model", "Seclore FileSecure", "Activity Comment", escape_es(ActivityComment)]};
 acl_act(mail, {custom, {seclore, pass, Name, {HotFolderId, ActivityComment}}}) -> 
-	{[" act=~s cn3Label=~ts cn3=~B cs1Label=~ts cs1=~ts cs2Label=~ts cs2=~ts cs3Label=~ts cs3=~ts"], 
+	{[" act=~s cn3Label=~ts cn3=~B cs2Label=~ts cs2=~ts cs3Label=~ts cs3=~ts cs4Label=~ts cs4=~ts"], 
 	["Encrypted", "HotFolder Id", HotFolderId, "Name of Custom Action", escape_es(Name), "IRM Model", "Seclore FileSecure", "Activity Comment", escape_es(ActivityComment)]};
 acl_act(_Channel, block) -> {[" act=~s"], ["Blocked"]};
 acl_act(_Channel, log) -> {[" act=~s"], ["Logged"]};
@@ -1377,6 +1377,12 @@ acl_destination(mail, {RcptTo, RcptList}) ->
 	{[" duser=~ts msg=~ts"], [escape_es(RcptTo), ("Full list of receipients: " ++ escape_es(RcptList))]};
 acl_destination(mail, RcptList) ->
 	{[" msg=~ts"], [("Full list of receipients: " ++ escape_es(RcptList))]};
+acl_destination(removable, Dest) ->
+	{[" cs1Label=~ts cs1=~ts"], ["Destination File", escape_es(Dest)]};
+acl_destination(discovery, Dest) ->
+	{[" cs1Label=~ts cs1=~ts"], ["Destination File", escape_es(Dest)]};
+acl_destination(printer, PrinterName) ->
+	{[" cs1Label=~ts cs1=~ts"], ["Printer Name", escape_es(PrinterName)]};
 acl_destination(_Channel, _Else) -> {[], []}.
 
 acl_file_hash(undefined) -> {[], []};

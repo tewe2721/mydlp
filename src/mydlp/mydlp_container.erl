@@ -201,7 +201,8 @@ handle_call({aclq, ObjId, Timeout}, From, #state{object_tree=OT} = State) ->
 						throw:{is_not_regularfile, Path} ->
 							case catch string:substr(Path, 2, 2) of
 								":\\" -> ok;
-								_Else -> ?ERROR_LOG("ACLQ: Path is not a regular file. Can not aclq. Path: "?S, [Path]) end;
+								_Else -> ?ERROR_LOG("ACLQ: Path is not a regular file. Can not aclq. Path: "?S, [Path]) end,
+							{ok, pass};
 						Class:Error ->
 							?ERROR_LOG("ACLQ: Error occured: Class: ["?S"]. Error: ["?S"].~n"
 									"Stack trace: "?S"~nObjID: ["?S"].~nState: "?S"~n ",
@@ -506,8 +507,12 @@ get_type(#object{prop_dict=PD}) ->
 		{ok, _Else} -> regular;
 		error -> regular  end.
 
-get_destination(#object{filepath=undefined}) -> undefined;
-get_destination(#object{filepath=FP} = Obj) ->
+get_destination(#object{prop_dict=PD} = Obj) ->
+	case dict:find("destination", PD) of
+		{ok, Dest} -> Dest;
+		error -> get_destination1(Obj) end.
+
+get_destination1(#object{filepath=FP} = Obj) ->
 	case get_channel(Obj) of
 		discovery -> FP;
 		removable -> FP;
