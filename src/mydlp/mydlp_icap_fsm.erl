@@ -464,14 +464,14 @@ acl_ret(QRet, DFFiles, State) ->
 		{archive, AclR} -> log_req(State, archive, AclR),
 					'REPLY_OK'(State);
 		{block, AclR} -> log_req(State, block, AclR),
-					'BLOCK_REQ'(block, State);
+					'BLOCK_REQ'(block, State, AclR);
 		{quarantine, AclR} -> log_req(State, quarantine, AclR),
-					'BLOCK_REQ'(block, State)
+					'BLOCK_REQ'(block, State, AclR)
 	end.
 
 'REPLY_OK'(State) -> reply(ok, State).
 
-'BLOCK_REQ'(block, State) -> reply(block, State).
+'BLOCK_REQ'(block, State, {{rule, OrigRuleId}, _, _, _}) -> reply({block, OrigRuleId}, State).
 
 reply(What, #state{socket=Socket, icap_request=IcapReq, http_request=HttpReq,
 		icap_headers=#icap_headers{allow204=Allow204},
@@ -517,9 +517,9 @@ reply(What, #state{socket=Socket, icap_request=IcapReq, http_request=HttpReq,
 				<<"\r\n\r\n">>,
                                 Payload,
 				<<"\r\n">>];
-		{block, _, _Reqmod_Or_Respmod} -> 
+		{{block, OrigRuleId}, _, _Reqmod_Or_Respmod} -> 
 				{http_request, _,  _, {HTTPMajorv, HTTPMinorv}} = HttpReq,
-				Deny = mydlp_api:get_denied_page(html),
+				Deny = mydlp_api:get_denied_page(OrigRuleId, html),
 				ReqModB = [httpd_util:integer_to_hexlist(size(Deny)), 
 						"\r\n", Deny, "\r\n0\r\n"],
 				ReqModH = list_to_binary(

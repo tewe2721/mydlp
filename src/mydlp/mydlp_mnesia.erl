@@ -91,7 +91,8 @@
 	get_user_from_address/1,
 	get_keywords/1,
 	get_matchers/0,
-	get_matchers/1
+	get_matchers/1,
+	get_user_message/2
 	]).
 
 -endif.
@@ -174,7 +175,8 @@
 		fun() -> mnesia:add_table_index(keyword, group_id) end},
 	site_desc,
 	{user_address, ordered_set, 
-		fun() -> mnesia:add_table_index(user_address, last_seen) end}
+		fun() -> mnesia:add_table_index(user_address, last_seen) end},
+	user_message
 ]).
 
 -endif.
@@ -243,6 +245,7 @@ get_record_fields_functional(Record) ->
 		keyword -> record_info(fields, keyword);
 		site_desc -> record_info(fields, site_desc);
 		user_address -> record_info(fields,user_address);
+		user_message -> record_info(fields, user_message);
 		_Else -> not_found
 	end.
 
@@ -357,6 +360,8 @@ get_matchers() -> get_matchers(all).
 
 get_matchers(Source) -> aqc({get_matchers, Source}, nocache).
 
+get_user_message(OrigRuleId, Format) -> aqc({get_user_message, OrigRuleId, Format}, cache).
+
 -endif.
 
 -ifdef(__MYDLP_ENDPOINT).
@@ -429,6 +434,14 @@ handle_result({get_user_from_address, _IpAddress}, {atomic, Result}) ->
 	case Result of
 		[] -> {nil, unknown};
 		[#user_address{username=UserName, un_hash=UserHash}] -> {UserName, UserHash} end;
+
+handle_result({get_user_message, _OrigRuleId, Format}, {atomic, Result}) -> 
+	Message = case Result of
+		[] -> <<>>;
+		[M] -> M end,
+	case Format of
+		html -> mydlp_denied_page:get_raw(Message);
+		html_base64_str -> mydlp_denied_page:get_base64_str(Message) end;
 
 handle_result(Query, Result) -> handle_result_common(Query, Result).
 
@@ -758,6 +771,13 @@ handle_query(get_remote_default_rule_ids) ->
 handle_query({get_matchers, all}) ->
 	Q = ?QLCQ([{M#match.id, M#match.func, M#match.func_params} ||
 		M <- mnesia:table(match)
+		]),
+	?QLCE(Q);
+
+handle_query({get_user_message, OrigRuleId, _Format}) ->
+	Q = ?QLCQ([U#user_message.message ||
+		U <- mnesia:table(user_message),
+		U#user_message.rule_orig_id == OrigRuleId
 		]),
 	?QLCE(Q);
 
@@ -1594,8 +1614,19 @@ remove_filter(FI) ->
 	RIs = [X || {X, _Y} <- AllRIs],
 	OrigRIs = [Y || {_X, Y} <- AllRIs],
 	remove_notification_queue_items(OrigRIs),
+	remove_user_messages(OrigRIs),
 	remove_rules(RIs),
 	mnesia:delete({filter, FI}).
+
+remove_user_messages(OrigRIs) -> lists:foreach(fun(Id) -> remove_user_message(Id) end, OrigRIs), ok.
+
+remove_user_message(OrigRI) ->
+	Q = ?QLCQ([N#user_message.rule_orig_id ||
+		N <- mnesia:table(user_message),
+		N#user_message.rule_orig_id == OrigRI
+	]),
+	UI = ?QLCE(Q),
+	lists:foreach(fun(I) -> mnesia:delete({user_message, I}) end, UI).
 
 remove_notification_queue_items(OrigRIs) -> lists:foreach(fun(Id) -> remove_notification_queue_item(Id) end, OrigRIs), ok.
 

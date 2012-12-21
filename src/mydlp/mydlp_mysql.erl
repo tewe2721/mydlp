@@ -328,7 +328,7 @@ init([]) ->
 	[ mysql:prepare(Key, Query) || {Key, Query} <- [
 		{last_insert_id, <<"SELECT last_insert_id()">>},
 		{configs, <<"SELECT configKey,value FROM Config">>},
-		{rules, <<"SELECT id,DTYPE,action,customAction_id FROM Rule WHERE enabled=1 order by priority desc">>},
+		{rules, <<"SELECT id,DTYPE,userMessage,action,customAction_id FROM Rule WHERE enabled=1 order by priority desc">>},
 		{custom_action_by_id, <<"SELECT c.name, c.typeKey FROM CustomAction AS c WHERE c.id=?">>},
 		{custom_action_seclore_by_id, <<"SELECT cs.hotFolderId, cs.activityComment FROM CustomActionDescription AS cd, CustomActionDescriptionSeclore AS cs WHERE cd.coupledCustomAction_id=? AND cd.id=cs.id">>},
 		{network_by_rule_id, <<"SELECT n.ipBase,n.ipMask FROM Network AS n, RuleItem AS ri WHERE ri.rule_id=? AND n.id=ri.item_id">>},
@@ -494,18 +494,20 @@ populate_filters([[Id, DActionS]|Rows], Id) ->
 	populate_filters(Rows, Id);
 populate_filters([], _FilterId) -> ok.
 
-populate_rules([[Id, DTYPE, ActionS, CustomActionId]|Rows], FilterId) ->
+populate_rules([[Id, DTYPE, UserMessage, ActionS, CustomActionId]|Rows], FilterId) ->
 	Action = case rule_action_to_atom(ActionS) of
 		custom -> {custom, populate_custom_action_detail(CustomActionId)};
 		Else -> Else end,
 	Channel = rule_dtype_to_channel(DTYPE),
 	validate_action_for_channel(Channel, Action),
-	populate_rule(Id, Channel, Action, FilterId),
+	populate_rule(Id, Channel, UserMessage, Action, FilterId),
 	populate_rules(Rows, FilterId);
 populate_rules([], _FilterId) -> ok.
 
-populate_rule(OrigId, Channel, Action, FilterId) ->
+populate_rule(OrigId, Channel, UserMessage, Action, FilterId) ->
 	RuleId = mydlp_mnesia:get_unique_id(rule),
+
+	populate_user_message(Channel, Action, OrigId, UserMessage),
 
 	{ok, IQ} = psq(network_by_rule_id, [OrigId]),
 	populate_iprs(IQ, RuleId),
@@ -528,6 +530,22 @@ populate_rule(OrigId, Channel, Action, FilterId) ->
 
 	R = #rule{id=RuleId, orig_id=OrigId, channel=Channel, action=Action, filter_id=FilterId},
 	mydlp_mnesia_write(R).
+
+populate_user_message(web, block, RuleOrigId, Message) -> populate_user_message1(RuleOrigId, Message);
+populate_user_message(web, quarantine, RuleOrigId, Message) -> populate_user_message1(RuleOrigId, Message);
+populate_user_message(mail, block, RuleOrigId, Message) -> populate_user_message1(RuleOrigId, Message);
+populate_user_message(mail, quarantine, RuleOrigId, Message) -> populate_user_message1(RuleOrigId, Message);
+populate_user_message(_Channel, _Action, _RuleOrigId, _Message) -> ok.
+
+populate_user_message1(_RuleOrigId, undefined) -> ok;
+populate_user_message1(_RuleOrigId, <<>>) -> ok;
+populate_user_message1(RuleOrigId, <<" ", Rest/binary>>) -> populate_user_message1(RuleOrigId, Rest);
+populate_user_message1(RuleOrigId, <<"\n", Rest/binary>>) -> populate_user_message1(RuleOrigId, Rest);
+populate_user_message1(RuleOrigId, <<"\r", Rest/binary>>) -> populate_user_message1(RuleOrigId, Rest);
+populate_user_message1(RuleOrigId, <<"\t", Rest/binary>>) -> populate_user_message1(RuleOrigId, Rest);
+populate_user_message1(RuleOrigId, UserMessage) ->
+	U = #user_message{rule_orig_id=RuleOrigId, message=UserMessage},
+	mydlp_mnesia_write(U).
 
 populate_custom_action_detail(CustomActionId) ->
         {ok, [[Name, TypeKey]]} = psq(custom_action_by_id, [CustomActionId]),

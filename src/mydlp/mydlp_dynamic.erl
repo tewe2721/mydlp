@@ -79,25 +79,27 @@ mydlp_denied_page_src(DeniedPageSrc) when is_list(DeniedPageSrc) ->
 -author('kerem@mydlp.com').
 
 -export([
-	get/0,
-	get_base64_str/0
+	get_raw/1,
+	get_base64_str/1
 ]).
 
-get() -> <<\"" ++ escape_string(DeniedPageSrc) ++ "\">>. 
+get_raw(UserMessage) ->
+	RawMessage = get_orig(),
+	re:replace(RawMessage, \"%%MESSAGE%%\", UserMessage, [global, {return, binary}]).
 
-get_base64_str() -> \"" ++ 
-	binary_to_list(
-		mydlp_api:insert_line_feed(
-			base64:encode(DeniedPageSrc)
-		)
-	)
- 				++ "\". 
+get_orig() -> <<\"" ++ escape_string(DeniedPageSrc) ++ "\">>. 
+
+get_base64_str(UserMessage) -> 
+	Message = get_raw(UserMessage),
+	Base64 = base64:encode(Message),
+	Base64F = mydlp_api:insert_line_feed(Base64),
+	binary_to_list(Base64F).
 
 ".
 
 load_mydlp_denied_page() -> load_src(mydlp_denied_page_src(denied_page_src())).
 
-load_mydlp_denied_page0() -> load_src(mydlp_denied_page_src("Denied!!!")).
+load_mydlp_denied_page0() -> load_src(mydlp_denied_page_src("Your attempt is blocked.\n%%MESSAGE%%")).
 
 
 -endif.

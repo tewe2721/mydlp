@@ -190,9 +190,9 @@ process_aclret(AclRet, #smtpd_fsm{files=Files} = State) ->
 		{archive, AclR} -> 	log_req(State, archive, AclR),
 					'CONNECT_REMOTE'(connect, State);
 		{block, AclR} -> 	log_req(State, block, AclR),
-					'BLOCK_REQ'(block, State);
+					'BLOCK_REQ'(block, State, AclR);
 		{quarantine, AclR} -> 	log_req(State, quarantine, AclR),
-					'BLOCK_REQ'(block, State);
+					'BLOCK_REQ'(block, State, AclR);
 		{{custom, {Type, PrimAction, _Name, Param}} = CustomAction, AclR} ->
 					{Message, NewFiles} = execute_custom_action(Type, Param, AclR, Files),
 					log_req(State, CustomAction, AclR, Message),
@@ -201,7 +201,7 @@ process_aclret(AclRet, #smtpd_fsm{files=Files} = State) ->
 					State1 = State#smtpd_fsm{message_record=MessageR#message{message=NewMessage}},
 					case PrimAction of
 						pass -> 'CONNECT_REMOTE'(connect, State1);
-						block -> 'BLOCK_REQ'(block, State1) end
+						block -> 'BLOCK_REQ'(block, State1, AclR) end
 	end.
 
 execute_custom_action(seclore, {HotFolderId, ActivityComments}, {_, {file, #file{dataref=DRef}}, _, _}, Files) ->
@@ -257,7 +257,7 @@ pre_query(State, Files) ->
 		false -> ok end.
 
 % refined this
-'BLOCK_REQ'(block, #smtpd_fsm{spool_ref=Ref, message_record=MessageR} = State) ->
+'BLOCK_REQ'(block, #smtpd_fsm{spool_ref=Ref, message_record=MessageR} = State, {{rule, OrigRuleId}, _, _, _}) ->
 	MailFrom = MessageR#message.mail_from,
 	RepMessage = #message{mail_from=MailFrom, 
 			rcpt_to=MailFrom,
@@ -269,7 +269,7 @@ pre_query(State, Files) ->
 				"Subject: Your e-mail to \'" ++ MessageR#message.rcpt_to ++ "\' has been denied!!!\r\n" ++
 				"\r\n" ++
 				"\r\n" ++
-				mydlp_api:get_denied_page(html_base64_str)},
+				mydlp_api:get_denied_page(OrigRuleId, html_base64_str)},
 	mydlp_smtpc:mail(Ref, RepMessage),
 	?SMTP_LOG(sent_deny, MessageR),
 	NextState = reset_statedata(State),

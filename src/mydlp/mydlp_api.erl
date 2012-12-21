@@ -1946,8 +1946,7 @@ quarantine(#file{data=Data, md5_hash=Hash}) -> mydlp_quarantine:q(Hash, Data).
 %% @end
 %%-------------------------------------------------------------------------
 
-get_denied_page(html) -> mydlp_denied_page:get();
-get_denied_page(html_base64_str) -> mydlp_denied_page:get_base64_str().
+get_denied_page(OrigRuleId, Format) -> mydlp_mnesia:get_user_message(OrigRuleId, Format).
 
 %%-------------------------------------------------------------------------
 %% @doc Inserts line feed for long lines

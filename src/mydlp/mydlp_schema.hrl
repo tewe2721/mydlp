@@ -111,6 +111,11 @@
 	last_seen
 }).
 
+-record(user_message, {
+	rule_orig_id,
+	message
+}).
+
 -endif.
 
 
