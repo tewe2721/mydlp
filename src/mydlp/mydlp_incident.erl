@@ -171,7 +171,7 @@ notify_users_now(RuleId) ->
 	notify_user(Notifications).
 
 notify_user([{email, EmailAddress}|Notifications]) ->
-	EmailBody = [	"From: support@mydlp.com", 
+	EmailBody = [	"From: ", ?CFG(email_notification_message_from),
 			"\n",
 			"To: ", EmailAddress,
 			"\n",
