@@ -2386,7 +2386,7 @@ heads_to_file([{'content-type', CT}|Rest], #file{filename=undefined} = F) ->
 heads_to_file([{'content-id', CI}|Rest], #file{filename=undefined, name=undefined} = File) ->
 	heads_to_file(Rest, File#file{name=CI});
 heads_to_file([{subject, Subject}|Rest], #file{filename=undefined, name=undefined} = File) ->
-	heads_to_file(Rest, File#file{name="Mail: " ++ Subject});
+	heads_to_file(Rest, File#file{name="Mail: " ++ multipart_decode_fn(Subject)});
 heads_to_file([_|Rest], File) ->
 	ignore,	heads_to_file(Rest, File);
 heads_to_file([], File) -> File.
