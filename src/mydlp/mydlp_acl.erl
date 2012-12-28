@@ -475,7 +475,7 @@ apply_func_iret(Threshold, Distance, IsDistanceApplicable, {MatcherId, Func, Fun
 		false -> false;
 		true -> not mydlp_api:has_text(File) end,
 	case EarlyNeg of
-		true -> neg;
+		true -> {neg, undefined};
 		false ->
 			FuncOpts = get_func_opts(Func, FuncParams),
 			IndexRet = case IndexRet0 of
