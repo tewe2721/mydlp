@@ -512,12 +512,17 @@ get_destination(#object{prop_dict=PD} = Obj) ->
 		{ok, Dest} -> Dest;
 		error -> get_destination1(Obj) end.
 
-get_destination1(#object{filepath=FP} = Obj) ->
+get_destination1(#object{} = Obj) ->
 	case get_channel(Obj) of
-		discovery -> FP;
-		removable -> FP;
+		discovery -> get_destination_file_path(Obj);
+		removable -> get_destination_file_path(Obj);
 		printer -> get_printer_name(Obj);
 		_Else -> undefined end.
+
+get_destination_file_path(#object{prop_dict=PD, filepath=FP}) ->
+	case dict:find("burn_after_reading", PD) of
+		{ok, "true"} -> undefined;
+		_Else -> FP end.
 
 get_ip_address(#object{prop_dict=PD}) ->
 	case dict:find("ip_address", PD) of
