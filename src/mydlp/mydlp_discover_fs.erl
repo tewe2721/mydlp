@@ -133,11 +133,14 @@ schedule(Interval) ->
 
 schedule() ->
 	PathsWithRuleIndex = mydlp_mnesia:get_discovery_directory(), % {Path, IndexInWhichRuleHasThisPath}
-	PathList = lists:map(fun({P, Index}) -> 
-			{try unicode:characters_to_list(P)
-				catch _:_ -> binary_to_list(P) end,  %% TODO: log this case
-			Index}
-		end, PathsWithRuleIndex),	
+	PathList = case PathsWithRuleIndex of
+		none -> [];
+		L when is_list(L) ->
+			lists:map(fun({P, Index}) -> 
+				{try unicode:characters_to_list(P)
+					catch _:_ -> binary_to_list(P) end,  %% TODO: log this case
+				Index} end
+			, L) end,	
 	lists:foreach(fun({P, I}) -> q(P, I) end, PathList),
 	ok.
 
