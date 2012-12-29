@@ -37,6 +37,7 @@
 	schedule_confupdate/0,
 	confupdate/0,
 	get_ep_meta_dict/0,
+	set_general_meta/0,
 	get_ep_meta/1,
 	set_ep_meta/2,
 	set_ep_meta_from_dict/1,
@@ -383,19 +384,31 @@ stop() ->
 init([]) ->
 	call_timer(),
 	set_init_meta(),
+	set_general_meta(),
 	{ok, #state{ object_tree=gb_trees:empty(), ep_meta=dict:new() }}.
 
 -ifdef(__PLATFORM_LINUX).
 
 set_init_meta() ->
-	?ASYNC(fun() -> 
+	?ASYNC0(fun() -> 
 		set_ep_meta("os", "linux"),
 		Version = mydlp_api:get_agent_version(),
 		set_ep_meta("version", Version),
 		LoggedOnUser = mydlp_api:get_logged_on_user(),
 		set_ep_meta("user", LoggedOnUser)
-	end, 150000),
+	end),
 	ok.
+
+set_general_meta() ->
+	?ASYNC0(fun() -> 
+		LoggedOnUser = mydlp_api:get_logged_on_user(),
+		LoggedOnDomain = mydlp_api:get_logged_on_domain(),
+		set_ep_meta("user", <<LoggedOnUser/binary, "@", LoggedOnDomain/binary>>),
+		set_ep_meta("logged_on_domain", LoggedOnDomain),
+		ok
+	end),
+	ok.
+
 
 -endif.
 
@@ -406,6 +419,8 @@ set_init_meta() ->
 		set_ep_meta("os", "windows")
 	end),
 	ok.
+
+set_general_meta() -> ok.
 
 -endif.
 
@@ -457,7 +472,7 @@ log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}
 
 get_user(#object{prop_dict=PD}) ->
 	case dict:find("user", PD) of
-		{ok, User} -> User;
+		{ok, User} -> User ++ "@" ++ get_ep_meta("logged_on_domain");
 		_Else -> get_ep_meta("user") end.
 
 -endif.

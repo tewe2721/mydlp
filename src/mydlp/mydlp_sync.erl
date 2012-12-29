@@ -86,6 +86,8 @@ handle_info(sync_now, #state{policy_id=undefined} = State) ->
         {noreply, State#state{policy_id=PolicyId}};
 
 handle_info(sync_now, #state{policy_id=PolicyId} = State) ->
+	mydlp_container:set_general_meta(),
+	timer:sleep(1000),
 	sync(PolicyId),
 	call_timer(),
         {noreply, State};

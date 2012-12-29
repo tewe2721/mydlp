@@ -984,7 +984,7 @@ get_agent_version() ->
 		exit_status,
 		stderr_to_stdout]),
 
-	case get_port_resp(Port, [], 60000) of
+	case get_port_resp(Port, [], 50000) of
 		{ok, Data} -> Data;
 		_Else -> "" end.
 
@@ -997,7 +997,20 @@ get_logged_on_user() ->
 		exit_status,
 		stderr_to_stdout]),
 
-	case get_port_resp(Port, [], 60000) of
+	case get_port_resp(Port, [], 25000) of
+		{ok, Data} -> Data;
+		_Else -> "" end.
+
+-define(LOGGEDONDOMAINBIN, "/usr/sbin/mydlp-logged-on-domain").
+
+get_logged_on_domain() ->
+	Port = open_port({spawn_executable, ?LOGGEDONDOMAINBIN},
+		[{args, []},
+		use_stdio,
+		exit_status,
+		stderr_to_stdout]),
+
+	case get_port_resp(Port, [], 25000) of
 		{ok, Data} -> Data;
 		_Else -> "" end.
 
