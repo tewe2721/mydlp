@@ -382,7 +382,32 @@ stop() ->
 
 init([]) ->
 	call_timer(),
+	set_init_meta(),
 	{ok, #state{ object_tree=gb_trees:empty(), ep_meta=dict:new() }}.
+
+-ifdef(__PLATFORM_LINUX).
+
+set_init_meta() ->
+	?ASYNC(fun() -> 
+		set_ep_meta("os", "linux"),
+		Version = mydlp_api:get_agent_version(),
+		set_ep_meta("version", Version),
+		LoggedOnUser = mydlp_api:get_logged_on_user(),
+		set_ep_meta("user", LoggedOnUser)
+	end, 150000),
+	ok.
+
+-endif.
+
+-ifdef(__PLATFORM_WINDOWS).
+
+set_init_meta() ->
+	?ASYNC0(fun() ->
+		set_ep_meta("os", "windows")
+	end),
+	ok.
+
+-endif.
 
 terminate(_Reason, _State) ->
 	ok.
@@ -428,10 +453,25 @@ log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}
 			_Else -> ?ERROR_LOG("Misc was not empty. Misc: "?S, [Misc]) end,
 	log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Message}}).
 
+-ifdef(__PLATFORM_LINUX).
+
+get_user(#object{prop_dict=PD}) ->
+	case dict:find("user", PD) of
+		{ok, User} -> User;
+		_Else -> get_ep_meta("user") end.
+
+-endif.
+
+-ifdef(__PLATFORM_WINDOWS).
+
+get_user(_Obj) -> get_ep_meta("user").
+
+-endif.
+
 log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
 	User = case get_channel(Obj) of
 		api -> get_api_user(Obj);
-		_Else -> get_ep_meta("user") end,
+		_Else -> get_user(Obj) end,
 	Channel = get_channel(Obj),
 	Time = erlang:universaltime(),
 	Destination = case get_destination(Obj) of
@@ -538,10 +578,6 @@ get_api_user(#object{prop_dict=PD}) ->
 		{ok, User} -> User;
 		error -> nil  end.
 
-%get_user(#object{prop_dict=PD}) ->
-%	case dict:find("user", PD) of
-%		{ok, User} -> User;
-%		error -> nil  end.
 predict_size(#object{filepath=undefined, data=undefined}) -> error;
 predict_size(#object{filepath=undefined, data=Data}) -> size(Data);
 predict_size(#object{filepath=FilePath}) -> filelib:file_size(FilePath).

@@ -971,6 +971,40 @@ get_port_resp(Port) ->
 
 %%% imported from tsuraan tempfile module http://www.erlang.org/cgi-bin/ezmlm-cgi/4/41649
 
+-ifdef(__MYDLP_ENDPOINT).
+
+-ifdef(__PLATFORM_LINUX).
+
+-define(AGENTVERSIONBIN, "/usr/sbin/mydlp-agent-version").
+
+get_agent_version() ->
+	Port = open_port({spawn_executable, ?AGENTVERSIONBIN},
+		[{args, []},
+		use_stdio,
+		exit_status,
+		stderr_to_stdout]),
+
+	case get_port_resp(Port, [], 60000) of
+		{ok, Data} -> Data;
+		_Else -> "" end.
+
+-define(LOGGEDONUSERBIN, "/usr/sbin/mydlp-logged-on-user").
+
+get_logged_on_user() ->
+	Port = open_port({spawn_executable, ?LOGGEDONUSERBIN},
+		[{args, []},
+		use_stdio,
+		exit_status,
+		stderr_to_stdout]),
+
+	case get_port_resp(Port, [], 60000) of
+		{ok, Data} -> Data;
+		_Else -> "" end.
+
+-endif.
+
+-endif.
+
 %%--------------------------------------------------------------------
 %% @doc Creates safe temporary files.
 %% @end
