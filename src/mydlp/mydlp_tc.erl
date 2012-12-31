@@ -74,6 +74,8 @@ restart_backoff() -> ok.
 -endif.
 
 -define(MMLEN, 4096).
+-define(ULEN, 1024).
+-define(ULENC, 128).
 
 get_mime(undefined, Data) -> get_mime("noname", Data);
 get_mime("", Data) -> get_mime("noname", Data);
@@ -119,11 +121,25 @@ get_mime(Filename, Data) when is_binary(Data) ->
 
 prettify_filename(Filename) -> mydlp_api:filename_to_bin(Filename).
 
+is_unicode_text(Data) when is_binary(Data) ->
+	S = size(Data),
+        Data1 = case S > ?ULEN of
+                true -> <<D:?ULEN/binary, _/binary>> = Data, D;
+                false -> Data
+        end,
+
+	case unicode:characters_to_list(Data1) of
+		{incomplete, Encoded, _Rest} ->
+			length(Encoded) > ?ULENC;
+		{error, _Encoded, _Rest} ->
+			false;
+		_Else -> true end.
+	
 get_text(undefined, MT, Data) -> get_text(<<>>, MT, Data);
 get_text(Filename, ?MIME_OCTET_STREAM, Data) -> 
-	case catch unicode:characters_to_binary(Data, unicode, unicode) of
-		Data -> get_text(Filename, ?MIME_TEXT, Data);
-		_Else -> get_text(Filename, ?MIME_OCTET_STREAM, Data) end;
+	case is_unicode_text(Data) of
+		true ->	get_text(Filename, ?MIME_TEXT, Data);
+		false -> get_text(Filename, ?MIME_OCTET_STREAM, Data) end;
 get_text(Filename0, MT, Data) ->
 	Filename = prettify_filename(Filename0),
 	try	RawText = call_pool({thrift, java, getText, [Filename, MT, Data]}),
