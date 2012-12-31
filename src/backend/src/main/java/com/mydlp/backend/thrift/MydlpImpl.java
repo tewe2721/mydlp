@@ -198,4 +198,11 @@ public class MydlpImpl implements Mydlp.Iface {
 		}
 	}
 
+	@Override
+	public ByteBuffer getUnicodeText(String Encoding, ByteBuffer Data)
+			throws TException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
 }
