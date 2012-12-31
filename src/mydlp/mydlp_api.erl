@@ -2469,15 +2469,12 @@ multipart_decode_fn_rfc2047("=?" ++ Rest) ->
 multipart_decode_fn_rfc2047(Charset, Encoding, Data) ->
 	multipart_decode_fn_rfc2047_1(string:to_lower(Charset), string:to_lower(Encoding), Data).
 	
-multipart_decode_fn_rfc2047_1("unicode", Encoding, Data) -> multipart_decode_fn_rfc2047_2(unicode, Encoding, Data);
-multipart_decode_fn_rfc2047_1("utf-8", Encoding, Data) -> multipart_decode_fn_rfc2047_2(unicode, Encoding, Data);
-multipart_decode_fn_rfc2047_1("utf-16", Encoding, Data) -> multipart_decode_fn_rfc2047_2(utf16, Encoding, Data);
-multipart_decode_fn_rfc2047_1("utf-32", Encoding, Data) -> multipart_decode_fn_rfc2047_2(utf32, Encoding, Data);
-multipart_decode_fn_rfc2047_1("latin1", Encoding, Data) -> multipart_decode_fn_rfc2047_2(latin1, Encoding, Data);
-multipart_decode_fn_rfc2047_1("iso-8859-1", Encoding, Data) -> multipart_decode_fn_rfc2047_2(latin1, Encoding, Data);
-multipart_decode_fn_rfc2047_1("windows-1252", Encoding, Data) -> multipart_decode_fn_rfc2047_2(latin1, Encoding, Data);
-multipart_decode_fn_rfc2047_1("cp-1252", Encoding, Data) -> multipart_decode_fn_rfc2047_2(latin1, Encoding, Data);
-multipart_decode_fn_rfc2047_1(_Else , Encoding, Data) -> multipart_decode_fn_rfc2047_2(unicode, Encoding, Data).
+multipart_decode_fn_rfc2047_1("unicode", Encoding, Data) -> multipart_decode_fn_rfc2047_2({api, unicode}, Encoding, Data);
+multipart_decode_fn_rfc2047_1("utf-8", Encoding, Data) -> multipart_decode_fn_rfc2047_2({api, unicode}, Encoding, Data);
+multipart_decode_fn_rfc2047_1("utf-16", Encoding, Data) -> multipart_decode_fn_rfc2047_2({api, utf16}, Encoding, Data);
+multipart_decode_fn_rfc2047_1("utf-32", Encoding, Data) -> multipart_decode_fn_rfc2047_2({api, utf32}, Encoding, Data);
+multipart_decode_fn_rfc2047_1("latin1", Encoding, Data) -> multipart_decode_fn_rfc2047_2({api, latin1}, Encoding, Data);
+multipart_decode_fn_rfc2047_1(Charset, Encoding, Data) -> multipart_decode_fn_rfc2047_2({backend, string:to_upper(Charset)}, Encoding, Data).
 
 multipart_decode_fn_rfc2047_2(Charset, $Q, Data) -> multipart_decode_fn_rfc2047_3(Charset, quoted_printable, Data);
 multipart_decode_fn_rfc2047_2(Charset, $q, Data) -> multipart_decode_fn_rfc2047_3(Charset, quoted_printable, Data);
@@ -2506,17 +2503,6 @@ multipart_decode_fn_rfc2047_3(Charset, quoted_printable, QPStr) ->
 			[Class, Error, erlang:get_stacktrace(), QPStr]),
 		list_to_binary(QPStr) end,
 	multipart_decode_fn_rfc2047_4(Charset, DataBin).
-	
-multipart_decode_fn_rfc2047_4(Charset, DataBin) ->
-	B = list_to_binary([DataBin]),
-	case unicode:characters_to_list(B, Charset) of
-		R when is_list(R) -> R;
-		_ -> 	try binary_to_list(DataBin)
-			catch _:_ -> ?ERROR_LOG("Error occured when unicode decoding: "
-					"DataBin: ["?S"]~n", [DataBin]), "noname" 
-			end
-	end.
-
 
 multipart_decode_fn_rfc2047_3_1(QPStr) -> multipart_decode_fn_rfc2047_3_1(QPStr, []).
 
@@ -2524,6 +2510,21 @@ multipart_decode_fn_rfc2047_3_1([$_|Rest], Acc) -> multipart_decode_fn_rfc2047_3
 multipart_decode_fn_rfc2047_3_1([C|Rest], Acc) -> multipart_decode_fn_rfc2047_3_1(Rest, [C|Acc]);
 multipart_decode_fn_rfc2047_3_1([], Acc) -> lists:reverse(Acc).
 	
+multipart_decode_fn_rfc2047_4({api, Charset}, DataBin) ->
+	B = list_to_binary([DataBin]),
+	case unicode:characters_to_list(B, Charset) of
+		R when is_list(R) -> R;
+		_ -> 	try binary_to_list(DataBin)
+			catch _:_ -> ?ERROR_LOG("Error occured when unicode decoding: "
+					"DataBin: ["?S"]~n", [DataBin]), "noname" 
+			end
+	end;
+multipart_decode_fn_rfc2047_4({backend, Charset}, DataBin) ->
+	B = list_to_binary([DataBin]),
+	UnicodeText = case mydlp_tc:get_unicode_text(Charset, B) of
+		{error, _Error} -> ?ERROR_LOG("Error occurred when getting unicode text.", []), B;
+		T when is_binary(T) -> T end,
+	multipart_decode_fn_rfc2047_4({api, unicode}, UnicodeText).
 
 
 multipart_decode_fn_xml(Filename) -> multipart_decode_fn_xml(Filename, []).

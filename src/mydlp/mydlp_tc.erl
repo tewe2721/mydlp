@@ -36,6 +36,8 @@
 -export([	start_link/0,
 		get_mime/2,
 		get_text/3,
+		get_unicode_text/1,
+		get_unicode_text/2,
 		seclore_initialize/7,
 		seclore_protect/3,
 		seclore_terminate/0,
@@ -132,6 +134,16 @@ get_text(Filename0, MT, Data) ->
 	catch Class:Error ->
 		?ERROR_LOG("Error occured when extractiong text. Filename: "?S", Mimetype: "?S".~nData: ["?S"]~nClass: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
 				[Filename, MT, Data, Class, Error, erlang:get_stacktrace()]),
+		{error, {Class, Error}} end.
+
+get_unicode_text(Data) -> get_unicode_text(undefined, Data).
+
+get_unicode_text(undefined, Data) -> get_unicode_text(<<>>, Data);
+get_unicode_text(Encoding, Data) ->
+	try	call_pool({thrift, java, getUnicodeText, [Encoding, Data]})
+	catch Class:Error ->
+		?ERROR_LOG("Error occured when extractiong unicode text. Encoding: "?S".~nData: ["?S"]~nClass: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
+				[Encoding, Data, Class, Error, erlang:get_stacktrace()]),
 		{error, {Class, Error}} end.
 
 seclore_initialize(SecloreAppPath, SecloreAddress, SeclorePort, SecloreAppName, SecloreHotFolderCabinetId, SecloreHotFolderCabinetPassphrase, SeclorePoolSize) ->
