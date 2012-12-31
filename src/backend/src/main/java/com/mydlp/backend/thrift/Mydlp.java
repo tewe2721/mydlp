@@ -28,6 +28,8 @@ public class Mydlp {
 
     public ByteBuffer getText(String FileName, String MimeType, ByteBuffer Data) throws org.apache.thrift.TException;
 
+    public ByteBuffer getUnicodeText(String Encoding, ByteBuffer Data) throws org.apache.thrift.TException;
+
     public String secloreInitialize(String SecloreAppPath, String SecloreAddress, int SeclorePort, String SecloreAppName, int SecloreHotFolderCabinetId, String SecloreHotFolderCabinetPassphrase, int SeclorePoolSize) throws org.apache.thrift.TException;
 
     public String secloreProtect(String FilePath, int HotFolderId, String ActivityComments) throws org.apache.thrift.TException;
@@ -41,6 +43,8 @@ public class Mydlp {
     public void getMime(String FileName, ByteBuffer Data, org.apache.thrift.async.AsyncMethodCallback<AsyncClient.getMime_call> resultHandler) throws org.apache.thrift.TException;
 
     public void getText(String FileName, String MimeType, ByteBuffer Data, org.apache.thrift.async.AsyncMethodCallback<AsyncClient.getText_call> resultHandler) throws org.apache.thrift.TException;
+
+    public void getUnicodeText(String Encoding, ByteBuffer Data, org.apache.thrift.async.AsyncMethodCallback<AsyncClient.getUnicodeText_call> resultHandler) throws org.apache.thrift.TException;
 
     public void secloreInitialize(String SecloreAppPath, String SecloreAddress, int SeclorePort, String SecloreAppName, int SecloreHotFolderCabinetId, String SecloreHotFolderCabinetPassphrase, int SeclorePoolSize, org.apache.thrift.async.AsyncMethodCallback<AsyncClient.secloreInitialize_call> resultHandler) throws org.apache.thrift.TException;
 
@@ -117,6 +121,30 @@ public class Mydlp {
         return result.success;
       }
       throw new org.apache.thrift.TApplicationException(org.apache.thrift.TApplicationException.MISSING_RESULT, "getText failed: unknown result");
+    }
+
+    public ByteBuffer getUnicodeText(String Encoding, ByteBuffer Data) throws org.apache.thrift.TException
+    {
+      send_getUnicodeText(Encoding, Data);
+      return recv_getUnicodeText();
+    }
+
+    public void send_getUnicodeText(String Encoding, ByteBuffer Data) throws org.apache.thrift.TException
+    {
+      getUnicodeText_args args = new getUnicodeText_args();
+      args.setEncoding(Encoding);
+      args.setData(Data);
+      sendBase("getUnicodeText", args);
+    }
+
+    public ByteBuffer recv_getUnicodeText() throws org.apache.thrift.TException
+    {
+      getUnicodeText_result result = new getUnicodeText_result();
+      receiveBase(result, "getUnicodeText");
+      if (result.isSetSuccess()) {
+        return result.success;
+      }
+      throw new org.apache.thrift.TApplicationException(org.apache.thrift.TApplicationException.MISSING_RESULT, "getUnicodeText failed: unknown result");
     }
 
     public String secloreInitialize(String SecloreAppPath, String SecloreAddress, int SeclorePort, String SecloreAppName, int SecloreHotFolderCabinetId, String SecloreHotFolderCabinetPassphrase, int SeclorePoolSize) throws org.apache.thrift.TException
@@ -286,6 +314,41 @@ public class Mydlp {
       }
     }
 
+    public void getUnicodeText(String Encoding, ByteBuffer Data, org.apache.thrift.async.AsyncMethodCallback<getUnicodeText_call> resultHandler) throws org.apache.thrift.TException {
+      checkReady();
+      getUnicodeText_call method_call = new getUnicodeText_call(Encoding, Data, resultHandler, this, ___protocolFactory, ___transport);
+      this.___currentMethod = method_call;
+      ___manager.call(method_call);
+    }
+
+    public static class getUnicodeText_call extends org.apache.thrift.async.TAsyncMethodCall {
+      private String Encoding;
+      private ByteBuffer Data;
+      public getUnicodeText_call(String Encoding, ByteBuffer Data, org.apache.thrift.async.AsyncMethodCallback<getUnicodeText_call> resultHandler, org.apache.thrift.async.TAsyncClient client, org.apache.thrift.protocol.TProtocolFactory protocolFactory, org.apache.thrift.transport.TNonblockingTransport transport) throws org.apache.thrift.TException {
+        super(client, protocolFactory, transport, resultHandler, false);
+        this.Encoding = Encoding;
+        this.Data = Data;
+      }
+
+      public void write_args(org.apache.thrift.protocol.TProtocol prot) throws org.apache.thrift.TException {
+        prot.writeMessageBegin(new org.apache.thrift.protocol.TMessage("getUnicodeText", org.apache.thrift.protocol.TMessageType.CALL, 0));
+        getUnicodeText_args args = new getUnicodeText_args();
+        args.setEncoding(Encoding);
+        args.setData(Data);
+        args.write(prot);
+        prot.writeMessageEnd();
+      }
+
+      public ByteBuffer getResult() throws org.apache.thrift.TException {
+        if (getState() != org.apache.thrift.async.TAsyncMethodCall.State.RESPONSE_READ) {
+          throw new IllegalStateException("Method call not finished!");
+        }
+        org.apache.thrift.transport.TMemoryInputTransport memoryTransport = new org.apache.thrift.transport.TMemoryInputTransport(getFrameBuffer().array());
+        org.apache.thrift.protocol.TProtocol prot = client.getProtocolFactory().getProtocol(memoryTransport);
+        return (new Client(prot)).recv_getUnicodeText();
+      }
+    }
+
     public void secloreInitialize(String SecloreAppPath, String SecloreAddress, int SeclorePort, String SecloreAppName, int SecloreHotFolderCabinetId, String SecloreHotFolderCabinetPassphrase, int SeclorePoolSize, org.apache.thrift.async.AsyncMethodCallback<secloreInitialize_call> resultHandler) throws org.apache.thrift.TException {
       checkReady();
       secloreInitialize_call method_call = new secloreInitialize_call(SecloreAppPath, SecloreAddress, SeclorePort, SecloreAppName, SecloreHotFolderCabinetId, SecloreHotFolderCabinetPassphrase, SeclorePoolSize, resultHandler, this, ___protocolFactory, ___transport);
@@ -418,6 +481,7 @@ public class Mydlp {
     private static <I extends Iface> Map<String,  org.apache.thrift.ProcessFunction<I, ? extends  org.apache.thrift.TBase>> getProcessMap(Map<String,  org.apache.thrift.ProcessFunction<I, ? extends  org.apache.thrift.TBase>> processMap) {
       processMap.put("getMime", new getMime());
       processMap.put("getText", new getText());
+      processMap.put("getUnicodeText", new getUnicodeText());
       processMap.put("secloreInitialize", new secloreInitialize());
       processMap.put("secloreProtect", new secloreProtect());
       processMap.put("secloreTerminate", new secloreTerminate());
@@ -452,6 +516,22 @@ public class Mydlp {
       protected getText_result getResult(I iface, getText_args args) throws org.apache.thrift.TException {
         getText_result result = new getText_result();
         result.success = iface.getText(args.FileName, args.MimeType, args.Data);
+        return result;
+      }
+    }
+
+    private static class getUnicodeText<I extends Iface> extends org.apache.thrift.ProcessFunction<I, getUnicodeText_args> {
+      public getUnicodeText() {
+        super("getUnicodeText");
+      }
+
+      protected getUnicodeText_args getEmptyArgsInstance() {
+        return new getUnicodeText_args();
+      }
+
+      protected getUnicodeText_result getResult(I iface, getUnicodeText_args args) throws org.apache.thrift.TException {
+        getUnicodeText_result result = new getUnicodeText_result();
+        result.success = iface.getUnicodeText(args.Encoding, args.Data);
         return result;
       }
     }
@@ -1957,6 +2037,710 @@ public class Mydlp {
     @Override
     public String toString() {
       StringBuilder sb = new StringBuilder("getText_result(");
+      boolean first = true;
+
+      sb.append("success:");
+      if (this.success == null) {
+        sb.append("null");
+      } else {
+        org.apache.thrift.TBaseHelper.toString(this.success, sb);
+      }
+      first = false;
+      sb.append(")");
+      return sb.toString();
+    }
+
+    public void validate() throws org.apache.thrift.TException {
+      // check for required fields
+    }
+
+    private void writeObject(java.io.ObjectOutputStream out) throws java.io.IOException {
+      try {
+        write(new org.apache.thrift.protocol.TCompactProtocol(new org.apache.thrift.transport.TIOStreamTransport(out)));
+      } catch (org.apache.thrift.TException te) {
+        throw new java.io.IOException(te);
+      }
+    }
+
+    private void readObject(java.io.ObjectInputStream in) throws java.io.IOException, ClassNotFoundException {
+      try {
+        read(new org.apache.thrift.protocol.TCompactProtocol(new org.apache.thrift.transport.TIOStreamTransport(in)));
+      } catch (org.apache.thrift.TException te) {
+        throw new java.io.IOException(te);
+      }
+    }
+
+  }
+
+  public static class getUnicodeText_args implements org.apache.thrift.TBase<getUnicodeText_args, getUnicodeText_args._Fields>, java.io.Serializable, Cloneable   {
+    private static final org.apache.thrift.protocol.TStruct STRUCT_DESC = new org.apache.thrift.protocol.TStruct("getUnicodeText_args");
+
+    private static final org.apache.thrift.protocol.TField ENCODING_FIELD_DESC = new org.apache.thrift.protocol.TField("Encoding", org.apache.thrift.protocol.TType.STRING, (short)1);
+    private static final org.apache.thrift.protocol.TField DATA_FIELD_DESC = new org.apache.thrift.protocol.TField("Data", org.apache.thrift.protocol.TType.STRING, (short)2);
+
+    public String Encoding; // required
+    public ByteBuffer Data; // required
+
+    /** The set of fields this struct contains, along with convenience methods for finding and manipulating them. */
+    public enum _Fields implements org.apache.thrift.TFieldIdEnum {
+      ENCODING((short)1, "Encoding"),
+      DATA((short)2, "Data");
+
+      private static final Map<String, _Fields> byName = new HashMap<String, _Fields>();
+
+      static {
+        for (_Fields field : EnumSet.allOf(_Fields.class)) {
+          byName.put(field.getFieldName(), field);
+        }
+      }
+
+      /**
+       * Find the _Fields constant that matches fieldId, or null if its not found.
+       */
+      public static _Fields findByThriftId(int fieldId) {
+        switch(fieldId) {
+          case 1: // ENCODING
+            return ENCODING;
+          case 2: // DATA
+            return DATA;
+          default:
+            return null;
+        }
+      }
+
+      /**
+       * Find the _Fields constant that matches fieldId, throwing an exception
+       * if it is not found.
+       */
+      public static _Fields findByThriftIdOrThrow(int fieldId) {
+        _Fields fields = findByThriftId(fieldId);
+        if (fields == null) throw new IllegalArgumentException("Field " + fieldId + " doesn't exist!");
+        return fields;
+      }
+
+      /**
+       * Find the _Fields constant that matches name, or null if its not found.
+       */
+      public static _Fields findByName(String name) {
+        return byName.get(name);
+      }
+
+      private final short _thriftId;
+      private final String _fieldName;
+
+      _Fields(short thriftId, String fieldName) {
+        _thriftId = thriftId;
+        _fieldName = fieldName;
+      }
+
+      public short getThriftFieldId() {
+        return _thriftId;
+      }
+
+      public String getFieldName() {
+        return _fieldName;
+      }
+    }
+
+    // isset id assignments
+
+    public static final Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> metaDataMap;
+    static {
+      Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> tmpMap = new EnumMap<_Fields, org.apache.thrift.meta_data.FieldMetaData>(_Fields.class);
+      tmpMap.put(_Fields.ENCODING, new org.apache.thrift.meta_data.FieldMetaData("Encoding", org.apache.thrift.TFieldRequirementType.DEFAULT, 
+          new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING)));
+      tmpMap.put(_Fields.DATA, new org.apache.thrift.meta_data.FieldMetaData("Data", org.apache.thrift.TFieldRequirementType.DEFAULT, 
+          new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING          , true)));
+      metaDataMap = Collections.unmodifiableMap(tmpMap);
+      org.apache.thrift.meta_data.FieldMetaData.addStructMetaDataMap(getUnicodeText_args.class, metaDataMap);
+    }
+
+    public getUnicodeText_args() {
+    }
+
+    public getUnicodeText_args(
+      String Encoding,
+      ByteBuffer Data)
+    {
+      this();
+      this.Encoding = Encoding;
+      this.Data = Data;
+    }
+
+    /**
+     * Performs a deep copy on <i>other</i>.
+     */
+    public getUnicodeText_args(getUnicodeText_args other) {
+      if (other.isSetEncoding()) {
+        this.Encoding = other.Encoding;
+      }
+      if (other.isSetData()) {
+        this.Data = org.apache.thrift.TBaseHelper.copyBinary(other.Data);
+;
+      }
+    }
+
+    public getUnicodeText_args deepCopy() {
+      return new getUnicodeText_args(this);
+    }
+
+    @Override
+    public void clear() {
+      this.Encoding = null;
+      this.Data = null;
+    }
+
+    public String getEncoding() {
+      return this.Encoding;
+    }
+
+    public getUnicodeText_args setEncoding(String Encoding) {
+      this.Encoding = Encoding;
+      return this;
+    }
+
+    public void unsetEncoding() {
+      this.Encoding = null;
+    }
+
+    /** Returns true if field Encoding is set (has been assigned a value) and false otherwise */
+    public boolean isSetEncoding() {
+      return this.Encoding != null;
+    }
+
+    public void setEncodingIsSet(boolean value) {
+      if (!value) {
+        this.Encoding = null;
+      }
+    }
+
+    public byte[] getData() {
+      setData(org.apache.thrift.TBaseHelper.rightSize(Data));
+      return Data == null ? null : Data.array();
+    }
+
+    public ByteBuffer bufferForData() {
+      return Data;
+    }
+
+    public getUnicodeText_args setData(byte[] Data) {
+      setData(Data == null ? (ByteBuffer)null : ByteBuffer.wrap(Data));
+      return this;
+    }
+
+    public getUnicodeText_args setData(ByteBuffer Data) {
+      this.Data = Data;
+      return this;
+    }
+
+    public void unsetData() {
+      this.Data = null;
+    }
+
+    /** Returns true if field Data is set (has been assigned a value) and false otherwise */
+    public boolean isSetData() {
+      return this.Data != null;
+    }
+
+    public void setDataIsSet(boolean value) {
+      if (!value) {
+        this.Data = null;
+      }
+    }
+
+    public void setFieldValue(_Fields field, Object value) {
+      switch (field) {
+      case ENCODING:
+        if (value == null) {
+          unsetEncoding();
+        } else {
+          setEncoding((String)value);
+        }
+        break;
+
+      case DATA:
+        if (value == null) {
+          unsetData();
+        } else {
+          setData((ByteBuffer)value);
+        }
+        break;
+
+      }
+    }
+
+    public Object getFieldValue(_Fields field) {
+      switch (field) {
+      case ENCODING:
+        return getEncoding();
+
+      case DATA:
+        return getData();
+
+      }
+      throw new IllegalStateException();
+    }
+
+    /** Returns true if field corresponding to fieldID is set (has been assigned a value) and false otherwise */
+    public boolean isSet(_Fields field) {
+      if (field == null) {
+        throw new IllegalArgumentException();
+      }
+
+      switch (field) {
+      case ENCODING:
+        return isSetEncoding();
+      case DATA:
+        return isSetData();
+      }
+      throw new IllegalStateException();
+    }
+
+    @Override
+    public boolean equals(Object that) {
+      if (that == null)
+        return false;
+      if (that instanceof getUnicodeText_args)
+        return this.equals((getUnicodeText_args)that);
+      return false;
+    }
+
+    public boolean equals(getUnicodeText_args that) {
+      if (that == null)
+        return false;
+
+      boolean this_present_Encoding = true && this.isSetEncoding();
+      boolean that_present_Encoding = true && that.isSetEncoding();
+      if (this_present_Encoding || that_present_Encoding) {
+        if (!(this_present_Encoding && that_present_Encoding))
+          return false;
+        if (!this.Encoding.equals(that.Encoding))
+          return false;
+      }
+
+      boolean this_present_Data = true && this.isSetData();
+      boolean that_present_Data = true && that.isSetData();
+      if (this_present_Data || that_present_Data) {
+        if (!(this_present_Data && that_present_Data))
+          return false;
+        if (!this.Data.equals(that.Data))
+          return false;
+      }
+
+      return true;
+    }
+
+    @Override
+    public int hashCode() {
+      return 0;
+    }
+
+    public int compareTo(getUnicodeText_args other) {
+      if (!getClass().equals(other.getClass())) {
+        return getClass().getName().compareTo(other.getClass().getName());
+      }
+
+      int lastComparison = 0;
+      getUnicodeText_args typedOther = (getUnicodeText_args)other;
+
+      lastComparison = Boolean.valueOf(isSetEncoding()).compareTo(typedOther.isSetEncoding());
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+      if (isSetEncoding()) {
+        lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.Encoding, typedOther.Encoding);
+        if (lastComparison != 0) {
+          return lastComparison;
+        }
+      }
+      lastComparison = Boolean.valueOf(isSetData()).compareTo(typedOther.isSetData());
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+      if (isSetData()) {
+        lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.Data, typedOther.Data);
+        if (lastComparison != 0) {
+          return lastComparison;
+        }
+      }
+      return 0;
+    }
+
+    public _Fields fieldForId(int fieldId) {
+      return _Fields.findByThriftId(fieldId);
+    }
+
+    public void read(org.apache.thrift.protocol.TProtocol iprot) throws org.apache.thrift.TException {
+      org.apache.thrift.protocol.TField field;
+      iprot.readStructBegin();
+      while (true)
+      {
+        field = iprot.readFieldBegin();
+        if (field.type == org.apache.thrift.protocol.TType.STOP) { 
+          break;
+        }
+        switch (field.id) {
+          case 1: // ENCODING
+            if (field.type == org.apache.thrift.protocol.TType.STRING) {
+              this.Encoding = iprot.readString();
+            } else { 
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, field.type);
+            }
+            break;
+          case 2: // DATA
+            if (field.type == org.apache.thrift.protocol.TType.STRING) {
+              this.Data = iprot.readBinary();
+            } else { 
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, field.type);
+            }
+            break;
+          default:
+            org.apache.thrift.protocol.TProtocolUtil.skip(iprot, field.type);
+        }
+        iprot.readFieldEnd();
+      }
+      iprot.readStructEnd();
+
+      // check for required fields of primitive type, which can't be checked in the validate method
+      validate();
+    }
+
+    public void write(org.apache.thrift.protocol.TProtocol oprot) throws org.apache.thrift.TException {
+      validate();
+
+      oprot.writeStructBegin(STRUCT_DESC);
+      if (this.Encoding != null) {
+        oprot.writeFieldBegin(ENCODING_FIELD_DESC);
+        oprot.writeString(this.Encoding);
+        oprot.writeFieldEnd();
+      }
+      if (this.Data != null) {
+        oprot.writeFieldBegin(DATA_FIELD_DESC);
+        oprot.writeBinary(this.Data);
+        oprot.writeFieldEnd();
+      }
+      oprot.writeFieldStop();
+      oprot.writeStructEnd();
+    }
+
+    @Override
+    public String toString() {
+      StringBuilder sb = new StringBuilder("getUnicodeText_args(");
+      boolean first = true;
+
+      sb.append("Encoding:");
+      if (this.Encoding == null) {
+        sb.append("null");
+      } else {
+        sb.append(this.Encoding);
+      }
+      first = false;
+      if (!first) sb.append(", ");
+      sb.append("Data:");
+      if (this.Data == null) {
+        sb.append("null");
+      } else {
+        org.apache.thrift.TBaseHelper.toString(this.Data, sb);
+      }
+      first = false;
+      sb.append(")");
+      return sb.toString();
+    }
+
+    public void validate() throws org.apache.thrift.TException {
+      // check for required fields
+    }
+
+    private void writeObject(java.io.ObjectOutputStream out) throws java.io.IOException {
+      try {
+        write(new org.apache.thrift.protocol.TCompactProtocol(new org.apache.thrift.transport.TIOStreamTransport(out)));
+      } catch (org.apache.thrift.TException te) {
+        throw new java.io.IOException(te);
+      }
+    }
+
+    private void readObject(java.io.ObjectInputStream in) throws java.io.IOException, ClassNotFoundException {
+      try {
+        read(new org.apache.thrift.protocol.TCompactProtocol(new org.apache.thrift.transport.TIOStreamTransport(in)));
+      } catch (org.apache.thrift.TException te) {
+        throw new java.io.IOException(te);
+      }
+    }
+
+  }
+
+  public static class getUnicodeText_result implements org.apache.thrift.TBase<getUnicodeText_result, getUnicodeText_result._Fields>, java.io.Serializable, Cloneable   {
+    private static final org.apache.thrift.protocol.TStruct STRUCT_DESC = new org.apache.thrift.protocol.TStruct("getUnicodeText_result");
+
+    private static final org.apache.thrift.protocol.TField SUCCESS_FIELD_DESC = new org.apache.thrift.protocol.TField("success", org.apache.thrift.protocol.TType.STRING, (short)0);
+
+    public ByteBuffer success; // required
+
+    /** The set of fields this struct contains, along with convenience methods for finding and manipulating them. */
+    public enum _Fields implements org.apache.thrift.TFieldIdEnum {
+      SUCCESS((short)0, "success");
+
+      private static final Map<String, _Fields> byName = new HashMap<String, _Fields>();
+
+      static {
+        for (_Fields field : EnumSet.allOf(_Fields.class)) {
+          byName.put(field.getFieldName(), field);
+        }
+      }
+
+      /**
+       * Find the _Fields constant that matches fieldId, or null if its not found.
+       */
+      public static _Fields findByThriftId(int fieldId) {
+        switch(fieldId) {
+          case 0: // SUCCESS
+            return SUCCESS;
+          default:
+            return null;
+        }
+      }
+
+      /**
+       * Find the _Fields constant that matches fieldId, throwing an exception
+       * if it is not found.
+       */
+      public static _Fields findByThriftIdOrThrow(int fieldId) {
+        _Fields fields = findByThriftId(fieldId);
+        if (fields == null) throw new IllegalArgumentException("Field " + fieldId + " doesn't exist!");
+        return fields;
+      }
+
+      /**
+       * Find the _Fields constant that matches name, or null if its not found.
+       */
+      public static _Fields findByName(String name) {
+        return byName.get(name);
+      }
+
+      private final short _thriftId;
+      private final String _fieldName;
+
+      _Fields(short thriftId, String fieldName) {
+        _thriftId = thriftId;
+        _fieldName = fieldName;
+      }
+
+      public short getThriftFieldId() {
+        return _thriftId;
+      }
+
+      public String getFieldName() {
+        return _fieldName;
+      }
+    }
+
+    // isset id assignments
+
+    public static final Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> metaDataMap;
+    static {
+      Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> tmpMap = new EnumMap<_Fields, org.apache.thrift.meta_data.FieldMetaData>(_Fields.class);
+      tmpMap.put(_Fields.SUCCESS, new org.apache.thrift.meta_data.FieldMetaData("success", org.apache.thrift.TFieldRequirementType.DEFAULT, 
+          new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING          , true)));
+      metaDataMap = Collections.unmodifiableMap(tmpMap);
+      org.apache.thrift.meta_data.FieldMetaData.addStructMetaDataMap(getUnicodeText_result.class, metaDataMap);
+    }
+
+    public getUnicodeText_result() {
+    }
+
+    public getUnicodeText_result(
+      ByteBuffer success)
+    {
+      this();
+      this.success = success;
+    }
+
+    /**
+     * Performs a deep copy on <i>other</i>.
+     */
+    public getUnicodeText_result(getUnicodeText_result other) {
+      if (other.isSetSuccess()) {
+        this.success = org.apache.thrift.TBaseHelper.copyBinary(other.success);
+;
+      }
+    }
+
+    public getUnicodeText_result deepCopy() {
+      return new getUnicodeText_result(this);
+    }
+
+    @Override
+    public void clear() {
+      this.success = null;
+    }
+
+    public byte[] getSuccess() {
+      setSuccess(org.apache.thrift.TBaseHelper.rightSize(success));
+      return success == null ? null : success.array();
+    }
+
+    public ByteBuffer bufferForSuccess() {
+      return success;
+    }
+
+    public getUnicodeText_result setSuccess(byte[] success) {
+      setSuccess(success == null ? (ByteBuffer)null : ByteBuffer.wrap(success));
+      return this;
+    }
+
+    public getUnicodeText_result setSuccess(ByteBuffer success) {
+      this.success = success;
+      return this;
+    }
+
+    public void unsetSuccess() {
+      this.success = null;
+    }
+
+    /** Returns true if field success is set (has been assigned a value) and false otherwise */
+    public boolean isSetSuccess() {
+      return this.success != null;
+    }
+
+    public void setSuccessIsSet(boolean value) {
+      if (!value) {
+        this.success = null;
+      }
+    }
+
+    public void setFieldValue(_Fields field, Object value) {
+      switch (field) {
+      case SUCCESS:
+        if (value == null) {
+          unsetSuccess();
+        } else {
+          setSuccess((ByteBuffer)value);
+        }
+        break;
+
+      }
+    }
+
+    public Object getFieldValue(_Fields field) {
+      switch (field) {
+      case SUCCESS:
+        return getSuccess();
+
+      }
+      throw new IllegalStateException();
+    }
+
+    /** Returns true if field corresponding to fieldID is set (has been assigned a value) and false otherwise */
+    public boolean isSet(_Fields field) {
+      if (field == null) {
+        throw new IllegalArgumentException();
+      }
+
+      switch (field) {
+      case SUCCESS:
+        return isSetSuccess();
+      }
+      throw new IllegalStateException();
+    }
+
+    @Override
+    public boolean equals(Object that) {
+      if (that == null)
+        return false;
+      if (that instanceof getUnicodeText_result)
+        return this.equals((getUnicodeText_result)that);
+      return false;
+    }
+
+    public boolean equals(getUnicodeText_result that) {
+      if (that == null)
+        return false;
+
+      boolean this_present_success = true && this.isSetSuccess();
+      boolean that_present_success = true && that.isSetSuccess();
+      if (this_present_success || that_present_success) {
+        if (!(this_present_success && that_present_success))
+          return false;
+        if (!this.success.equals(that.success))
+          return false;
+      }
+
+      return true;
+    }
+
+    @Override
+    public int hashCode() {
+      return 0;
+    }
+
+    public int compareTo(getUnicodeText_result other) {
+      if (!getClass().equals(other.getClass())) {
+        return getClass().getName().compareTo(other.getClass().getName());
+      }
+
+      int lastComparison = 0;
+      getUnicodeText_result typedOther = (getUnicodeText_result)other;
+
+      lastComparison = Boolean.valueOf(isSetSuccess()).compareTo(typedOther.isSetSuccess());
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+      if (isSetSuccess()) {
+        lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.success, typedOther.success);
+        if (lastComparison != 0) {
+          return lastComparison;
+        }
+      }
+      return 0;
+    }
+
+    public _Fields fieldForId(int fieldId) {
+      return _Fields.findByThriftId(fieldId);
+    }
+
+    public void read(org.apache.thrift.protocol.TProtocol iprot) throws org.apache.thrift.TException {
+      org.apache.thrift.protocol.TField field;
+      iprot.readStructBegin();
+      while (true)
+      {
+        field = iprot.readFieldBegin();
+        if (field.type == org.apache.thrift.protocol.TType.STOP) { 
+          break;
+        }
+        switch (field.id) {
+          case 0: // SUCCESS
+            if (field.type == org.apache.thrift.protocol.TType.STRING) {
+              this.success = iprot.readBinary();
+            } else { 
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, field.type);
+            }
+            break;
+          default:
+            org.apache.thrift.protocol.TProtocolUtil.skip(iprot, field.type);
+        }
+        iprot.readFieldEnd();
+      }
+      iprot.readStructEnd();
+
+      // check for required fields of primitive type, which can't be checked in the validate method
+      validate();
+    }
+
+    public void write(org.apache.thrift.protocol.TProtocol oprot) throws org.apache.thrift.TException {
+      oprot.writeStructBegin(STRUCT_DESC);
+
+      if (this.isSetSuccess()) {
+        oprot.writeFieldBegin(SUCCESS_FIELD_DESC);
+        oprot.writeBinary(this.success);
+        oprot.writeFieldEnd();
+      }
+      oprot.writeFieldStop();
+      oprot.writeStructEnd();
+    }
+
+    @Override
+    public String toString() {
+      StringBuilder sb = new StringBuilder("getUnicodeText_result(");
       boolean first = true;
 
       sb.append("success:");

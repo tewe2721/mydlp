@@ -23,6 +23,7 @@ namespace java com.mydlp.backend.thrift
 service Mydlp {
 	string getMime(1 : string FileName, 2 : binary Data)
 	binary getText(1 : string FileName, 2: string MimeType, 3 : binary Data)
+	binary getUnicodeText(1 : string Encoding, 2 : binary Data)
 
 	string secloreInitialize(	1 : string SecloreAppPath,
 					2 : string SecloreAddress,
