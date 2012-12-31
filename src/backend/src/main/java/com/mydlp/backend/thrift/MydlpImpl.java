@@ -114,7 +114,38 @@ public class MydlpImpl implements Mydlp.Iface {
 				logger.error("Can not close stream", e);
 			}
 		}
-
+	}
+	
+	@Override
+	public ByteBuffer getUnicodeText(String Encoding, ByteBuffer Data)
+			throws TException {
+		InputStream inputStream = getInputStream(Data);
+		try {
+			Metadata metadata = new Metadata();
+			metadata.add(Metadata.RESOURCE_NAME_KEY, "sample.txt");
+			metadata.add(Metadata.CONTENT_TYPE, "text/plain");
+			if (Encoding != null && Encoding.length() > 0 && !Encoding.equals("unknown"));
+				metadata.add(Metadata.CONTENT_ENCODING, Encoding);
+			Reader reader = tika.parse(inputStream, metadata);
+			return ByteBuffer.wrap(IOUtils.toByteArray(reader, DEFAULT_ENCODING));
+		} catch (Throwable e) {
+			if (isMemoryError(e))
+			{
+				logger.error("Can not allocate required memory", e);
+				return EMPTY;
+			}
+			else
+			{
+				logger.error("Can not read unicode text", e);
+				return ERROR;
+			}
+		} finally {
+			try {
+				inputStream.close();
+			} catch (IOException e) {
+				logger.error("Can not close stream", e);
+			}
+		}
 	}
 
 	@Override
@@ -196,13 +227,6 @@ public class MydlpImpl implements Mydlp.Iface {
 			logger.error("An error unexpected occurred when terminating seclore connection", e);
 			return "mydlp.backend.seclore.protect.unexpectedException";	
 		}
-	}
-
-	@Override
-	public ByteBuffer getUnicodeText(String Encoding, ByteBuffer Data)
-			throws TException {
-		// TODO Auto-generated method stub
-		return null;
 	}
 
 }
