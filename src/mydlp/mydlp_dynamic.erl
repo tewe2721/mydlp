@@ -245,6 +245,8 @@ load_src(Src) ->
 	{icap_options_ttl, integer, "0"},
 	{icap_log_pass, boolean, "false"},
 	{icap_log_pass_lower_limit, integer, "10240"},
+	{icap_ignore_big_requests, boolean, "true"},
+	{web_archive, boolean, "false"},
 	{syslog_acl_host, ip, "127.0.0.1"},
 	{syslog_acl_port, integer, "514"},
 	{syslog_acl_facility, syslog_facility, "local6"},

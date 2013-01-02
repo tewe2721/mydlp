@@ -51,6 +51,7 @@
 -define(MIME_OOXML_EXCEL, <<"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">>).
 -define(MIME_OOXML_POWERPOINT, <<"application/vnd.openxmlformats-officedocument.presentationml.presentation">>).
 -define(MIME_ZIP, <<"application/zip">>).
+-define(MIME_PDF, <<"application/pdf">>).
 -define(MIME_XPS, <<"application/vnd.ms-xpsdocument">>).
 -define(MIME_TEXT, <<"text/plain">>).
 -define(MIME_OCTET_STREAM, <<"application/octet-stream">>).

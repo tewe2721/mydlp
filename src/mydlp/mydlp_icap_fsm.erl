@@ -1,4 +1,4 @@
-%%
+%%%
 %%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@mydlp.com>
 %%%
 %%%--------------------------------------------------------------------------
@@ -46,6 +46,7 @@
     'HTTP_HEADER'/2,
     'PARSE_HEADER'/2,
     'HTTP_CC_LINE'/2,
+    'HTTP_CC_PREVIEW'/2,
     'HTTP_CC_CHUNK'/2,
     'PARSE_CC_CHUNK'/2,
     'HTTP_CC_CRLF'/2,
@@ -101,11 +102,13 @@
 	connection,
 	encapsulated,
 	x_client_ip,
+	preview,
 	other=[]
 }).
 
 -define(ICAP_RESP_LINE_OK, <<"ICAP/1.0 200 OK\r\n">>).
 -define(ICAP_RESP_LINE_204, <<"ICAP/1.0 204 No Content\r\n">>).
+-define(ICAP_RESP_LINE_100, <<"ICAP/1.0 100 Continue\r\n">>).
 -define(ICAP_RESP_STD_HEADERS, 
 	<<	"Service: MyDLP ICAP Server\r\n", 
 		"Connection: keep-alive\r\n", 
@@ -214,6 +217,7 @@ init([]) ->
                 "connection" -> IcapHeaders#icap_headers{connection=Value};
                 "encapsulated" -> IcapHeaders#icap_headers{encapsulated=raw_to_encapsulatedh(Value)};
                 "x-client-ip" -> IcapHeaders#icap_headers{x_client_ip=mydlp_api:str_to_ip(Value)};
+                "preview" -> IcapHeaders#icap_headers{preview=list_to_integer(Value)};
                 "allow" ->	AllowH = raw_to_allowh(Value),
 				IcapHeaders#icap_headers{allow=AllowH, 
 					allow204=lists:member("204",AllowH)};
@@ -356,7 +360,7 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 		"host" -> HttpHeaders#http_headers{host=Value};
 		"cookie" -> Cookies = HttpHeaders#http_headers.cookie, HttpHeaders#http_headers{cookie=[Value|Cookies]};
 		"keep-alive" -> HttpHeaders#http_headers{keep_alive=Value};
-		"content-length" -> HttpHeaders#http_headers{content_length=Value};
+		"content-length" -> HttpHeaders#http_headers{content_length=list_to_integer(Value)};
 		"content-type" -> HttpHeaders#http_headers{content_type=Value};
 		"content-disposition" -> HttpHeaders#http_headers{content_disposition=Value};
 		"content-encoding" -> HttpHeaders#http_headers{content_encoding=Value};
@@ -366,6 +370,28 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 	end,
 	{next_state, 'HTTP_HEADER', State#state{http_headers=HttpHeaders1}, ?CFG(fsm_timeout)}.
 
+respond_preview(State, #http_headers{content_length=undefined}) ->
+	send_continue(State);
+
+respond_preview(State, #http_headers{content_length=ContentLength}) ->
+	case ( not ?CFG(icap_ignore_big_requests) ) and ( ContentLength > ?CFG(maximum_object_size) ) of
+		true -> reply(ok, State);
+		false -> send_continue(State) end.
+
+'HTTP_CC_LINE'({data, <<"0\r\n">>}, 
+		#state{icap_headers=(#icap_headers{preview=Preview} = IcapHeaders)} = State)
+		when is_integer(Preview) ->
+	IcapHeaders1 = IcapHeaders#icap_headers{preview=done},
+	{next_state, 'HTTP_CC_PREVIEW', State#state{icap_headers=IcapHeaders1}, ?CFG(fsm_timeout)};
+
+'HTTP_CC_LINE'({data, <<"0; ieof\r\n">>}, 
+		#state{icap_headers=(
+			#icap_headers{preview=Preview} = IcapHeaders)
+		} = State) 
+		when is_integer(Preview) ->
+	IcapHeaders1 = IcapHeaders#icap_headers{preview=ieof},
+	{next_state, 'HTTP_CC_TCRLF', State#state{icap_headers=IcapHeaders1}, ?CFG(fsm_timeout)};
+
 'HTTP_CC_LINE'({data, Line}, State) ->
 	CSize = mydlp_api:hex2int(Line),
 	case CSize of
@@ -374,6 +400,42 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 	end;
 
 'HTTP_CC_LINE'(timeout, State) ->
+	?DEBUG(?S" Client connection timeout - closing.\n", [self()]),
+	{stop, normal, State}.
+
+drop_preview_bin(DataB)->
+	case size(DataB) of
+		5 -> <<>>;
+		I when I > 5 -> Size = I - 5,
+				<<B:Size/binary, "0\r\n\r\n">> = DataB, B end.
+
+'HTTP_CC_PREVIEW'({data, <<"\r\n">>}, 
+		#state{icap_mod_mode=respmod,
+		ch_res_b=false,
+                http_res_headers=HttpHeaders} = State) ->
+	respond_preview(State, HttpHeaders);
+
+'HTTP_CC_PREVIEW'({data, <<"\r\n">>}, 
+		#state{icap_mod_mode=respmod,
+		ch_res_b=true, ch_data_res_b=CacheDataResB,
+                http_res_headers=HttpHeaders} = State) ->
+	ResBody = drop_preview_bin(CacheDataResB),
+	respond_preview(State#state{ch_data_res_b=ResBody}, HttpHeaders);
+
+'HTTP_CC_PREVIEW'({data, <<"\r\n">>}, 
+		#state{icap_mod_mode=reqmod,
+		ch_req_b=false,
+                http_req_headers=HttpHeaders} = State) ->
+	respond_preview(State, HttpHeaders);
+
+'HTTP_CC_PREVIEW'({data, <<"\r\n">>}, 
+		#state{icap_mod_mode=reqmod,
+		ch_req_b=true, ch_data_req_b=CacheDataReqB,
+                http_req_headers=HttpHeaders} = State) ->
+	ReqBody = drop_preview_bin(CacheDataReqB),
+	respond_preview(State#state{ch_data_req_b=ReqBody}, HttpHeaders);
+
+'HTTP_CC_PREVIEW'(timeout, State) ->
 	?DEBUG(?S" Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
@@ -427,7 +489,8 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 'REQ_OK'(#state{icap_request=#icap_request{method=options} } = State) -> 'REPLY_OK'(State);
 'REQ_OK'(#state{icap_mod_mode=respmod} = State) ->
 	DFFiles = df_to_files(State),
-	QRet = mydlp_acl:qi(web, DFFiles),
+	%QRet = mydlp_acl:qi(web, DFFiles),
+	QRet = respmod_query(State, DFFiles),
 	acl_ret(QRet, DFFiles, State);
 'REQ_OK'(#state{icap_headers=#icap_headers{x_client_ip=CAddr},
 		http_request=#http_request{method=Method, path=Uri},
@@ -445,9 +508,14 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 
 	acl_ret(QRet, DFFiles, State).
 
+respmod_query(_State, Files) ->
+	case ?CFG(web_archive) of
+		true ->	{archive, mydlp_api:empty_aclr(Files, web_archive)}; % We don't create redundant data refs because fsm will not query acl.
+		false -> pass end.
+
 acl_ret(QRet, DFFiles, State) -> 
 	case case QRet of
-		pass -> {pass, mydlp_api:empty_aclr(DFFiles)};
+		pass -> pass; 
 		log -> {log, mydlp_api:empty_aclr(DFFiles)};
 		archive -> {archive, mydlp_api:empty_aclr(DFFiles)};
 		block -> {block, mydlp_api:empty_aclr(DFFiles)};
@@ -458,6 +526,7 @@ acl_ret(QRet, DFFiles, State) ->
 		{block, _AR} = T -> T;
 		{quarantine, _AR} = T -> T
 	end of
+		pass -> 'REPLY_OK'(State); 
 		{pass, _AclR} -> 'REPLY_OK'(State); 
 		{log, AclR} -> log_req(State, log, AclR),
 					'REPLY_OK'(State); 
@@ -472,6 +541,16 @@ acl_ret(QRet, DFFiles, State) ->
 'REPLY_OK'(State) -> reply(ok, State).
 
 'BLOCK_REQ'(block, State, {{rule, OrigRuleId}, _, _, _}) -> reply({block, OrigRuleId}, State).
+
+send_continue(#state{socket=Socket} = State) ->
+	Reply = [?ICAP_RESP_LINE_100,
+		icap_date_hdr_line(),
+		?ICAP_RESP_STD_HEADERS,
+		<<"Encapsulated: null-body=0\r\n\r\n">>],
+	%io:format("~s~n",[binary_to_list(list_to_binary(Reply))]),
+	gen_tcp:send(Socket, Reply),
+	inet:setopts(Socket, [{packet, line}, binary]),
+        {next_state, 'HTTP_CC_LINE', State, ?CFG(fsm_timeout)}.
 
 reply(What, #state{socket=Socket, icap_request=IcapReq, http_request=HttpReq,
 		icap_headers=#icap_headers{allow204=Allow204},
@@ -493,6 +572,10 @@ reply(What, #state{socket=Socket, icap_request=IcapReq, http_request=HttpReq,
 				case OT of 0 -> "";
 					_ -> ["Options-TTL: ", integer_to_list(OT), "\r\n"] end,
 				"Encapsulated: null-body=0\r\n",
+				"Preview: 0\r\n"
+				"Transfer-Complete: \r\n"
+				"Transfer-Ignore: \r\n"
+				"Transfer-Preview: *\r\n"
 				"Allow: 204\r\n\r\n"];
 		{ok, true, _Reqmod_Or_Respmod} -> [
 				?ICAP_RESP_LINE_204,
@@ -535,8 +618,11 @@ reply(What, #state{socket=Socket, icap_request=IcapReq, http_request=HttpReq,
 					", res-body=", integer_to_list(size(ReqModH)),"\r\n\r\n",
 				ReqModH, ReqModB, "\r\n"] end,
 
-	% io:format("~s~n",[binary_to_list(list_to_binary(Reply))]),
-
+	%Print = binary_to_list(list_to_binary(Reply)),
+	%case length(Print) > 1024 of
+	%	true -> io:format("~s~n",[string:substr(Print, 1,1000) ++ "..."]);
+	%	false -> io:format("~s~n",[Print]) end,
+	%
 	gen_tcp:send(Socket, Reply),
 	inet:setopts(Socket, [{packet, line}, list]),
 
