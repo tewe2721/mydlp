@@ -191,7 +191,7 @@ notify_user([{other, _Target}|Notifications]) ->
 	notify_user(Notifications);
 notify_user([]) -> ok.
 
-process_log_tuple(#log{channel=web, action=archieve, itype_id=-1, file=Files} = Log) ->
+process_log_tuple(#log{channel=web, action=archive, rule_id=-1, file=Files} = Log) ->
 	Files1 = lists:filter(fun(F) -> 
 		?BB_S(F#file.dataref) > ?CFG(archive_minimum_size)
 		end, Files),

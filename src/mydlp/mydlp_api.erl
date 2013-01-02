@@ -2447,10 +2447,26 @@ find_char_in_range([], Range, _Char, Range) -> not_found.
 
 multipart_decode_fn(Filename0) -> 
 	Filename = filename_to_list(list_to_binary(Filename0)),
+	multipart_decode_fn_1(Filename).
 
-	case Filename of
-		"=?" ++ _Rest -> multipart_decode_fn_rfc2047(Filename);
-		_Else -> multipart_decode_fn_xml(Filename) end.
+multipart_decode_fn_1(Filename) -> multipart_decode_fn_1(Filename, [], []).
+
+multipart_decode_fn_1([C|Filename], Current0, Acc) 
+		when C == $\s; C == $\r; C == $\n; C == $\t ->
+	Current = lists:reverse(Current0),
+	Current1 = multipart_decode_fn_part(Current, C),
+	multipart_decode_fn_1(Filename, [], [ Current1 | Acc]);
+multipart_decode_fn_1([C|Filename], Current, Acc) ->
+	multipart_decode_fn_1(Filename, [C|Current], Acc);
+multipart_decode_fn_1([], [], Acc) -> lists:append(lists:reverse(Acc)); % return
+multipart_decode_fn_1([], Current0, Acc) -> 
+	Current = lists:reverse(Current0),
+	Current1 = multipart_decode_fn_part(Current, none),
+	multipart_decode_fn_1([], [], [ Current1 | Acc]).
+
+multipart_decode_fn_part(("=?" ++ _Rest) = FilenamePart, _C) -> multipart_decode_fn_rfc2047(FilenamePart);
+multipart_decode_fn_part(FilenamePart, none) -> multipart_decode_fn_xml(FilenamePart);
+multipart_decode_fn_part(FilenamePart, C) -> multipart_decode_fn_xml(FilenamePart) ++ [C].
 
 multipart_decode_fn_rfc2047("=?" ++ Rest) -> 
 	case string:chr(Rest, $?) of

@@ -164,7 +164,12 @@ get_unicode_text(Data) -> get_unicode_text(undefined, Data).
 
 get_unicode_text(undefined, Data) -> get_unicode_text(<<>>, Data);
 get_unicode_text(Encoding, Data) ->
-	try	call_pool({thrift, java, getUnicodeText, [Encoding, Data]})
+	try	RawText = call_pool({thrift, java, getUnicodeText, [Encoding, Data]}),
+		Size = size(RawText) - 1,
+		case RawText of
+			<<>> -> <<>>;
+			<<T:Size/binary, "\n">> -> T;
+			Else -> Else end
 	catch Class:Error ->
 		?ERROR_LOG("Error occured when extractiong unicode text. Encoding: "?S".~nData: ["?S"]~nClass: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
 				[Encoding, Data, Class, Error, erlang:get_stacktrace()]),

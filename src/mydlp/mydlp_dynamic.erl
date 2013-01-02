@@ -288,7 +288,7 @@ load_src(Src) ->
 -define(CONFDEF_COMMON, [
 	{error_action, atom, "pass"},
 	{maximum_object_size, integer, "10485760"},
-	{archive_minimum_size, integer, "256"},
+	{archive_minimum_size, integer, "2048"},
 	{maximum_memory_object, integer, "204800"},
 	{maximum_chunk_size, integer, "1048576"},
 	{query_cache_maximum_size, integer, "1500000"},
