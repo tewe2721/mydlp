@@ -427,7 +427,7 @@ encap_next(#state{icap_rencap=[{opt_body, _BI}|_Rest]}) -> throw({error, {not_im
 'REQ_OK'(#state{icap_request=#icap_request{method=options} } = State) -> 'REPLY_OK'(State);
 'REQ_OK'(#state{icap_mod_mode=respmod} = State) ->
 	DFFiles = df_to_files(State),
-	QRet = mydlp_acl:qi(web,DFFiles),
+	QRet = mydlp_acl:qi(web, DFFiles),
 	acl_ret(QRet, DFFiles, State);
 'REQ_OK'(#state{icap_headers=#icap_headers{x_client_ip=CAddr},
 		http_request=#http_request{method=Method, path=Uri},

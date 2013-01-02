@@ -98,6 +98,7 @@ acl_call(Query) -> acl_call(Query, none).
 
 acl_call(Query, Files) -> acl_call(Query, Files, 1500000).
 
+acl_call(_Query, [], _Timeout) -> pass;
 acl_call(Query, none, Timeout) -> acl_call1(Query, none, Timeout);
 acl_call(Query, [#file{mime_type= <<"mydlp-internal/usb-device", _/binary>>}] = Files, Timeout) -> acl_call1(Query, Files, Timeout);
 acl_call(Query, Files, Timeout) -> 
