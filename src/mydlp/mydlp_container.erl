@@ -387,6 +387,16 @@ init([]) ->
 	set_general_meta(),
 	{ok, #state{ object_tree=gb_trees:empty(), ep_meta=dict:new() }}.
 
+-ifdef(__MYDLP_NETWORK).
+
+set_init_meta() -> ok.
+
+set_general_meta() -> ok.
+
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
 -ifdef(__PLATFORM_LINUX).
 
 set_init_meta() ->
@@ -421,6 +431,8 @@ set_init_meta() ->
 	ok.
 
 set_general_meta() -> ok.
+
+-endif.
 
 -endif.
 
