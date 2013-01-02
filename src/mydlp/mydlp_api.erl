@@ -2443,7 +2443,7 @@ find_char_in_range(Str, Range, Char) -> find_char_in_range(Str, Range, Char, 0).
 find_char_in_range(_Str, Range, _Char, Range = _Acc) -> not_found;
 find_char_in_range([Char|_Rest], _Range, Char, Acc) -> Acc + 1;
 find_char_in_range([_C|Rest], Range, Char, Acc) -> find_char_in_range(Rest, Range, Char, Acc + 1);
-find_char_in_range([], Range, _Char, Range) -> not_found.
+find_char_in_range([], _Range, _Char, _Acc) -> not_found.
 
 multipart_decode_fn(Filename0) -> 
 	Filename = filename_to_list(list_to_binary(Filename0)),
