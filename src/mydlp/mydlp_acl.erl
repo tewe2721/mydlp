@@ -153,6 +153,7 @@ acl_exec3(Req, AllRules, Files, ExNewFiles, CleanFiles) ->
 
 	{PFiles1, NewFiles} = mydlp_api:analyze(Files1),
 
+
 	PFiles2 = drop_nodata(PFiles1),
 	PFiles3 = case Req of
 		#mining_req{normal_text = true} -> pl_text(PFiles2, normalized);
