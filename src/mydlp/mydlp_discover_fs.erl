@@ -126,7 +126,7 @@ handle_info(schedule_now, State) ->
 handle_info(schedule_startup, State) ->
 	State1 = case ?CFG(discover_fs_on_startup) of
 		true -> schedule(), State;
-		false -> schedule_timer(?CFG(discover_fs_interval)) end,
+		false -> schedule_timer(State, ?CFG(discover_fs_interval)) end,
 	{noreply, State1};
 
 handle_info({async_reply, Reply, From}, State) ->
