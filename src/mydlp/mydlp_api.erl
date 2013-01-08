@@ -3278,7 +3278,7 @@ decrypt_payload(<<"MyDLPEPSync_", SizeB:16/binary, "_", Cipher/binary>> = Chunk)
 				<<"MyDLPEPPayload_", Data/binary>> = PayloadData, Data;
 			Err -> ?ERROR_LOG("Error occurred when decrypting. Err: "?S , [Err]), retry end
 	catch Class:Error ->
-		?ERROR_LOG("Error occurred when decrypting. Class: "?S" Error: "?S , [Class, Error]), retry end.
+		?ERROR_LOG("Error occurred when decrypting. Class: "?S" Error: "?S , [Class, Error]), retry end;
 decrypt_payload(Data) when is_list(Data) -> decrypt_payload(list_to_binary(Data));
 decrypt_payload(Else) -> 
 	?ERROR_LOG("Improper paylaod to decrypt. Payload: "?S , [Else]),
@@ -3287,18 +3287,18 @@ decrypt_payload(Else) ->
 get_endpoint_id() -> 
 	EpKey = get_endpoint_key(),
 	{<<"EPKEY">>, Rest} = binary:split(EpKey, <<"_">>),
-	{Id, _Secret} = binary_split(Rest, <<"_">>),
+	{Id, _Secret} = binary:split(Rest, <<"_">>),
 	Id.
 
 get_endpoint_secret() ->
 	EpKey = get_endpoint_key(),
 	{<<"EPKEY">>, Rest} = binary:split(EpKey, <<"_">>),
-	{_Id, Secret} = binary_split(Rest, <<"_">>),
+	{_Id, Secret} = binary:split(Rest, <<"_">>),
 	Secret.
 
 generate_endpoint_key() -> 
         Url = "https://" ++ ?CFG(management_server_address) ++ "/register",
-        Ret = case catch httpc:request(Url) of
+        case catch httpc:request(Url) of
                 {ok, {{_HttpVer, Code, _Msg}, _Headers, Body}} ->
                         case {Code, Body} of
                                 {200, <<>>} -> ?ERROR_LOG("REGISTER: Empty response: Url="?S"~n", [Url]), retry;
