@@ -192,31 +192,34 @@ push_chunk(ItemId, ChunkData, ChunkNum, ChunkNumTotal) ->
 	Url = "https://" ++ ?CFG(management_server_address) ++ "/receive?o=push&" ++
 			"i=" ++ ItemIdS ++ "&c=" ++ ChunkNumS ++ "&t=" ++ ChunkNumTotalS,
 	case http_req(Url, ChunkData) of
-		{ok, "error"} -> throw(http_returned_error);
-		{ok, "ok"} -> ok;
+		{ok, <<"error">>} -> throw(http_returned_error);
+		{ok, <<"ok">>} -> ok;
 		Else -> throw(Else) end.
 
 new_item_id() ->
 	Url = "https://" ++ ?CFG(management_server_address) ++ "/receive?o=begin",
 	case http_req(Url) of
-		{ok, "error"} -> throw(http_returned_error);
-		{ok, "null"} -> throw(http_returned_null);
-		{ok, Ret} -> list_to_integer(Ret);
+		{ok, <<"error">>} -> throw(http_returned_error);
+		{ok, <<"null">>} -> throw(http_returned_null);
+		{ok, Ret} -> mydlp_api:binary_to_integer(Ret);
 		Else -> throw(Else) end.
 
-http_req(Url) ->
-        ReqRet = (catch httpc:request(Url)),
-	http_req1(ReqRet).
+http_req(Url) -> http_req(Url, <<>>).
 
 http_req(Url, Data) when is_binary(Data) ->
-	ReqRet = (catch httpc:request(post, {Url, [], "application/octet-stream", Data}, [], [])),
+	Payload = case mydlp_api:encrypt_payload(Data) of
+		retry -> throw({error, encrypt_payload_retry});
+		P when is_binary(P) -> P end,
+	ReqRet = (catch httpc:request(post, {Url, [], "application/octet-stream", Payload}, [], [])),
 	http_req1(ReqRet).
 
 http_req1(ReqRet) -> 
         case ReqRet of
                 {ok, {{_HttpVer, Code, _Msg}, _Headers, Body}} -> 
                         case {Code, Body} of
-                                {200, RetBody} -> {ok, RetBody};
+                                {200, RetBody} -> case mydlp_api:decrypt_payload(RetBody) of
+					retry -> throw({error, decrypt_payload_retry});
+					P when is_binary(P) -> {ok, P} end;
                                 {Else1, _Data} -> ?ERROR_LOG("ITEMPUSH: An error occured during HTTP req: Code="?S"~n", [Else1]),
 						{error, {http_code, Else1}} end;
                 Else -> ?ERROR_LOG("ITEMPUSH: An error occured during HTTP req: Obj="?S"~n", [Else]),

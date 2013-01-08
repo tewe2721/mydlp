@@ -3016,18 +3016,7 @@ use_client_policy(<<>>) -> ?ERROR_LOG("USE_CLIENT_POLICY: Management server retu
 use_client_policy(<<"up-to-date">>) -> ok;
 use_client_policy(CDBBin) ->
 	try	CDBObj = erlang:binary_to_term(CDBBin), % TODO: binary_to_term/2 with safe option
-		{{rule_tables, RuleTables}, {mc, MCModule}, {items, ItemDump}} = CDBObj,
-		
-		mydlp_mnesia:truncate_nondata(),
-		( catch mydlp_mnesia:write(ItemDump) ),
-		( catch mydlp_mnesia:write([ MCModule ]) ),
-		( catch mydlp_mnesia:write([ #rule_table{channel=C, destination=D,table = RT} || {C, D, RT} <- RuleTables ]) ),
-
-		mydlp_mnesia:post_start(),
-		populate_win32reg(),
-		mydlp_tc:load(),
-		mydlp_container:schedule_confupdate(),
-
+		apply_cdbobj(CDBObj),
 		NewRevisionId = erlang:phash2(CDBObj),
 		mydlp_sync:set_policy_id(NewRevisionId)
 	catch Class:Error ->
@@ -3037,6 +3026,28 @@ use_client_policy(CDBBin) ->
 		mydlp_sync:set_policy_id(RevisionId)
 	end,
 	ok.
+
+apply_cdbobj(L) when is_list(L) -> lists:foreach(fun(C) -> apply_cdbobj(C) end, L);
+apply_cdbobj({{rule_tables, RuleTables}, {mc, MCModule}, {items, ItemDump}}) ->
+	mydlp_mnesia:truncate_nondata(),
+	( catch mydlp_mnesia:write(ItemDump) ),
+	( catch mydlp_mnesia:write([ MCModule ]) ),
+	( catch mydlp_mnesia:write([ #rule_table{channel=C, destination=D,table = RT} || {C, D, RT} <- RuleTables ]) ),
+
+	mydlp_mnesia:post_start(),
+	populate_win32reg(),
+	mydlp_tc:load(),
+	mydlp_container:schedule_confupdate(),
+	ok;
+apply_cdbobj({command, L}) when is_list(L) -> lists:foreach(fun(C) -> apply_cdbobj({command, C}) end, L);
+apply_cdbobj({command, stop_discovery}) ->
+	?ASYNC0(fun() -> mydlp_discover_fs:stop_discovery() end), ok;
+apply_cdbobj({command, schedule_discovery}) ->
+	?ASYNC0(fun() -> mydlp_discover_fs:schedule_discovery() end), ok;
+apply_cdbobj({command, Else}) ->
+	?ERROR_LOG("Unknown remote command: "?S, [Else]);
+apply_cdbobj(Else) ->
+	?ERROR_LOG("Unkown cdbobj: "?S, [Else]).
 
 -ifdef(__PLATFORM_WINDOWS).
 
@@ -3216,3 +3227,135 @@ reverse_binary(Bin) ->
 	S = size(Bin)*8, 
 	<<X:S/integer-little>> = Bin,
 	<<X:S/integer-big>>.
+
+
+bf_encrypt(Key, Data) when is_binary(Data) >= 8 ->
+	bf_encrypt(Key, Data, <<>>, size(Data)).
+
+bf_encrypt(Key, <<Data:8/binary, Rest/binary>>, Acc, Size) ->
+	Cipher = crypto:blowfish_ecb_encrypt(Key, Data),
+	bf_encrypt(Key, Rest, <<Acc/binary, Cipher/binary>>, Size);
+bf_encrypt(_Key, <<>>, Acc, Size) -> {cipher, Size, Acc};
+bf_encrypt(Key, <<Data/binary>>, Acc, Size)->
+	BitSize = ( 8 - (Size rem 8) ) * 8,
+	Data1 = <<Data/binary, 0:BitSize/integer>>,
+	Cipher = crypto:blowfish_ecb_encrypt(Key, Data1),
+	bf_encrypt(Key, <<>>, <<Acc/binary, Cipher/binary>>, Size).
+
+
+bf_decrypt(Key, {cipher, Size, Data}) when Size >= 0, size(Data) >= Size  ->
+	bf_decrypt(Key, Data, <<>>, Size).
+
+bf_decrypt(Key, <<Data:8/binary, Rest/binary>>, Acc, Size) ->
+	Cipher = crypto:blowfish_ecb_decrypt(Key, Data),
+	bf_decrypt(Key, Rest, <<Acc/binary, Cipher/binary>>, Size);
+bf_decrypt(_Key, <<>>, Acc, Size) -> <<Data:Size/binary, _/binary>> = Acc, Data.
+
+
+-ifdef(__MYDLP_ENDPOINT).
+
+encrypt_payload(Data0) when is_binary(Data0) ->
+	Data = <<"MyDLPEPPayload_", Data0/binary>>,
+        SizeB = list_to_binary(lists:flatten(io_lib:format("~16..0B", [size(Data)]))),
+        case { (catch get_endpoint_id()), (catch get_endpoint_secret()) } of
+                {retry, _} -> retry;
+                {_, retry} -> retry;
+                {EpId, EpSecret} when is_binary(EpId), is_binary(EpSecret) ->
+                        Cipher = mydlp_api:bf_encrypt(EpSecret, Data),
+                        <<"MyDLPEPSync_",  EpId/binary, "_", SizeB/binary, "_", Cipher/binary>>;
+		Err -> ?ERROR_LOG("Error occurred when encrypting. Err: "?S , [Err]), retry end;
+encrypt_payload(Data) when is_list(Data) -> encrypt_payload(list_to_binary(Data)).
+
+decrypt_payload(<<"MyDLPEPSync_", SizeB:16/binary, "_", Cipher/binary>> = Chunk) when size(Chunk) >= 45 -> 
+	try	Size = binary_to_integer(SizeB),
+		case (catch get_endpoint_secret()) of
+			retry -> retry;
+			EpSecret when is_binary(EpSecret) ->
+				PayloadData = bf_decrypt(EpSecret, {cipher, Size, Cipher}),
+				<<"MyDLPEPPayload_", Data/binary>> = PayloadData, Data;
+			Err -> ?ERROR_LOG("Error occurred when decrypting. Err: "?S , [Err]), retry end
+	catch Class:Error ->
+		?ERROR_LOG("Error occurred when decrypting. Class: "?S" Error: "?S , [Class, Error]), retry end.
+decrypt_payload(Data) when is_list(Data) -> decrypt_payload(list_to_binary(Data));
+decrypt_payload(Else) -> 
+	?ERROR_LOG("Improper paylaod to decrypt. Payload: "?S , [Else]),
+	retry.
+
+get_endpoint_id() -> 
+	EpKey = get_endpoint_key(),
+	{<<"EPKEY">>, Rest} = binary:split(EpKey, <<"_">>),
+	{Id, _Secret} = binary_split(Rest, <<"_">>),
+	Id.
+
+get_endpoint_secret() ->
+	EpKey = get_endpoint_key(),
+	{<<"EPKEY">>, Rest} = binary:split(EpKey, <<"_">>),
+	{_Id, Secret} = binary_split(Rest, <<"_">>),
+	Secret.
+
+generate_endpoint_key() -> 
+        Url = "https://" ++ ?CFG(management_server_address) ++ "/register",
+        Ret = case catch httpc:request(Url) of
+                {ok, {{_HttpVer, Code, _Msg}, _Headers, Body}} ->
+                        case {Code, Body} of
+                                {200, <<>>} -> ?ERROR_LOG("REGISTER: Empty response: Url="?S"~n", [Url]), retry;
+                                {200, <<"retry", _/binary>>} -> retry;
+                                {200, <<"EPKEY_", _/binary>> = EpKey} -> ?ERROR_LOG("REGISTER: Successfully registered.", []), EpKey;
+                                {Else1, _Data} -> ?ERROR_LOG("REGISTER: An error occured during HTTP req: Code="?S"~n", [Else1]), retry end;
+                Else -> ?ERROR_LOG("REGISTER: An error occured during HTTP req: Obj="?S"~n", [Else]), retry end.
+
+-ifdef(__PLATFORM_LINUX).
+
+-define(ENDPOINTKEYFILE, "/var/lib/mydlp/endpoint_key").
+
+get_endpoint_key() ->
+	case filelib:is_regular(?ENDPOINTKEYFILE) of
+		true -> ok;
+		false -> create_endpoint_key() end,
+	read_endpoint_key().
+
+read_endpoint_key() ->
+	case file:read_file(?ENDPOINTKEYFILE) of
+                {ok, Bin} -> Bin;
+                Else -> throw({error, Else}) end.
+
+create_endpoint_key() ->
+	EndpointKey = generate_endpoint_key(),
+	filelib:ensure_dir(?ENDPOINTKEYFILE),
+	file:write_file(?ENDPOINTKEYFILE, EndpointKey),
+	ok.
+
+-endif.
+
+-ifdef(__PLATFORM_WINDOWS).
+
+-define(WIN32REGENDPOINTKEY, "endpoint_key").
+
+get_endpoint_key() ->
+	{ok, RegHandle} = win32reg:open([read,write]),
+        win32reg:change_key_create(RegHandle, "\\hklm\\software\\MyDLP"),
+
+	try case win32reg:value(RegHandle, ?WIN32REGENDPOINTKEY) of
+		{ok, EndpointKey} -> EndpointKey;
+		_ ->	create_endpoint_key(RegHandle),
+			read_endpoint_key(RegHandle) end
+	after
+		win32reg:close(RegHandle)
+	end.
+
+read_endpoint_key(RegHandle) ->
+	case win32reg:value(RegHandle, ?WIN32REGENDPOINTKEY) of
+		{ok, EndpointKey} -> EndpointKey;
+                Err -> throw({error, Err}) end.
+
+create_endpoint_key(RegHandle) ->
+	EndpointKey = generate_endpoint_key(),
+	case win32reg:set_value(RegHandle, ?WIN32REGENDPOINTKEY, EndpointKey) of
+		ok -> ok;
+		Err -> throw({error, Error}) end,
+	ok.
+
+-endif.
+
+-endif.
+

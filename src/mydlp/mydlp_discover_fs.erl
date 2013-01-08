@@ -40,6 +40,8 @@
 -export([start_link/0,
 	q/2,
 	q/3,
+	stop_discovery/0,
+	schedule_discovery/0,
 	stop/0]).
 
 %% gen_server callbacks
@@ -54,7 +56,8 @@
 
 -record(state, {
 	discover_queue,
-	discover_inprog=false
+	discover_inprog=false,
+	timer
 }).
 
 %%%%%%%%%%%%%  API
@@ -62,6 +65,10 @@
 q(FilePath, RuleIndex) -> q(none, FilePath, RuleIndex).
 
 q(ParentId, FilePath, RuleIndex) -> gen_server:cast(?MODULE, {q, ParentId, FilePath, RuleIndex}).
+
+stop_discovery() -> gen_server:cast(?MODULE, stop_discovery).
+
+schedule_discovery() -> gen_server:cast(?MODULE, schedule_discovery).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -74,6 +81,7 @@ handle_call(_Msg, _From, State) ->
 handle_cast({q, ParentId, FilePath, RuleIndex}, #state{discover_queue=Q, discover_inprog=false} = State) ->
 	Q1 = queue:in({ParentId, FilePath, RuleIndex}, Q),
 	consume(),
+	set_discover_inprog(),
 	{noreply, State#state{discover_queue=Q1, discover_inprog=true}};
 
 handle_cast({q, ParentId, FilePath, RuleIndex}, #state{discover_queue=Q, discover_inprog=true} = State) ->
@@ -96,22 +104,30 @@ handle_cast(consume, #state{discover_queue=Q} = State) ->
 					consume(),
 					{noreply, State#state{discover_queue=Q1}} end;
 		{empty, _} ->
-			schedule(?CFG(discover_fs_interval)),
-			{noreply, State#state{discover_inprog=false}}
+			State1 = schedule_timer(State, ?CFG(discover_fs_interval)),
+			unset_discover_inprog(),
+			{noreply, State1#state{discover_inprog=false}}
 	end;
+
+handle_cast(stop_discovery, State) ->
+	NewQ = queue:new(),
+	{noreply, State#state{discover_queue=NewQ}};
+
+handle_cast(schedule_discovery, State) -> handle_info(schedule_now, State);
 
 handle_cast(_Msg, State) ->
 	{noreply, State}.
 
 handle_info(schedule_now, State) ->
+	State1 = cancel_timer(State),
 	schedule(),
-	{noreply, State};
+	{noreply, State1};
 
 handle_info(schedule_startup, State) ->
-	case ?CFG(discover_fs_on_startup) of
-		true -> schedule();
-		false -> schedule(?CFG(discover_fs_interval)) end,
-	{noreply, State};
+	State1 = case ?CFG(discover_fs_on_startup) of
+		true -> schedule(), State;
+		false -> schedule_timer(?CFG(discover_fs_interval)) end,
+	{noreply, State1};
 
 handle_info({async_reply, Reply, From}, State) ->
 	gen_server:reply(From, Reply),
@@ -127,9 +143,19 @@ has_discover_rule() ->
 		none -> false;
 		{_ACLOpts, {_Id, pass}, []} -> false;
 		_Else -> true end.
+
+cancel_timer(#state{timer=Timer} = State) ->
+	case Timer of
+		undefined -> ok;
+		TRef ->	(catch timer:cancel(TRef)) end,
+	State#state{timer=undefined}.
 	
-schedule(Interval) ->
-	timer:send_after(Interval, schedule_now).
+schedule_timer(State, Interval) ->
+	State1 = cancel_timer(State),
+	Timer = case timer:send_after(Interval, schedule_now) of
+		{ok, TRef} -> TRef;
+		{error, _} = Error -> ?ERROR_LOG("Can not create timer. Reason: "?S, [Error]), undefined end,
+	State1#state{timer=Timer}.
 
 schedule() ->
 	PathsWithRuleIndex = mydlp_mnesia:get_discovery_directory(), % {Path, IndexInWhichRuleHasThisPath}
@@ -233,6 +259,12 @@ discover(ParentId, FilePath, RuleIndex) ->
 				false -> discover_dir_dir(E) end;
 	false -> mydlp_mnesia:del_fs_entry(FilePath) end end, % Means file does not exists
 	ok.
+
+set_discover_inprog() ->
+	mydlp_container:set_ep_meta("discover_inprog", "yes").
+
+unset_discover_inprog() ->
+	mydlp_container:set_ep_meta("discover_inprog", "no").
 	
 -endif.
 

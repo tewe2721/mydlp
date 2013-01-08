@@ -404,8 +404,7 @@ set_init_meta() ->
 		set_ep_meta("os", "linux"),
 		Version = mydlp_api:get_agent_version(),
 		set_ep_meta("version", Version),
-		LoggedOnUser = mydlp_api:get_logged_on_user(),
-		set_ep_meta("user", LoggedOnUser)
+		ok
 	end),
 	ok.
 
@@ -418,7 +417,6 @@ set_general_meta() ->
 		ok
 	end),
 	ok.
-
 
 -endif.
 

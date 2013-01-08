@@ -127,18 +127,26 @@ sync(PolicyId) ->
 	User = mydlp_container:get_ep_meta("user"),
 	UserHI = mydlp_api:hash_un(User),
 	UserHS = integer_to_list(UserHI),
-	Data = erlang:term_to_binary(MetaDict),
-	Url = "https://" ++ ?CFG(management_server_address) ++ "/sync?rid=" ++ RevisionS ++ "&uh=" ++ UserHS,
-	case catch httpc:request(post, {Url, [], "application/octet-stream", Data}, [], []) of
-		{ok, {{_HttpVer, Code, _Msg}, _Headers, Body}} -> 
-			case {Code, Body} of
-				{200, <<>>} -> ?ERROR_LOG("SYNC: Empty response: Url="?S"~n", [Url]);
-				{200, <<"up-to-date", _/binary>>} -> ok;
-				{200, CDBS} -> 	CDBBin = list_to_binary(CDBS),
-						mydlp_api:use_client_policy(CDBBin);
-				{Else1, _Data} -> ?ERROR_LOG("SYNC: An error occured during HTTP req: Code="?S"~n", [Else1]) end;
-		Else -> ?ERROR_LOG("SYNC: An error occured during HTTP req: Obj="?S"~n", [Else]) end,
+	Data0 = erlang:term_to_binary(MetaDict),
+	case mydlp_api:encrypt_payload(Data0) of
+		retry -> ok;
+		Data when is_binary(Data)-> 
+			Url = "https://" ++ ?CFG(management_server_address) ++ "/sync?rid=" ++ RevisionS ++ "&uh=" ++ UserHS,
+			case catch httpc:request(post, {Url, [], "application/octet-stream", Data}, [], []) of
+				{ok, {{_HttpVer, Code, _Msg}, _Headers, Body}} -> 
+					case {Code, Body} of
+						{200, <<>>} -> ?ERROR_LOG("SYNC: Empty response: Url="?S"~n", [Url]);
+						{200, <<"up-to-date", _/binary>>} -> ok;
+						{200, Payload} -> process_payload(Payload);
+						{Else1, _Data} -> ?ERROR_LOG("SYNC: An error occured during HTTP req: Code="?S"~n", [Else1]) end;
+				Else -> ?ERROR_LOG("SYNC: An error occured during HTTP req: Obj="?S"~n", [Else]) end end,
 	ok.
+
+process_payload(Payload) ->
+	case mydlp_api:decrypt_payload(Payload) of
+		retry -> ok;
+		<<"up-to-date", _/binary>> -> ok;
+		CDBBin -> mydlp_api:use_client_policy(CDBBin) end.
 
 -endif.
 
