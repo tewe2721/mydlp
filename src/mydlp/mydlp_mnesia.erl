@@ -89,6 +89,9 @@
 	save_user_address/3,
 	remove_old_user_address/0,
 	get_user_from_address/1,
+	save_endpoint_command/2,
+	remove_old_endpoint_command/0,
+	get_endpoint_commands/1,
 	get_keywords/1,
 	get_matchers/0,
 	get_matchers/1,
@@ -176,6 +179,8 @@
 	site_desc,
 	{user_address, ordered_set, 
 		fun() -> mnesia:add_table_index(user_address, last_seen) end},
+	{endpoint_command, ordered_set, 
+		fun() -> mnesia:add_table_index(endpoint_command, endpoint_id) end},
 	user_message
 ]).
 
@@ -245,6 +250,7 @@ get_record_fields_functional(Record) ->
 		keyword -> record_info(fields, keyword);
 		site_desc -> record_info(fields, site_desc);
 		user_address -> record_info(fields,user_address);
+		endpoint_command -> record_info(fields,endpoint_command);
 		user_message -> record_info(fields, user_message);
 		_Else -> not_found
 	end.
@@ -354,6 +360,12 @@ remove_old_user_address() -> aqc(remove_old_user_address, nocache, dirty).
 
 get_user_from_address(IpAddress) -> aqc({get_user_from_address, IpAddress}, nocache, dirty).
 
+save_endpoint_command(EndpointId, Command) -> aqc({save_endpoint_command, EndpointId, Command}, nocache, dirty).
+
+remove_old_endpoint_command() -> aqc(remove_old_endpoint_command, nocache, dirty).
+
+get_endpoint_commands(EndpointId) -> aqc({get_endpoint_commands, EndpointId}, nocache, dirty).
+
 get_keywords(GroupId) -> aqc({get_keywords, GroupId}, nocache).
 
 get_matchers() -> get_matchers(all).
@@ -442,6 +454,9 @@ handle_result({get_user_message, _OrigRuleId, Format}, {atomic, Result}) ->
 	case Format of
 		html -> mydlp_denied_page:get_raw(Message);
 		html_base64_str -> mydlp_denied_page:get_base64_str(Message) end;
+
+handle_result({get_endpoint_commands, _EntryId}, {atomic, Result}) -> 
+	[ {command, C} || #endpoint_command{command=C} <- Result ];
 
 handle_result(Query, Result) -> handle_result_common(Query, Result).
 
@@ -874,6 +889,29 @@ handle_query(remove_old_user_address) ->
 
 handle_query({get_user_from_address, IpAddress}) ->
 	mnesia:dirty_read(user_address, IpAddress);
+
+handle_query({save_endpoint_command, EndpointId, Command}) ->
+	{MegaSecs, Secs, _MicroSecs} = erlang:now(),
+        Born = 1000000*MegaSecs + Secs,
+        L = mnesia:match_object(#endpoint_command{id='_', endpoint_id=EndpointId, command=Command, date='_'}),
+	EC = case L of
+		[] -> 	Id = get_unique_id(endpoint_command),
+			#endpoint_command{id=Id, endpoint_id=EndpointId, command=Command, date=Born};
+		[E] ->	E#endpoint_command{date=Born} end,
+	mnesia:dirty_write(EC);
+
+handle_query({get_endpoint_commands, EndpointId}) ->
+        mnesia:match_object(#endpoint_command{id='_', endpoint_id=EndpointId, command='_', date='_'});
+
+handle_query(remove_old_endpoint_command) ->
+	{MegaSecs, Secs, _MicroSecs} = erlang:now(),
+        AgeLimit = 1000000*MegaSecs + Secs - 900,
+	Q = ?QLCQ([E#endpoint_command.id ||
+		E <- mnesia:table(endpoint_command),
+		E#endpoint_command.date < AgeLimit
+		]),
+	ECIs = ?QLCE(Q),
+	lists:foreach(fun(Id) -> mnesia:dirty_delete({endpoint_command, Id}) end, ECIs);
 
 handle_query(Query) -> handle_query_common(Query).
 

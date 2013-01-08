@@ -2998,15 +2998,18 @@ str_to_ip(IpStr) ->
 %% @end
 %%-------------------------------------------------------------------------
 %%%%%%%%%%%%% TODO: beware of race condifitons when compile_customer had been called.
-generate_client_policy(IpAddr, UserH, RevisionId) -> 
+generate_client_policy(EndpointId, IpAddr, UserH, RevisionId) -> 
 	RuleTables = mydlp_acl:get_remote_rule_tables(IpAddr, UserH), 
 	ItemDump = mydlp_mnesia:dump_client_tables(),
 	MCModule = mydlp_mnesia:get_remote_mc_module(mydlp_mnesia:get_dfid(), IpAddr, UserH),
 	CDBObj = {{rule_tables, RuleTables}, {mc, MCModule}, {items, ItemDump}},
 	CDBHash = erlang:phash2(CDBObj),
-	case CDBHash of
-		RevisionId -> <<"up-to-date">>;
-		_Else -> erlang:term_to_binary(CDBObj, [compressed]) end.
+	Commands = mydlp_mnesia:get_endpoint_commands(EndpointId),
+	case {CDBHash, Commands} of
+		{RevisionId, []} -> <<"up-to-date">>;
+		{RevisionId, Commands} ->  erlang:term_to_binary(Commands, [compressed]);
+		{_Else, []} -> erlang:term_to_binary(CDBObj, [compressed]);
+		{_Else, Commands} -> erlang:term_to_binary([CDBObj|Commands], [compressed]) end.
 
 -endif.
 

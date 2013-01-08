@@ -45,11 +45,12 @@
 	generateFingerprintsWithFile/3,
 	compileCustomer/1,
 	getCompileStatus/0,
-	getRuletable/3,
+	getRuletable/4,
 	receiveBegin/1,
 	receiveChunk/5,
 	requeueIncident/1,
 	registerUserAddress/3,
+	registerCommand/2,
 	saveLicenseKey/1,
 	getLicense/0,
 	apiQuery/3
@@ -85,12 +86,12 @@ getCompileStatus() ->
 	Atom = mydlp_mysql:get_progress(),
 	atom_to_list(Atom).
 
-getRuletable(Ipaddress, Userh, Revisionid) ->
+getRuletable(EndpointId, Ipaddress, Userh, Revisionid) ->
 	RevisionIdI = mydlp_api:binary_to_integer(Revisionid),
 	UserHI = mydlp_api:binary_to_integer(Userh),
 	ClientIpS = binary_to_list(Ipaddress),
 	ClientIp = mydlp_api:str_to_ip(ClientIpS),
-	mydlp_api:generate_client_policy(ClientIp, UserHI, RevisionIdI).
+	mydlp_api:generate_client_policy(EndpointId, ClientIp, UserHI, RevisionIdI).
 
 apiQuery(Ipaddress, Filename, Data) ->
 	{ok, Itemid} = mydlp_container:new(), 
@@ -184,6 +185,12 @@ registerUserAddress(Ipaddress, Userh, Data) ->
 	ClientIp = mydlp_api:str_to_ip(ClientIpS),
 	mydlp_mnesia:save_user_address(ClientIp, UserHI, Username),
 	MetaDict.
+
+registerCommand(EndpointId, Command) ->
+	case Command of
+		<<"schedule_discovery">> -> mydlp_mnesia:save_endpoint_command(EndpointId, schedule_discovery);
+		<<"stop_discovery">> -> mydlp_mnesia:save_endpoint_command(EndpointId, stop_discovery);
+		_Else -> ?ERROR_LOG("Unknown command. Command: "?S, [Command]) end.
 
 saveLicenseKey(LicenseKey) ->
 	mydlp_license:save_license_key(LicenseKey),

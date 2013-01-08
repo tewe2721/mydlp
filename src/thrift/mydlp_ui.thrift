@@ -35,7 +35,7 @@ service Mydlp_ui {
 	void compileCustomer(1: i32 Customerid)
 	string getCompileStatus()
 
-	binary getRuletable(1: string Ipaddress, 2: string Userh, 3: string Revisionid)
+	binary getRuletable(1: string endpointId, 2: string Ipaddress, 3: string Userh, 4: string Revisionid)
 
 	string receiveBegin(1: string Ipaddress)
 	string receiveChunk(1: string Ipaddress, 2: i64 Itemid, 3: binary Chunkdata, 4: i32 Chunknum, 5: i32 Chunknumtotal)
@@ -53,4 +53,6 @@ service Mydlp_ui {
 	LicenseObject getLicense()
 
 	string apiQuery(1: string Ipaddress, 2: string Filename, 3: binary Data)
+
+	oneway void registerCommand(1: string EndpointId, 2: string Command)
 }
