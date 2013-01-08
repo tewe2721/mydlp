@@ -91,6 +91,7 @@
 	get_user_from_address/1,
 	save_endpoint_command/2,
 	remove_old_endpoint_command/0,
+	remove_endpoint_command/2,
 	get_endpoint_commands/1,
 	get_keywords/1,
 	get_matchers/0,
@@ -363,6 +364,8 @@ get_user_from_address(IpAddress) -> aqc({get_user_from_address, IpAddress}, noca
 save_endpoint_command(EndpointId, Command) -> aqc({save_endpoint_command, EndpointId, Command}, nocache, dirty).
 
 remove_old_endpoint_command() -> aqc(remove_old_endpoint_command, nocache, dirty).
+
+remove_endpoint_command(EndpointId, Command) -> aqc({remove_endpoint_command, EndpointId, Command}, nocache, dirty).
 
 get_endpoint_commands(EndpointId) -> aqc({get_endpoint_commands, EndpointId}, nocache, dirty).
 
@@ -898,10 +901,17 @@ handle_query({save_endpoint_command, EndpointId, Command}) ->
 		[] -> 	Id = get_unique_id(endpoint_command),
 			#endpoint_command{id=Id, endpoint_id=EndpointId, command=Command, date=Born};
 		[E] ->	E#endpoint_command{date=Born} end,
-	mnesia:dirty_write(EC);
+	mnesia:dirty_write(EC),
+	case Command of
+		stop_discovery -> remove_endpoint_command(EndpointId, schedule_discovery);
+		schedule_discovery -> remove_endpoint_command(EndpointId, stop_discovery);
+		_Else -> ok end,
+	ok;
 
 handle_query({get_endpoint_commands, EndpointId}) ->
-        mnesia:match_object(#endpoint_command{id='_', endpoint_id=EndpointId, command='_', date='_'});
+        Items = mnesia:match_object(#endpoint_command{id='_', endpoint_id=EndpointId, command='_', date='_'}),
+	lists:foreach(fun(#endpoint_command{id=Id}) -> mnesia:dirty_delete({endpoint_command, Id}) end, Items),
+	Items;
 
 handle_query(remove_old_endpoint_command) ->
 	{MegaSecs, Secs, _MicroSecs} = erlang:now(),
@@ -912,6 +922,10 @@ handle_query(remove_old_endpoint_command) ->
 		]),
 	ECIs = ?QLCE(Q),
 	lists:foreach(fun(Id) -> mnesia:dirty_delete({endpoint_command, Id}) end, ECIs);
+
+handle_query({remove_endpoint_command, EndpointId, Command}) ->
+        Items = mnesia:match_object(#endpoint_command{id='_', endpoint_id=EndpointId, command=Command, date='_'}),
+	lists:foreach(fun(#endpoint_command{id=Id}) -> mnesia:dirty_delete({endpoint_command, Id}) end, Items);
 
 handle_query(Query) -> handle_query_common(Query).
 
