@@ -116,6 +116,13 @@
 	message
 }).
 
+-record(endpoint_command, {
+	id,
+	endpoint_id,
+	command,
+	date
+}).
+
 -endif.
 
 

@@ -139,7 +139,7 @@ handle_cast(_Msg, State) ->
 
 handle_info(cleanup_now, State) ->
 	cleanup(),
-	(catch mydlp_mnesia:remove_old_user_address()),
+	extra(),
 	call_timer(),
         {noreply, State};
 
@@ -217,5 +217,19 @@ cleanup() ->
 		end, FileList), 
 	ok.
 
+-ifdef(__MYDLP_NETWORK).
+
+extra() ->
+	(catch mydlp_mnesia:remove_old_user_address()),
+	(catch mydlp_mnesia:remove_old_endpoint_command()),
+	ok.
+
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
+extra() -> ok.
+
+-endif.
 
 
