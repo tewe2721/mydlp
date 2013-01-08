@@ -261,10 +261,12 @@ discover(ParentId, FilePath, RuleIndex) ->
 	ok.
 
 set_discover_inprog() ->
-	mydlp_container:set_ep_meta("discover_inprog", "yes").
+	mydlp_container:set_ep_meta("discover_inprog", "yes"),
+	mydlp_sync:sync_now().
 
 unset_discover_inprog() ->
-	mydlp_container:set_ep_meta("discover_inprog", "no").
+	mydlp_container:set_ep_meta("discover_inprog", "no"),
+	mydlp_sync:sync_now().
 	
 -endif.
 
