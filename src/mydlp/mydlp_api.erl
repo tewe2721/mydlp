@@ -3256,12 +3256,12 @@ bf_decrypt(_Key, <<>>, Acc, Size) -> <<Data:Size/binary, _/binary>> = Acc, Data.
 
 encrypt_payload(Data0) when is_binary(Data0) ->
 	Data = <<"MyDLPEPPayload_", Data0/binary>>,
-        SizeB = list_to_binary(lists:flatten(io_lib:format("~16..0B", [size(Data)]))),
         case { (catch get_endpoint_id()), (catch get_endpoint_secret()) } of
                 {retry, _} -> retry;
                 {_, retry} -> retry;
                 {EpId, EpSecret} when is_binary(EpId), is_binary(EpSecret) ->
-                        Cipher = mydlp_api:bf_encrypt(EpSecret, Data),
+			{cipher, Size, Cipher} = mydlp_api:bf_encrypt(EpSecret, Data),
+        		SizeB = list_to_binary(lists:flatten(io_lib:format("~16..0B", [Size]))),
                         <<"MyDLPEPSync_",  EpId/binary, "_", SizeB/binary, "_", Cipher/binary>>;
 		Err -> ?ERROR_LOG("Error occurred when encrypting. Err: "?S , [Err]), retry end;
 encrypt_payload(Data) when is_list(Data) -> encrypt_payload(list_to_binary(Data)).
@@ -3283,14 +3283,14 @@ decrypt_payload(Else) ->
 
 get_endpoint_id() -> 
 	EpKey = get_endpoint_key(),
-	{<<"EPKEY">>, Rest} = binary:split(EpKey, <<"_">>),
-	{Id, _Secret} = binary:split(Rest, <<"_">>),
+	[<<"EPKEY">>, Rest] = binary:split(EpKey, <<"_">>),
+	[Id, _Secret] = binary:split(Rest, <<"_">>),
 	Id.
 
 get_endpoint_secret() ->
 	EpKey = get_endpoint_key(),
-	{<<"EPKEY">>, Rest} = binary:split(EpKey, <<"_">>),
-	{_Id, Secret} = binary:split(Rest, <<"_">>),
+	[<<"EPKEY">>, Rest] = binary:split(EpKey, <<"_">>),
+	[_Id, Secret] = binary:split(Rest, <<"_">>),
 	Secret.
 
 generate_endpoint_key() -> 
@@ -3298,10 +3298,11 @@ generate_endpoint_key() ->
         case catch httpc:request(Url) of
                 {ok, {{_HttpVer, Code, _Msg}, _Headers, Body}} ->
                         case {Code, Body} of
-                                {200, <<>>} -> ?ERROR_LOG("REGISTER: Empty response: Url="?S"~n", [Url]), retry;
-                                {200, <<"retry", _/binary>>} -> retry;
-                                {200, <<"EPKEY_", _/binary>> = EpKey} -> ?ERROR_LOG("REGISTER: Successfully registered.", []), EpKey;
-                                {Else1, _Data} -> ?ERROR_LOG("REGISTER: An error occured during HTTP req: Code="?S"~n", [Else1]), retry end;
+                                {200, Resp} -> case list_to_binary(Resp) of
+					<<>> ->	?ERROR_LOG("REGISTER: Empty response: Url="?S"~n", [Url]), retry;
+                                	<<"retry", _/binary>> -> retry;
+                                	<<"EPKEY_", _/binary>> = EpKey -> ?ERROR_LOG("REGISTER: Successfully registered.", []), EpKey end;
+                                Else2 -> ?ERROR_LOG("REGISTER: An error occured during HTTP req:Ret="?S, [Else2]), retry end;
                 Else -> ?ERROR_LOG("REGISTER: An error occured during HTTP req: Obj="?S"~n", [Else]), retry end.
 
 -ifdef(__PLATFORM_LINUX).
@@ -3320,7 +3321,9 @@ read_endpoint_key() ->
                 Else -> throw({error, Else}) end.
 
 create_endpoint_key() ->
-	EndpointKey = generate_endpoint_key(),
+	EndpointKey = case generate_endpoint_key() of
+		retry -> throw({error, generate_retry});
+		B when is_binary(B) -> B end,
 	filelib:ensure_dir(?ENDPOINTKEYFILE),
 	file:write_file(?ENDPOINTKEYFILE, EndpointKey),
 	ok.
@@ -3349,10 +3352,12 @@ read_endpoint_key(RegHandle) ->
                 Err -> throw({error, Err}) end.
 
 create_endpoint_key(RegHandle) ->
-	EndpointKey = generate_endpoint_key(),
+	EndpointKey = case generate_endpoint_key() of
+		retry -> throw({error, generate_retry});
+		B when is_binary(B) -> B end,
 	case win32reg:set_value(RegHandle, ?WIN32REGENDPOINTKEY, EndpointKey) of
 		ok -> ok;
-		Err -> throw({error, Error}) end,
+		Err -> throw({error, Err}) end,
 	ok.
 
 -endif.
