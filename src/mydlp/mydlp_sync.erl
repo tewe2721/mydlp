@@ -66,6 +66,10 @@ handle_call(stop, _From, State) ->
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
+handle_cast(sync, #state{policy_id=undefined} = State) ->
+	PolicyId = mydlp_api:get_client_policy_revision_id(),
+	handle_cast(sync, State#state{policy_id=PolicyId});
+
 handle_cast(sync, #state{policy_id=PolicyId} = State) ->
 	sync(PolicyId),
         {noreply, State};
@@ -82,8 +86,7 @@ handle_info({async_reply, Reply, From}, State) ->
 
 handle_info(sync_now, #state{policy_id=undefined} = State) ->
 	PolicyId = mydlp_api:get_client_policy_revision_id(),
-	call_timer(100),
-        {noreply, State#state{policy_id=PolicyId}};
+	handle_info(sync_now, State#state{policy_id=PolicyId});
 
 handle_info(sync_now, #state{policy_id=PolicyId} = State) ->
 	mydlp_container:set_general_meta(),
