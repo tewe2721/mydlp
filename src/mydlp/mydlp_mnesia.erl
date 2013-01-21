@@ -310,7 +310,9 @@ wait_for_tables(Timeout) when Timeout > 0 ->
 
 	case DoTablesExist of
 		true -> mnesia:wait_for_tables(TableList, Timeout);
-		_Else -> timer:sleep(500), wait_for_tables(Timeout-500) end.
+		_Else -> timer:sleep(500), wait_for_tables(Timeout-500) end;
+
+wait_for_tables(_Else) -> timeout.
 
 -ifdef(__MYDLP_NETWORK).
 
@@ -946,9 +948,11 @@ handle_query({get_rule_table, Channel, RuleIndex}) ->
 		R <- mnesia:table(rule_table),
 		R#rule_table.channel == Channel
 		]),
-	[{Req, IdAndDefaultAction, RuleTables}] = ?QLCE(Q),
-	UniqueRule = lists:nth(RuleIndex+1, RuleTables),
-	[{Req, IdAndDefaultAction, [UniqueRule]}];
+	case ?QLCE(Q) of
+		[] -> [];
+		[{Req, IdAndDefaultAction, RuleTables}] ->
+			UniqueRule = lists:nth(RuleIndex+1, RuleTables),
+			[{Req, IdAndDefaultAction, [UniqueRule]}] end;
 
 handle_query({get_discovery_directory}) ->
 	Q = ?QLCQ([ R#rule_table.destination ||
