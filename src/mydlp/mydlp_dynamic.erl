@@ -312,7 +312,7 @@ load_src(Src) ->
 	archive_inbound,
 	maximum_object_size,
 	usb_serial_access_control,
-	print_monitor
+	print_monitor,
 	log_level,
 	log_limit,
 	prtscr_block
