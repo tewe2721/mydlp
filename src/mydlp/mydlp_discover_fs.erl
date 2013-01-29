@@ -72,7 +72,8 @@ is_substring(FileName, [Head|Tail]) ->
 -ifdef(__PLATFORM_WINDOWS).
 
 -define(EXCEPTIONS_FILE, [
-	"ntuser.dat"
+	"ntuser.dat",
+	"apache-tika-"
 ]).
 
 -define(EXCEPTIONS_DIR, [
@@ -83,10 +84,7 @@ is_substring(FileName, [Head|Tail]) ->
 is_exceptional(FilePath) ->
 	FileName = filename:basename(FilePath, ""),
 	FileName1 = string:to_lower(FileName),
-	case filelib:is_regular(FilePath) of
-		true -> is_substring(FileName1, ?EXCEPTIONS_FILE);
-		false -> is_substring(FileName1, ?EXCEPTIONS_DIR)
-	end.
+	is_substring(FileName1, ?EXCEPTIONS_FILE).
 
 -endif.
 
