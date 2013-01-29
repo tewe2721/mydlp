@@ -1722,13 +1722,13 @@ comp_to_files([#file{mime_type= <<"application/zip">>, compressed_copy=false, is
 %			ctf_ok(Files, File, ExtFiles, Processed, New);
 %		{error, _ShouldBeLogged} -> 
 %			ctf_err_enc(Files, File, Processed, New) end;
-comp_to_files([#file{mime_type= <<"application/x-archive">>, compressed_copy=false, is_encrypted=false} = File|Files], Processed, New) ->
-	case unar(File#file.dataref, File#file.filename) of
-		{ok, Ext} -> 
-			ExtFiles = ext_to_file(Ext),
-			ctf_ok(Files, File, ExtFiles, Processed, New);
-		{error, _ShouldBeLogged} -> 
-			ctf_err_enc(Files, File, Processed, New) end;
+%comp_to_files([#file{mime_type= <<"application/x-archive">>, compressed_copy=false, is_encrypted=false} = File|Files], Processed, New) ->
+%	case unar(File#file.dataref, File#file.filename) of
+%		{ok, Ext} -> 
+%			ExtFiles = ext_to_file(Ext),
+%			ctf_ok(Files, File, ExtFiles, Processed, New);
+%		{error, _ShouldBeLogged} -> 
+%			ctf_err_enc(Files, File, Processed, New) end;
 comp_to_files([#file{mime_type= <<"application/vnd.ms-tnef">>, compressed_copy=false, is_encrypted=false} = File|Files], Processed, New) ->
 	case untnef(File#file.dataref, File#file.filename) of
 		{ok, Ext} -> 
