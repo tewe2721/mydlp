@@ -64,7 +64,7 @@
 
 is_substring(_FileName, []) -> false;
 is_substring(FileName, [Head|Tail]) ->
-	case string:rstr(FileName, Head) of
+	case string:str(FileName, Head) of
 		1 -> true;
 		_ -> is_substring(FileName, Tail)
 	end.
