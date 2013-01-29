@@ -71,21 +71,28 @@ is_substring(FileName, [Head|Tail]) ->
 
 -ifdef(__PLATFORM_WINDOWS).
 
--define(EXCEPTIONS, [
+-define(EXCEPTIONS_FILE, [
 	"ntuser.dat"
 ]).
 
+-define(EXCEPTIONS_DIR, [
+	"appdata"
+]).
+
 	
-is_exceptional_file(FilePath) ->
+is_exceptional(FilePath) ->
 	FileName = filename:basename(FilePath, ""),
 	FileName1 = string:to_lower(FileName),
-	is_substring(FileName1, ?EXCEPTIONS).
+	case filelib:is_regular(FilePath) of
+		true -> is_substring(FileName1, ?EXCEPTIONS_FILE);
+		false -> is_substring(FileName1, ?EXCEPTIONS_DIR)
+	end.
 
 -endif.
 
 -ifdef(__PLATFORM_LINUX).
 
-is_exceptional_file(FilePath) -> false.
+is_exceptional(FilePath) -> false.
 
 -endif.
 
@@ -121,7 +128,7 @@ handle_cast(consume, #state{discover_queue=Q} = State) ->
 	case queue:out(Q) of
 		{{value, {ParentId, FilePath, RuleIndex}}, Q1} ->
 			try	case has_discover_rule() of
-					true -> case is_exceptional_file(FilePath) of
+					true -> case is_exceptional(FilePath) of
 							false -> discover(ParentId, FilePath, RuleIndex);
 							true -> ok end;
 					false -> ok end,
