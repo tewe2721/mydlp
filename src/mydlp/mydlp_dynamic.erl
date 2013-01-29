@@ -276,7 +276,6 @@ load_src(Src) ->
 	{log_level, integer, "0"},
 	{log_limit, integer, "10485760"},
 	{usb_serial_access_control, boolean, "false"},
-	{print_monitor, boolean, "false"},
 	{seclore_fs_endpoint_pool_size, integer, "2"},
 	{thrift_endpoint_pool_size, integer, "3"},
 	{endpoint_spool_soft_limit, integer, "52428800"},
@@ -534,11 +533,9 @@ populate_win32reg() ->
 	populate_win32reg(RegHandle, ?CONFREG).
 
 populate_win32reg(RegHandle, [print_monitor|Rest]) ->
-	RegVal = case ?CFG(print_monitor) of
-			true -> case mydlp_mnesia:get_rule_table(printer) of 
-					{_, {_, pass}, [_|_]} -> 1;
-					_Else -> 0 end;
-			false -> 0 end,
+	RegVal = case mydlp_mnesia:get_rule_table(printer) of 
+			{_, {_, pass}, [_|_]} -> 1;
+			_Else -> 0 end,
 	win32reg:set_value(RegHandle, "print_monitor", RegVal),
 	populate_win32reg(RegHandle, Rest);
 populate_win32reg(RegHandle, [archive_inbound|Rest]) ->
