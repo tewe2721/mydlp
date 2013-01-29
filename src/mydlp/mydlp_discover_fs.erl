@@ -25,6 +25,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 
+
 -ifdef(__MYDLP_ENDPOINT).
 
 -module(mydlp_discover_fs).
@@ -60,6 +61,34 @@
 	timer
 }).
 
+
+is_substring(_FileName, []) -> false;
+is_substring(FileName, [Head|Tail]) ->
+	case string:rstr(FileName, Head) of
+		1 -> true;
+		_ -> is_substring(FileName, Tail)
+	end.
+
+-ifdef(__PLATFORM_WINDOWS).
+
+-define(EXCEPTIONS, [
+	"ntuser.dat"
+]).
+
+	
+is_exceptional_file(FilePath) ->
+	FileName = filename:basename(FilePath, ""),
+	FileName1 = string:to_lower(FileName),
+	is_substring(FileName1, ?EXCEPTIONS).
+
+-endif.
+
+-ifdef(__PLATFORM_LINUX).
+
+is_exceptional_file(FilePath) -> false.
+
+-endif.
+
 %%%%%%%%%%%%%  API
 
 q(FilePath, RuleIndex) -> q(none, FilePath, RuleIndex).
@@ -92,7 +121,9 @@ handle_cast(consume, #state{discover_queue=Q} = State) ->
 	case queue:out(Q) of
 		{{value, {ParentId, FilePath, RuleIndex}}, Q1} ->
 			try	case has_discover_rule() of
-					true -> discover(ParentId, FilePath, RuleIndex);
+					true -> case is_exceptional_file(FilePath) of
+							false -> discover(ParentId, FilePath, RuleIndex);
+							true -> ok end;
 					false -> ok end,
 				consume(),
 				{noreply, State#state{discover_queue=Q1}}
