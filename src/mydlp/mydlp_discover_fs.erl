@@ -75,11 +75,6 @@ is_substring(FileName, [Head|Tail]) ->
 	"ntuser.dat",
 	"apache-tika-"
 ]).
-
--define(EXCEPTIONS_DIR, [
-	"appdata"
-]).
-
 	
 is_exceptional(FilePath) ->
 	FileName = filename:basename(FilePath, ""),
@@ -203,6 +198,7 @@ schedule() ->
 					catch _:_ -> binary_to_list(P) end,  %% TODO: log this case
 				Index} end
 			, L) end,	
+	reset_discover_cache(),
 	lists:foreach(fun({P, I}) -> q(P, I) end, PathList),
 	ok.
 
@@ -283,6 +279,11 @@ discover_dir_dir(#fs_entry{file_id={FP, RuleIndex}, entry_id=EId}) ->
 	ok.
 
 discover(ParentId, FilePath, RuleIndex) ->
+	case is_cached({FilePath, RuleIndex}) of
+		true -> ok;
+		false -> discover1(ParentId, FilePath, RuleIndex) end.
+
+discover1(ParentId, FilePath, RuleIndex) ->
 	case filelib:is_regular(FilePath) of
 		true -> E = fs_entry(ParentId, FilePath, RuleIndex),
 			case is_changed(E) of
@@ -301,8 +302,20 @@ set_discover_inprog() ->
 	mydlp_sync:sync_now().
 
 unset_discover_inprog() ->
+	reset_discover_cache(),
 	mydlp_container:set_ep_meta("discover_inprog", "no"),
 	mydlp_sync:sync_now().
+
+reset_discover_cache() ->
+	put(cache, gb_sets:new()), ok.
+
+is_cached(Element) ->
+	CS = get(cache),
+	case gb_sets:is_element(Element, CS) of
+		true -> true;
+		false -> CS1 = gb_sets:add(Element, CS),
+			put(cache, CS1),
+			false end.
 	
 -endif.
 

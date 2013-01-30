@@ -74,7 +74,7 @@ raw_to_obj(#file{} = File, Data) ->
 			mydlp_api:md5_hex(Bin) end,
 	File#file{dataref=Ref, md5_hash=Hash}.
 
-raw_to_obj({regularfile, FilePath}) -> 
+raw_to_obj({regularfile, FilePath}) ->
 	case filelib:is_regular(FilePath) of
 		true -> case filelib:file_size(FilePath) > ?CFG(maximum_memory_object) of
 			true -> {regularfile, FilePath};

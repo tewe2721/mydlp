@@ -958,7 +958,7 @@ get_port_resp(Port, Ret, Timeout) ->
 		{ Port, {data, Data}} -> get_port_resp(Port, [Data|Ret]);
 		{ Port, {exit_status, 0}} -> {ok, list_to_binary(lists:reverse(Ret))};
 		{ Port, {exit_status, RetCode}} -> { error, {retcode, RetCode} }
-	after Timeout -> { error, timeout }
+	after Timeout -> { error, port_timeout }
 	end.
 
 get_port_resp(Port) ->
@@ -966,7 +966,7 @@ get_port_resp(Port) ->
 		{ Port, {data, _Data}} -> get_port_resp(Port);
 		{ Port, {exit_status, 0}} -> ok;
 		{ Port, {exit_status, RetCode}} -> { error, {retcode, RetCode} }
-	after 180000 -> { error, timeout }
+	after 180000 -> { error, port_timeout }
 	end.
 
 %%% imported from tsuraan tempfile module http://www.erlang.org/cgi-bin/ezmlm-cgi/4/41649
@@ -2228,7 +2228,6 @@ mime_category(<<"application/x-tar">>) -> compression;
 mime_category(<<"application/x-gzip">>) -> compression;
 mime_category(<<"application/x-bzip2">>) -> compression;
 mime_category(<<"application/x-gtar">>) -> compression;
-mime_category(<<"application/x-archive">>) -> compression;
 mime_category(<<"application/x-rpm">>) -> compression;
 mime_category(<<"application/x-arj">>) -> compression;
 mime_category(<<"application/arj">>) -> compression;
@@ -2246,6 +2245,7 @@ mime_category(<<"application/vnd.ms-cab-compressed">>) -> compression;
 mime_category(<<"application/vnd.ms-tnef">>) -> compression;
 mime_category(<<"message/rfc822">>) -> compression;
 mime_category(<<"application/vnd.android.package-archive">>) -> compression;
+mime_category(<<"application/x-archive">>) -> cobject;
 mime_category(<<"application/x-executable">>) -> cobject;
 mime_category(<<"application/x-sharedlib">>) -> cobject;
 mime_category(<<"application/x-object">>) -> cobject;
