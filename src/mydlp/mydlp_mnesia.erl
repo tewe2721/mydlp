@@ -51,6 +51,10 @@
 	get_config_value/1,
 	is_mime_of_dfid/2,
 	is_hash_of_gid/2,
+	get_fs_entry/1,
+	del_fs_entry/1,
+	add_fs_entry/1,
+	fs_entry_list_dir/1,
 	pdm_of_gid/2,
 	get_record_fields/1,
 	dump_tables/1,
@@ -110,10 +114,6 @@
 	get_discovery_directory/0,
 	get_prtscr_app_name/0,
 	get_inbound_rule/0,
-	get_fs_entry/1,
-	del_fs_entry/1,
-	add_fs_entry/1,
-	fs_entry_list_dir/1,
 	is_valid_usb_device_id/1
 	]).
 
@@ -191,10 +191,7 @@
 
 -define(NONDATA_FUNCTIONAL_TABLES, [
 	{rule_table, ordered_set, 
-		fun() -> mnesia:add_table_index(rule_table, head) end},
-	{fs_entry, ordered_set, 
-		fun() -> mnesia:add_table_index(fs_entry, parent_id),
-			 mnesia:add_table_index(fs_entry, entry_id) end}
+		fun() -> mnesia:add_table_index(rule_table, head) end}
 ]).
 
 -endif.
@@ -202,6 +199,9 @@
 -define(NONDATA_COMMON_TABLES, [
 	config,
 	mc_module, 
+	{fs_entry, ordered_set, 
+		fun() -> mnesia:add_table_index(fs_entry, parent_id),
+			 mnesia:add_table_index(fs_entry, entry_id) end},
 	{mime_type, ordered_set, 
 		fun() -> mnesia:add_table_index(mime_type, mime) end},
 	{regex, ordered_set, 
@@ -224,6 +224,7 @@ get_record_fields_common(Record) ->
         case Record of
 		unique_ids -> record_info(fields, unique_ids);
 		config -> record_info(fields, config);
+		fs_entry -> record_info(fields, fs_entry);
 		usb_device -> record_info(fields, usb_device);
 		file_hash -> record_info(fields, file_hash);
 		file_fingerprint -> record_info(fields, file_fingerprint);
@@ -263,7 +264,6 @@ get_record_fields_functional(Record) ->
 get_record_fields_functional(Record) ->
         case Record of
 		rule_table -> record_info(fields, rule_table);
-		fs_entry -> record_info(fields, fs_entry);
 		_Else -> not_found
 	end.
 
@@ -393,6 +393,10 @@ get_prtscr_app_name() -> aqc({get_prtscr_app_name}, cache).
 
 get_inbound_rule() -> aqc(get_inbound_rule, cache). 
 
+is_valid_usb_device_id(DeviceId) -> aqc({is_valid_usb_device_id, DeviceId}, cache).
+
+-endif.
+
 get_fs_entry(FilePath) -> aqc({get_fs_entry, FilePath}, nocache).
 
 del_fs_entry(FilePath) -> aqc({del_fs_entry, FilePath}, nocache).
@@ -400,10 +404,6 @@ del_fs_entry(FilePath) -> aqc({del_fs_entry, FilePath}, nocache).
 fs_entry_list_dir(EntryId) -> aqc({fs_entry_list_dir, EntryId}, nocache).
 
 add_fs_entry(Record) when is_tuple(Record) -> write(Record, nocache).
-
-is_valid_usb_device_id(DeviceId) -> aqc({is_valid_usb_device_id, DeviceId}, cache).
-
--endif.
 
 dump_tables(Tables) when is_list(Tables) -> aqc({dump_tables, Tables}, cache);
 dump_tables(Table) -> dump_tables([Table]).
@@ -500,14 +500,6 @@ handle_result(get_inbound_rule, {atomic, Result}) ->
 		[{_,_,[]}] -> {-1, pass};
 		[{_,_,[{RuleId, Action,_}|_]}|_] -> {RuleId,Action} end;
 
-handle_result({get_fs_entry, _FilePath}, {atomic, Result}) -> 
-	case Result of
-		[] -> none;
-		[FSEntry] -> FSEntry end;
-
-handle_result({fs_entry_list_dir, _EntryId}, {atomic, Result}) -> 
-	[ FP || #fs_entry{file_id={FP,_RuleIndex}} <- Result ];
-
 handle_result({is_valid_usb_device_id, _DeviceId}, {atomic, Result}) -> 
 	case Result of
 		[] -> false;
@@ -538,6 +530,15 @@ handle_result_common({get_mc_module, _Target}, {atomic, Result}) ->
 	case Result of
 		[] -> [];
 		[#mc_module{modules=Mods}] -> Mods end;
+
+handle_result_common({get_fs_entry, _FilePath}, {atomic, Result}) -> 
+	case Result of
+		[] -> none;
+		[FSEntry] -> FSEntry end;
+
+handle_result_common({fs_entry_list_dir, _EntryId}, {atomic, Result}) -> 
+	[ FP || #fs_entry{file_id={FP,_RuleIndex}} <- Result ];
+
 
 handle_result_common(_Query, {atomic, Objects}) -> Objects.
 
@@ -859,6 +860,11 @@ handle_query({remove_site, FI}) ->
 		]),
 	MCTs = ?QLCE(Q8),
 
+	Q9 = ?QLCQ([F#fs_entry.file_id ||	
+		F <- mnesia:table(fs_entry)
+		]),
+	FSIs = ?QLCE(Q9),
+
 	case RQ4 of
 		[] -> ok;
 		[SDI] -> mnesia:delete({site_desc, SDI}) end,
@@ -866,6 +872,7 @@ handle_query({remove_site, FI}) ->
 	remove_filters([FI]),
 	lists:foreach(fun(T) -> mnesia:delete({mc_module, T}) end, MCTs),
 	lists:foreach(fun(Id) -> mnesia:delete({config, Id}) end, CIs),
+	lists:foreach(fun(Id) -> mnesia:delete({fs_entry, Id}) end, FSIs),
 	lists:foreach(fun(Id) -> mnesia:delete({usb_device, Id}) end, UDIs);
 
 handle_query({remove_file_entry, FI}) ->
@@ -975,15 +982,6 @@ handle_query(get_inbound_rule) ->
 		]),
 	?QLCE(Q);
 
-handle_query({get_fs_entry, FileId}) ->
-	mnesia:read(fs_entry, FileId);
-
-handle_query({del_fs_entry, FileId}) ->
-	mnesia:delete({fs_entry, FileId});
-
-handle_query({fs_entry_list_dir, EntryId}) ->
-	mnesia:match_object(#fs_entry{file_id='_', entry_id='_', parent_id=EntryId, file_size='_', last_modified='_'});
-
 % TODO: should be refined for multi-site usage
 handle_query({is_valid_usb_device_id, DeviceId}) ->
 	Q = ?QLCQ([ U#usb_device.id ||
@@ -1036,6 +1034,15 @@ handle_query_common({get_config_value, KeyB}) ->
 		C#config.key == KeyB
 		]),
 	?QLCE(Q);
+
+handle_query_common({get_fs_entry, FileId}) ->
+	mnesia:read(fs_entry, FileId);
+
+handle_query_common({del_fs_entry, FileId}) ->
+	mnesia:delete({fs_entry, FileId});
+
+handle_query_common({fs_entry_list_dir, EntryId}) ->
+	mnesia:match_object(#fs_entry{file_id='_', entry_id='_', parent_id=EntryId, file_size='_', last_modified='_'});
 
 handle_query_common({dump_tables, Tables}) ->
 	L1 = [ {T, mnesia:all_keys(T)} || T <- Tables],

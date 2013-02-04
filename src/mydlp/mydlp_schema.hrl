@@ -134,14 +134,6 @@
 	table=[]
 }).
 
--record(fs_entry, {
-	file_id,
-	entry_id,
-	parent_id,
-	file_size,
-	last_modified
-}).
-
 -endif.
 
 -record(config, {
@@ -149,6 +141,14 @@
 	filter_id,
 	key,
 	value
+}).
+
+-record(fs_entry, {
+	file_id,
+	entry_id,
+	parent_id,
+	file_size,
+	last_modified
 }).
 
 -record(usb_device, {

@@ -25,9 +25,6 @@
 %%% @end
 %%%-------------------------------------------------------------------
 
-
--ifdef(__MYDLP_ENDPOINT).
-
 -module(mydlp_discover_fs).
 -author("kerem@mydlp.com").
 -behaviour(gen_server).
@@ -169,11 +166,21 @@ handle_info(_Info, State) ->
 
 %%%%%%%%%%%%%%%% Implicit functions
 
+-ifdef(__MYDLP_NETWORK).
+
+has_discover_rule() -> true.
+
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
 has_discover_rule() ->
 	case mydlp_mnesia:get_rule_table(discovery) of
 		none -> false;
 		{_ACLOpts, {_Id, pass}, []} -> false;
 		_Else -> true end.
+
+-endif.
 
 cancel_timer(#state{timer=Timer} = State) ->
 	case Timer of
@@ -245,11 +252,28 @@ fs_entry(ParentId, FilePath, RuleIndex) ->
 			E;
 		#fs_entry{} = FS -> FS end.
 
+-ifdef(__MYDLP_NETWORK).
+
+set_prop_extra(ObjId) -> 
+	ok = mydlp_container:setprop(ObjId, "channel", "remote_discovery"),
+	ok = mydlp_container:setprop(ObjId, "drop_path", ?CFG(mount_dir)),
+	ok.
+
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
+set_prop_extra(ObjId) ->
+	ok = mydlp_container:setprop(ObjId, "channel", "discovery"),
+	ok.
+
+-endif.
+
 discover_file(#fs_entry{file_id={FP, RuleIndex}}) ->
 	try	timer:sleep(20),
 		{ok, ObjId} = mydlp_container:new(),
-		ok = mydlp_container:setprop(ObjId, "channel", "discovery"),
 		ok = mydlp_container:setprop(ObjId, "rule_index", RuleIndex),
+		set_prop_extra(ObjId),
 		ok = mydlp_container:pushfile(ObjId, {raw, FP}),
 		ok = mydlp_container:eof(ObjId),
 		{ok, Action} = mydlp_container:aclq(ObjId),
@@ -317,5 +341,3 @@ is_cached(Element) ->
 			put(cache, CS1),
 			false end.
 	
--endif.
-

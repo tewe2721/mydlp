@@ -165,6 +165,7 @@ load_src(Src) ->
 	{mysql_pool_size, integer, "8"},
 	{resources_dir, string, "/usr/share/mydlp/resources/"},
 	{quarantine_dir, string, "/var/lib/mydlp/quarantine/"},
+	{mount_dir, string, "/var/lib/mydlp/mounts"},
 	{quarantine_uid, integer, "33"},
 	{quarantine_gid, integer, "33"},
 	% TODO : should resolve mnesia -> auto dist conf circular dependency
