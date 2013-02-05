@@ -38,9 +38,15 @@
 -export([start_link/0,
 	q/2,
 	q/3,
-	stop_discovery/0,
-	schedule_discovery/0,
 	stop/0]).
+
+-ifdef(__MYDLP_ENDPOINT).
+
+-export([stop_discovery/0,
+	schedule_discovery/0
+	]).
+
+-endif.
 
 %% gen_server callbacks
 -export([init/1,
@@ -82,7 +88,7 @@ is_exceptional(FilePath) ->
 
 -ifdef(__PLATFORM_LINUX).
 
-is_exceptional(FilePath) -> false.
+is_exceptional(_FilePath) -> false.
 
 -endif.
 
@@ -92,9 +98,13 @@ q(FilePath, RuleIndex) -> q(none, FilePath, RuleIndex).
 
 q(ParentId, FilePath, RuleIndex) -> gen_server:cast(?MODULE, {q, ParentId, FilePath, RuleIndex}).
 
+-ifdef(__MYDLP_ENDPOINT).
+
 stop_discovery() -> gen_server:cast(?MODULE, stop_discovery).
 
 schedule_discovery() -> gen_server:cast(?MODULE, schedule_discovery).
+
+-endif.
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -170,6 +180,12 @@ handle_info(_Info, State) ->
 
 has_discover_rule() -> true.
 
+cancel_timer(State) -> State.
+
+schedule_timer(State, _Interval) -> State.
+
+schedule() -> ok.
+
 -endif.
 
 -ifdef(__MYDLP_ENDPOINT).
@@ -179,8 +195,6 @@ has_discover_rule() ->
 		none -> false;
 		{_ACLOpts, {_Id, pass}, []} -> false;
 		_Else -> true end.
-
--endif.
 
 cancel_timer(#state{timer=Timer} = State) ->
 	case Timer of
@@ -208,6 +222,7 @@ schedule() ->
 	reset_discover_cache(),
 	lists:foreach(fun({P, I}) -> q(P, I) end, PathList),
 	ok.
+-endif.
 
 consume() -> gen_server:cast(?MODULE, consume).
 
@@ -220,9 +235,21 @@ start_link() ->
 stop() ->
 	gen_server:call(?MODULE, stop).
 
+-ifdef(__MYDLP_ENDPOINT).
+
 init([]) ->
 	timer:send_after(60000, schedule_startup),
 	{ok, #state{discover_queue=queue:new()}}.
+
+-endif.
+
+-ifdef(__MYDLP_NETWORK).
+
+init([]) -> 
+	reset_discover_cache(),
+	{ok, #state{discover_queue=queue:new()}}.
+
+-endif.
 
 terminate(_Reason, _State) ->
 	ok.
@@ -270,6 +297,7 @@ set_prop_extra(ObjId) ->
 -endif.
 
 discover_file(#fs_entry{file_id={FP, RuleIndex}}) ->
+	erlang:display("discover file is called"),
 	try	timer:sleep(20),
 		{ok, ObjId} = mydlp_container:new(),
 		ok = mydlp_container:setprop(ObjId, "rule_index", RuleIndex),
@@ -321,6 +349,9 @@ discover1(ParentId, FilePath, RuleIndex) ->
 	false -> mydlp_mnesia:del_fs_entry(FilePath) end end, % Means file does not exists
 	ok.
 
+
+-ifdef(__MYDLP_ENDPOINT).
+
 set_discover_inprog() ->
 	mydlp_container:set_ep_meta("discover_inprog", "yes"),
 	mydlp_sync:sync_now().
@@ -329,6 +360,18 @@ unset_discover_inprog() ->
 	reset_discover_cache(),
 	mydlp_container:set_ep_meta("discover_inprog", "no"),
 	mydlp_sync:sync_now().
+
+-endif.
+
+-ifdef(__MYDLP_NETWORK).
+
+set_discover_inprog() -> ok.
+
+unset_discover_inprog() -> 
+reset_discover_cache(),
+	mydlp_discover_rfs:finished().
+
+-endif.
 
 reset_discover_cache() ->
 	put(cache, gb_sets:new()), ok.

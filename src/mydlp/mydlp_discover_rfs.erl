@@ -32,7 +32,6 @@
 -include("mydlp.hrl").
 -include("mydlp_schema.hrl").
 
--include_lib("kernel/include/file.hrl").
 
 %% API
 -export([start_link/0,
@@ -88,8 +87,8 @@ handle_cast(consume, #state{discover_queue=Q} = State) ->
 			catch Class:Error ->
 				?ERROR_LOG("Discover Queue Consume: Error occured: "
 						"Class: ["?S"]. Error: ["?S"].~n"
-						"Stack trace: "?S"~n.FilePath: "?S"~nState: "?S"~n ",	
-						[Class, Error, erlang:get_stacktrace(), FilePath, State]),
+						"Stack trace: "?S"~n.State: "?S"~n ",	
+						[Class, Error, erlang:get_stacktrace(), State]),
 					consume(),
 					{noreply, State#state{discover_queue=Q1}} end;
 		{empty, _} ->
@@ -100,13 +99,7 @@ handle_cast(finished, State) ->
 	release_mounts(),
 	{noreply, State#state{discover_inprog=false}};
 
-handle_info(schedule_startup, State) ->
-        State1 = case ?CFG(discover_fs_on_startup) of
-                true -> schedule(), State;
-                false -> schedule_timer(State, ?CFG(discover_fs_interval)) end,
-        {noreply, State1};
-
-handle_cast(_Msg, State) ->
+handle_cast(Msg, State) ->
 	{noreply, State}.
 
 handle_info({async_reply, Reply, From}, State) ->
@@ -131,7 +124,6 @@ stop() ->
 
 init([]) ->
 	release_mounts(),
-	timer:send_after(60000, schedule_startup),
 	{ok, #state{discover_queue=queue:new()}}.
 
 terminate(_Reason, _State) ->
@@ -141,3 +133,9 @@ code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 
 %%%%%%%%%%%%%%%%% internal
+
+discover(MountId, RuleIndex) -> %TODO: Different type remote should be handled.
+	Ret = os:cmd("sudo /bin/mount --bind /home/ozgen/test/ /home/ozgen/mount"),
+	mydlp_discover_fs:q("/home/ozgen/mount", 1).
+
+release_mounts() -> erlang:display("Relesae mount is called").

@@ -271,7 +271,6 @@ load_src(Src) ->
 -define(CONFDEF_FUNCTIONAL, [
 	{maximum_push_size, integer, "1048576"},
 	{sync_interval, integer, "300000"},
-	{discover_fs_interval, integer, "7200000"},
 	{discover_fs_on_startup, boolean, "false"},
 	{ignore_discover_max_size_exceeded, boolean, "true"},
 	{log_level, integer, "0"},
@@ -293,6 +292,7 @@ load_src(Src) ->
 	{maximum_chunk_size, integer, "1048576"},
 	{query_cache_maximum_size, integer, "1500000"},
 	{query_cache_cleanup_interval, integer, "900000"},
+	{discover_fs_interval, integer, "7200000"},
 	{seclore_fs_enable, boolean, "false"},
 	{seclore_fs_address, string, "127.0.0.1"},
 	{seclore_fs_port, integer, "443"},

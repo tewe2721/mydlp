@@ -192,6 +192,9 @@ handle_call({aclq, ObjId, Timeout}, From, #state{object_tree=OT} = State) ->
 							discovery -> 
 								RuleIndex = get_discovery_rule_index(Obj),
 								{mydlp_acl:qe(Channel, DFFiles, RuleIndex), Obj};
+							remote_discovery -> {pass, Obj};%TODO: should be create aclq and sent to mydlp_acl
+								%RuleIndex = get_discovery_rule_index(Obj),
+								%{mydlp_acl:qe(Channel, DFFiles, RuleIndex), Obj};
 							printer -> {mydlp_acl:qe(Channel, DFFiles), Obj};
 							inbound -> {mydlp_acl:qi(Channel, DFFiles), Obj};
 							removable -> {mydlp_acl:qe(Channel, DFFiles), Obj}
@@ -546,6 +549,7 @@ get_channel(#object{prop_dict=PD} = Obj) ->
 	case dict:find("channel", PD) of
 		{ok, "discovery"} -> discovery;
 		{ok, "api"} -> api;
+		{ok, "remote_discovery"} -> remote_discovery;
 	error -> case dict:find("printerName", PD) of
 		{ok, _} -> printer;
 		error -> case is_inbound(Obj) of

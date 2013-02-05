@@ -83,6 +83,8 @@
           {mydlp_license, start_link,[]},
           {mydlp_ts, start_link,[]},
           {mydlp_container, start_link,[]},
+          {mydlp_discover_fs, start_link,[]},
+          {mydlp_discover_rfs, start_link,[]},
           {mydlp_item_receive, start_link,[]}
          ]},
     {protocols, [
