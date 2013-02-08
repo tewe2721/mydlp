@@ -37,4 +37,4 @@ all: downloadmsi
 
 install-data-hook:
 	mkdir -p $(DESTDIR)$(endpointwindir) && \
-		cp -af win/msi $(DESTDIR)$(apachesitesdir)/msi-dpkg
+		cp -af win/msi $(DESTDIR)$(endpointwindir)/msi-dpkg
