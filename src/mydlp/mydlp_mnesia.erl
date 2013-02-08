@@ -100,7 +100,9 @@
 	get_keywords/1,
 	get_matchers/0,
 	get_matchers/1,
-	get_user_message/2
+	get_user_message/2,
+	get_remote_storages/0,
+	get_remote_storage_by_id/1
 	]).
 
 -endif.
@@ -168,6 +170,7 @@
 	dest,
 	notification, 
 	notification_queue,
+	remote_storage,
 	{m_user, ordered_set, 
 		fun() -> mnesia:add_table_index(m_user, un_hash) end},
 	{source_domain, ordered_set, 
@@ -242,6 +245,7 @@ get_record_fields_functional(Record) ->
 		rule -> record_info(fields, rule);
 		ipr -> record_info(fields, ipr);
 		dest -> record_info(fields, dest);
+		remote_storage -> record_info(fields, remote_storage);
 		notification -> record_info(fields, notification);
 		notification_queue -> record_info(fields, notification_queue);
 		source_domain -> record_info(fields, source_domain);
@@ -379,6 +383,10 @@ get_matchers(Source) -> aqc({get_matchers, Source}, nocache).
 
 get_user_message(OrigRuleId, Format) -> aqc({get_user_message, OrigRuleId, Format}, cache).
 
+get_remote_storages() -> aqc(get_remote_storages, cache).
+
+get_remote_storage_by_id(Id) -> aqc({get_remote_storage_by_id, Id}, cache).
+
 -endif.
 
 -ifdef(__MYDLP_ENDPOINT).
@@ -459,6 +467,16 @@ handle_result({get_user_message, _OrigRuleId, Format}, {atomic, Result}) ->
 	case Format of
 		html -> mydlp_denied_page:get_raw(Message);
 		html_base64_str -> mydlp_denied_page:get_base64_str(Message) end;
+
+handle_result(get_remote_storages, {atomic, Result}) ->
+	case Result of 
+		[] -> none;
+		_ -> Result end;
+
+handle_result({get_remote_storage_by_id, _Id}, {atomic, Result}) ->
+	case Result of 
+		[] -> none;
+		[Table] -> Table end;
 
 handle_result({get_endpoint_commands, _EntryId}, {atomic, Result}) -> 
 	[ {command, C} || #endpoint_command{command=C} <- Result ];
@@ -799,6 +817,19 @@ handle_query({get_user_message, OrigRuleId, _Format}) ->
 	Q = ?QLCQ([U#user_message.message ||
 		U <- mnesia:table(user_message),
 		U#user_message.rule_orig_id == OrigRuleId
+		]),
+	?QLCE(Q);
+
+handle_query(get_remote_storages) ->
+	Q = ?QLCQ([{R#remote_storage.id, R#remote_storage.rule_id, R#remote_storage.type, R#remote_storage.details} ||
+		R <- mnesia:table(remote_storage)
+		]),
+	?QLCE(Q);
+
+handle_query({get_remote_storage_by_id, Id}) ->
+	Q = ?QLCQ([{R#remote_storage.type, R#remote_storage.details} ||
+		R <- mnesia:table(remote_storage),
+		R#remote_storage.id == Id
 		]),
 	?QLCE(Q);
 
@@ -1748,11 +1779,18 @@ remove_rule(RI) ->
 		]),
 	SDs = ?QLCE(Q7),
 
+	Q8 = ?QLCQ([RS#remote_storage.id ||	
+		RS <- mnesia:table(remote_storage),
+		RS#remote_storage.rule_id == RI
+		]),
+	RSs = ?QLCE(Q8),
+
 	lists:foreach(fun(Id) -> mnesia:delete({ipr, Id}) end, IIs),
 	lists:foreach(fun(Id) -> mnesia:delete({m_user, Id}) end, UIs),
 	lists:foreach(fun(Id) -> mnesia:delete({dest, Id}) end, DIs),
 	lists:foreach(fun(Id) -> mnesia:delete({notification, Id}) end, NIs),
 	lists:foreach(fun(Id) -> mnesia:delete({source_domain, Id}) end, SDs),
+	lists:foreach(fun(Id) -> mnesia:delete({remote_storage, Id}) end, RSs),
 
 	remove_data_formats(DFIs),
 	remove_itypes(ITIs),

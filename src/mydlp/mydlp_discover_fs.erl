@@ -36,6 +36,7 @@
 
 %% API
 -export([start_link/0,
+	ql/1,
 	q/2,
 	q/3,
 	stop/0]).
@@ -94,6 +95,8 @@ is_exceptional(_FilePath) -> false.
 
 %%%%%%%%%%%%%  API
 
+ql(List) -> gen_server:cast(?MODULE, {ql, List}).
+
 q(FilePath, RuleIndex) -> q(none, FilePath, RuleIndex).
 
 q(ParentId, FilePath, RuleIndex) -> gen_server:cast(?MODULE, {q, ParentId, FilePath, RuleIndex}).
@@ -113,6 +116,12 @@ handle_call(stop, _From, State) ->
 
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
+
+handle_cast({ql, List}, State) ->
+	%lists:map(fun({FilePath, RuleIndex, SourceString}) -> 
+	%		put({FilePath, RuleIndex, }))
+	[ q(FilePath, RuleIndex) || {FilePath, RuleIndex, SourceString} <- List ],
+	{noreply, State};
 
 handle_cast({q, ParentId, FilePath, RuleIndex}, #state{discover_queue=Q, discover_inprog=false} = State) ->
 	Q1 = queue:in({ParentId, FilePath, RuleIndex}, Q),
@@ -368,7 +377,7 @@ unset_discover_inprog() ->
 set_discover_inprog() -> ok.
 
 unset_discover_inprog() -> 
-reset_discover_cache(),
+	reset_discover_cache(),
 	mydlp_discover_rfs:finished().
 
 -endif.

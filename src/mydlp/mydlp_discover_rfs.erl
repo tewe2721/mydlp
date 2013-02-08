@@ -35,7 +35,7 @@
 
 %% API
 -export([start_link/0,
-	q/2,
+	start_remote_discovery/0,
 	finished/0,
 	stop/0]).
 
@@ -50,14 +50,21 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -record(state, {
-	discover_queue,
-	discover_inprog=false,
-	timer
 }).
+
+-define(MOUNTH_PATH, "/home/ozgen/mounts/").
+-define(SSH_COMMAND, "/usr/bin/sshfs").
+-define(FTP_COMMAND, "/usr/bin/curlftpfs").
+-define(SMB_COMMAND, "/usr/bin/smbmount").
+-define(MOUNT_COMMAND, "/bin/mount").
+-define(UMOUNT_COMMAND, "/bin/umount").
+-define(TRY_COUNT, 5).
 
 %%%%%%%%%%%%%  API
 
-q(MountId, RuleIndex) -> gen_server:cast(?MODULE, {q, MountId, RuleIndex}).
+start_remote_discovery() ->
+	RemoteStorages = mydlp_mnesia:get_remote_storages(),
+	consume(RemoteStorages).
 
 finished() -> gen_server:cast(?MODULE, finished).
 
@@ -69,38 +76,25 @@ handle_call(stop, _From, State) ->
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-handle_cast({q, MountId, RuleIndex}, #state{discover_queue=Q, discover_inprog=false} = State) ->
-	Q1 = queue:in({MountId, RuleIndex}, Q),
-	consume(),
-	{noreply, State#state{discover_queue=Q1, discover_inprog=true}};
-
-handle_cast({q, MountId, RuleIndex}, #state{discover_queue=Q, discover_inprog=true} = State) ->
-	Q1 = queue:in({MountId, RuleIndex}, Q),
-	{noreply,State#state{discover_queue=Q1}};
-
-handle_cast(consume, #state{discover_queue=Q} = State) ->
-	case queue:out(Q) of
-		{{value, {MountId, RuleIndex}}, Q1} ->
-			try	discover(MountId, RuleIndex),
-				consume(),
-				{noreply, State#state{discover_queue=Q1}}
-			catch Class:Error ->
-				?ERROR_LOG("Discover Queue Consume: Error occured: "
-						"Class: ["?S"]. Error: ["?S"].~n"
-						"Stack trace: "?S"~n.State: "?S"~n ",	
-						[Class, Error, erlang:get_stacktrace(), State]),
-					consume(),
-					{noreply, State#state{discover_queue=Q1}} end;
-		{empty, _} ->
-			{noreply, State}
-	end;
+handle_cast({consume, RemoteStorages}, State) ->
+	discover_each_mount(RemoteStorages, []),
+	{noreply, State};
 
 handle_cast(finished, State) ->
-	release_mounts(),
-	{noreply, State#state{discover_inprog=false}};
+	release_mounts(true),
+	{noreply, State};
 
-handle_cast(Msg, State) ->
+handle_cast(_Msg, State) ->
 	{noreply, State}.
+
+handle_info(startup, State) ->
+	release_mounts(?CFG(discover_rfs_on_startup)),
+	{noreply, State};
+
+handle_info(schedule_now, State) ->
+	erlang:display("Timer is elapsed"),
+	start_remote_discovery(),
+	{noreply, State};
 
 handle_info({async_reply, Reply, From}, State) ->
 	gen_server:reply(From, Reply),
@@ -111,7 +105,7 @@ handle_info(_Info, State) ->
 
 %%%%%%%%%%%%%%%% Implicit functions
 
-consume() -> gen_server:cast(?MODULE, consume).
+consume(RemoteStorages) -> gen_server:cast(?MODULE, {consume, RemoteStorages}).
 
 start_link() ->
 	case gen_server:start_link({local, ?MODULE}, ?MODULE, [], []) of
@@ -123,8 +117,8 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
-	release_mounts(),
-	{ok, #state{discover_queue=queue:new()}}.
+	timer:send_after(60000, startup),
+	{ok, #state{}}.
 
 terminate(_Reason, _State) ->
 	ok.
@@ -134,8 +128,136 @@ code_change(_OldVsn, State, _Extra) ->
 
 %%%%%%%%%%%%%%%%% internal
 
-discover(MountId, RuleIndex) -> %TODO: Different type remote should be handled.
-	Ret = os:cmd("sudo /bin/mount --bind /home/ozgen/test/ /home/ozgen/mount"),
-	mydlp_discover_fs:q("/home/ozgen/mount", 1).
+concat_mount_list(none, _Type, _SourceAddress, Acc) -> Acc;
+concat_mount_list({MountPath, RuleId}, Type, SourceAddress, Acc) ->
+	erlang:display({concat, SourceAddress}),
+	SourceString = atom_to_list(Type) ++ SourceAddress,
+	[{MountPath, RuleId, SourceString}|Acc].
 
-release_mounts() -> erlang:display("Relesae mount is called").
+mount_path(MountPath, Command, Args, Envs, Stdin, RuleId) ->
+	Ret = case filelib:is_dir(MountPath) of 
+		true -> ok;
+		false -> 
+			file:make_dir(MountPath),
+			mydlp_api:cmd(Command, Args, Envs, Stdin)
+	end,
+	 case Ret of 
+		ok -> {MountPath, RuleId};
+		E -> ?ERROR_LOG("Remote Discovery: Error occured on mount: "
+                                                "FilePath: "?S"~nError: "?S"~n ", [MountPath, E]),
+		   none  end.
+	
+
+discover_each_mount([{Id, RuleId, sshfs, {Address, Port, Path, Username, Password}}|RemoteStorages], Acc) ->
+	PortS = integer_to_list(Port),
+	Stdin = binary_to_list(Password) ++ "\n",
+	UsernameS = binary_to_list(Username),
+	PathS = binary_to_list(Path),
+	AddressS = binary_to_list(Address),
+	MountPath = filename:join(?MOUNTH_PATH, integer_to_list(Id)),
+	ConnectionString = UsernameS ++ "@" ++ AddressS ++ ":" ++ PathS, 
+	Args = ["-p", PortS, ConnectionString, MountPath, "-o", "password_stdin"],
+	MountTuple = mount_path(MountPath, ?SSH_COMMAND, Args, [], Stdin, RuleId),
+	Acc1 = concat_mount_list(MountTuple, sshfs, AddressS ++ "/" ++ PathS, Acc),
+	discover_each_mount(RemoteStorages, Acc1);
+discover_each_mount([{Id, RuleId, ftpfs, {Address, Path, Username, Password}}|RemoteStorages], Acc) ->
+	PasswordS = binary_to_list(Password),
+	UsernameS = binary_to_list(Username),
+	PathS = binary_to_list(Path),
+	AddressS = binary_to_list(Address),
+	MountPath = filename:join(?MOUNTH_PATH, integer_to_list(Id)),
+	UandP = case UsernameS of 
+			[] -> "anonymous:anonymous";
+			_ -> UsernameS ++ ":" ++ PasswordS
+		end,
+	AddressPath = UandP ++ "@" ++ AddressS ++ "/" ++ PathS,
+	Args = ["-o", "ro,utf8", AddressPath, MountPath],
+	MountTuple = mount_path(MountPath, ?FTP_COMMAND, Args, [], none, RuleId),
+	Acc1 = concat_mount_list(MountTuple, ftpfs, AddressS ++ "/" ++ PathS, Acc),
+	discover_each_mount(RemoteStorages, Acc1);
+discover_each_mount([{Id, RuleId, cifs, Details}|RemoteStorages], Acc) ->
+	Acc1 = discover_windows_share(Id, RuleId, Details, cifs, Acc),
+	discover_each_mount(RemoteStorages, Acc1);
+discover_each_mount([{Id, RuleId, dfs, Details}|RemoteStorages], Acc) ->
+	Acc1 = discover_windows_share(Id, RuleId, Details, dfs, Acc),
+	discover_each_mount(RemoteStorages, Acc1);
+discover_each_mount([{Id, RuleId, nfs, {Address, Path}}|RemoteStorages], Acc) ->
+	PathS = binary_to_list(Path),
+	AddressS = binary_to_list(Address),
+	MountPath = filename:join(?MOUNTH_PATH, integer_to_list(Id)),
+	AddressPath = AddressS ++ ":" ++ PathS,
+	Args = ["-o", "ro,soft,intr,rsize=8192,wsize=8192", AddressPath, MountPath],
+	MountTuple = mount_path(MountPath, ?MOUNT_COMMAND, Args, [], none, RuleId),
+	Acc1 = concat_mount_list(MountTuple, nfs, AddressPath, Acc),
+	discover_each_mount(RemoteStorages, Acc1);
+discover_each_mount([], Acc) -> mydlp_discover_fs:ql(Acc).
+
+discover_windows_share(Id, RuleId, {WindowsShare, Path, Username, Password}, Type, Acc) ->
+	PasswordS = binary_to_list(Password),
+	UsernameS = binary_to_list(Username),
+	PathS = binary_to_list(Path),
+	WindowsSharePath =  "//" ++ binary_to_list(WindowsShare) ++ "/" ++ PathS,
+	MountPath = filename:join(?MOUNTH_PATH, integer_to_list(Id)),
+	Args = ["-o","ro", WindowsSharePath, MountPath],
+	MountTuple = case UsernameS of
+			[] -> mount_path(MountPath, ?SMB_COMMAND, Args, [], "\n", RuleId);
+			_ ->
+				case PasswordS of
+					[] -> mount_path(MountPath, ?SMB_COMMAND, Args, [{"USER", UsernameS}], "\n", RuleId);
+					_ -> mount_path(MountPath, ?SMB_COMMAND, Args, [{"USER", UsernameS}, {"PASSWD", PasswordS}], none, RuleId)
+				end
+		end,
+	concat_mount_list(MountTuple, Type, WindowsSharePath, Acc).
+
+release_mounts(IsScheduled) -> 
+	erlang:display("Relesae mount is called"),
+	case file:list_dir(?MOUNTH_PATH) of
+		{ok, FileList} -> release_mount(FileList, IsScheduled);
+		{error, E} -> ?ERROR_LOG("Remote Discovery: Error Occured listing mount directory. MountPath: ["?S"]~n. Error: ["?S"]~n", [?MOUNTH_PATH, E])
+	end.
+
+release_mount([File|Rest], IsScheduled) ->
+	FilePath = filename:join(?MOUNTH_PATH, File),
+	umount_path(FilePath, ?TRY_COUNT),
+	release_mount(Rest, IsScheduled);
+release_mount([], IsScheduled) -> 
+	case IsScheduled of 
+		true ->
+			case timer:send_after(10000, schedule_now) of
+				{ok, _} -> ok;
+				{error, E} -> ?ERROR_LOG("Remote discovery: Can not create timer. Reason: "?S, [E])
+			end;
+		false -> ok end.
+
+umount_path(FilePath, TryCount) ->
+	case mydlp_api:cmd(?UMOUNT_COMMAND, [FilePath]) of
+		ok -> 
+			case file:del_dir(FilePath) of
+				ok -> ok;
+				ER -> ?ERROR_LOG("Remote Discovery: Error Occured rm directory. MountPath: ["?S"]~n. Error: ["?S"]~n", [FilePath, ER]) end;
+		E ->
+			case TryCount of
+				1 -> ?ERROR_LOG("Remote Discovery: Error Occured umount directory. MountPath: ["?S"]~n. Error: ["?S"]~n", [FilePath, E]) ;
+				_ -> timer:sleep(400),
+					umount_path(FilePath, TryCount-1)
+			end
+	end.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

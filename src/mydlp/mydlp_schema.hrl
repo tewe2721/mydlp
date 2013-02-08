@@ -72,6 +72,13 @@
 	domain_name
 }).
 
+-record(remote_storage, {
+	id,
+	rule_id,
+	type,
+	details
+}).
+
 -record(m_user, {
 	id,
 	rule_id,

@@ -259,6 +259,7 @@ load_src(Src) ->
 	{syslog_report_facility, syslog_facility, "local7"},
 	{seclore_fs_server_pool_size, integer, "8"},
 	{thrift_server_pool_size, integer, "24"},
+	{discover_rfs_on_startup, boolean, false},
 	{email_notification_message_from, string, "support@mydlp.com"},
 	{email_notification_message_subject, string, "Notifications from MyDLP"},
 	{email_notification_message, string, "Hello,\r\nThis is an auto-generated message. This message aims to inform you about some incidents that have been recently occurred and logged in your MyDLP system.\r\nYou are recieving this message because you have subscribed to be notified for incidents related to a rule in MyDLP.\r\nFor details, please log on to MyDLP Management Console and go to Logs screen.\r\nIf you do not want to recieve these emails, please contact to your system administrator."}
@@ -293,6 +294,7 @@ load_src(Src) ->
 	{query_cache_maximum_size, integer, "1500000"},
 	{query_cache_cleanup_interval, integer, "900000"},
 	{discover_fs_interval, integer, "7200000"},
+	{discover_rfs_interval, integer, "7200000"},
 	{seclore_fs_enable, boolean, "false"},
 	{seclore_fs_address, string, "127.0.0.1"},
 	{seclore_fs_port, integer, "443"},

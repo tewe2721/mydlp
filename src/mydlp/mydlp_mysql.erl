@@ -335,6 +335,11 @@ init([]) ->
 		{domain_by_rule_id, <<"SELECT d.destinationString FROM Domain AS d, RuleItem AS ri WHERE ri.rule_id=? AND d.id=ri.item_id">>},
 		{directory_by_rule_id, <<"SELECT d.destinationString FROM FileSystemDirectory AS d, RuleItem AS ri WHERE ri.rule_id=? AND d.id=ri.item_id">>},
 		{source_domain_by_rule_id, <<"SELECT s.sourceDomain FROM SourceDomainName AS s, RuleItem AS ri WHERE ri.rule_id=? AND s.id=ri.item_id">>},
+		{remote_sshfs, <<"SELECT r.address, r.port, r.path, r.username, r.password FROM RemoteStorageSSHFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
+		{remote_ftpfs, <<"SELECT r.address, r.path, r.username, r.password FROM RemoteStorageFTPFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
+		{remote_cifs, <<"SELECT r.windowsShare, r.path, r.username, r.password FROM RemoteStorageCIFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
+		{remote_dfs, <<"SELECT r.windowsShare, r.path, r.username, r.password FROM RemoteStorageDFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
+		{remote_nfs, <<"SELECT r.address, r.path FROM RemoteStorageNFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
 		{app_name_by_rule_id, <<"SELECT a.destinationString FROM ApplicationName AS a, RuleItem AS ri WHERE ri.rule_id=? AND a.id=ri.item_id">>},
 		{email_notification_by_rule_id, <<"SELECT a.email FROM AuthUser AS a, NotificationItem AS ni, EmailNotificationItem AS eni, Rule r WHERE ni.rule_id=? AND ni.id=eni.id AND ni.authUser_id=a.id AND r.id=? AND r.notificationEnabled=1">>},
 		{user_s_by_rule_id, <<"SELECT u.username FROM RuleUserStatic AS u, RuleItem AS ri WHERE ri.rule_id=? AND u.id=ri.item_id">>},
@@ -528,6 +533,8 @@ populate_rule(OrigId, Channel, UserMessage, Action, FilterId) ->
 	{ok, SDN} = psq(source_domain_by_rule_id, [OrigId]),
 	populate_source_domains(SDN, RuleId),
 
+	populate_remote_storages(OrigId, RuleId),
+
 	R = #rule{id=RuleId, orig_id=OrigId, channel=Channel, action=Action, filter_id=FilterId},
 	mydlp_mnesia_write(R).
 
@@ -600,7 +607,60 @@ populate_source_domains([[SourceDomain]|Rows], RuleId) ->
 	I = #source_domain{id=Id, rule_id=RuleId, domain_name=S},
 	mydlp_mnesia_write(I),
 	populate_source_domains(Rows, RuleId);
-populate_source_domains([], _RuleId) ->ok.	
+populate_source_domains([], _RuleId) ->ok.
+
+populate_remote_storages(RuleOrigId, RuleId) ->
+	{ok, RSSHFS} = psq(remote_sshfs, [RuleOrigId]),
+	populate_remote_sshfs(RSSHFS, RuleId),
+
+	{ok, RFTPFS} = psq(remote_ftpfs, [RuleOrigId]),
+	populate_remote_ftpfs(RFTPFS, RuleId),
+
+	{ok, RCIFS} = psq(remote_cifs, [RuleOrigId]),
+	populate_remote_cifs(RCIFS, RuleId),
+
+	{ok, RDFS} = psq(remote_dfs, [RuleOrigId]),
+	populate_remote_dfs(RDFS, RuleId),
+
+	{ok, RNFS} = psq(remote_nfs, [RuleOrigId]),
+	populate_remote_nfs(RNFS, RuleId),
+
+	ok.
+
+populate_remote_sshfs([[Address, Port, Path, Username, Password]|Rows], RuleId) ->
+	Id = mydlp_mnesia:get_unique_id(remote_storage),
+	I = #remote_storage{id=Id, rule_id=RuleId, type=sshfs, details={Address, Port, Path, Username, Password}},
+	mydlp_mnesia_write(I),
+	populate_remote_sshfs(Rows, RuleId);
+populate_remote_sshfs([], _RuleId) -> ok.
+
+populate_remote_ftpfs([[Address, Path, Username, Password]|Rows], RuleId) ->
+	Id = mydlp_mnesia:get_unique_id(remote_storage),
+	I = #remote_storage{id=Id, rule_id=RuleId, type=ftpfs, details={Address, Path, Username, Password}},
+	mydlp_mnesia_write(I),
+	populate_remote_ftpfs(Rows, RuleId);
+populate_remote_ftpfs([], _RuleId) -> ok.
+
+populate_remote_cifs([[WindowsShare, Path, Username, Password]|Rows], RuleId) ->
+	Id = mydlp_mnesia:get_unique_id(remote_storage),
+	I = #remote_storage{id=Id, rule_id=RuleId, type=cifs, details={WindowsShare, Path, Username, Password}},
+	mydlp_mnesia_write(I),
+	populate_remote_cifs(Rows, RuleId);
+populate_remote_cifs([], _RuleId) -> ok.
+
+populate_remote_dfs([[WindowsShare, Path, Username, Password]|Rows], RuleId) ->
+	Id = mydlp_mnesia:get_unique_id(remote_storage),
+	I = #remote_storage{id=Id, rule_id=RuleId, type=dfs, details={WindowsShare, Path, Username, Password}},
+	mydlp_mnesia_write(I),
+	populate_remote_dfs(Rows, RuleId);
+populate_remote_dfs([], _RuleId) -> ok.
+
+populate_remote_nfs([[Address, Path]|Rows], RuleId) ->
+	Id = mydlp_mnesia:get_unique_id(remote_storage),
+	I = #remote_storage{id=Id, rule_id=RuleId, type=nfs, details={Address, Path}},
+	mydlp_mnesia_write(I),
+	populate_remote_nfs(Rows, RuleId);
+populate_remote_nfs([], _RuleId) -> ok.
 
 populate_rule_users(RuleOrigId, RuleId) -> 
 	{ok, USQ} = psq(user_s_by_rule_id, [RuleOrigId]),
@@ -1030,6 +1090,7 @@ rule_dtype_to_channel(<<"MailRule">>) -> mail;
 rule_dtype_to_channel(<<"RemovableStorageRule">>) -> removable;
 rule_dtype_to_channel(<<"PrinterRule">>) -> printer;
 rule_dtype_to_channel(<<"DiscoveryRule">>) -> discovery;
+rule_dtype_to_channel(<<"RemoteStorageRule">>) -> remote_discovery;
 rule_dtype_to_channel(<<"ApiRule">>) -> api;
 rule_dtype_to_channel(<<"RemovableStorageInboundRule">>) -> inbound;
 rule_dtype_to_channel(<<"ScreenshotRule">>) -> screenshot;
@@ -1064,6 +1125,9 @@ validate_action_for_channel(discovery, archive) -> ok;
 validate_action_for_channel(discovery, quarantine) -> ok;
 validate_action_for_channel(discovery, {custom, {seclore, pass, _, {HotFolderId, _}}}) 
 		when is_integer(HotFolderId)-> ok;
+validate_action_for_channel(remote_discovery, pass) -> ok;
+validate_action_for_channel(remote_discovery, log) -> ok;
+validate_action_for_channel(remote_discovery, archive) -> ok;
 validate_action_for_channel(api, pass) -> ok;
 validate_action_for_channel(api, log) -> ok;
 validate_action_for_channel(api, block) -> ok;
@@ -1151,6 +1215,7 @@ pre_push_log(RuleId, Ip, User, Destination, Action, Channel, Misc) ->
 		removable -> <<"R">>;
 		printer -> <<"P">>;
 		discovery -> <<"D">>;
+		remote_discovery -> <<"RD">>;
 		api -> <<"A">> ;
 		inbound -> <<"I">>;
 		screenshot -> <<"S">>

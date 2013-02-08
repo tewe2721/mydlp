@@ -957,8 +957,8 @@ get_port_resp(Port, Ret, Timeout) ->
 	receive
 		{ Port, {data, Data}} -> get_port_resp(Port, [Data|Ret]);
 		{ Port, {exit_status, 0}} -> {ok, list_to_binary(lists:reverse(Ret))};
-		{ Port, {exit_status, RetCode}} -> { error, {retcode, RetCode} }
-	after Timeout -> { error, port_timeout }
+		{ Port, {exit_status, RetCode}} -> { error, {retcode, RetCode, list_to_binary(lists:reverse(Ret))} }
+	after Timeout -> { error, { port_timeout , list_to_binary(lists:reverse(Ret)) } }
 	end.
 
 get_port_resp(Port) ->
@@ -1400,6 +1400,7 @@ str_channel(web) -> "Web";
 str_channel(mail) -> "Mail";
 str_channel(removable) -> "Removable Storage";
 str_channel(printer) -> "Printer";
+str_channel(remote_discovery) -> "Remote Discovery";
 str_channel(discovery) -> "Discovery";
 str_channel(api) -> "API";
 str_channel(_) -> "Unknown".
@@ -1475,6 +1476,7 @@ get_message(web, log) -> "Transfer of sensitive information to web has been logg
 get_message(mail, log) -> "Transfer of e-mail containing sensitive information has been logged.";
 get_message(removable, log) -> "Transfer of file containing sensitive information to a removable storage device on endpoint has been logged.";
 get_message(discovery, log) -> "A file containing sensitive information on endpoint has been discovered and logged.";
+get_message(remote_discovery, log) -> "A file containing sensitive information on remote has been discovered and logged.";
 get_message(printer, log) -> "Printing of document containing sensitive information on endpoint has been logged.";
 get_message(api, log) -> "Specified file should not be blocked in response to API query and logged query.";
 get_message(web, quarantined) -> "Transfer of sensitive information to web has been blocked and a copy of file has been quarantined at central data store.";
@@ -1487,6 +1489,7 @@ get_message(web, archive) -> "Transfer of sensitive information to web has been 
 get_message(mail, archive) -> "Transfer of e-mail containing sensitive information has been logged and a copy of file has been archived in central data store.";
 get_message(removable, archive) -> "Transfer of file containing sensitive information to a removable storage devicea on endpoint has been logged and a copy has been archived in central data store.";
 get_message(discovery, archive) -> "A file containing sensitive information on endpoint has been discovered, logged and a copy has been archived in central data store.";
+get_message(remote_discovery, archive) -> "A file containing sensitive information on remote has been discovered, logged and a copy has been archived in central data store.";
 get_message(printer, archive) -> "Printing of document containing sensitive information on endpoint has been logged and a copy has been archived in data store.";
 get_message(api, archive) -> "Specified file should not be blocked in response to API query, logged query and a copy of file has been archived in central data store.";
 get_message(discovery, {custom, {seclore, pass, _, _}}) -> "A file containing sensitive information has been discovered, logged and protected with Seclore FileSecure IRM.";
@@ -3367,3 +3370,40 @@ create_endpoint_key(RegHandle) ->
 
 -endif.
 
+
+-ifdef(__MYDLP_NETWORK).
+
+-ifdef(__PLATFORM_LINUX).
+
+cmd(Command) -> cmd(Command, []).
+
+cmd(Command, Args) -> cmd(Command, Args, []). 
+
+cmd(Command, Args, Envs) -> cmd(Command, Args, Envs, none). % Last variable for Stdin
+
+% envs should be like [{"key","value"}] and Stdin shold be "Stdin\n" format
+cmd(Command, Args, Envs, Stdin) when is_list(Args), is_list(Envs) ->
+	erlang:display({command, Command}),
+	erlang:display({args, Args}),
+	erlang:display({envs, Envs}),
+	erlang:display({stdin, Stdin}),
+       Port = open_port({spawn_executable, Command},
+                       [{args, Args},
+                       {env, Envs},
+                       use_stdio,
+                       exit_status,
+                       stderr_to_stdout]),
+
+	case Stdin of 
+		none -> ok;
+		S -> port_command(Port, S) 
+	end,
+
+	case get_port_resp(Port, []) of
+		{ok, _Data} -> ok;
+		{error, _} = Error -> ?ERROR_LOG("Error calling "?S", Args: "?S"~nOutput: "?S, [Command, Args, Error]),
+			Error end.
+
+-endif.
+
+-endif.

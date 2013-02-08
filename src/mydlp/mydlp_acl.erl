@@ -40,7 +40,8 @@
 
 -export([
 	get_remote_rule_tables/2,
-	q/2
+	q/2,
+	qr/2
 	]).
 
 -endif.
@@ -76,6 +77,8 @@
 get_remote_rule_tables(Addr, UserH) -> acl_call({get_remote_rule_tables, Addr, UserH}).
 
 q(AclQ, Files) -> acl_call({q, AclQ}, Files).
+
+qr(RuleId, Files) when is_integer(RuleId) -> acl_call({qr, RuleId}, Files).
 
 -endif.
 
@@ -187,6 +190,11 @@ acl_exec3(Req, AllRules, Files, ExNewFiles, CleanFiles) ->
 handle_acl({q, #aclq{} = AclQ}, Files, _State) ->
 	CustomerId = mydlp_mnesia:get_dfid(),
 	Rules = mydlp_mnesia:get_rules(CustomerId, AclQ),
+	acl_exec(Rules, Files);
+
+handle_acl({qr, RuleId}, Files, _State) when is_integer(RuleId) ->
+	CustomerId = mydlp_mnesia:get_dfid(),
+	Rules = mydlp_mnesia:get_rule_table(CustomerId, [RuleId]),
 	acl_exec(Rules, Files);
 
 handle_acl({get_remote_rule_tables, Addr, UserH}, _Files, _State) ->

@@ -192,9 +192,9 @@ handle_call({aclq, ObjId, Timeout}, From, #state{object_tree=OT} = State) ->
 							discovery -> 
 								RuleIndex = get_discovery_rule_index(Obj),
 								{mydlp_acl:qe(Channel, DFFiles, RuleIndex), Obj};
-							remote_discovery -> {pass, Obj};%TODO: should be create aclq and sent to mydlp_acl
-								%RuleIndex = get_discovery_rule_index(Obj),
-								%{mydlp_acl:qe(Channel, DFFiles, RuleIndex), Obj};
+							remote_discovery -> 
+								RuleIndex = get_discovery_rule_index(Obj),
+								{mydlp_acl:qr(RuleIndex, DFFiles), Obj};
 							printer -> {mydlp_acl:qe(Channel, DFFiles), Obj};
 							inbound -> {mydlp_acl:qi(Channel, DFFiles), Obj};
 							removable -> {mydlp_acl:qe(Channel, DFFiles), Obj}
@@ -488,6 +488,22 @@ get_user(#object{prop_dict=PD}) ->
 		{ok, User} -> User ++ "@" ++ get_ep_meta("logged_on_domain");
 		_Else -> get_ep_meta("user") end.
 
+get_remote_user(#object{filepath=FP}) ->
+	case filename:split(FP) of %originally should be "/var/lib/mydlp/mounts"
+		["/", "home", "ozgen", "mounts", Id|_Rest] -> construct_source(list_to_integer(Id));
+		_ -> ?ERROR_LOG("Unknown remote discovery file", []), none
+	end.
+
+construct_source(Id) ->
+	erlang:display({id, Id}),
+	case mydlp_mnesia:get_remote_storage_by_id(Id) of
+		{sshfs, {Address, _, Path, _, _}} -> "sshfs://" ++ binary_to_list(Address) ++ ":" ++binary_to_list(Path);
+		{ftpfs, {Address, Path, _, _}} -> "ftpfs://" ++ binary_to_list(Address) ++ binary_to_list(Path);
+		{cifs, {Address, Path, _, _}} -> "cifs://" ++ binary_to_list(Address) ++ "/" ++ binary_to_list(Path);
+		{dfs, {Address, Path, _, _}} -> "dfs://" ++ binary_to_list(Address) ++ "/" ++ binary_to_list(Path);
+		{nfs, {Address, Path}} -> "nfs://" ++ binary_to_list(Address) ++ "/" ++ binary_to_list(Path)
+	end.
+
 -endif.
 
 -ifdef(__PLATFORM_WINDOWS).
@@ -499,6 +515,7 @@ get_user(_Obj) -> get_ep_meta("user").
 log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
 	User = case get_channel(Obj) of
 		api -> get_api_user(Obj);
+		remote_discovery -> get_remote_user(Obj);
 		_Else -> get_user(Obj) end,
 	Channel = get_channel(Obj),
 	Time = erlang:universaltime(),
@@ -585,6 +602,7 @@ get_destination1(#object{} = Obj) ->
 	case get_channel(Obj) of
 		discovery -> get_destination_file_path(Obj);
 		removable -> get_destination_file_path(Obj);
+		remote_discovery -> get_remote_destination_file_path(Obj);
 		printer -> get_printer_name(Obj);
 		_Else -> undefined end.
 
@@ -593,6 +611,12 @@ get_destination_file_path(#object{prop_dict=PD, filepath=FP}) ->
 		{ok, "true"} -> undefined;
 		_Else -> FP end.
 
+get_remote_destination_file_path(#object{filepath=FP}) ->
+	case filename:split(FP) of %originally should be "/var/lib/mydlp/mounts"
+		["/", "home", "ozgen", "mounts", _Id|Rest] -> filename:join(Rest);
+		_ -> ?ERROR_LOG("Unknown remote discovery file", []), undefined
+	end.
+	
 get_ip_address(#object{prop_dict=PD}) ->
 	case dict:find("ip_address", PD) of
 		{ok, ClientIpS} -> mydlp_api:str_to_ip(ClientIpS);
