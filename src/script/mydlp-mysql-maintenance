@@ -1,0 +1,15 @@
+#!/bin/bash
+PATH=/usr/local/maven/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games
+
+MYSQLCHECKC=/usr/bin/mysqlcheck
+MYSQLCHECKANALYZEOPTS="-Aa"
+
+MYSQLCHECKANALYZE="$MYSQLCHECKC $MYSQLCHECKANALYZEOPTS"
+
+
+function analyze_tables() {
+	$MYSQLCHECKANALYZE 2>&1 > /dev/null
+}
+
+analyze_tables
+

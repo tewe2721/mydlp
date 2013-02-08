@@ -4,6 +4,7 @@ sbin_SCRIPTS = \
 	mydlp-download-xp-deps \
 	mydlp-index \
 	mydlp-log \
+	mydlp-mysql-maintenance \
 	mydlp-revision-list \
 	mydlp-revision-save \
 	mydlp-revision-restore \
