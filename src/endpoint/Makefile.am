@@ -24,12 +24,17 @@ endpointwindir = $(endpointdir)/win
 
 endpointwin_DATA = \
 	win/mydlp-dep-conf.vbs \
-	win/latest.txt \
-	win/latest.msi
+	win/latest.txt
 
-win/latest.msi: win/latest.txt
+downloadmsi: win/latest.txt
 	@(cd win && ./downloads_msi.sh)
 
 clean-local:
 	@rm -f win/*.msi
+	@rm -rf win/msi
 
+all: downloadmsi
+
+install-data-hook:
+	mkdir -p $(DESTDIR)$(endpointwindir) && \
+		cp -af win/msi $(DESTDIR)$(apachesitesdir)/msi-dpkg
