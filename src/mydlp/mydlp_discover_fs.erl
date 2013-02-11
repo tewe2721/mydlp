@@ -118,9 +118,7 @@ handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
 handle_cast({ql, List}, State) ->
-	%lists:map(fun({FilePath, RuleIndex, SourceString}) -> 
-	%		put({FilePath, RuleIndex, }))
-	[ q(FilePath, RuleIndex) || {FilePath, RuleIndex, SourceString} <- List ],
+	[ q(FilePath, RuleIndex) || {FilePath, RuleIndex} <- List ],
 	{noreply, State};
 
 handle_cast({q, ParentId, FilePath, RuleIndex}, #state{discover_queue=Q, discover_inprog=false} = State) ->
@@ -306,7 +304,6 @@ set_prop_extra(ObjId) ->
 -endif.
 
 discover_file(#fs_entry{file_id={FP, RuleIndex}}) ->
-	erlang:display("discover file is called"),
 	try	timer:sleep(20),
 		{ok, ObjId} = mydlp_container:new(),
 		ok = mydlp_container:setprop(ObjId, "rule_index", RuleIndex),

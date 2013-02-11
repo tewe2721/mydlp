@@ -3383,10 +3383,6 @@ cmd(Command, Args, Envs) -> cmd(Command, Args, Envs, none). % Last variable for 
 
 % envs should be like [{"key","value"}] and Stdin shold be "Stdin\n" format
 cmd(Command, Args, Envs, Stdin) when is_list(Args), is_list(Envs) ->
-	erlang:display({command, Command}),
-	erlang:display({args, Args}),
-	erlang:display({envs, Envs}),
-	erlang:display({stdin, Stdin}),
        Port = open_port({spawn_executable, Command},
                        [{args, Args},
                        {env, Envs},
@@ -3403,6 +3399,47 @@ cmd(Command, Args, Envs, Stdin) when is_list(Args), is_list(Envs) ->
 		{ok, _Data} -> ok;
 		{error, _} = Error -> ?ERROR_LOG("Error calling "?S", Args: "?S"~nOutput: "?S, [Command, Args, Error]),
 			Error end.
+
+cmd_retcode(Command) -> cmd_retcode(Command, []).
+
+cmd_retcode(Command, Args) -> cmd_retcode(Command, Args, []). 
+
+cmd_retcode(Command, Args, Envs) -> cmd_retcode(Command, Args, Envs, none). % Last variable for Stdin
+
+% envs should be like [{"key","value"}] and Stdin shold be "Stdin\n" format
+cmd_retcode(Command, Args, Envs, Stdin) when is_list(Args), is_list(Envs) ->
+       Port = open_port({spawn_executable, Command},
+                       [{args, Args},
+                       {env, Envs},
+                       use_stdio,
+                       exit_status,
+                       stderr_to_stdout]),
+
+	case Stdin of 
+		none -> ok;
+		S -> port_command(Port, S) 
+	end,
+
+	case get_port_resp(Port, []) of
+		{ok, _Data} -> ok;
+		{error, {retcode, I, _}} when is_integer(I) ->  {retcode, I};
+		{error, _} = Error -> ?ERROR_LOG("Error calling "?S", Args: "?S"~nOutput: "?S, [Command, Args, Error]),
+			Error end.
+
+
+cmd_bool(Command) -> cmd_bool(Command, []).
+
+cmd_bool(Command, Args) -> cmd_bool(Command, Args, []). 
+
+cmd_bool(Command, Args, Envs) -> cmd_bool(Command, Args, Envs, none). % Last variable for Stdin
+
+% envs should be like [{"key","value"}] and Stdin shold be "Stdin\n" format
+cmd_bool(Command, Args, Envs, Stdin) when is_list(Args), is_list(Envs) ->
+	case cmd_retcode(Command, Args, Envs, Stdin) of
+		ok -> true;
+		{retcode, _Else} -> false;
+		Else -> Else end.
+
 
 -endif.
 

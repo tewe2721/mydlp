@@ -495,7 +495,6 @@ get_remote_user(#object{filepath=FP}) ->
 	end.
 
 construct_source(Id) ->
-	erlang:display({id, Id}),
 	case mydlp_mnesia:get_remote_storage_by_id(Id) of
 		{sshfs, {Address, _, Path, _, _}} -> "sshfs://" ++ binary_to_list(Address) ++ ":" ++binary_to_list(Path);
 		{ftpfs, {Address, Path, _, _}} -> "ftpfs://" ++ binary_to_list(Address) ++ binary_to_list(Path);
