@@ -179,7 +179,7 @@ public class MydlpImpl implements Mydlp.Iface {
 	public List<String> extractLinks(ByteBuffer HTMLData) throws TException {
 		List<String> links = new ArrayList<String>();
 		try {
-			TagNode rootNode = cleaner.clean(getInputStream(HTMLData));
+			TagNode rootNode = getCleaner().clean(getInputStream(HTMLData));
 			for (TagNode aTag : (List<TagNode>) rootNode.getElementListByName ("a", true))
 			{
 				try {
