@@ -25,6 +25,8 @@ service Mydlp {
 	binary getText(1 : string FileName, 2: string MimeType, 3 : binary Data)
 	binary getUnicodeText(1 : string Encoding, 2 : binary Data)
 
+	list<string> extractLinks(1: binary HTMLData)
+
 	string secloreInitialize(	1 : string SecloreAppPath,
 					2 : string SecloreAddress,
 					3 : i32 SeclorePort,
