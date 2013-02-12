@@ -67,7 +67,11 @@ handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
 handle_cast(sync, #state{policy_id=undefined} = State) ->
-	PolicyId = mydlp_api:get_client_policy_revision_id(),
+	PolicyId = try mydlp_api:get_client_policy_revision_id()
+	catch Class:Error -> ?ERROR_LOG("GET Revision ID: "
+		"Class: ["?S"]. Error: ["?S"].~n"
+		"Stack trace: "?S"~n", [Class, Error, erlang:get_stacktrace()]),
+		0 end,
 	handle_cast(sync, State#state{policy_id=PolicyId});
 
 handle_cast(sync, #state{policy_id=PolicyId} = State) ->
@@ -89,9 +93,12 @@ handle_info(sync_now, #state{policy_id=undefined} = State) ->
 	handle_info(sync_now, State#state{policy_id=PolicyId});
 
 handle_info(sync_now, #state{policy_id=PolicyId} = State) ->
-	mydlp_container:set_general_meta(),
-	timer:sleep(1000),
-	sync(PolicyId),
+	try	mydlp_container:set_general_meta(),
+		timer:sleep(1000),
+		sync(PolicyId)
+	catch Class:Error -> ?ERROR_LOG("SYNC Handle: "
+		"Class: ["?S"]. Error: ["?S"].~n"
+		"Stack trace: "?S"~n", [Class, Error, erlang:get_stacktrace()]) end,
 	call_timer(),
         {noreply, State};
 
