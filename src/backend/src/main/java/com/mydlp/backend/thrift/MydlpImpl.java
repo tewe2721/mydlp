@@ -7,11 +7,16 @@ import java.io.Reader;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.Charset;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.apache.thrift.TException;
 import org.apache.tika.Tika;
 import org.apache.tika.io.IOUtils;
 import org.apache.tika.metadata.Metadata;
+import org.htmlcleaner.CleanerProperties;
+import org.htmlcleaner.HtmlCleaner;
+import org.htmlcleaner.TagNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,12 +36,33 @@ public class MydlpImpl implements Mydlp.Iface {
 			.encode(CharBuffer.wrap("mydlp-internal/error"));
 	protected static final String MIME_NOT_FOUND = "mydlp-internal/not-found";
 	
-	protected Tika tika = new Tika();
+	protected Tika tika = null;
+	
+	protected HtmlCleaner cleaner = null;
 	
 	protected FileSecureConfigBuilder secloreConfig = null;
 	
 	protected FileSecureProtect secloreProtect = null;
-		
+	
+	protected Tika getTika() {
+		if (tika == null) {
+			tika = new Tika();
+		}
+		return tika;
+	}
+	
+	protected HtmlCleaner getCleaner() {
+		if (cleaner == null) {
+			cleaner = new HtmlCleaner();
+		    CleanerProperties props = cleaner.getProperties();
+			props.setAllowHtmlInsideAttributes(true);
+			props.setAllowMultiWordAttributes(true);
+			props.setRecognizeUnicodeChars(true);
+			props.setOmitComments(true);
+		}
+		return cleaner;
+	}
+	
 	protected InputStream getInputStream(final ByteBuffer buf) {
 		return new InputStream() {
 			public synchronized int read() throws IOException {
@@ -59,7 +85,7 @@ public class MydlpImpl implements Mydlp.Iface {
 			metadata.add(Metadata.RESOURCE_NAME_KEY, FileName);
 		InputStream inputStream = getInputStream(Data);
 		try {
-			return tika.detect(inputStream, metadata);
+			return getTika().detect(inputStream, metadata);
 		} catch (IOException e) {
 			logger.error("Can not detect file type", e);
 			return MIME_NOT_FOUND;
@@ -94,7 +120,7 @@ public class MydlpImpl implements Mydlp.Iface {
 			if (FileName != null && FileName.length() > 0)
 				metadata.add(Metadata.RESOURCE_NAME_KEY, FileName);
 			metadata.add(Metadata.CONTENT_TYPE, MimeType);
-			Reader reader = tika.parse(inputStream, metadata);
+			Reader reader = getTika().parse(inputStream, metadata);
 			return ByteBuffer.wrap(IOUtils.toByteArray(reader, DEFAULT_ENCODING));
 		} catch (Throwable e) {
 			if (isMemoryError(e))
@@ -126,7 +152,7 @@ public class MydlpImpl implements Mydlp.Iface {
 			metadata.add(Metadata.CONTENT_TYPE, "text/plain");
 			if (Encoding != null && Encoding.length() > 0 && !Encoding.equals("unknown"));
 				metadata.add(Metadata.CONTENT_ENCODING, Encoding);
-			Reader reader = tika.parse(inputStream, metadata);
+			Reader reader = getTika().parse(inputStream, metadata);
 			return ByteBuffer.wrap(IOUtils.toByteArray(reader, DEFAULT_ENCODING));
 		} catch (Throwable e) {
 			if (isMemoryError(e))
@@ -146,6 +172,27 @@ public class MydlpImpl implements Mydlp.Iface {
 				logger.error("Can not close stream", e);
 			}
 		}
+	}
+	
+	@SuppressWarnings("unchecked")
+	@Override
+	public List<String> extractLinks(ByteBuffer HTMLData) throws TException {
+		List<String> links = new ArrayList<String>();
+		try {
+			TagNode rootNode = getCleaner().clean(getInputStream(HTMLData));
+			for (TagNode aTag : (List<TagNode>) rootNode.getElementListByName ("a", true))
+			{
+				try {
+				    String link = aTag.getAttributeByName ("href");
+				    if (link != null && link.length () > 0) links.add (link);
+				} catch (Throwable t) {
+					logger.error("Can not extract link", t);
+				} 
+			}
+		} catch (IOException e) {
+			logger.error("Can not parse HTML", e);
+		}
+		return links;
 	}
 
 	@Override

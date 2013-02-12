@@ -298,13 +298,22 @@ code_change(_OldVsn, State, _Extra) ->
 %%%%%%%%%%%%%%% helper func
 apply_rules(_CTX, [], _Files) -> return;
 apply_rules(_CTX, _Rules, []) -> return;
-apply_rules(CTX, [{Id, Action, ITypes}|Rules], Files) ->
-	case execute_itypes(CTX, ITypes, Files) of
+apply_rules(CTX, [{Id, Action, ITypes} = RS|Rules], Files) ->
+	Result = try execute_itypes(CTX, ITypes, Files)
+		catch Class:Error -> 
+			?ERROR_LOG("Internal error. Class: "?S", Error: "?S".~nRS: "?S"~nStacktrace: "?S, 
+				[Class, Error, RS, erlang:get_stacktrace()]),
+		{error, {file, Files}, {itype, -1}, {misc, "internal_error"}} end,
+	case Result of
 		neg -> apply_rules(CTX, Rules, Files);
 		{pos, {file, File}, {itype, ITypeOrigId}, {misc, Misc}} -> 
 			{Action, {{rule, Id}, {file, File}, {itype, ITypeOrigId}, {misc, Misc}}};
 		{error, {file, File}, {itype, ITypeOrigId}, {misc, Misc}} -> 
-			{?CFG(error_action), {{rule, Id}, {file, File}, {itype, ITypeOrigId}, {misc, Misc}}}
+			case ?CFG(error_action) of
+				pass -> apply_rules(CTX, Rules, Files);
+				EAction -> {EAction, {{rule, Id}, {file, File}, 
+						{itype, ITypeOrigId}, {misc, Misc}}} 
+			end
 	end.
 
 
@@ -345,7 +354,7 @@ execute_itype_pf1(CTX, ITypeOrigId, Distance, IFeatures, File) ->
 				{error, {file, File}, {itype, ITypeOrigId}, {misc, Misc}};
 		E -> E end.
 
-execute_ifeatures(_CTX, _Distance, [], _File) -> 0;
+execute_ifeatures(_CTX, _Distance, [], _File) -> neg;
 execute_ifeatures(CTX, Distance, IFeatures, File) ->
 	try	UseDistance = case Distance of
 			undefined -> false;

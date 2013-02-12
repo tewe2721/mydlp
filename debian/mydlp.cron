@@ -1,6 +1,6 @@
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
-25 6 * * *	root	/usr/sbin/mydlp-index
 */5 * * * *	root	/usr/sbin/mydlp-watchdog
-
+15 6 * * *	root	/usr/sbin/mydlp-mysql-maintenance
+25 6 * * *	root	/usr/sbin/mydlp-index
 

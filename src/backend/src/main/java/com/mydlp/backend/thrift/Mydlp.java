@@ -30,6 +30,8 @@ public class Mydlp {
 
     public ByteBuffer getUnicodeText(String Encoding, ByteBuffer Data) throws org.apache.thrift.TException;
 
+    public List<String> extractLinks(ByteBuffer HTMLData) throws org.apache.thrift.TException;
+
     public String secloreInitialize(String SecloreAppPath, String SecloreAddress, int SeclorePort, String SecloreAppName, int SecloreHotFolderCabinetId, String SecloreHotFolderCabinetPassphrase, int SeclorePoolSize) throws org.apache.thrift.TException;
 
     public String secloreProtect(String FilePath, int HotFolderId, String ActivityComments) throws org.apache.thrift.TException;
@@ -45,6 +47,8 @@ public class Mydlp {
     public void getText(String FileName, String MimeType, ByteBuffer Data, org.apache.thrift.async.AsyncMethodCallback<AsyncClient.getText_call> resultHandler) throws org.apache.thrift.TException;
 
     public void getUnicodeText(String Encoding, ByteBuffer Data, org.apache.thrift.async.AsyncMethodCallback<AsyncClient.getUnicodeText_call> resultHandler) throws org.apache.thrift.TException;
+
+    public void extractLinks(ByteBuffer HTMLData, org.apache.thrift.async.AsyncMethodCallback<AsyncClient.extractLinks_call> resultHandler) throws org.apache.thrift.TException;
 
     public void secloreInitialize(String SecloreAppPath, String SecloreAddress, int SeclorePort, String SecloreAppName, int SecloreHotFolderCabinetId, String SecloreHotFolderCabinetPassphrase, int SeclorePoolSize, org.apache.thrift.async.AsyncMethodCallback<AsyncClient.secloreInitialize_call> resultHandler) throws org.apache.thrift.TException;
 
@@ -145,6 +149,29 @@ public class Mydlp {
         return result.success;
       }
       throw new org.apache.thrift.TApplicationException(org.apache.thrift.TApplicationException.MISSING_RESULT, "getUnicodeText failed: unknown result");
+    }
+
+    public List<String> extractLinks(ByteBuffer HTMLData) throws org.apache.thrift.TException
+    {
+      send_extractLinks(HTMLData);
+      return recv_extractLinks();
+    }
+
+    public void send_extractLinks(ByteBuffer HTMLData) throws org.apache.thrift.TException
+    {
+      extractLinks_args args = new extractLinks_args();
+      args.setHTMLData(HTMLData);
+      sendBase("extractLinks", args);
+    }
+
+    public List<String> recv_extractLinks() throws org.apache.thrift.TException
+    {
+      extractLinks_result result = new extractLinks_result();
+      receiveBase(result, "extractLinks");
+      if (result.isSetSuccess()) {
+        return result.success;
+      }
+      throw new org.apache.thrift.TApplicationException(org.apache.thrift.TApplicationException.MISSING_RESULT, "extractLinks failed: unknown result");
     }
 
     public String secloreInitialize(String SecloreAppPath, String SecloreAddress, int SeclorePort, String SecloreAppName, int SecloreHotFolderCabinetId, String SecloreHotFolderCabinetPassphrase, int SeclorePoolSize) throws org.apache.thrift.TException
@@ -349,6 +376,38 @@ public class Mydlp {
       }
     }
 
+    public void extractLinks(ByteBuffer HTMLData, org.apache.thrift.async.AsyncMethodCallback<extractLinks_call> resultHandler) throws org.apache.thrift.TException {
+      checkReady();
+      extractLinks_call method_call = new extractLinks_call(HTMLData, resultHandler, this, ___protocolFactory, ___transport);
+      this.___currentMethod = method_call;
+      ___manager.call(method_call);
+    }
+
+    public static class extractLinks_call extends org.apache.thrift.async.TAsyncMethodCall {
+      private ByteBuffer HTMLData;
+      public extractLinks_call(ByteBuffer HTMLData, org.apache.thrift.async.AsyncMethodCallback<extractLinks_call> resultHandler, org.apache.thrift.async.TAsyncClient client, org.apache.thrift.protocol.TProtocolFactory protocolFactory, org.apache.thrift.transport.TNonblockingTransport transport) throws org.apache.thrift.TException {
+        super(client, protocolFactory, transport, resultHandler, false);
+        this.HTMLData = HTMLData;
+      }
+
+      public void write_args(org.apache.thrift.protocol.TProtocol prot) throws org.apache.thrift.TException {
+        prot.writeMessageBegin(new org.apache.thrift.protocol.TMessage("extractLinks", org.apache.thrift.protocol.TMessageType.CALL, 0));
+        extractLinks_args args = new extractLinks_args();
+        args.setHTMLData(HTMLData);
+        args.write(prot);
+        prot.writeMessageEnd();
+      }
+
+      public List<String> getResult() throws org.apache.thrift.TException {
+        if (getState() != org.apache.thrift.async.TAsyncMethodCall.State.RESPONSE_READ) {
+          throw new IllegalStateException("Method call not finished!");
+        }
+        org.apache.thrift.transport.TMemoryInputTransport memoryTransport = new org.apache.thrift.transport.TMemoryInputTransport(getFrameBuffer().array());
+        org.apache.thrift.protocol.TProtocol prot = client.getProtocolFactory().getProtocol(memoryTransport);
+        return (new Client(prot)).recv_extractLinks();
+      }
+    }
+
     public void secloreInitialize(String SecloreAppPath, String SecloreAddress, int SeclorePort, String SecloreAppName, int SecloreHotFolderCabinetId, String SecloreHotFolderCabinetPassphrase, int SeclorePoolSize, org.apache.thrift.async.AsyncMethodCallback<secloreInitialize_call> resultHandler) throws org.apache.thrift.TException {
       checkReady();
       secloreInitialize_call method_call = new secloreInitialize_call(SecloreAppPath, SecloreAddress, SeclorePort, SecloreAppName, SecloreHotFolderCabinetId, SecloreHotFolderCabinetPassphrase, SeclorePoolSize, resultHandler, this, ___protocolFactory, ___transport);
@@ -482,6 +541,7 @@ public class Mydlp {
       processMap.put("getMime", new getMime());
       processMap.put("getText", new getText());
       processMap.put("getUnicodeText", new getUnicodeText());
+      processMap.put("extractLinks", new extractLinks());
       processMap.put("secloreInitialize", new secloreInitialize());
       processMap.put("secloreProtect", new secloreProtect());
       processMap.put("secloreTerminate", new secloreTerminate());
@@ -532,6 +592,22 @@ public class Mydlp {
       protected getUnicodeText_result getResult(I iface, getUnicodeText_args args) throws org.apache.thrift.TException {
         getUnicodeText_result result = new getUnicodeText_result();
         result.success = iface.getUnicodeText(args.Encoding, args.Data);
+        return result;
+      }
+    }
+
+    private static class extractLinks<I extends Iface> extends org.apache.thrift.ProcessFunction<I, extractLinks_args> {
+      public extractLinks() {
+        super("extractLinks");
+      }
+
+      protected extractLinks_args getEmptyArgsInstance() {
+        return new extractLinks_args();
+      }
+
+      protected extractLinks_result getResult(I iface, extractLinks_args args) throws org.apache.thrift.TException {
+        extractLinks_result result = new extractLinks_result();
+        result.success = iface.extractLinks(args.HTMLData);
         return result;
       }
     }
@@ -2748,6 +2824,647 @@ public class Mydlp {
         sb.append("null");
       } else {
         org.apache.thrift.TBaseHelper.toString(this.success, sb);
+      }
+      first = false;
+      sb.append(")");
+      return sb.toString();
+    }
+
+    public void validate() throws org.apache.thrift.TException {
+      // check for required fields
+    }
+
+    private void writeObject(java.io.ObjectOutputStream out) throws java.io.IOException {
+      try {
+        write(new org.apache.thrift.protocol.TCompactProtocol(new org.apache.thrift.transport.TIOStreamTransport(out)));
+      } catch (org.apache.thrift.TException te) {
+        throw new java.io.IOException(te);
+      }
+    }
+
+    private void readObject(java.io.ObjectInputStream in) throws java.io.IOException, ClassNotFoundException {
+      try {
+        read(new org.apache.thrift.protocol.TCompactProtocol(new org.apache.thrift.transport.TIOStreamTransport(in)));
+      } catch (org.apache.thrift.TException te) {
+        throw new java.io.IOException(te);
+      }
+    }
+
+  }
+
+  public static class extractLinks_args implements org.apache.thrift.TBase<extractLinks_args, extractLinks_args._Fields>, java.io.Serializable, Cloneable   {
+    private static final org.apache.thrift.protocol.TStruct STRUCT_DESC = new org.apache.thrift.protocol.TStruct("extractLinks_args");
+
+    private static final org.apache.thrift.protocol.TField HTMLDATA_FIELD_DESC = new org.apache.thrift.protocol.TField("HTMLData", org.apache.thrift.protocol.TType.STRING, (short)1);
+
+    public ByteBuffer HTMLData; // required
+
+    /** The set of fields this struct contains, along with convenience methods for finding and manipulating them. */
+    public enum _Fields implements org.apache.thrift.TFieldIdEnum {
+      HTMLDATA((short)1, "HTMLData");
+
+      private static final Map<String, _Fields> byName = new HashMap<String, _Fields>();
+
+      static {
+        for (_Fields field : EnumSet.allOf(_Fields.class)) {
+          byName.put(field.getFieldName(), field);
+        }
+      }
+
+      /**
+       * Find the _Fields constant that matches fieldId, or null if its not found.
+       */
+      public static _Fields findByThriftId(int fieldId) {
+        switch(fieldId) {
+          case 1: // HTMLDATA
+            return HTMLDATA;
+          default:
+            return null;
+        }
+      }
+
+      /**
+       * Find the _Fields constant that matches fieldId, throwing an exception
+       * if it is not found.
+       */
+      public static _Fields findByThriftIdOrThrow(int fieldId) {
+        _Fields fields = findByThriftId(fieldId);
+        if (fields == null) throw new IllegalArgumentException("Field " + fieldId + " doesn't exist!");
+        return fields;
+      }
+
+      /**
+       * Find the _Fields constant that matches name, or null if its not found.
+       */
+      public static _Fields findByName(String name) {
+        return byName.get(name);
+      }
+
+      private final short _thriftId;
+      private final String _fieldName;
+
+      _Fields(short thriftId, String fieldName) {
+        _thriftId = thriftId;
+        _fieldName = fieldName;
+      }
+
+      public short getThriftFieldId() {
+        return _thriftId;
+      }
+
+      public String getFieldName() {
+        return _fieldName;
+      }
+    }
+
+    // isset id assignments
+
+    public static final Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> metaDataMap;
+    static {
+      Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> tmpMap = new EnumMap<_Fields, org.apache.thrift.meta_data.FieldMetaData>(_Fields.class);
+      tmpMap.put(_Fields.HTMLDATA, new org.apache.thrift.meta_data.FieldMetaData("HTMLData", org.apache.thrift.TFieldRequirementType.DEFAULT, 
+          new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING          , true)));
+      metaDataMap = Collections.unmodifiableMap(tmpMap);
+      org.apache.thrift.meta_data.FieldMetaData.addStructMetaDataMap(extractLinks_args.class, metaDataMap);
+    }
+
+    public extractLinks_args() {
+    }
+
+    public extractLinks_args(
+      ByteBuffer HTMLData)
+    {
+      this();
+      this.HTMLData = HTMLData;
+    }
+
+    /**
+     * Performs a deep copy on <i>other</i>.
+     */
+    public extractLinks_args(extractLinks_args other) {
+      if (other.isSetHTMLData()) {
+        this.HTMLData = org.apache.thrift.TBaseHelper.copyBinary(other.HTMLData);
+;
+      }
+    }
+
+    public extractLinks_args deepCopy() {
+      return new extractLinks_args(this);
+    }
+
+    @Override
+    public void clear() {
+      this.HTMLData = null;
+    }
+
+    public byte[] getHTMLData() {
+      setHTMLData(org.apache.thrift.TBaseHelper.rightSize(HTMLData));
+      return HTMLData == null ? null : HTMLData.array();
+    }
+
+    public ByteBuffer bufferForHTMLData() {
+      return HTMLData;
+    }
+
+    public extractLinks_args setHTMLData(byte[] HTMLData) {
+      setHTMLData(HTMLData == null ? (ByteBuffer)null : ByteBuffer.wrap(HTMLData));
+      return this;
+    }
+
+    public extractLinks_args setHTMLData(ByteBuffer HTMLData) {
+      this.HTMLData = HTMLData;
+      return this;
+    }
+
+    public void unsetHTMLData() {
+      this.HTMLData = null;
+    }
+
+    /** Returns true if field HTMLData is set (has been assigned a value) and false otherwise */
+    public boolean isSetHTMLData() {
+      return this.HTMLData != null;
+    }
+
+    public void setHTMLDataIsSet(boolean value) {
+      if (!value) {
+        this.HTMLData = null;
+      }
+    }
+
+    public void setFieldValue(_Fields field, Object value) {
+      switch (field) {
+      case HTMLDATA:
+        if (value == null) {
+          unsetHTMLData();
+        } else {
+          setHTMLData((ByteBuffer)value);
+        }
+        break;
+
+      }
+    }
+
+    public Object getFieldValue(_Fields field) {
+      switch (field) {
+      case HTMLDATA:
+        return getHTMLData();
+
+      }
+      throw new IllegalStateException();
+    }
+
+    /** Returns true if field corresponding to fieldID is set (has been assigned a value) and false otherwise */
+    public boolean isSet(_Fields field) {
+      if (field == null) {
+        throw new IllegalArgumentException();
+      }
+
+      switch (field) {
+      case HTMLDATA:
+        return isSetHTMLData();
+      }
+      throw new IllegalStateException();
+    }
+
+    @Override
+    public boolean equals(Object that) {
+      if (that == null)
+        return false;
+      if (that instanceof extractLinks_args)
+        return this.equals((extractLinks_args)that);
+      return false;
+    }
+
+    public boolean equals(extractLinks_args that) {
+      if (that == null)
+        return false;
+
+      boolean this_present_HTMLData = true && this.isSetHTMLData();
+      boolean that_present_HTMLData = true && that.isSetHTMLData();
+      if (this_present_HTMLData || that_present_HTMLData) {
+        if (!(this_present_HTMLData && that_present_HTMLData))
+          return false;
+        if (!this.HTMLData.equals(that.HTMLData))
+          return false;
+      }
+
+      return true;
+    }
+
+    @Override
+    public int hashCode() {
+      return 0;
+    }
+
+    public int compareTo(extractLinks_args other) {
+      if (!getClass().equals(other.getClass())) {
+        return getClass().getName().compareTo(other.getClass().getName());
+      }
+
+      int lastComparison = 0;
+      extractLinks_args typedOther = (extractLinks_args)other;
+
+      lastComparison = Boolean.valueOf(isSetHTMLData()).compareTo(typedOther.isSetHTMLData());
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+      if (isSetHTMLData()) {
+        lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.HTMLData, typedOther.HTMLData);
+        if (lastComparison != 0) {
+          return lastComparison;
+        }
+      }
+      return 0;
+    }
+
+    public _Fields fieldForId(int fieldId) {
+      return _Fields.findByThriftId(fieldId);
+    }
+
+    public void read(org.apache.thrift.protocol.TProtocol iprot) throws org.apache.thrift.TException {
+      org.apache.thrift.protocol.TField field;
+      iprot.readStructBegin();
+      while (true)
+      {
+        field = iprot.readFieldBegin();
+        if (field.type == org.apache.thrift.protocol.TType.STOP) { 
+          break;
+        }
+        switch (field.id) {
+          case 1: // HTMLDATA
+            if (field.type == org.apache.thrift.protocol.TType.STRING) {
+              this.HTMLData = iprot.readBinary();
+            } else { 
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, field.type);
+            }
+            break;
+          default:
+            org.apache.thrift.protocol.TProtocolUtil.skip(iprot, field.type);
+        }
+        iprot.readFieldEnd();
+      }
+      iprot.readStructEnd();
+
+      // check for required fields of primitive type, which can't be checked in the validate method
+      validate();
+    }
+
+    public void write(org.apache.thrift.protocol.TProtocol oprot) throws org.apache.thrift.TException {
+      validate();
+
+      oprot.writeStructBegin(STRUCT_DESC);
+      if (this.HTMLData != null) {
+        oprot.writeFieldBegin(HTMLDATA_FIELD_DESC);
+        oprot.writeBinary(this.HTMLData);
+        oprot.writeFieldEnd();
+      }
+      oprot.writeFieldStop();
+      oprot.writeStructEnd();
+    }
+
+    @Override
+    public String toString() {
+      StringBuilder sb = new StringBuilder("extractLinks_args(");
+      boolean first = true;
+
+      sb.append("HTMLData:");
+      if (this.HTMLData == null) {
+        sb.append("null");
+      } else {
+        org.apache.thrift.TBaseHelper.toString(this.HTMLData, sb);
+      }
+      first = false;
+      sb.append(")");
+      return sb.toString();
+    }
+
+    public void validate() throws org.apache.thrift.TException {
+      // check for required fields
+    }
+
+    private void writeObject(java.io.ObjectOutputStream out) throws java.io.IOException {
+      try {
+        write(new org.apache.thrift.protocol.TCompactProtocol(new org.apache.thrift.transport.TIOStreamTransport(out)));
+      } catch (org.apache.thrift.TException te) {
+        throw new java.io.IOException(te);
+      }
+    }
+
+    private void readObject(java.io.ObjectInputStream in) throws java.io.IOException, ClassNotFoundException {
+      try {
+        read(new org.apache.thrift.protocol.TCompactProtocol(new org.apache.thrift.transport.TIOStreamTransport(in)));
+      } catch (org.apache.thrift.TException te) {
+        throw new java.io.IOException(te);
+      }
+    }
+
+  }
+
+  public static class extractLinks_result implements org.apache.thrift.TBase<extractLinks_result, extractLinks_result._Fields>, java.io.Serializable, Cloneable   {
+    private static final org.apache.thrift.protocol.TStruct STRUCT_DESC = new org.apache.thrift.protocol.TStruct("extractLinks_result");
+
+    private static final org.apache.thrift.protocol.TField SUCCESS_FIELD_DESC = new org.apache.thrift.protocol.TField("success", org.apache.thrift.protocol.TType.LIST, (short)0);
+
+    public List<String> success; // required
+
+    /** The set of fields this struct contains, along with convenience methods for finding and manipulating them. */
+    public enum _Fields implements org.apache.thrift.TFieldIdEnum {
+      SUCCESS((short)0, "success");
+
+      private static final Map<String, _Fields> byName = new HashMap<String, _Fields>();
+
+      static {
+        for (_Fields field : EnumSet.allOf(_Fields.class)) {
+          byName.put(field.getFieldName(), field);
+        }
+      }
+
+      /**
+       * Find the _Fields constant that matches fieldId, or null if its not found.
+       */
+      public static _Fields findByThriftId(int fieldId) {
+        switch(fieldId) {
+          case 0: // SUCCESS
+            return SUCCESS;
+          default:
+            return null;
+        }
+      }
+
+      /**
+       * Find the _Fields constant that matches fieldId, throwing an exception
+       * if it is not found.
+       */
+      public static _Fields findByThriftIdOrThrow(int fieldId) {
+        _Fields fields = findByThriftId(fieldId);
+        if (fields == null) throw new IllegalArgumentException("Field " + fieldId + " doesn't exist!");
+        return fields;
+      }
+
+      /**
+       * Find the _Fields constant that matches name, or null if its not found.
+       */
+      public static _Fields findByName(String name) {
+        return byName.get(name);
+      }
+
+      private final short _thriftId;
+      private final String _fieldName;
+
+      _Fields(short thriftId, String fieldName) {
+        _thriftId = thriftId;
+        _fieldName = fieldName;
+      }
+
+      public short getThriftFieldId() {
+        return _thriftId;
+      }
+
+      public String getFieldName() {
+        return _fieldName;
+      }
+    }
+
+    // isset id assignments
+
+    public static final Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> metaDataMap;
+    static {
+      Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> tmpMap = new EnumMap<_Fields, org.apache.thrift.meta_data.FieldMetaData>(_Fields.class);
+      tmpMap.put(_Fields.SUCCESS, new org.apache.thrift.meta_data.FieldMetaData("success", org.apache.thrift.TFieldRequirementType.DEFAULT, 
+          new org.apache.thrift.meta_data.ListMetaData(org.apache.thrift.protocol.TType.LIST, 
+              new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING))));
+      metaDataMap = Collections.unmodifiableMap(tmpMap);
+      org.apache.thrift.meta_data.FieldMetaData.addStructMetaDataMap(extractLinks_result.class, metaDataMap);
+    }
+
+    public extractLinks_result() {
+    }
+
+    public extractLinks_result(
+      List<String> success)
+    {
+      this();
+      this.success = success;
+    }
+
+    /**
+     * Performs a deep copy on <i>other</i>.
+     */
+    public extractLinks_result(extractLinks_result other) {
+      if (other.isSetSuccess()) {
+        List<String> __this__success = new ArrayList<String>();
+        for (String other_element : other.success) {
+          __this__success.add(other_element);
+        }
+        this.success = __this__success;
+      }
+    }
+
+    public extractLinks_result deepCopy() {
+      return new extractLinks_result(this);
+    }
+
+    @Override
+    public void clear() {
+      this.success = null;
+    }
+
+    public int getSuccessSize() {
+      return (this.success == null) ? 0 : this.success.size();
+    }
+
+    public java.util.Iterator<String> getSuccessIterator() {
+      return (this.success == null) ? null : this.success.iterator();
+    }
+
+    public void addToSuccess(String elem) {
+      if (this.success == null) {
+        this.success = new ArrayList<String>();
+      }
+      this.success.add(elem);
+    }
+
+    public List<String> getSuccess() {
+      return this.success;
+    }
+
+    public extractLinks_result setSuccess(List<String> success) {
+      this.success = success;
+      return this;
+    }
+
+    public void unsetSuccess() {
+      this.success = null;
+    }
+
+    /** Returns true if field success is set (has been assigned a value) and false otherwise */
+    public boolean isSetSuccess() {
+      return this.success != null;
+    }
+
+    public void setSuccessIsSet(boolean value) {
+      if (!value) {
+        this.success = null;
+      }
+    }
+
+    public void setFieldValue(_Fields field, Object value) {
+      switch (field) {
+      case SUCCESS:
+        if (value == null) {
+          unsetSuccess();
+        } else {
+          setSuccess((List<String>)value);
+        }
+        break;
+
+      }
+    }
+
+    public Object getFieldValue(_Fields field) {
+      switch (field) {
+      case SUCCESS:
+        return getSuccess();
+
+      }
+      throw new IllegalStateException();
+    }
+
+    /** Returns true if field corresponding to fieldID is set (has been assigned a value) and false otherwise */
+    public boolean isSet(_Fields field) {
+      if (field == null) {
+        throw new IllegalArgumentException();
+      }
+
+      switch (field) {
+      case SUCCESS:
+        return isSetSuccess();
+      }
+      throw new IllegalStateException();
+    }
+
+    @Override
+    public boolean equals(Object that) {
+      if (that == null)
+        return false;
+      if (that instanceof extractLinks_result)
+        return this.equals((extractLinks_result)that);
+      return false;
+    }
+
+    public boolean equals(extractLinks_result that) {
+      if (that == null)
+        return false;
+
+      boolean this_present_success = true && this.isSetSuccess();
+      boolean that_present_success = true && that.isSetSuccess();
+      if (this_present_success || that_present_success) {
+        if (!(this_present_success && that_present_success))
+          return false;
+        if (!this.success.equals(that.success))
+          return false;
+      }
+
+      return true;
+    }
+
+    @Override
+    public int hashCode() {
+      return 0;
+    }
+
+    public int compareTo(extractLinks_result other) {
+      if (!getClass().equals(other.getClass())) {
+        return getClass().getName().compareTo(other.getClass().getName());
+      }
+
+      int lastComparison = 0;
+      extractLinks_result typedOther = (extractLinks_result)other;
+
+      lastComparison = Boolean.valueOf(isSetSuccess()).compareTo(typedOther.isSetSuccess());
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+      if (isSetSuccess()) {
+        lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.success, typedOther.success);
+        if (lastComparison != 0) {
+          return lastComparison;
+        }
+      }
+      return 0;
+    }
+
+    public _Fields fieldForId(int fieldId) {
+      return _Fields.findByThriftId(fieldId);
+    }
+
+    public void read(org.apache.thrift.protocol.TProtocol iprot) throws org.apache.thrift.TException {
+      org.apache.thrift.protocol.TField field;
+      iprot.readStructBegin();
+      while (true)
+      {
+        field = iprot.readFieldBegin();
+        if (field.type == org.apache.thrift.protocol.TType.STOP) { 
+          break;
+        }
+        switch (field.id) {
+          case 0: // SUCCESS
+            if (field.type == org.apache.thrift.protocol.TType.LIST) {
+              {
+                org.apache.thrift.protocol.TList _list0 = iprot.readListBegin();
+                this.success = new ArrayList<String>(_list0.size);
+                for (int _i1 = 0; _i1 < _list0.size; ++_i1)
+                {
+                  String _elem2; // required
+                  _elem2 = iprot.readString();
+                  this.success.add(_elem2);
+                }
+                iprot.readListEnd();
+              }
+            } else { 
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, field.type);
+            }
+            break;
+          default:
+            org.apache.thrift.protocol.TProtocolUtil.skip(iprot, field.type);
+        }
+        iprot.readFieldEnd();
+      }
+      iprot.readStructEnd();
+
+      // check for required fields of primitive type, which can't be checked in the validate method
+      validate();
+    }
+
+    public void write(org.apache.thrift.protocol.TProtocol oprot) throws org.apache.thrift.TException {
+      oprot.writeStructBegin(STRUCT_DESC);
+
+      if (this.isSetSuccess()) {
+        oprot.writeFieldBegin(SUCCESS_FIELD_DESC);
+        {
+          oprot.writeListBegin(new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRING, this.success.size()));
+          for (String _iter3 : this.success)
+          {
+            oprot.writeString(_iter3);
+          }
+          oprot.writeListEnd();
+        }
+        oprot.writeFieldEnd();
+      }
+      oprot.writeFieldStop();
+      oprot.writeStructEnd();
+    }
+
+    @Override
+    public String toString() {
+      StringBuilder sb = new StringBuilder("extractLinks_result(");
+      boolean first = true;
+
+      sb.append("success:");
+      if (this.success == null) {
+        sb.append("null");
+      } else {
+        sb.append(this.success);
       }
       first = false;
       sb.append(")");

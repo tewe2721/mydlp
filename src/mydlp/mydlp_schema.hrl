@@ -130,6 +130,25 @@
 	date
 }).
 
+-record(web_server, {
+	id,
+	proto,
+	address,
+	port,
+	dig_depth,
+	start_path
+}).
+
+-record(web_entry, {
+	entry_id,
+	parent_id,
+	is_html,
+	size,
+	maxage,
+	expires,
+	last_modified
+}).
+
 -endif.
 
 

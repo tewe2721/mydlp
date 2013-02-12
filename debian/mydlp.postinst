@@ -39,6 +39,9 @@ AWKBIN=/usr/bin/awk
 DPKGBIN=/usr/bin/dpkg
 ECHOBIN=/bin/echo
 
+MSITEMPDIR=/usr/share/mydlp/endpoint/win/msi-dpkg
+MSIPERMDIR=/usr/share/mydlp/endpoint/win/msi
+
 SQUIDSSLCRTDDIR=/var/lib/ssl_db/
 
 if test -f /etc/default/mydlp; then
@@ -159,6 +162,17 @@ patch_mysql_schema() {
         fi
 }
 
+move_msi_to_permenant_dir() {
+	if [ -d "$MSITEMPDIR" ]; then
+		/bin/mkdir -p $MSIPERMDIR
+		if [ "$(/bin/ls -A $MSITEMPDIR 2> /dev/null)" == "" ]; then
+			/bin/rm -rf $MSITEMPDIR
+		else
+			/bin/mv -f $MSITEMPDIR/*.msi $MSIPERMDIR/ && /bin/rm -rf $MSITEMPDIR
+		fi
+	fi
+}
+
 case "$1" in
     configure)
 	fix_jetty_init_grep_typo
@@ -190,6 +204,7 @@ case "$1" in
 		configure_tomcat
 		restart_rsyslog
 	fi
+	move_msi_to_permenant_dir
 	remove_root_webapp
 	install_webapp
 	;;

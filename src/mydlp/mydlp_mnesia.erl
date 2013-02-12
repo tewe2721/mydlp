@@ -100,9 +100,14 @@
 	get_keywords/1,
 	get_matchers/0,
 	get_matchers/1,
-	get_user_message/2,
 	get_remote_storages/0,
-	get_remote_storage_by_id/1
+	get_remote_storage_by_id/1,
+	get_web_server/1,
+	get_web_servers/0,
+	get_web_entry/1,
+	add_web_entry/1,
+	web_entry_list_links/1,
+	get_user_message/2
 	]).
 
 -endif.
@@ -185,7 +190,10 @@
 		fun() -> mnesia:add_table_index(user_address, last_seen) end},
 	{endpoint_command, ordered_set, 
 		fun() -> mnesia:add_table_index(endpoint_command, endpoint_id) end},
-	user_message
+	user_message,
+	{web_entry, ordered_set,
+		fun() -> mnesia:add_table_index(web_entry, parent_id) end},
+	web_server
 ]).
 
 -endif.
@@ -257,6 +265,8 @@ get_record_fields_functional(Record) ->
 		site_desc -> record_info(fields, site_desc);
 		user_address -> record_info(fields,user_address);
 		endpoint_command -> record_info(fields,endpoint_command);
+		web_server -> record_info(fields,web_server);
+		web_entry -> record_info(fields,web_entry);
 		user_message -> record_info(fields, user_message);
 		_Else -> not_found
 	end.
@@ -387,6 +397,16 @@ get_remote_storages() -> aqc(get_remote_storages, cache).
 
 get_remote_storage_by_id(Id) -> aqc({get_remote_storage_by_id, Id}, cache).
 
+get_web_servers() -> aqc(get_web_servers, cache).
+
+get_web_server(WebServerId) -> aqc({get_web_server, WebServerId}, cache).
+
+get_web_entry(EntryId) -> aqc({get_web_entry, EntryId}, nocache).
+
+add_web_entry(Record) when is_tuple(Record) -> write(Record, nocache).
+
+web_entry_list_links(EntryId) -> aqc({web_entry_list_links, EntryId}, nocache).
+
 -endif.
 
 -ifdef(__MYDLP_ENDPOINT).
@@ -452,9 +472,6 @@ flush_cache() -> cache_clean0().
 
 -ifdef(__MYDLP_NETWORK).
 
-handle_result({get_matchers, _Source}, {atomic, Result}) -> lists:usort(Result);
-
-
 handle_result({get_user_from_address, _IpAddress}, {atomic, Result}) -> 
 	case Result of
 		[] -> {nil, unknown};
@@ -480,6 +497,22 @@ handle_result({get_remote_storage_by_id, _Id}, {atomic, Result}) ->
 
 handle_result({get_endpoint_commands, _EntryId}, {atomic, Result}) -> 
 	[ {command, C} || #endpoint_command{command=C} <- Result ];
+
+handle_result({get_matchers, _Source}, {atomic, Result}) -> lists:usort(Result);
+
+handle_result({get_web_server, WebServerId}, {atomic, Result}) ->
+	case Result of
+		[#web_server{id=WebServerId} = W] -> W;
+		_Else -> none end;
+
+handle_result({get_web_entry, _EntryId}, {atomic, Result}) -> 
+	case Result of
+		[] -> none;
+		[WebEntry] -> WebEntry end;
+
+handle_result({web_entry_list_links, _EntryId}, {atomic, Result}) -> 
+	[ LP || #web_entry{entry_id={_WebServerId, LP}} <- Result ];
+
 
 handle_result(Query, Result) -> handle_result_common(Query, Result).
 
@@ -812,6 +845,21 @@ handle_query({get_matchers, all}) ->
 		M <- mnesia:table(match)
 		]),
 	?QLCE(Q);
+
+handle_query(get_web_servers) ->
+	Q = ?QLCQ([W ||
+		W <- mnesia:table(web_server)
+		]),
+	?QLCE(Q);
+
+handle_query({get_web_server, WebServerId}) ->
+	mnesia:read(web_server, WebServerId);
+
+handle_query({get_web_entry, EntryId}) ->
+	mnesia:read(web_entry, EntryId);
+
+handle_query({web_entry_list_links, EntryId}) ->
+	mnesia:match_object(#web_entry{entry_id='_', parent_id=EntryId, is_html='_', size='_', maxage='_', expires='_', last_modified='_'});
 
 handle_query({get_user_message, OrigRuleId, _Format}) ->
 	Q = ?QLCQ([U#user_message.message ||
