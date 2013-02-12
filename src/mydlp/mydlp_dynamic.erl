@@ -464,6 +464,7 @@ val_to_type_src(boolean, "true") -> "true";
 val_to_type_src(boolean, "no") -> "false";
 val_to_type_src(boolean, "n") -> "false";
 val_to_type_src(boolean, "false") -> "false";
+val_to_type_src(boolean, false) -> "false";
 val_to_type_src(string, V) -> "\"" ++ escape_string(V) ++ "\"";
 val_to_type_src(integer, V) -> V;
 val_to_type_src(atom, V) -> V;

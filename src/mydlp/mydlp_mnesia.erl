@@ -102,6 +102,7 @@
 	get_matchers/1,
 	get_remote_storages/0,
 	get_remote_storage_by_id/1,
+	get_rule_id_by_web_server_id/1,
 	get_web_server/1,
 	get_web_servers/0,
 	get_web_entry/1,
@@ -397,6 +398,8 @@ get_remote_storages() -> aqc(get_remote_storages, cache).
 
 get_remote_storage_by_id(Id) -> aqc({get_remote_storage_by_id, Id}, cache).
 
+get_rule_id_by_web_server_id(Id) -> aqc({get_rule_id_by_web_server_id, Id}, cache).
+
 get_web_servers() -> aqc(get_web_servers, cache).
 
 get_web_server(WebServerId) -> aqc({get_web_server, WebServerId}, cache).
@@ -491,6 +494,11 @@ handle_result(get_remote_storages, {atomic, Result}) ->
 		_ -> Result end;
 
 handle_result({get_remote_storage_by_id, _Id}, {atomic, Result}) ->
+	case Result of 
+		[] -> none;
+		[Table] -> Table end;
+
+handle_result({get_rule_id_by_web_server_id, _Id}, {atomic, Result}) ->
 	case Result of 
 		[] -> none;
 		[Table] -> Table end;
@@ -878,6 +886,13 @@ handle_query({get_remote_storage_by_id, Id}) ->
 	Q = ?QLCQ([{R#remote_storage.type, R#remote_storage.details} ||
 		R <- mnesia:table(remote_storage),
 		R#remote_storage.id == Id
+		]),
+	?QLCE(Q);
+
+handle_query({get_rule_id_by_web_server_id, Id}) ->
+	Q = ?QLCQ([R#web_server.rule_id ||
+		R <- mnesia:table(web_server),
+		R#web_server.id == Id
 		]),
 	?QLCE(Q);
 
@@ -1833,12 +1848,19 @@ remove_rule(RI) ->
 		]),
 	RSs = ?QLCE(Q8),
 
+	Q9 = ?QLCQ([RS#web_server.id ||	
+		RS <- mnesia:table(web_server),
+		RS#web_server.rule_id == RI
+		]),
+	WSs = ?QLCE(Q9),
+
 	lists:foreach(fun(Id) -> mnesia:delete({ipr, Id}) end, IIs),
 	lists:foreach(fun(Id) -> mnesia:delete({m_user, Id}) end, UIs),
 	lists:foreach(fun(Id) -> mnesia:delete({dest, Id}) end, DIs),
 	lists:foreach(fun(Id) -> mnesia:delete({notification, Id}) end, NIs),
 	lists:foreach(fun(Id) -> mnesia:delete({source_domain, Id}) end, SDs),
 	lists:foreach(fun(Id) -> mnesia:delete({remote_storage, Id}) end, RSs),
+	lists:foreach(fun(Id) -> mnesia:delete({web_server, Id}) end, WSs),
 
 	remove_data_formats(DFIs),
 	remove_itypes(ITIs),

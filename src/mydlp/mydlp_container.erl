@@ -31,6 +31,7 @@
 -behaviour(gen_server).
 
 -include("mydlp.hrl").
+-include("mydlp_schema.hrl").
 
 %% API
 -export([start_link/0,
@@ -488,10 +489,15 @@ get_user(#object{prop_dict=PD}) ->
 		{ok, User} -> User ++ "@" ++ get_ep_meta("logged_on_domain");
 		_Else -> get_ep_meta("user") end.
 
-get_remote_user(#object{filepath=FP}) ->
-	case filename:split(FP) of %originally should be "/var/lib/mydlp/mounts"
-		["/", "home", "ozgen", "mounts", Id|_Rest] -> construct_source(list_to_integer(Id));
-		_ -> ?ERROR_LOG("Unknown remote discovery file", []), none
+get_remote_user(#object{filepath=FP, prop_dict=PD}) ->
+	case dict:find("web_server_id", PD) of
+	{ok, WSId} -> WS = mydlp_mnesia:get_web_server(WSId),
+			WS#web_server.proto ++ "://" ++ binary_to_list(WS#web_server.address);
+	_Else ->
+		case filename:split(FP) of %originally should be "/var/lib/mydlp/mounts"
+			["/", "home", "ozgen", "mounts", Id|_Rest] -> construct_source(list_to_integer(Id));
+			_ -> ?ERROR_LOG("Unknown remote discovery file", []), none
+		end
 	end.
 
 construct_source(Id) ->
@@ -580,9 +586,18 @@ get_printer_name(#object{prop_dict=PD} = Obj) ->
 			"Unknown printer" end.
 
 get_discovery_rule_index(#object{prop_dict=PD}) ->
-	case dict:find("rule_index", PD) of
+	Ret = case dict:find("rule_index", PD) of
 		{ok, RuleIndex} -> RuleIndex;
 		error -> none
+	end,
+
+	erlang:display({container1, Ret}),
+
+	case Ret of 
+		none -> case dict:find("web_server_id", PD) of
+			{ok, WebServerId} -> mydlp_mnesia:get_rule_id_by_web_server_id(WebServerId);
+			error -> none end;
+		R -> R
 	end.
 
 get_type(#object{prop_dict=PD}) ->
@@ -610,10 +625,14 @@ get_destination_file_path(#object{prop_dict=PD, filepath=FP}) ->
 		{ok, "true"} -> undefined;
 		_Else -> FP end.
 
-get_remote_destination_file_path(#object{filepath=FP}) ->
-	case filename:split(FP) of %originally should be "/var/lib/mydlp/mounts"
-		["/", "home", "ozgen", "mounts", _Id|Rest] -> filename:join(Rest);
-		_ -> ?ERROR_LOG("Unknown remote discovery file", []), undefined
+get_remote_destination_file_path(#object{filepath=FP, prop_dict=PD}) ->
+	case dict:find("filename_unicode", PD) of
+		{ok, FNU} -> FNU;
+		_Else ->
+			case filename:split(FP) of %originally should be "/var/lib/mydlp/mounts"
+				["/", "home", "ozgen", "mounts", _Id|Rest] -> filename:join(Rest);
+				_ -> ?ERROR_LOG("Unknown remote discovery file", []), undefined
+			end
 	end.
 	
 get_ip_address(#object{prop_dict=PD}) ->

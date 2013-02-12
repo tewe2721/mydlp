@@ -340,6 +340,7 @@ init([]) ->
 		{remote_cifs, <<"SELECT r.windowsShare, r.path, r.username, r.password FROM RemoteStorageCIFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
 		{remote_dfs, <<"SELECT r.windowsShare, r.path, r.username, r.password FROM RemoteStorageDFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
 		{remote_nfs, <<"SELECT r.address, r.path FROM RemoteStorageNFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
+		{web_servers, <<"SELECT r.proto, r.address, r.port, r.digDepth, r.startPath FROM WebServer r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
 		{app_name_by_rule_id, <<"SELECT a.destinationString FROM ApplicationName AS a, RuleItem AS ri WHERE ri.rule_id=? AND a.id=ri.item_id">>},
 		{email_notification_by_rule_id, <<"SELECT a.email FROM AuthUser AS a, NotificationItem AS ni, EmailNotificationItem AS eni, Rule r WHERE ni.rule_id=? AND ni.id=eni.id AND ni.authUser_id=a.id AND r.id=? AND r.notificationEnabled=1">>},
 		{user_s_by_rule_id, <<"SELECT u.username FROM RuleUserStatic AS u, RuleItem AS ri WHERE ri.rule_id=? AND u.id=ri.item_id">>},
@@ -535,6 +536,9 @@ populate_rule(OrigId, Channel, UserMessage, Action, FilterId) ->
 
 	populate_remote_storages(OrigId, RuleId),
 
+	{ok, RWS} = psq(web_servers, [OrigId]),
+	populate_web_servers(RWS, RuleId),
+
 	R = #rule{id=RuleId, orig_id=OrigId, channel=Channel, action=Action, filter_id=FilterId},
 	mydlp_mnesia_write(R).
 
@@ -661,6 +665,14 @@ populate_remote_nfs([[Address, Path]|Rows], RuleId) ->
 	mydlp_mnesia_write(I),
 	populate_remote_nfs(Rows, RuleId);
 populate_remote_nfs([], _RuleId) -> ok.
+
+populate_web_servers([[Proto, Address, Port, DigDepth, StartPath]|Rest], RuleId) ->
+	Id = mydlp_mnesia:get_unique_id(web_server),
+	I = #web_server{id=Id, rule_id=RuleId, proto=Proto, address=Address, port=Port, dig_depth=DigDepth, start_path=StartPath},
+	mydlp_mnesia_write(I),
+	populate_web_servers(Rest, RuleId);
+populate_web_servers([], _RuleId) -> ok.
+	
 
 populate_rule_users(RuleOrigId, RuleId) -> 
 	{ok, USQ} = psq(user_s_by_rule_id, [RuleOrigId]),

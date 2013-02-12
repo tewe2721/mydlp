@@ -132,6 +132,7 @@
 
 -record(web_server, {
 	id,
+	rule_id,
 	proto,
 	address,
 	port,

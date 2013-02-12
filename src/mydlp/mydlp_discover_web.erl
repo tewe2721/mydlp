@@ -205,12 +205,14 @@ code_change(_OldVsn, State, _Extra) ->
 %%%%%%%%%%%%%%%%% internal
 
 get_base_url(W) ->
+	erlang:display(zart11),
+	erlang:display({W#web_server.proto, W#web_server.port}),
 	case W of
 		#web_server{proto="https", port=443} -> 
-			"https://" ++ W#web_server.address ++ "/";
+			"https://" ++ binary_to_list(W#web_server.address) ++ "/";
 		#web_server{proto="http", port=80} -> 
-			"http://" ++ W#web_server.address ++ "/";
-		_ -> W#web_server.proto ++ "://" ++ W#web_server.address ++ ":" ++ 
+			"http://" ++ binary_to_list(W#web_server.address) ++ "/";
+		_ -> W#web_server.proto ++ "://" ++ binary_to_list(W#web_server.address) ++ ":" ++ 
 			integer_to_list(W#web_server.port) ++ "/"  end.
 
 get_url(WebServerId, PagePath) ->
@@ -345,7 +347,7 @@ get_fn(WebServerId, PagePath) ->
 		0 -> "data";
 		I -> 	NextStr = string:substr(URL, I+1),
 			case string:tokens(NextStr, "?=;&/") of
-				[FN|_] -> case mydlp_api:do_prettify_uenc(FN) of
+				[FN|_] -> case mydlp_api:prettify_uenc_data(FN) of
 					{ok, PFN} -> mydlp_api:filename_to_list(PFN);
 					_ -> "data" end;
 				_ -> "data" 
@@ -355,8 +357,9 @@ get_fn(WebServerId, PagePath) ->
 discover_item({WebServerId, PagePath}, Data) ->
 	try	timer:sleep(20),
 		{ok, ObjId} = mydlp_container:new(),
-		ok = mydlp_container:setprop(ObjId, "channel", "web_discovery"),
+		ok = mydlp_container:setprop(ObjId, "channel", "remote_discovery"),
 		ok = mydlp_container:setprop(ObjId, "web_server_id", WebServerId),
+		erlang:display({web_server_id, WebServerId}),
 		ok = mydlp_container:setprop(ObjId, "filename_unicode", get_fn(WebServerId, PagePath)),
 		ok = mydlp_container:push(ObjId, Data),
 		ok = mydlp_container:eof(ObjId),
