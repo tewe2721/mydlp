@@ -273,7 +273,7 @@ load_src(Src) ->
 	{discover_fs_interval, integer, "7200000"},
 	{discover_fs_on_startup, boolean, "false"},
 	{ignore_discover_max_size_exceeded, boolean, "true"},
-	{log_level, integer, "0"},
+	{log_level, integer, "2"}, % defaulted to debug
 	{log_limit, integer, "10485760"},
 	{usb_serial_access_control, boolean, "false"},
 	{seclore_fs_endpoint_pool_size, integer, "2"},
