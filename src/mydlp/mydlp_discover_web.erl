@@ -205,14 +205,12 @@ code_change(_OldVsn, State, _Extra) ->
 %%%%%%%%%%%%%%%%% internal
 
 get_base_url(W) ->
-	erlang:display(zart11),
-	erlang:display({W#web_server.proto, W#web_server.port}),
 	case W of
 		#web_server{proto="https", port=443} -> 
-			"https://" ++ binary_to_list(W#web_server.address) ++ "/";
+			"https://" ++ W#web_server.address ++ "/";
 		#web_server{proto="http", port=80} -> 
-			"http://" ++ binary_to_list(W#web_server.address) ++ "/";
-		_ -> W#web_server.proto ++ "://" ++ binary_to_list(W#web_server.address) ++ ":" ++ 
+			"http://" ++ W#web_server.address ++ "/";
+		_ -> W#web_server.proto ++ "://" ++ W#web_server.address ++ ":" ++ 
 			integer_to_list(W#web_server.port) ++ "/"  end.
 
 get_url(WebServerId, PagePath) ->
@@ -315,8 +313,13 @@ update_web_entry(WE, []) -> WE.
 fetch_data(WebServerId, PagePath) ->
 	URL = get_url(WebServerId, PagePath),
 	httpc:request(get, {URL, []}, [], [{sync, false}]).
+
+handle_head(RequestId, {{_, 404, _}, _Headers, _}, #state{head_requests=HeadT, get_requests=_GetT} = State) ->
+	{_WebServerId, _ParentId, PagePath, _Depth} = gb_trees:get(RequestId, HeadT),
+	erlang:display({not_found, PagePath}),
+	State;
 	
-handle_head(RequestId, {{_, 200, _}, Headers, <<>>}, #state{head_requests=HeadT, get_requests=GetT} = State) ->
+handle_head(RequestId, {{_, 200, _}, Headers, _}, #state{head_requests=HeadT, get_requests=GetT} = State) ->
 	{WebServerId, ParentId, PagePath, Depth} = gb_trees:get(RequestId, HeadT),
 	HeadT1 = gb_trees:delete(RequestId, HeadT),
 	EntryId = {WebServerId, PagePath},
@@ -359,7 +362,7 @@ discover_item({WebServerId, PagePath}, Data) ->
 		{ok, ObjId} = mydlp_container:new(),
 		ok = mydlp_container:setprop(ObjId, "channel", "remote_discovery"),
 		ok = mydlp_container:setprop(ObjId, "web_server_id", WebServerId),
-		erlang:display({web_server_id, WebServerId}),
+		ok = mydlp_container:setprop(ObjId, "page_path", PagePath),
 		ok = mydlp_container:setprop(ObjId, "filename_unicode", get_fn(WebServerId, PagePath)),
 		ok = mydlp_container:push(ObjId, Data),
 		ok = mydlp_container:eof(ObjId),

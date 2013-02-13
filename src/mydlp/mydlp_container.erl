@@ -492,7 +492,7 @@ get_user(#object{prop_dict=PD}) ->
 get_remote_user(#object{filepath=FP, prop_dict=PD}) ->
 	case dict:find("web_server_id", PD) of
 	{ok, WSId} -> WS = mydlp_mnesia:get_web_server(WSId),
-			WS#web_server.proto ++ "://" ++ binary_to_list(WS#web_server.address);
+			WS#web_server.proto ++ "://" ++ WS#web_server.address;
 	_Else ->
 		case filename:split(FP) of %originally should be "/var/lib/mydlp/mounts"
 			["/", "home", "ozgen", "mounts", Id|_Rest] -> construct_source(list_to_integer(Id));
@@ -591,8 +591,6 @@ get_discovery_rule_index(#object{prop_dict=PD}) ->
 		error -> none
 	end,
 
-	erlang:display({container1, Ret}),
-
 	case Ret of 
 		none -> case dict:find("web_server_id", PD) of
 			{ok, WebServerId} -> mydlp_mnesia:get_rule_id_by_web_server_id(WebServerId);
@@ -626,8 +624,8 @@ get_destination_file_path(#object{prop_dict=PD, filepath=FP}) ->
 		_Else -> FP end.
 
 get_remote_destination_file_path(#object{filepath=FP, prop_dict=PD}) ->
-	case dict:find("filename_unicode", PD) of
-		{ok, FNU} -> FNU;
+	case dict:find("page_path", PD) of
+		{ok, PP} -> PP;
 		_Else ->
 			case filename:split(FP) of %originally should be "/var/lib/mydlp/mounts"
 				["/", "home", "ozgen", "mounts", _Id|Rest] -> filename:join(Rest);

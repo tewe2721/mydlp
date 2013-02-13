@@ -668,7 +668,7 @@ populate_remote_nfs([], _RuleId) -> ok.
 
 populate_web_servers([[Proto, Address, Port, DigDepth, StartPath]|Rest], RuleId) ->
 	Id = mydlp_mnesia:get_unique_id(web_server),
-	I = #web_server{id=Id, rule_id=RuleId, proto=Proto, address=Address, port=Port, dig_depth=DigDepth, start_path=StartPath},
+	I = #web_server{id=Id, rule_id=RuleId, proto=binary_to_list(Proto), address=binary_to_list(Address), port=Port, dig_depth=DigDepth, start_path=binary_to_list(StartPath)},
 	mydlp_mnesia_write(I),
 	populate_web_servers(Rest, RuleId);
 populate_web_servers([], _RuleId) -> ok.
