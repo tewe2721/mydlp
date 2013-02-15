@@ -3283,7 +3283,30 @@ aes_decrypt(Key, {cipher, Size, IV, Data}) when
 		is_binary(IV), size(IV) == 16 ->
 	Clear = crypto:aes_cbc_128_decrypt(Key, IV, Data),
 	<<Orig:Size/binary, _/binary>> = Clear, Orig.
+
+aes_cipher_to_binary({cipher, Size, IV, Data}) when 
+		Size >= 0, is_binary(Data), size(Data) >= Size, 
+		is_binary(IV), size(IV) == 16 ->
+	<<"MyDLP_MEC", Size:64/integer, IV/binary, Data/binary>>.
+
+
+is_aes_cipher_binary(<<"MyDLP_MEC", Size:64/integer, IV:16/binary, Data/binary>>) when
+		Size >= 0, is_binary(Data), size(Data) >= Size, 
+		is_binary(IV), size(IV) == 16 -> true;
+is_aes_cipher_binary(_) -> false.
+
+binary_to_aes_cipher(<<"MyDLP_MEC", Size:64/integer, IV:16/binary, Data/binary>>) when
+		Size >= 0, is_binary(Data), size(Data) >= Size, 
+		is_binary(IV), size(IV) == 16 ->
+	{cipher, Size, IV, Data}.
+
+aes_encrypt_binary(Key, Data) ->
+	Cipher = mydlp_api:aes_encrypt(Key, Data),
+	mydlp_api:aes_cipher_to_binary(Cipher).
 	
+aes_decrypt_binary(Key, Data) -> 
+	Cipher = mydlp_api:binary_to_aes_cipher(Data),
+	mydlp_api:aes_decrypt(Key, Cipher).
 
 -ifdef(__MYDLP_ENDPOINT).
 
