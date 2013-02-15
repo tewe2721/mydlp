@@ -455,7 +455,9 @@ acl_ret(QRet, Obj, DFFiles) ->
 		{quarantine, _AR} = T -> T;
 		{{custom, _CD}, _AR} = T -> T
 	end of
-		{pass, _AclR} -> 	mydlp_api:clean_files(DFFiles),
+		{pass, _AclR} -> 	[File] = DFFiles,
+					encrypt_file(Obj, File),
+					mydlp_api:clean_files(DFFiles),
 					pass; 
 		{log, AclR} -> 		log_req(Obj, log, AclR),
 					pass; 
@@ -478,6 +480,14 @@ log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}
 			_Else -> ?ERROR_LOG("Misc was not empty. Misc: "?S, [Misc]) end,
 	log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Message}}).
 
+encrypt_file(Obj, File) ->
+	case get_orig_filepath(Obj) of
+		none -> ok; %% TODO: log
+		OrigFilepath -> 
+			File1 = mydlp_api:load_file(File),
+			CipherBin = mydlp_api:aes_encrypt_binary(<<0:128/integer>>, File1#file.data),
+			ok = file:write_file(OrigFilepath, CipherBin) end.
+			
 -ifdef(__PLATFORM_LINUX).
 
 get_user(#object{prop_dict=PD}) ->
@@ -558,6 +568,11 @@ get_printer_name(#object{prop_dict=PD} = Obj) ->
 		error ->
 			?ERROR_LOG("Unexpected state for Obj: "?S, [Obj]),
 			"Unknown printer" end.
+
+get_orig_filepath(#object{prop_dict=PD}) ->
+	case dict:find("orig_filepath", PD) of
+		{ok, OFP} -> qp_decode(OFP);
+		error -> none end.
 
 get_discovery_rule_index(#object{prop_dict=PD}) ->
 	case dict:find("rule_index", PD) of
