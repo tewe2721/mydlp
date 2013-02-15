@@ -2719,6 +2719,16 @@ get_random_string() ->
                             ++ Acc
                 end, [], lists:seq(1, Length)).
 
+
+get_random_bytes() -> get_random_bytes(16, <<>>).
+
+get_random_bytes(0, Acc) -> Acc;
+get_random_bytes(I, Acc) ->
+	NextInt = random:uniform(256) - 1,
+	Acc1 = <<Acc/binary, NextInt:8/integer>>,
+	get_random_bytes(I - 1, Acc1).
+
+
 %%-------------------------------------------------------------------------
 %% @doc Extracts filename from value of content disposition header
 %% @end
@@ -3254,6 +3264,26 @@ bf_decrypt(Key, <<Data:8/binary, Rest/binary>>, Acc, Size) ->
 	bf_decrypt(Key, Rest, <<Acc/binary, Cipher/binary>>, Size);
 bf_decrypt(_Key, <<>>, Acc, Size) -> <<Data:Size/binary, _/binary>> = Acc, Data.
 
+
+aes_encrypt(Key, Data) when is_binary(Key), size(Key) == 16, is_binary(Data) ->
+	OrigSize = size(Data),
+	PaddingByte = case (OrigSize rem 16) of
+		0 -> 0;
+		16 -> 0;
+		I -> 16 - I end,
+	PaddingBit = PaddingByte * 8,
+	Data1 = <<Data/binary, 0:PaddingBit/integer>>,
+	IV = get_random_bytes(),
+	Cipher = crypto:aes_cbc_128_encrypt(Key, IV, Data1),
+	{cipher, OrigSize, IV, Cipher}.
+
+aes_decrypt(Key, {cipher, Size, IV, Data}) when 
+		Size >= 0, is_binary(Data), size(Data) >= Size, 
+		is_binary(Key), size(Key) == 16, 
+		is_binary(IV), size(IV) == 16 ->
+	Clear = crypto:aes_cbc_128_decrypt(Key, IV, Data),
+	<<Orig:Size/binary, _/binary>> = Clear, Orig.
+	
 
 -ifdef(__MYDLP_ENDPOINT).
 
