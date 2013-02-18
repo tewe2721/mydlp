@@ -53,7 +53,8 @@
 
 -record(state, {
 	policy_id,
-	enc_key
+	enc_key,
+	startup_sync=3
 	}).
 
 %%%% API
@@ -106,15 +107,21 @@ handle_info(sync_now, #state{policy_id=undefined} = State) ->
 	PolicyId = mydlp_api:get_client_policy_revision_id(),
 	handle_info(sync_now, State#state{policy_id=PolicyId});
 
-handle_info(sync_now, #state{policy_id=PolicyId} = State) ->
+handle_info(sync_now, #state{startup_sync=StartupSync, policy_id=PolicyId} = State) ->
 	try	mydlp_container:set_general_meta(),
 		timer:sleep(1000),
 		sync(PolicyId)
 	catch Class:Error -> ?ERROR_LOG("SYNC Handle: "
 		"Class: ["?S"]. Error: ["?S"].~n"
 		"Stack trace: "?S"~n", [Class, Error, erlang:get_stacktrace()]) end,
-	call_timer(),
-        {noreply, State};
+	StartupSync1 = case StartupSync of
+		undefined -> call_timer(), undefined;
+		S when is_integer(S), S > 0 -> call_timer(10000), S - 1;
+		_Else -> call_timer(), undefined end,
+		
+	case StartupSync of
+		StartupSync1 -> {noreply, State};
+		_Else2 -> {noreply, State#state{startup_sync=StartupSync1}} end;
 
 handle_info(_Info, State) ->
 	{noreply, State}.
@@ -132,7 +139,7 @@ stop() ->
 
 init([]) ->
 	inets:start(),
-	call_timer(15000),
+	call_timer(10000),
 	{ok, #state{}}.
 
 terminate(_Reason, _State) ->
