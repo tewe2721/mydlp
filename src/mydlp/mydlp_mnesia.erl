@@ -479,6 +479,9 @@ handle_result({get_rule_table, _Channel, _RuleIndex}, {atomic, Result}) ->
 		[] -> none;
 		[Table] -> Table end;
 
+handle_result({get_rule_table_destination, _Channel}, {atomic, Result}) -> 
+	[Destinations] = Result, Destinations;
+
 handle_result({get_discovery_directory}, {atomic, Result}) -> 
 	case Result of
 		[] -> none;
@@ -647,12 +650,14 @@ handle_query({get_remote_rule_tables, FilterId, Addr, UserH}) ->
 	Directories = get_rule_destinations(DiscoveryRuleIds),
 	DiscoveryRuleTable = get_rule_table(FilterId, DiscoveryRuleIds),
 	ScreenshotRuleTable = get_rule_table(FilterId, ScreenshotRuleIds),
+	EncryptionRuleTable = get_rules(FilterId, AclQ#aclq{channel=encryption}),
 	[
 		{removable, none, RemovableStorageRuleTable},
 		{printer, none, PrinterRuleTable},
 		{discovery, Directories, DiscoveryRuleTable},
 		{screenshot, ApplicationNames, ScreenshotRuleTable},
-		{inbound, none, InboundRuleTable}
+		{inbound, none, InboundRuleTable},
+		{encryption, none, EncryptionRuleTable}
 	];
 
 handle_query({get_remote_rule_ids, FilterId, Addr, UserH}) ->
@@ -662,7 +667,8 @@ handle_query({get_remote_rule_ids, FilterId, Addr, UserH}) ->
 	DiscoveryRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=discovery}),
 	ScreenshotRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=screenshot}),
 	InboundRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=inbound}),
-	R = lists:flatten([RemovableStorageRuleIds, PrinterRuleIds, DiscoveryRuleIds, ScreenshotRuleIds, InboundRuleIds]),
+	EncryptionRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=encryption}),
+	R = lists:flatten([RemovableStorageRuleIds, PrinterRuleIds, DiscoveryRuleIds, ScreenshotRuleIds, InboundRuleIds, EncryptionRuleIds]),
 	lists:usort(R);
 
 handle_query({get_rule_ids, FilterId, #aclq{channel=Channel, destinations=Destinations} = AclQ}) ->
@@ -953,6 +959,13 @@ handle_query({get_rule_table, Channel, RuleIndex}) ->
 		[{Req, IdAndDefaultAction, RuleTables}] ->
 			UniqueRule = lists:nth(RuleIndex+1, RuleTables),
 			[{Req, IdAndDefaultAction, [UniqueRule]}] end;
+
+handle_query({get_rule_table_destination, Channel}) ->
+	Q = ?QLCQ([ R#rule_table.destination ||
+		R <- mnesia:table(rule_table),
+		R#rule_table.channel == Channel
+		]),
+	?QLCE(Q);
 
 handle_query({get_discovery_directory}) ->
 	Q = ?QLCQ([ R#rule_table.destination ||

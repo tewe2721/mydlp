@@ -3060,7 +3060,7 @@ apply_cdbobj({command, stop_discovery}) ->
 apply_cdbobj({command, schedule_discovery}) ->
 	?ASYNC0(fun() -> mydlp_discover_fs:schedule_discovery() end), ok;
 apply_cdbobj({command, {set_enc_key, EncKey}}) when is_binary(EncKey), size(EncKey) == 64 ->
-	?ASYNC0(fun() -> mydlp_sync:set_enc_key(EncKey) end), ok;
+	?ASYNC0(fun() -> mydlp_sync:set_enc_key(EncKey), mydlp_container:schedule_confupdate() end), ok;
 apply_cdbobj({command, Else}) ->
 	?ERROR_LOG("Unknown remote command: "?S, [Else]);
 apply_cdbobj(Else) ->
@@ -3079,18 +3079,24 @@ populate_win32reg() -> ok.
 -endif.
 
 get_client_policy_revision_id() ->
+	% ======================================== BEWARE ============================
 	% sequence should be same with mydlp_mnesia:get_remote_rule_tables
+	% ============================================================================
 	RemovableStorageRuleTable = mydlp_mnesia:get_rule_table(removable),
 	PrinterRuleTable = mydlp_mnesia:get_rule_table(printer),
 	DiscoveryRuleTable = mydlp_mnesia:get_rule_table(discovery),
 	ScreenshotRuleTable = mydlp_mnesia:get_rule_table(screenshot),
 	InboundRuleTable = mydlp_mnesia:get_rule_table(inbound),
+	EncryptionRuleTable = mydlp_mnesia:get_rule_table(encryption),
+	Directories = mydlp_mnesia:get_rule_table_destionations(discovery),
+	ApplicationNames = mydlp_mnesia:get_rule_table_destionations(screenshot),
 	RuleTables = [
-		{removable, RemovableStorageRuleTable},
-		{printer, PrinterRuleTable},
-		{discovery, DiscoveryRuleTable},
-		{screenshot, ScreenshotRuleTable},
-		{inbound, InboundRuleTable}
+		{removable, none, RemovableStorageRuleTable},
+		{printer, none, PrinterRuleTable},
+		{discovery, Directories, DiscoveryRuleTable},
+		{screenshot, ApplicationNames, ScreenshotRuleTable},
+		{inbound, none, InboundRuleTable},
+		{encryption, none, EncryptionRuleTable}
 	],
 	ItemDump = mydlp_mnesia:dump_client_tables(),
 	MCMods = mydlp_mnesia:get_mc_module(),
