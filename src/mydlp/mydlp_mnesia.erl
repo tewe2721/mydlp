@@ -483,7 +483,9 @@ handle_result({get_rule_table, _Channel, _RuleIndex}, {atomic, Result}) ->
 		[Table] -> Table end;
 
 handle_result({get_rule_table_destination, _Channel}, {atomic, Result}) -> 
-	[Destinations] = Result, Destinations;
+	case Result of
+		[] -> [];
+		[D] -> D end;
 
 handle_result({get_discovery_directory}, {atomic, Result}) -> 
 	case Result of
