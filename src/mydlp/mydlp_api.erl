@@ -3460,3 +3460,13 @@ create_encryption_key() ->
 generate_encryption_key() -> get_random_bytes(64).
 
 -endif.
+
+write_to_tmpfile(Bin) when is_binary(Bin) ->
+	Now = now(),
+	FN = ref_to_fn(?CFG(work_dir), "keyfile", Now),
+	ok = file:write_file(FN, <<>>, [raw]),
+        ok = file:change_mode(FN, 8#00600),
+	ok = file:write_file(FN, Bin, [raw]),
+	{ok, Bin}.
+
+
