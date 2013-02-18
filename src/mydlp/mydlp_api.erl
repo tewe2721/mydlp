@@ -2720,7 +2720,9 @@ get_random_string() ->
                 end, [], lists:seq(1, Length)).
 
 
-get_random_bytes() -> get_random_bytes(16, <<>>).
+get_random_bytes() -> get_random_bytes(16).
+
+get_random_bytes(Size) -> get_random_bytes(Size, <<>>).
 
 get_random_bytes(0, Acc) -> Acc;
 get_random_bytes(I, Acc) ->
@@ -3057,6 +3059,8 @@ apply_cdbobj({command, stop_discovery}) ->
 	?ASYNC0(fun() -> mydlp_discover_fs:stop_discovery() end), ok;
 apply_cdbobj({command, schedule_discovery}) ->
 	?ASYNC0(fun() -> mydlp_discover_fs:schedule_discovery() end), ok;
+apply_cdbobj({command, {set_enc_key, EncKey}}) when is_binary(EncKey), size(EncKey) == 64 ->
+	?ASYNC0(fun() -> mydlp_sync:set_enc_key(EncKey) end), ok;
 apply_cdbobj({command, Else}) ->
 	?ERROR_LOG("Unknown remote command: "?S, [Else]);
 apply_cdbobj(Else) ->
@@ -3420,3 +3424,33 @@ create_endpoint_key(RegHandle) ->
 
 -endif.
 
+-ifdef(__MYDLP_NETWORK).
+
+-ifdef(__PLATFORM_LINUX).
+
+-define(ENCKEYFILE, "/var/lib/mydlp/encryption_key").
+
+-endif.
+
+get_encryption_key() ->
+	case filelib:is_regular(?ENCKEYFILE) of
+		true -> ok;
+		false -> create_encryption_key() end,
+	read_encryption_key().
+
+read_encryption_key() ->
+	case file:read_file(?ENCKEYFILE) of
+                {ok, Bin} -> Bin;
+                Else -> throw({error, Else}) end.
+
+create_encryption_key() ->
+	EncKey = case generate_encryption_key() of
+		retry -> throw({error, generate_retry});
+		B when is_binary(B) -> B end,
+	filelib:ensure_dir(?ENCKEYFILE),
+	file:write_file(?ENCKEYFILE, EncKey),
+	ok.
+
+generate_encryption_key() -> get_random_bytes(64).
+
+-endif.

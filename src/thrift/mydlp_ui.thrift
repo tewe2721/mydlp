@@ -46,7 +46,7 @@ service Mydlp_ui {
 
 	oneway void requeueIncident(1: i64 Incidentid)
 
-	map<string,string> registerUserAddress(1: string Ipaddress, 2: string Userh, 3: binary Payload)
+	map<string,string> registerUserAddress(1: string EndpointId, 2: string Ipaddress, 3: string Userh, 4: binary Payload)
 
 	string saveLicenseKey(1: string licenseKey)
 

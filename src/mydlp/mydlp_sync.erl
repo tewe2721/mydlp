@@ -36,6 +36,8 @@
 %% API
 -export([start_link/0,
 	set_policy_id/1,
+	set_enc_key/1,
+	get_enc_key/0,
 	sync_now/0,
 	stop/0]).
 
@@ -50,15 +52,23 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -record(state, {
-	policy_id
+	policy_id,
+	enc_key
 	}).
 
 %%%% API
 set_policy_id(PolicyId) -> gen_server:cast(?MODULE, {set_policy_id, PolicyId}).
 
+set_enc_key(EncKey) when is_binary(EncKey), size(EncKey) == 64 -> gen_server:cast(?MODULE, {set_enc_key, EncKey}).
+
+get_enc_key() -> gen_server:call(?MODULE, get_enc_key).
+
 sync_now() -> gen_server:cast(?MODULE, sync).
 
 %%%%%%%%%%%%%% gen_server handles
+
+handle_call(get_enc_key, _From, #state{enc_key=EncKey} = State) ->
+	{reply, EncKey, State};
 
 handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
@@ -80,6 +90,10 @@ handle_cast(sync, #state{policy_id=PolicyId} = State) ->
 
 handle_cast({set_policy_id, PolicyId}, State) ->
         {noreply, State#state{policy_id=PolicyId}};
+
+handle_cast({set_enc_key, EncKey}, State) when is_binary(EncKey), size(EncKey) == 64 ->
+	mydlp_container:set_ep_meta("has_enc_key", "yes"),
+        {noreply, State#state{enc_key=EncKey}};
 
 handle_cast(_Msg, State) ->
 	{noreply, State}.
