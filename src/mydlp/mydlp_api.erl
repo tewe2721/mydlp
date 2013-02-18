@@ -3088,8 +3088,8 @@ get_client_policy_revision_id() ->
 	ScreenshotRuleTable = mydlp_mnesia:get_rule_table(screenshot),
 	InboundRuleTable = mydlp_mnesia:get_rule_table(inbound),
 	EncryptionRuleTable = mydlp_mnesia:get_rule_table(encryption),
-	Directories = mydlp_mnesia:get_rule_table_destionations(discovery),
-	ApplicationNames = mydlp_mnesia:get_rule_table_destionations(screenshot),
+	Directories = mydlp_mnesia:get_rule_table_destionation(discovery),
+	ApplicationNames = mydlp_mnesia:get_rule_table_destionation(screenshot),
 	RuleTables = [
 		{removable, none, RemovableStorageRuleTable},
 		{printer, none, PrinterRuleTable},

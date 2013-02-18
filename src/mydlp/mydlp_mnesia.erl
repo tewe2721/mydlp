@@ -107,6 +107,7 @@
 -export([
 	get_rule_table/1,
 	get_rule_table/2,
+	get_rule_table_destination/1,
 	get_discovery_directory/0,
 	get_prtscr_app_name/0,
 	get_inbound_rule/0,
@@ -386,6 +387,8 @@ get_user_message(OrigRuleId, Format) -> aqc({get_user_message, OrigRuleId, Forma
 get_rule_table(Channel) -> aqc({get_rule_table, Channel}, cache).
 
 get_rule_table(Channel, RuleIndex) -> aqc({get_rule_table, Channel, RuleIndex}, cache).
+
+get_rule_table_destination(Channel) -> aqc({get_rule_table_destination, Channel}, cache).
 
 get_discovery_directory() -> aqc({get_discovery_directory}, cache).
 
