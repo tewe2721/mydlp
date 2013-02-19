@@ -3331,6 +3331,12 @@ create_endpoint_key() ->
 	file:write_file(?ENDPOINTKEYFILE, EndpointKey),
 	ok.
 
+delete_endpoint_key() ->
+	case file:delete(?ENDPOINTKEYFILE) of
+		ok -> ok;
+		{error, enoent} -> ok;
+		{error, Else} -> throw({error, Else}) end.
+
 -endif.
 
 -ifdef(__PLATFORM_WINDOWS).
@@ -3362,6 +3368,13 @@ create_endpoint_key(RegHandle) ->
 		ok -> ok;
 		Err -> throw({error, Err}) end,
 	ok.
+
+delete_endpoint_key() ->
+	{ok, RegHandle} = win32reg:open([read,write]),
+        win32reg:change_key_create(RegHandle, "\\hklm\\software\\MyDLP"),
+	try	win32reg:delete_value(RegHandle, ?WIN32REGENDPOINTKEY)
+	after	win32reg:close(RegHandle) end.
+	
 
 -endif.
 

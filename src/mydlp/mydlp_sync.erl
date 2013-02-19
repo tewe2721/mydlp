@@ -147,6 +147,7 @@ sync(PolicyId) ->
 					case {Code, Body} of
 						{200, []} -> ?ERROR_LOG("SYNC: Empty response: Url="?S"~n", [Url]);
 						{200, "up-to-date" ++ _Rest} -> ok;
+						{200, "invalid_endpoint" ++ _Rest} -> mydlp_api:delete_endpoint_key(), ok;
 						{200, Payload} -> process_payload(Payload);
 						{Else1, _Data} -> ?ERROR_LOG("SYNC: An error occured during HTTP req: Code="?S"~n", [Else1]) end;
 				Else -> ?ERROR_LOG("SYNC: An error occured during HTTP req: Obj="?S"~n", [Else]) end end,
