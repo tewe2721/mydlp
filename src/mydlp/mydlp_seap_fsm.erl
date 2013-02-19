@@ -183,14 +183,14 @@ init([]) ->
 	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
 
 'HASKEY_RESP'(State) ->
-	Reply = case mydlp_sync:get_enc_key() of
+	Reply = case ( catch mydlp_sync:get_enc_key() ) of
 		Key when is_binary(Key), size(Key) == 64 -> "yes";
 		_Else -> "no" end,
 	send_ok(State, Reply),
 	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
 
 'GETKEY_RESP'(State) ->
-	case mydlp_sync:get_enc_key() of
+	case ( catch mydlp_sync:get_enc_key() ) of
 		Key when is_binary(Key), size(Key) == 64 -> 
 			{ok, KeyPath} = mydlp_api:write_to_tmpfile(Key),
 			send_ok(State, KeyPath);
@@ -277,7 +277,8 @@ handle_info({tcp_closed, Socket}, _StateName, #state{socket=Socket, addr=_Addr} 
 	{stop, normal, StateData};
 
 handle_info(_Info, StateName, StateData) ->
-	{noreply, StateName, StateData}.
+	% ?ERROR_LOG("SEAP: Unexpected message: "?S"~nStateName: "?S", StateData: "?S, [Info, StateName, StateData]),
+	{next_state, StateName, StateData}.
 
 fsm_call(StateName, Args, StateData) -> 
 	try ?MODULE:StateName(Args, StateData)

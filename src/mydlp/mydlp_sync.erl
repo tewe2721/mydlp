@@ -62,7 +62,9 @@ set_policy_id(PolicyId) -> gen_server:cast(?MODULE, {set_policy_id, PolicyId}).
 
 set_enc_key(EncKey) when is_binary(EncKey), size(EncKey) == 64 -> gen_server:cast(?MODULE, {set_enc_key, EncKey}).
 
-get_enc_key() -> gen_server:call(?MODULE, get_enc_key).
+reset_enc_key() -> gen_server:cast(?MODULE, reset_enc_key).
+
+get_enc_key() -> gen_server:call(?MODULE, get_enc_key, 400).
 
 sync_now() -> gen_server:cast(?MODULE, sync).
 
@@ -96,6 +98,10 @@ handle_cast({set_enc_key, EncKey}, State) when is_binary(EncKey), size(EncKey) =
 	mydlp_container:set_ep_meta("has_enc_key", "yes"),
         {noreply, State#state{enc_key=EncKey}};
 
+handle_cast(reset_enc_key, State) ->
+	mydlp_container:set_ep_meta("has_enc_key", "no"),
+        {noreply, State#state{enc_key=undefined}};
+
 handle_cast(_Msg, State) ->
 	{noreply, State}.
 
@@ -111,8 +117,9 @@ handle_info(sync_now, #state{startup_sync=StartupSync, policy_id=PolicyId} = Sta
 	try	mydlp_container:set_general_meta(),
 		timer:sleep(1000),
 		sync(PolicyId)
-	catch Class:Error -> ?ERROR_LOG("SYNC Handle: "
-		"Class: ["?S"]. Error: ["?S"].~n"
+	catch Class:Error -> 
+		reset_enc_key(),
+		?ERROR_LOG("SYNC Handle: Class: ["?S"]. Error: ["?S"].~n"
 		"Stack trace: "?S"~n", [Class, Error, erlang:get_stacktrace()]) end,
 	StartupSync1 = case StartupSync of
 		undefined -> call_timer(), undefined;
@@ -160,17 +167,22 @@ sync(PolicyId) ->
 	UserHS = integer_to_list(UserHI),
 	Data0 = erlang:term_to_binary(MetaDict),
 	case mydlp_api:encrypt_payload(Data0) of
-		retry -> ok;
+		retry -> reset_enc_key(), ok;
 		Data when is_binary(Data)-> 
 			Url = "https://" ++ ?CFG(management_server_address) ++ "/sync?rid=" ++ RevisionS ++ "&uh=" ++ UserHS,
 			case catch httpc:request(post, {Url, [], "application/octet-stream", Data}, [], []) of
 				{ok, {{_HttpVer, Code, _Msg}, _Headers, Body}} -> 
 					case {Code, Body} of
-						{200, []} -> ?ERROR_LOG("SYNC: Empty response: Url="?S"~n", [Url]);
+						{200, []} -> 
+							reset_enc_key(), 
+							?ERROR_LOG("SYNC: Empty response: Url="?S"~n", [Url]);
 						{200, "up-to-date" ++ _Rest} -> ok;
 						{200, Payload} -> process_payload(Payload);
-						{Else1, _Data} -> ?ERROR_LOG("SYNC: An error occured during HTTP req: Code="?S"~n", [Else1]) end;
-				Else -> ?ERROR_LOG("SYNC: An error occured during HTTP req: Obj="?S"~n", [Else]) end end,
+						{Else1, _Data} -> 
+							reset_enc_key(),
+							?ERROR_LOG("SYNC: An error occured during HTTP req: Code="?S"~n", [Else1]) end;
+				Else -> reset_enc_key(), 
+					?ERROR_LOG("SYNC: An error occured during HTTP req: Obj="?S"~n", [Else]) end end,
 	ok.
 
 process_payload(Payload) ->

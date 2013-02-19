@@ -3088,8 +3088,8 @@ get_client_policy_revision_id() ->
 	ScreenshotRuleTable = mydlp_mnesia:get_rule_table(screenshot),
 	InboundRuleTable = mydlp_mnesia:get_rule_table(inbound),
 	EncryptionRuleTable = mydlp_mnesia:get_rule_table(encryption),
-	Directories = mydlp_mnesia:get_rule_table_destionation(discovery),
-	ApplicationNames = mydlp_mnesia:get_rule_table_destionation(screenshot),
+	Directories = mydlp_mnesia:get_rule_table_destination(discovery),
+	ApplicationNames = mydlp_mnesia:get_rule_table_destination(screenshot),
 	RuleTables = [
 		{removable, none, RemovableStorageRuleTable},
 		{printer, none, PrinterRuleTable},
@@ -3467,6 +3467,6 @@ write_to_tmpfile(Bin) when is_binary(Bin) ->
 	ok = file:write_file(FN, <<>>, [raw]),
         ok = file:change_mode(FN, 8#00600),
 	ok = file:write_file(FN, Bin, [raw]),
-	{ok, Bin}.
+	{ok, FN}.
 
 
