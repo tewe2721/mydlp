@@ -193,6 +193,7 @@ push_chunk(ItemId, ChunkData, ChunkNum, ChunkNumTotal) ->
 			"i=" ++ ItemIdS ++ "&c=" ++ ChunkNumS ++ "&t=" ++ ChunkNumTotalS,
 	case http_req(Url, ChunkData) of
 		{ok, <<"error">>} -> throw(http_returned_error);
+                {ok, <<"invalid", _/binary>>} -> mydlp_api:delete_endpoint_key(), throw(http_returned_invalid);
 		{ok, <<"ok">>} -> ok;
 		Else -> throw(Else) end.
 
@@ -200,6 +201,7 @@ new_item_id() ->
 	Url = "https://" ++ ?CFG(management_server_address) ++ "/receive?o=begin",
 	case http_req(Url) of
 		{ok, <<"error">>} -> throw(http_returned_error);
+                {ok, <<"invalid", _/binary>>} -> mydlp_api:delete_endpoint_key(), throw(http_returned_invalid);
 		{ok, <<"null">>} -> throw(http_returned_null);
 		{ok, Ret} -> mydlp_api:binary_to_integer(Ret);
 		Else -> throw(Else) end.
