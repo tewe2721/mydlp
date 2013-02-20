@@ -294,7 +294,8 @@ discover1(ParentId, FilePath, RuleIndex) ->
 			case is_changed(E) of
 				true -> discover_dir(E);
 				false -> discover_dir_dir(E) end;
-	false -> mydlp_mnesia:del_fs_entry(FilePath) end end, % Means file does not exists
+	false -> ?ERROR_LOG("DISCOVER: File or directory does not exists. Filename: "?S, [FilePath]), 
+		mydlp_mnesia:del_fs_entry(FilePath) end end, % Means file does not exists
 	ok.
 
 set_discover_inprog() ->
