@@ -2711,24 +2711,28 @@ encode_smtp_addr({addr, User, Domain, Name}) ->
 	B = list_to_binary([$", encode_rfc2047(Name), $", $\s, User, $@, Domain]),
 	binary_to_list(B). %% TODO: workaround
 
+random_uniform_256() ->
+	RandByte = get_random_bytes(1),
+	<<Int:8/integer>> = RandByte,
+	Int.
+
+random_uniform(Length) when is_integer(Length), Length > 1, Length < 255 ->
+	Int = random_uniform_256(),
+	( Int rem Length ) + 1.
+
 get_random_string() ->
 	AllowedChars = "qwertyuioplkjhgfdsazxcvbnm0987654321QWERTYUIOPLKJHGFDSAZXCVBNM",
 	Length = 32,
 	lists:foldl(fun(_, Acc) ->
-		[lists:nth(random:uniform(length(AllowedChars)), AllowedChars)]
+		[lists:nth(random_uniform(Length) , AllowedChars)]
                             ++ Acc
                 end, [], lists:seq(1, Length)).
 
 
 get_random_bytes() -> get_random_bytes(16).
 
-get_random_bytes(Size) -> get_random_bytes(Size, <<>>).
+get_random_bytes(Size) when is_integer(Size) -> crypto:rand_bytes(Size).
 
-get_random_bytes(0, Acc) -> Acc;
-get_random_bytes(I, Acc) ->
-	NextInt = random:uniform(256) - 1,
-	Acc1 = <<Acc/binary, NextInt:8/integer>>,
-	get_random_bytes(I - 1, Acc1).
 
 
 %%-------------------------------------------------------------------------
