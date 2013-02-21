@@ -1015,12 +1015,14 @@ rule_action_to_atom(<<"LOG">>) -> log;
 rule_action_to_atom(<<"BLOCK">>) -> block;
 rule_action_to_atom(<<"QUARANTINE">>) -> quarantine;
 rule_action_to_atom(<<"ARCHIVE">>) -> archive;
+rule_action_to_atom(<<"ENCRYPT">>) -> encrypt;
 rule_action_to_atom(<<"CUSTOM">>) -> custom;
 rule_action_to_atom(<<"pass">>) -> pass;
 rule_action_to_atom(<<"log">>) -> log;
 rule_action_to_atom(<<"block">>) -> block;
 rule_action_to_atom(<<"quarantine">>) -> quarantine;
 rule_action_to_atom(<<"archive">>) -> archive;
+rule_action_to_atom(<<"encrypt">>) -> encrypt;
 rule_action_to_atom(<<"custom">>) -> custom;
 rule_action_to_atom(<<"">>) -> pass;
 rule_action_to_atom(Else) -> throw({error, unsupported_action_type, Else}).
@@ -1032,6 +1034,7 @@ rule_dtype_to_channel(<<"PrinterRule">>) -> printer;
 rule_dtype_to_channel(<<"DiscoveryRule">>) -> discovery;
 rule_dtype_to_channel(<<"ApiRule">>) -> api;
 rule_dtype_to_channel(<<"RemovableStorageInboundRule">>) -> inbound;
+rule_dtype_to_channel(<<"RemovableStorageEncryptionRule">>) -> encryption;
 rule_dtype_to_channel(<<"ScreenshotRule">>) -> screenshot;
 rule_dtype_to_channel(Else) -> throw({error, unsupported_rule_type, Else}).
 
@@ -1074,6 +1077,8 @@ validate_action_for_channel(inbound, log) -> ok;
 validate_action_for_channel(inbound, archive) -> ok;
 validate_action_for_channel(screenshot, pass) -> ok;
 validate_action_for_channel(screenshot, block) -> ok;
+validate_action_for_channel(encryption, pass) -> ok;
+validate_action_for_channel(encryption, encrypt) -> ok;
 validate_action_for_channel(Channel, Action) -> throw({error, {unexpected_action_for_channel, Channel, Action}}).
 
 mydlp_mnesia_write(I) when is_list(I) ->
@@ -1152,8 +1157,7 @@ pre_push_log(RuleId, Ip, User, Destination, Action, Channel, Misc) ->
 		printer -> <<"P">>;
 		discovery -> <<"D">>;
 		api -> <<"A">> ;
-		inbound -> <<"I">>;
-		screenshot -> <<"S">>
+		inbound -> <<"I">>
 	end,
 	Visible = case {Channel, RuleId} of
 		{inbound, _} -> 0;

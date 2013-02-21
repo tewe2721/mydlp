@@ -36,6 +36,8 @@
 %% API
 -export([start_link/0,
 	set_policy_id/1,
+	set_enc_key/1,
+	get_enc_key/0,
 	sync_now/0,
 	stop/0]).
 
@@ -50,15 +52,26 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -record(state, {
-	policy_id
+	policy_id,
+	enc_key,
+	startup_sync=3
 	}).
 
 %%%% API
 set_policy_id(PolicyId) -> gen_server:cast(?MODULE, {set_policy_id, PolicyId}).
 
+set_enc_key(EncKey) when is_binary(EncKey), size(EncKey) == 64 -> gen_server:cast(?MODULE, {set_enc_key, EncKey}).
+
+reset_enc_key() -> gen_server:cast(?MODULE, reset_enc_key).
+
+get_enc_key() -> gen_server:call(?MODULE, get_enc_key, 400).
+
 sync_now() -> gen_server:cast(?MODULE, sync).
 
 %%%%%%%%%%%%%% gen_server handles
+
+handle_call(get_enc_key, _From, #state{enc_key=EncKey} = State) ->
+	{reply, EncKey, State};
 
 handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
@@ -81,6 +94,14 @@ handle_cast(sync, #state{policy_id=PolicyId} = State) ->
 handle_cast({set_policy_id, PolicyId}, State) ->
         {noreply, State#state{policy_id=PolicyId}};
 
+handle_cast({set_enc_key, EncKey}, State) when is_binary(EncKey), size(EncKey) == 64 ->
+	mydlp_container:set_ep_meta("has_enc_key", "yes"),
+        {noreply, State#state{enc_key=EncKey}};
+
+handle_cast(reset_enc_key, State) ->
+	mydlp_container:set_ep_meta("has_enc_key", "no"),
+        {noreply, State#state{enc_key=undefined}};
+
 handle_cast(_Msg, State) ->
 	{noreply, State}.
 
@@ -92,15 +113,22 @@ handle_info(sync_now, #state{policy_id=undefined} = State) ->
 	PolicyId = mydlp_api:get_client_policy_revision_id(),
 	handle_info(sync_now, State#state{policy_id=PolicyId});
 
-handle_info(sync_now, #state{policy_id=PolicyId} = State) ->
+handle_info(sync_now, #state{startup_sync=StartupSync, policy_id=PolicyId} = State) ->
 	try	mydlp_container:set_general_meta(),
 		timer:sleep(1000),
 		sync(PolicyId)
-	catch Class:Error -> ?ERROR_LOG("SYNC Handle: "
-		"Class: ["?S"]. Error: ["?S"].~n"
+	catch Class:Error -> 
+		reset_enc_key(),
+		?ERROR_LOG("SYNC Handle: Class: ["?S"]. Error: ["?S"].~n"
 		"Stack trace: "?S"~n", [Class, Error, erlang:get_stacktrace()]) end,
-	call_timer(),
-        {noreply, State};
+	StartupSync1 = case StartupSync of
+		undefined -> call_timer(), undefined;
+		S when is_integer(S), S > 0 -> call_timer(10000), S - 1;
+		_Else -> call_timer(), undefined end,
+		
+	case StartupSync of
+		StartupSync1 -> {noreply, State};
+		_Else2 -> {noreply, State#state{startup_sync=StartupSync1}} end;
 
 handle_info(_Info, State) ->
 	{noreply, State}.
@@ -118,7 +146,7 @@ stop() ->
 
 init([]) ->
 	inets:start(),
-	call_timer(15000),
+	call_timer(10000),
 	{ok, #state{}}.
 
 terminate(_Reason, _State) ->
@@ -139,18 +167,23 @@ sync(PolicyId) ->
 	UserHS = integer_to_list(UserHI),
 	Data0 = erlang:term_to_binary(MetaDict),
 	case mydlp_api:encrypt_payload(Data0) of
-		retry -> ok;
+		retry -> reset_enc_key(), ok;
 		Data when is_binary(Data)-> 
 			Url = "https://" ++ ?CFG(management_server_address) ++ "/sync?rid=" ++ RevisionS ++ "&uh=" ++ UserHS,
 			case catch httpc:request(post, {Url, [], "application/octet-stream", Data}, [], []) of
 				{ok, {{_HttpVer, Code, _Msg}, _Headers, Body}} -> 
 					case {Code, Body} of
-						{200, []} -> ?ERROR_LOG("SYNC: Empty response: Url="?S"~n", [Url]);
+						{200, []} -> 
+							reset_enc_key(), 
+							?ERROR_LOG("SYNC: Empty response: Url="?S"~n", [Url]);
 						{200, "up-to-date" ++ _Rest} -> ok;
 						{200, "invalid" ++ _Rest} -> mydlp_api:delete_endpoint_key(), ok;
 						{200, Payload} -> process_payload(Payload);
-						{Else1, _Data} -> ?ERROR_LOG("SYNC: An error occured during HTTP req: Code="?S"~n", [Else1]) end;
-				Else -> ?ERROR_LOG("SYNC: An error occured during HTTP req: Obj="?S"~n", [Else]) end end,
+						{Else1, _Data} -> 
+							reset_enc_key(),
+							?ERROR_LOG("SYNC: An error occured during HTTP req: Code="?S"~n", [Else1]) end;
+				Else -> reset_enc_key(), 
+					?ERROR_LOG("SYNC: An error occured during HTTP req: Obj="?S"~n", [Else]) end end,
 	ok.
 
 process_payload(Payload) ->

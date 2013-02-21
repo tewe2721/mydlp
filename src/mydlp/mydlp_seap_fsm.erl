@@ -117,6 +117,10 @@ init([]) ->
 'SEAP_REQ'({data, "CONFUPDATE" ++ Rest}, State) -> 
 	MetaDict = get_map_args(Rest),
 	'CONFUPDATE_RESP'(State, MetaDict);
+'SEAP_REQ'({data, "GETKEY" ++ _Rest}, State) -> 
+	'GETKEY_RESP'(State);
+'SEAP_REQ'({data, "HASKEY" ++ _Rest}, State) -> 
+	'HASKEY_RESP'(State);
 'SEAP_REQ'({data, "HELP" ++ _Rest}, State) -> 
 	'HELP_RESP'(State);
 'SEAP_REQ'({data, _Else}, State) -> 
@@ -176,6 +180,21 @@ init([]) ->
 		true -> "yes";
 		false -> "no" end,
 	send_ok(State, Reply),
+	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
+
+'HASKEY_RESP'(State) ->
+	Reply = case ( catch mydlp_sync:get_enc_key() ) of
+		Key when is_binary(Key), size(Key) == 64 -> "yes";
+		_Else -> "no" end,
+	send_ok(State, Reply),
+	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
+
+'GETKEY_RESP'(State) ->
+	case ( catch mydlp_sync:get_enc_key() ) of
+		Key when is_binary(Key), size(Key) == 64 -> 
+			{ok, KeyPath} = mydlp_api:write_to_tmpfile(Key),
+			send_ok(State, KeyPath);
+		_Else -> send_err(State) end,
 	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
 
 'HELP_RESP'(State) ->
@@ -258,7 +277,8 @@ handle_info({tcp_closed, Socket}, _StateName, #state{socket=Socket, addr=_Addr} 
 	{stop, normal, StateData};
 
 handle_info(_Info, StateName, StateData) ->
-	{noreply, StateName, StateData}.
+	% ?ERROR_LOG("SEAP: Unexpected message: "?S"~nStateName: "?S", StateData: "?S, [Info, StateName, StateData]),
+	{next_state, StateName, StateData}.
 
 fsm_call(StateName, Args, StateData) -> 
 	try ?MODULE:StateName(Args, StateData)

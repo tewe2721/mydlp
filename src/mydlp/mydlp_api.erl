@@ -2719,6 +2719,18 @@ get_random_string() ->
                             ++ Acc
                 end, [], lists:seq(1, Length)).
 
+
+get_random_bytes() -> get_random_bytes(16).
+
+get_random_bytes(Size) -> get_random_bytes(Size, <<>>).
+
+get_random_bytes(0, Acc) -> Acc;
+get_random_bytes(I, Acc) ->
+	NextInt = random:uniform(256) - 1,
+	Acc1 = <<Acc/binary, NextInt:8/integer>>,
+	get_random_bytes(I - 1, Acc1).
+
+
 %%-------------------------------------------------------------------------
 %% @doc Extracts filename from value of content disposition header
 %% @end
@@ -3047,6 +3059,8 @@ apply_cdbobj({command, stop_discovery}) ->
 	?ASYNC0(fun() -> mydlp_discover_fs:stop_discovery() end), ok;
 apply_cdbobj({command, schedule_discovery}) ->
 	?ASYNC0(fun() -> mydlp_discover_fs:schedule_discovery() end), ok;
+apply_cdbobj({command, {set_enc_key, EncKey}}) when is_binary(EncKey), size(EncKey) == 64 ->
+	?ASYNC0(fun() -> mydlp_sync:set_enc_key(EncKey), mydlp_container:schedule_confupdate() end), ok;
 apply_cdbobj({command, Else}) ->
 	?ERROR_LOG("Unknown remote command: "?S, [Else]);
 apply_cdbobj(Else) ->
@@ -3065,18 +3079,24 @@ populate_win32reg() -> ok.
 -endif.
 
 get_client_policy_revision_id() ->
+	% ======================================== BEWARE ============================
 	% sequence should be same with mydlp_mnesia:get_remote_rule_tables
+	% ============================================================================
 	RemovableStorageRuleTable = mydlp_mnesia:get_rule_table(removable),
 	PrinterRuleTable = mydlp_mnesia:get_rule_table(printer),
 	DiscoveryRuleTable = mydlp_mnesia:get_rule_table(discovery),
 	ScreenshotRuleTable = mydlp_mnesia:get_rule_table(screenshot),
 	InboundRuleTable = mydlp_mnesia:get_rule_table(inbound),
+	EncryptionRuleTable = mydlp_mnesia:get_rule_table(encryption),
+	Directories = mydlp_mnesia:get_rule_table_destination(discovery),
+	ApplicationNames = mydlp_mnesia:get_rule_table_destination(screenshot),
 	RuleTables = [
-		{removable, RemovableStorageRuleTable},
-		{printer, PrinterRuleTable},
-		{discovery, DiscoveryRuleTable},
-		{screenshot, ScreenshotRuleTable},
-		{inbound, InboundRuleTable}
+		{removable, none, RemovableStorageRuleTable},
+		{printer, none, PrinterRuleTable},
+		{discovery, Directories, DiscoveryRuleTable},
+		{screenshot, ApplicationNames, ScreenshotRuleTable},
+		{inbound, none, InboundRuleTable},
+		{encryption, none, EncryptionRuleTable}
 	],
 	ItemDump = mydlp_mnesia:dump_client_tables(),
 	MCMods = mydlp_mnesia:get_mc_module(),
@@ -3255,6 +3275,49 @@ bf_decrypt(Key, <<Data:8/binary, Rest/binary>>, Acc, Size) ->
 bf_decrypt(_Key, <<>>, Acc, Size) -> <<Data:Size/binary, _/binary>> = Acc, Data.
 
 
+aes_encrypt(Key, Data) when is_binary(Key), size(Key) == 16, is_binary(Data) ->
+	OrigSize = size(Data),
+	PaddingByte = case (OrigSize rem 16) of
+		0 -> 0;
+		16 -> 0;
+		I -> 16 - I end,
+	PaddingBit = PaddingByte * 8,
+	Data1 = <<Data/binary, 0:PaddingBit/integer>>,
+	IV = get_random_bytes(),
+	Cipher = crypto:aes_cbc_128_encrypt(Key, IV, Data1),
+	{cipher, OrigSize, IV, Cipher}.
+
+aes_decrypt(Key, {cipher, Size, IV, Data}) when 
+		Size >= 0, is_binary(Data), size(Data) >= Size, 
+		is_binary(Key), size(Key) == 16, 
+		is_binary(IV), size(IV) == 16 ->
+	Clear = crypto:aes_cbc_128_decrypt(Key, IV, Data),
+	<<Orig:Size/binary, _/binary>> = Clear, Orig.
+
+aes_cipher_to_binary({cipher, Size, IV, Data}) when 
+		Size >= 0, is_binary(Data), size(Data) >= Size, 
+		is_binary(IV), size(IV) == 16 ->
+	<<"MyDLP_MEC", Size:64/integer, IV/binary, Data/binary>>.
+
+
+is_aes_cipher_binary(<<"MyDLP_MEC", Size:64/integer, IV:16/binary, Data/binary>>) when
+		Size >= 0, is_binary(Data), size(Data) >= Size, 
+		is_binary(IV), size(IV) == 16 -> true;
+is_aes_cipher_binary(_) -> false.
+
+binary_to_aes_cipher(<<"MyDLP_MEC", Size:64/integer, IV:16/binary, Data/binary>>) when
+		Size >= 0, is_binary(Data), size(Data) >= Size, 
+		is_binary(IV), size(IV) == 16 ->
+	{cipher, Size, IV, Data}.
+
+aes_encrypt_binary(Key, Data) ->
+	Cipher = mydlp_api:aes_encrypt(Key, Data),
+	mydlp_api:aes_cipher_to_binary(Cipher).
+	
+aes_decrypt_binary(Key, Data) -> 
+	Cipher = mydlp_api:binary_to_aes_cipher(Data),
+	mydlp_api:aes_decrypt(Key, Cipher).
+
 -ifdef(__MYDLP_ENDPOINT).
 
 encrypt_payload(Data0) when is_binary(Data0) ->
@@ -3379,4 +3442,44 @@ delete_endpoint_key() ->
 -endif.
 
 -endif.
+
+-ifdef(__MYDLP_NETWORK).
+
+-ifdef(__PLATFORM_LINUX).
+
+-define(ENCKEYFILE, "/var/lib/mydlp/encryption_key").
+
+-endif.
+
+get_encryption_key() ->
+	case filelib:is_regular(?ENCKEYFILE) of
+		true -> ok;
+		false -> create_encryption_key() end,
+	read_encryption_key().
+
+read_encryption_key() ->
+	case file:read_file(?ENCKEYFILE) of
+                {ok, Bin} -> Bin;
+                Else -> throw({error, Else}) end.
+
+create_encryption_key() ->
+	EncKey = case generate_encryption_key() of
+		retry -> throw({error, generate_retry});
+		B when is_binary(B) -> B end,
+	filelib:ensure_dir(?ENCKEYFILE),
+	file:write_file(?ENCKEYFILE, EncKey),
+	ok.
+
+generate_encryption_key() -> get_random_bytes(64).
+
+-endif.
+
+write_to_tmpfile(Bin) when is_binary(Bin) ->
+	Now = now(),
+	FN = ref_to_fn(?CFG(work_dir), "keyfile", Now),
+	ok = file:write_file(FN, <<>>, [raw]),
+        ok = file:change_mode(FN, 8#00600),
+	ok = file:write_file(FN, Bin, [raw]),
+	{ok, FN}.
+
 

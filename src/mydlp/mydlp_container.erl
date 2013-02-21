@@ -383,9 +383,17 @@ stop() ->
 
 init([]) ->
 	call_timer(),
+	set_common_meta(),
 	set_init_meta(),
 	set_general_meta(),
 	{ok, #state{ object_tree=gb_trees:empty(), ep_meta=dict:new() }}.
+
+set_common_meta() ->
+	?ASYNC0(fun() -> 
+		set_ep_meta("has_enc_key", "no"),
+		ok
+	end),
+	ok.
 
 -ifdef(__MYDLP_NETWORK).
 

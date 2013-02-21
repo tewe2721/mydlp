@@ -315,7 +315,8 @@ load_src(Src) ->
 	print_monitor,
 	log_level,
 	log_limit,
-	prtscr_block
+	prtscr_block,
+	usbstor_encryption
 ]).
 
 -endif.
@@ -548,6 +549,17 @@ populate_win32reg(RegHandle, [archive_inbound|Rest]) ->
 			_AnyAction -> 1
 		end,
 	win32reg:set_value(RegHandle, "archive_inbound", RegVal),
+	populate_win32reg(RegHandle, Rest);
+populate_win32reg(RegHandle, [usbstor_encryption|Rest]) ->
+	ActionVal = case mydlp_mnesia:get_rule_table(encryption) of
+			{_, _, [{_, Action, _}|_]} -> Action;
+			_Else -> pass
+		end,
+	RegVal = case ActionVal of
+			pass -> 0;
+			encrypt -> 1
+		end,
+	win32reg:set_value(RegHandle, "usbstor_encryption", RegVal),
 	populate_win32reg(RegHandle, Rest);
 populate_win32reg(RegHandle, [prtscr_block|Rest]) ->
 	AppNames = mydlp_mnesia:get_prtscr_app_name(),

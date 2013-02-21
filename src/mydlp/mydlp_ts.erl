@@ -49,7 +49,7 @@
 	receiveBegin/1,
 	receiveChunk/5,
 	requeueIncident/1,
-	registerUserAddress/3,
+	registerUserAddress/4,
 	registerCommand/2,
 	saveLicenseKey/1,
 	getLicense/0,
@@ -168,17 +168,25 @@ get_arg_value(MetaDict, Arg) ->
 		error -> "";
 		{ok, ""} -> "";
 		{ok, nil} -> "";
-		{ok, unkown} -> "";
+		{ok, unknown} -> "";
 		{ok, undefined} -> "";
 		{ok, Val} -> Val end.
 
-registerUserAddress(Ipaddress, Userh, Data) -> 
+registerUserAddress(EndpointId, Ipaddress, Userh, Data) -> 
 	MetaDict = try erlang:binary_to_term(Data)
 		catch Class:Error ->
 			?ERROR_LOG("REGISTER_USER_ADDRESS: Error occured when deserializing: Class: ["?S"]. Error: ["?S"].~n"
 					"Data: ["?S"]. UserHash: ["?S"]. IPAddr: ["?S"]. ~nStack trace: "?S"~n",
 				[Class, Error, Data, Userh, Ipaddress, erlang:get_stacktrace()]),
 		dict:new() end,
+
+	case get_arg_value(MetaDict, "has_enc_key") of
+		"no" -> case (catch mydlp_api:get_encryption_key()) of
+			EncKey when is_binary(EncKey), size(EncKey) == 64 -> 
+				mydlp_mnesia:save_endpoint_command(EndpointId, {set_enc_key, EncKey});
+			Else -> ?ERROR_LOG("Error occurred obtaining encryption key: "?S , [Else]), ok end;
+		_Else -> ok end,
+
 	Username = get_arg_value(MetaDict, "user"),
 	UserHI = mydlp_api:binary_to_integer(Userh),
 	ClientIpS = binary_to_list(Ipaddress),
