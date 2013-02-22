@@ -119,7 +119,7 @@ handle_info(sync_now, #state{startup_sync=StartupSync, policy_id=PolicyId} = Sta
 		sync(PolicyId)
 	catch Class:Error -> 
 		reset_enc_key(),
-		?ERROR_LOG("SYNC Handle: Class: ["?S"]. Error: ["?S"].~n"
+		?ERROR_LOG("SYNC: An error occurrred. Class: ["?S"]. Error: ["?S"].~n"
 		"Stack trace: "?S"~n", [Class, Error, erlang:get_stacktrace()]) end,
 	StartupSync1 = case StartupSync of
 		undefined -> call_timer(), undefined;
