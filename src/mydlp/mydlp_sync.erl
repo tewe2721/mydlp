@@ -173,15 +173,25 @@ sync(PolicyId) ->
 			case catch httpc:request(post, {Url, [], "application/octet-stream", Data}, [], []) of
 				{ok, {{_HttpVer, Code, _Msg}, _Headers, Body}} -> 
 					case {Code, Body} of
-						{200, []} -> 
+						{200, <<>>} -> 
 							reset_enc_key(), 
-							?ERROR_LOG("SYNC: Empty response: Url="?S"~n", [Url]);
-						{200, "up-to-date" ++ _Rest} -> ok;
-						{200, "invalid" ++ _Rest} -> mydlp_api:delete_endpoint_key(), ok;
+							?ERROR_LOG("SYNC: Empty response: Url="?S"~n", [Url]),
+							ok;
+						{200, <<"error", _/binary>>} -> 
+							reset_enc_key(), 
+							?ERROR_LOG("SYNC: Error occured on server: Url="?S"~n", [Url]),
+							ok;
+						{200, <<"up-to-date", _/binary>>} -> ok;
+						{200, <<"invalid", _/binary>>} -> 
+							mydlp_api:delete_endpoint_key(),
+							?ERROR_LOG("SYNC: Invalid key received. Deleting current endpoint key.~n", []),
+							reset_enc_key(),
+							ok;
 						{200, Payload} -> process_payload(Payload);
 						{Else1, _Data} -> 
 							reset_enc_key(),
-							?ERROR_LOG("SYNC: An error occured during HTTP req: Code="?S"~n", [Else1]) end;
+							?ERROR_LOG("SYNC: An error occured during HTTP req: Code="?S"~n", [Else1]),
+							ok end;
 				Else -> reset_enc_key(), 
 					?ERROR_LOG("SYNC: An error occured during HTTP req: Obj="?S"~n", [Else]) end end,
 	ok.
@@ -189,6 +199,7 @@ sync(PolicyId) ->
 process_payload(Payload) ->
 	case mydlp_api:decrypt_payload(Payload) of
 		retry -> ok;
+		<<"invalid", _/binary>> -> mydlp_api:delete_endpoint_key(), ok;
 		<<"up-to-date", _/binary>> -> ok;
 		CDBBin -> mydlp_api:use_client_policy(CDBBin) end.
 

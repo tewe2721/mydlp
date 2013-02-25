@@ -577,6 +577,7 @@ populate_destinations([[Destination]|Rows], RuleId, Channel) ->
 	Id = mydlp_mnesia:get_unique_id(dest),
 	D = case Destination of
 		<<"all">> -> all; 
+		<<"hasBCC">> -> has_bcc;  %% Workaround to select BCC objects
 		_ -> Destination
 	end,
 	I = #dest{id=Id, rule_id=RuleId, destination=D},

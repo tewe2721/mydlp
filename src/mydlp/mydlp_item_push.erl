@@ -219,6 +219,9 @@ http_req1(ReqRet) ->
         case ReqRet of
                 {ok, {{_HttpVer, Code, _Msg}, _Headers, Body}} -> 
                         case {Code, Body} of
+				{200, <<"error">>} -> throw(http_returned_error);
+				{200, <<"invalid">>} -> mydlp_api:delete_endpoint_key(), throw(http_returned_invalid);
+				{200, <<"null">>} -> throw(http_returned_null);
                                 {200, RetBody} -> case mydlp_api:decrypt_payload(RetBody) of
 					retry -> throw({error, decrypt_payload_retry});
 					P when is_binary(P) -> {ok, P} end;

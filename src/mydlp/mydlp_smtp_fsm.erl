@@ -164,8 +164,9 @@ init([]) ->
 	SrcDomainName = get_from_domainname(MessageR),
 	UserH = mydlp_api:hash_un(MailFrom),
 	Destinations = get_dest_domains(MessageR),
+	HasBCC = has_bcc(MessageR),
 	pre_query(State, Files),
-	AclQ = #aclq{channel=mail, src_domain = SrcDomainName, src_user_h=UserH, destinations=Destinations},
+	AclQ = #aclq{channel=mail, src_domain = SrcDomainName, src_user_h=UserH, destinations=Destinations, has_hidden_destinations=HasBCC},
 	AclRet = mydlp_acl:q(AclQ, Files),
 	process_aclret(AclRet, State).
 
@@ -424,6 +425,13 @@ get_dest_domains(#message{rcpt_to=RcptTo, to=ToH, cc=CCH, bcc=BCCH})->
 	DestList = RcptToA ++ ToH ++ CCH ++ BCCH,
 	Domains = [list_to_binary(A#addr.domainname) || A <- DestList],
 	lists:usort(Domains).
+
+has_bcc(#message{bcc=undefined})-> false;
+has_bcc(#message{bcc=BCCH}) when is_list(BCCH)->
+	case length(BCCH) of
+		0 -> false;
+		I when is_integer(I), I > 0 -> true end.
+
 
 create_smtp_msg(connect, {Ip1,Ip2,Ip3,Ip4}) ->
 	{

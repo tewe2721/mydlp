@@ -562,7 +562,57 @@ is_sub_destination(<<>>, _Dest2) -> true;
 is_sub_destination(<<C/utf8, R/binary>>, <<C1/utf8, R1/binary>>) when C == C1 -> is_sub_destination(R, R1);
 is_sub_destination(_, _) -> false.
 
-filter_rule_ids_by_dest(RuleIds, Destinations) -> %TODO: domain names stored as binary. Unicode characters should be examined wheter it is problem or not.
+select_rule_ids_by_source(FilterId, #aclq{channel=Channel} = AclQ) ->
+	Q0 = ?QLCQ([R#rule.id || 
+		R <- mnesia:table(rule),
+		I <- mnesia:table(ipr),
+		R#rule.filter_id == FilterId,
+		R#rule.channel == Channel,
+		I#ipr.rule_id == R#rule.id,
+		I#ipr.ipbase == {0,0,0,0}, 
+		I#ipr.ipmask == {0,0,0,0}
+	]),
+	RulesD = ?QLCE(Q0),
+
+	RulesI = case AclQ#aclq.src_addr of
+		unknown -> [];
+		Addr -> Q = ?QLCQ([R#rule.id || 
+				R <- mnesia:table(rule),
+				I <- mnesia:table(ipr),
+				R#rule.filter_id == FilterId,
+				R#rule.channel == Channel,
+				I#ipr.rule_id == R#rule.id,
+				I#ipr.ipbase /= {0,0,0,0}, 
+				I#ipr.ipmask /= {0,0,0,0},
+				ip_band(I#ipr.ipbase, I#ipr.ipmask) == ip_band(Addr, I#ipr.ipmask)
+				]), ?QLCE(Q) end,
+
+	RulesU = case AclQ#aclq.src_user_h of
+		unknown -> [];
+		UserH -> Q2 = ?QLCQ([R#rule.id || 
+				R <- mnesia:table(rule),
+				U <- mnesia:table(m_user),
+				R#rule.filter_id == FilterId,
+				R#rule.channel == Channel,
+				U#m_user.rule_id == R#rule.id,
+				U#m_user.un_hash == UserH
+				]), ?QLCE(Q2) end,
+
+	RulesDU = case AclQ#aclq.src_domain of
+		undefined -> [];
+		DomainName -> Q4 = ?QLCQ([R#rule.id ||
+				R <- mnesia:table(rule),
+				U <- mnesia:table(source_domain),
+				R#rule.filter_id == FilterId,
+				R#rule.channel == Channel,
+				U#source_domain.rule_id == R#rule.id,
+				U#source_domain.domain_name == DomainName
+				]), ?QLCE(Q4) end, 
+
+	RuleIds = lists:append([RulesD, RulesI, RulesU, RulesDU]),
+	RuleIds.
+
+filter_rule_ids_by_dest(RuleIds, AclQ) -> %TODO: domain names stored as binary. Unicode characters should be examined wheter it is problem or not.
 	Q0 = ?QLCQ([R ||
 		D <- mnesia:table(dest),
 		R <- RuleIds,
@@ -576,10 +626,24 @@ filter_rule_ids_by_dest(RuleIds, Destinations) -> %TODO: domain names stored as 
 		R <- RuleIds,
 		D#dest.rule_id == R,
 		D#dest.destination /= all,
-		is_applicable_destination(Destinations, D#dest.destination)
+		D#dest.destination /= has_bcc,
+		is_applicable_destination(AclQ#aclq.destinations, D#dest.destination)
 	]),
 	RulenD = ?QLCE(Q1),
-	lists:append([RuleaD, RulenD]).
+
+	RuleHD = case AclQ#aclq.has_hidden_destinations of
+		true -> case AclQ#aclq.channel of
+			mail -> Q2 = ?QLCQ([R ||
+					D <- mnesia:table(dest),
+					R <- RuleIds,
+					D#dest.rule_id == R,
+					D#dest.destination == has_bcc
+				]),
+				?QLCE(Q2);
+			_Else -> [] end;
+		false -> [] end,
+
+	lists:append([RuleaD, RulenD, RuleHD]).
 
 get_rule_destinations(RuleIds) -> 
 	DL =get_rule_destinations(RuleIds, 0, []),
@@ -676,60 +740,13 @@ handle_query({get_remote_rule_ids, FilterId, Addr, UserH}) ->
 	R = lists:flatten([RemovableStorageRuleIds, PrinterRuleIds, DiscoveryRuleIds, ScreenshotRuleIds, InboundRuleIds, EncryptionRuleIds]),
 	lists:usort(R);
 
-handle_query({get_rule_ids, FilterId, #aclq{channel=Channel, destinations=Destinations} = AclQ}) ->
-	Q0 = ?QLCQ([R#rule.id || 
-		R <- mnesia:table(rule),
-		I <- mnesia:table(ipr),
-		R#rule.filter_id == FilterId,
-		R#rule.channel == Channel,
-		I#ipr.rule_id == R#rule.id,
-		I#ipr.ipbase == {0,0,0,0}, 
-		I#ipr.ipmask == {0,0,0,0}
-	]),
-	RulesD = ?QLCE(Q0),
+handle_query({get_rule_ids, FilterId, AclQ}) ->
+	RuleIds = select_rule_ids_by_source(FilterId, AclQ),
 
-	RulesI = case AclQ#aclq.src_addr of
-		unknown -> [];
-		Addr -> Q = ?QLCQ([R#rule.id || 
-				R <- mnesia:table(rule),
-				I <- mnesia:table(ipr),
-				R#rule.filter_id == FilterId,
-				R#rule.channel == Channel,
-				I#ipr.rule_id == R#rule.id,
-				I#ipr.ipbase /= {0,0,0,0}, 
-				I#ipr.ipmask /= {0,0,0,0},
-				ip_band(I#ipr.ipbase, I#ipr.ipmask) == ip_band(Addr, I#ipr.ipmask)
-				]), ?QLCE(Q) end,
-
-	RulesU = case AclQ#aclq.src_user_h of
-		unknown -> [];
-		UserH -> Q2 = ?QLCQ([R#rule.id || 
-				R <- mnesia:table(rule),
-				U <- mnesia:table(m_user),
-				R#rule.filter_id == FilterId,
-				R#rule.channel == Channel,
-				U#m_user.rule_id == R#rule.id,
-				U#m_user.un_hash == UserH
-				]), ?QLCE(Q2) end,
-
-	RulesDU = case AclQ#aclq.src_domain of
-		undefined -> [];
-		DomainName -> Q4 = ?QLCQ([R#rule.id ||
-				R <- mnesia:table(rule),
-				U <- mnesia:table(source_domain),
-				R#rule.filter_id == FilterId,
-				R#rule.channel == Channel,
-				U#source_domain.rule_id == R#rule.id,
-				U#source_domain.domain_name == DomainName
-				]), ?QLCE(Q4) end, 
-
-	RuleIds = lists:append([RulesD, RulesI, RulesU, RulesDU]),
-
-	FinalRuleIds = case Channel of
-				web -> filter_rule_ids_by_dest(RuleIds, Destinations);
-				mail -> filter_rule_ids_by_dest(RuleIds, Destinations);
-				_ -> RuleIds
-			end,
+	FinalRuleIds = case AclQ#aclq.channel of
+		web -> filter_rule_ids_by_dest(RuleIds, AclQ);
+		mail -> filter_rule_ids_by_dest(RuleIds, AclQ);
+		_ -> RuleIds end,
 
 	lists:usort(FinalRuleIds);
 
