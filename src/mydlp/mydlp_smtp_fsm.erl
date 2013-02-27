@@ -426,12 +426,24 @@ get_dest_domains(#message{rcpt_to=RcptTo, to=ToH, cc=CCH, bcc=BCCH})->
 	Domains = [list_to_binary(A#addr.domainname) || A <- DestList],
 	lists:usort(Domains).
 
-has_bcc(#message{bcc=undefined})-> false;
-has_bcc(#message{bcc=BCCH}) when is_list(BCCH)->
+has_bcc(#message{bcc=undefined} = MessageR)-> has_bcc_1(MessageR);
+has_bcc(#message{bcc=BCCH} = MessageR) when is_list(BCCH)->
 	case length(BCCH) of
-		0 -> false;
+		0 -> has_bcc_1(MessageR);
 		I when is_integer(I), I > 0 -> true end.
 
+has_bcc_1(#message{rcpt_to=RcptTo, to=ToHeader, cc=CCHeader} = MessageR) ->
+	RcptToCount = case RcptTo of
+		R when is_list(R) -> length(R);
+		_Else -> ?ERROR_LOG("Encountered with an email with 0 rcptto addresses. MessageR: "?S , [MessageR]), 0 end,
+	ToCount = case ToHeader of
+		T when is_list(T) -> length(T);
+		_Else2 -> 0 end,
+	CCCount = case CCHeader of
+		C when is_list(C) -> length(C);
+		_Else3 -> 0 end,
+	( RcptToCount > ( ToCount + CCCount ) ).
+	
 
 create_smtp_msg(connect, {Ip1,Ip2,Ip3,Ip4}) ->
 	{
