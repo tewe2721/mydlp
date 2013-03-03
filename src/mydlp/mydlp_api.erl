@@ -3035,9 +3035,7 @@ use_client_policy(<<>>) -> ?ERROR_LOG("USE_CLIENT_POLICY: Management server retu
 use_client_policy(<<"up-to-date">>) -> ok;
 use_client_policy(CDBBin) ->
 	try	CDBObj = erlang:binary_to_term(CDBBin), % TODO: binary_to_term/2 with safe option
-		apply_cdbobj(CDBObj),
-		NewRevisionId = erlang:phash2(CDBObj),
-		mydlp_sync:set_policy_id(NewRevisionId)
+		apply_cdbobj(CDBObj)
 	catch Class:Error ->
 		?ERROR_LOG("USE_CLIENT_POLICY: Error occured: Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~nCDBBin: ["?S"].~n",
 			[Class, Error, erlang:get_stacktrace(), CDBBin]),
@@ -3047,11 +3045,14 @@ use_client_policy(CDBBin) ->
 	ok.
 
 apply_cdbobj(L) when is_list(L) -> lists:foreach(fun(C) -> apply_cdbobj(C) end, L);
-apply_cdbobj({{rule_tables, RuleTables}, {mc, MCModule}, {items, ItemDump}}) ->
+apply_cdbobj({{rule_tables, RuleTables}, {mc, MCModule}, {items, ItemDump}} = PolicyObj) ->
 	mydlp_mnesia:truncate_nondata(),
 	( catch mydlp_mnesia:write(ItemDump) ),
 	( catch mydlp_mnesia:write([ MCModule ]) ),
 	( catch mydlp_mnesia:write([ #rule_table{channel=C, destination=D,table = RT} || {C, D, RT} <- RuleTables ]) ),
+
+	NewRevisionId = erlang:phash2(PolicyObj),
+	mydlp_sync:set_policy_id(NewRevisionId),
 
 	mydlp_mnesia:post_start(),
 	populate_win32reg(),

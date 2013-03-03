@@ -217,7 +217,10 @@ http_req(Url, Data) when is_binary(Data) ->
 
 http_req1(ReqRet) -> 
         case ReqRet of
-                {ok, {{_HttpVer, Code, _Msg}, _Headers, Body}} -> 
+                {ok, {{_HttpVer, Code, _Msg}, _Headers, Body0}} -> 
+			Body = case Body0 of
+				L when is_list(L) -> list_to_binary(L);
+				B when is_binary(B) -> B end,
                         case {Code, Body} of
 				{200, <<"error">>} -> throw(http_returned_error);
 				{200, <<"invalid">>} -> mydlp_api:delete_endpoint_key(), throw(http_returned_invalid);

@@ -58,6 +58,7 @@
 -record(state, {
 	discover_queue,
 	discover_inprog=false,
+	stop_inprog=false,
 	timer
 }).
 
@@ -109,6 +110,10 @@ handle_call(stop, _From, State) ->
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
+handle_cast({q, _ParentId, FilePath, _RuleIndex}, #state{stop_inprog=true} = State) ->
+	?ERROR_LOG("Ignoring discovery because of stop signal. FP: "?S, [FilePath]),
+	{noreply, State};
+
 handle_cast({q, ParentId, FilePath, RuleIndex}, #state{discover_queue=Q, discover_inprog=false} = State) ->
 	Q1 = queue:in({ParentId, FilePath, RuleIndex}, Q),
 	consume(),
@@ -138,13 +143,14 @@ handle_cast(consume, #state{discover_queue=Q} = State) ->
 					{noreply, State#state{discover_queue=Q1}} end;
 		{empty, _} ->
 			State1 = schedule_timer(State, ?CFG(discover_fs_interval)),
+			reset_discover_cache(),
 			unset_discover_inprog(),
-			{noreply, State1#state{discover_inprog=false}}
+			{noreply, State1#state{discover_inprog=false, stop_inprog=false}}
 	end;
 
-handle_cast(stop_discovery, State) ->
+handle_cast(stop_discovery, #state{discover_inprog=true, stop_inprog=false} = State) ->
 	NewQ = queue:new(),
-	{noreply, State#state{discover_queue=NewQ}};
+	{noreply, State#state{discover_queue=NewQ, stop_inprog=true}};
 
 handle_cast(schedule_discovery, State) -> handle_info(schedule_now, State);
 
@@ -305,7 +311,6 @@ set_discover_inprog() ->
 	mydlp_sync:sync_now().
 
 unset_discover_inprog() ->
-	reset_discover_cache(),
 	mydlp_container:set_ep_meta("discover_inprog", "no"),
 	mydlp_sync:sync_now().
 
