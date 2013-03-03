@@ -172,28 +172,32 @@ sync(PolicyId) ->
 			Url = "https://" ++ ?CFG(management_server_address) ++ "/sync?rid=" ++ RevisionS ++ "&uh=" ++ UserHS,
 			case catch httpc:request(post, {Url, [], "application/octet-stream", Data}, [], []) of
 				{ok, {{_HttpVer, Code, _Msg}, _Headers, Body}} -> 
-					case {Code, Body} of
-						{200, <<>>} -> 
-							reset_enc_key(), 
-							?ERROR_LOG("SYNC: Empty response: Url="?S"~n", [Url]),
-							ok;
-						{200, <<"error", _/binary>>} -> 
-							reset_enc_key(), 
-							?ERROR_LOG("SYNC: Error occured on server: Url="?S"~n", [Url]),
-							ok;
-						{200, <<"up-to-date", _/binary>>} -> ok;
-						{200, <<"invalid", _/binary>>} -> 
-							mydlp_api:delete_endpoint_key(),
-							?ERROR_LOG("SYNC: Invalid key received. Deleting current endpoint key.~n", []),
-							reset_enc_key(),
-							ok;
-						{200, Payload} -> process_payload(Payload);
-						{Else1, _Data} -> 
-							reset_enc_key(),
-							?ERROR_LOG("SYNC: An error occured during HTTP req: Code="?S"~n", [Else1]),
-							ok end;
+					handle_http_resp(Url, Code, Body);
 				Else -> reset_enc_key(), 
 					?ERROR_LOG("SYNC: An error occured during HTTP req: Obj="?S"~n", [Else]) end end,
+	ok.
+
+handle_http_resp(Url, Code, Body) when is_list(Body) ->
+	Body1 = list_to_binary(Body),
+	handle_http_resp(Url, Code, Body1);
+handle_http_resp(Url, 200, <<>>) -> 
+	reset_enc_key(), 
+	?ERROR_LOG("SYNC: Empty response: Url="?S"~n", [Url]),
+	ok;
+handle_http_resp(Url, 200, <<"error", _/binary>>) -> 
+	reset_enc_key(), 
+	?ERROR_LOG("SYNC: Error occured on server: Url="?S"~n", [Url]),
+	ok;
+handle_http_resp(_Url, 200, <<"up-to-date", _/binary>>) -> ok;
+handle_http_resp(_Url, 200, <<"invalid", _/binary>>) -> 
+	mydlp_api:delete_endpoint_key(),
+	?ERROR_LOG("SYNC: Invalid key received. Deleting current endpoint key.~n", []),
+	reset_enc_key(),
+	ok;
+handle_http_resp(_Url, 200, Payload) -> process_payload(Payload);
+handle_http_resp(_Url, Else1, _Data) -> 
+	reset_enc_key(),
+	?ERROR_LOG("SYNC: An error occured during HTTP req: Code="?S"~n", [Else1]),
 	ok.
 
 process_payload(Payload) ->
