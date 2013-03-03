@@ -3023,7 +3023,7 @@ generate_client_policy(EndpointId, IpAddr, UserH, RevisionId) ->
 	Commands = mydlp_mnesia:get_endpoint_commands(EndpointId),
 	case {CDBHash, Commands} of
 		{RevisionId, []} -> <<"up-to-date">>;
-		{RevisionId, Commands} ->  erlang:term_to_binary(Commands, [compressed]);
+		{RevisionId, Commands} -> erlang:term_to_binary(Commands, [compressed]);
 		{_Else, []} -> erlang:term_to_binary(CDBObj, [compressed]);
 		{_Else, Commands} -> erlang:term_to_binary([CDBObj|Commands], [compressed]) end.
 

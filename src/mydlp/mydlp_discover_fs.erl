@@ -97,7 +97,9 @@ q(ParentId, FilePath, RuleIndex) -> gen_server:cast(?MODULE, {q, ParentId, FileP
 
 stop_discovery() -> gen_server:cast(?MODULE, stop_discovery).
 
-schedule_discovery() -> gen_server:cast(?MODULE, schedule_discovery).
+schedule_discovery() -> 
+	stop_discovery(),
+	gen_server:cast(?MODULE, schedule_discovery).
 
 %%%%%%%%%%%%%% gen_server handles
 

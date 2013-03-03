@@ -126,9 +126,7 @@ handle_info(sync_now, #state{startup_sync=StartupSync, policy_id=PolicyId} = Sta
 		S when is_integer(S), S > 0 -> call_timer(10000), S - 1;
 		_Else -> call_timer(), undefined end,
 		
-	case StartupSync of
-		StartupSync1 -> {noreply, State};
-		_Else2 -> {noreply, State#state{startup_sync=StartupSync1}} end;
+	{noreply, State#state{startup_sync=StartupSync1}};
 
 handle_info(_Info, State) ->
 	{noreply, State}.
