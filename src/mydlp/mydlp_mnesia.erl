@@ -428,7 +428,10 @@ is_hash_of_gid(Hash, GroupId) -> aqc({is_hash_of_gid, Hash, GroupId}, nocache, d
 
 pdm_of_gid(Fingerprints, GroupId) -> aqc({pdm_of_gid, Fingerprints, GroupId}, nocache, dirty).
 
-write(RecordList, CacheOption) when is_list(RecordList) -> aqc({write, RecordList}, CacheOption);
+write(RecordList, CacheOption) when is_list(RecordList) -> 
+	T = 15000 + ( length(RecordList) * 10 ),
+	Timeout = case T > 150000 of true -> 150000; _ -> T end,
+	aqc({write, RecordList}, CacheOption, transaction, Timeout);
 write(Record, CacheOption) -> write([Record], CacheOption).
 
 write(Item) -> write(Item, flush).
@@ -1101,7 +1104,7 @@ handle_async_query(cache, Context, Query) ->
 handle_async_query(nocache, Context, Query) ->
 	evaluate_query(Context, Query).
 
-handle_call({async_query, CacheOption, Context, Query}, From, State) ->
+handle_call({async_query, CacheOption, Context, Query, Timeout}, From, State) ->
 	Worker = self(),
 	mydlp_api:mspawn(fun() ->
 		Return= try	handle_async_query(CacheOption, Context, Query)
@@ -1113,7 +1116,7 @@ handle_call({async_query, CacheOption, Context, Query}, From, State) ->
 					[Class, Error, erlang:get_stacktrace(), CacheOption, Context, Query, State]),
 					{ierror, {Class, Error}} end,
 		Worker ! {async_reply, Return, From}
-	end, 15000),
+	end, Timeout + 250),
 	{noreply, State};
 
 handle_call(truncate_all, From, State) ->
@@ -1664,10 +1667,12 @@ get_unique_id(TableName) -> mnesia:dirty_update_counter(unique_ids, TableName, 1
 
 aqc(Query, CacheOption) -> aqc(Query, CacheOption, transaction).
 
-aqc(Query, CacheOption, Context) -> async_query_call(Query, CacheOption, Context).
+aqc(Query, CacheOption, Context) -> aqc(Query, CacheOption, Context, 15000).
 
-async_query_call(Query, CacheOption, Context) -> 
-	case gen_server:call(?MODULE, {async_query, CacheOption, Context, Query}, 14500) of
+aqc(Query, CacheOption, Context, Timeout) -> async_query_call(Query, CacheOption, Context, Timeout).
+
+async_query_call(Query, CacheOption, Context, Timeout) -> 
+	case gen_server:call(?MODULE, {async_query, CacheOption, Context, Query, Timeout}, Timeout) of
 		{ierror, {Class, Error}} -> mydlp_api:exception(Class, Error);
 		Else -> Else end.
 
