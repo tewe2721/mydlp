@@ -85,6 +85,7 @@
           {mydlp_container, start_link,[]},
           {mydlp_discover_fs, start_link,[]},
           {mydlp_discover_rfs, start_link,[]},
+          {mydlp_discovery_manager, start_link,[]},
           {mydlp_discover_web, start_link,[]},
           {mydlp_item_receive, start_link,[]}
          ]},

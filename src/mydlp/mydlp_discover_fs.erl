@@ -39,6 +39,7 @@
 	ql/1,
 	q/2,
 	q/3,
+	continue_paused_discovery/0,
 	stop/0]).
 
 -ifdef(__MYDLP_ENDPOINT).
@@ -61,6 +62,7 @@
 
 -record(state, {
 	discover_queue,
+	paused_queue,
 	discover_inprog=false,
 	timer
 }).
@@ -79,7 +81,7 @@ is_substring(FileName, [Head|Tail]) ->
 	"ntuser.dat",
 	"apache-tika-"
 ]).
-	
+
 is_exceptional(FilePath) ->
 	FileName = filename:basename(FilePath, ""),
 	FileName1 = string:to_lower(FileName),
@@ -100,6 +102,8 @@ ql(List) -> gen_server:cast(?MODULE, {ql, List}).
 q(FilePath, RuleIndex) -> q(none, FilePath, RuleIndex).
 
 q(ParentId, FilePath, RuleIndex) -> gen_server:cast(?MODULE, {q, ParentId, FilePath, RuleIndex}).
+
+continue_paused_discovery() -> gen_server:cast(?MODULE, push_paused_to_proc_queue).
 
 -ifdef(__MYDLP_ENDPOINT).
 
@@ -131,23 +135,33 @@ handle_cast({q, ParentId, FilePath, RuleIndex}, #state{discover_queue=Q, discove
 	Q1 = queue:in({ParentId, FilePath, RuleIndex}, Q),
 	{noreply,State#state{discover_queue=Q1}};
 
-handle_cast(consume, #state{discover_queue=Q} = State) ->
+handle_cast({push_paused_to_proc_queue}, #state{discover_queue=Q, paused_queue=PQ} = State) ->
+	consume(),
+	{noreply, State#state{discover_queue=queue:join(Q, PQ), paused_queue=queue:new()}};
+
+handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ} = State) ->
 	case queue:out(Q) of
-		{{value, {ParentId, FilePath, RuleIndex}}, Q1} ->
-			try	case has_discover_rule() of
-					true -> case is_exceptional(FilePath) of
-							false -> discover(ParentId, FilePath, RuleIndex);
-							true -> ok end;
-					false -> ok end,
-				consume(),
-				{noreply, State#state{discover_queue=Q1}}
-			catch Class:Error ->
-				?ERROR_LOG("Discover Queue Consume: Error occured: "
-						"Class: ["?S"]. Error: ["?S"].~n"
-						"Stack trace: "?S"~n.FilePath: "?S"~nState: "?S"~n ",	
-						[Class, Error, erlang:get_stacktrace(), FilePath, State]),
+		{{value, {ParentId, FilePath, RuleIndex}=Item}, Q1} ->
+			case is_paused_by_rule_id(RuleIndex) of
+				true -> PQ1 = queue:in(Item, PQ),
 					consume(),
-					{noreply, State#state{discover_queue=Q1}} end;
+					{noreply, State#state{discover_queue=Q1, paused_queue=PQ1}};
+				false ->
+					try	case has_discover_rule() of
+							true -> case is_exceptional(FilePath) of
+									false -> discover(ParentId, FilePath, RuleIndex);
+									true -> ok end;
+							false -> ok end,
+						consume(),
+						{noreply, State#state{discover_queue=Q1}}
+					catch Class:Error ->
+						?ERROR_LOG("Discover Queue Consume: Error occured: "
+								"Class: ["?S"]. Error: ["?S"].~n"
+								"Stack trace: "?S"~n.FilePath: "?S"~nState: "?S"~n ",	
+								[Class, Error, erlang:get_stacktrace(), FilePath, State]),
+							consume(),
+							{noreply, State#state{discover_queue=Q1}} end
+			end;
 		{empty, _} ->
 			State1 = schedule_timer(State, ?CFG(discover_fs_interval)),
 			unset_discover_inprog(),
@@ -185,6 +199,8 @@ handle_info(_Info, State) ->
 
 -ifdef(__MYDLP_NETWORK).
 
+is_paused_by_rule_id(RuleId) -> gen_server:call(mydlp_discovery_manager, {is_paused, RuleId}).
+
 has_discover_rule() -> true.
 
 cancel_timer(State) -> State.
@@ -196,6 +212,8 @@ schedule() -> ok.
 -endif.
 
 -ifdef(__MYDLP_ENDPOINT).
+
+is_paused_by_rule_id(_RuleId) -> false.
 
 has_discover_rule() ->
 	case mydlp_mnesia:get_rule_table(discovery) of
@@ -246,7 +264,7 @@ stop() ->
 
 init([]) ->
 	timer:send_after(60000, schedule_startup),
-	{ok, #state{discover_queue=queue:new()}}.
+	{ok, #state{discover_queue=queue:new(), paused_queue=queue:new()}}.
 
 -endif.
 

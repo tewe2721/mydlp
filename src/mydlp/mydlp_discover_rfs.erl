@@ -77,6 +77,15 @@ handle_call(stop, _From, State) ->
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
+handle_cast({start_by_rule_id, RuleId, ReportId}, State) ->
+	RemoteStorages = mydlp_mnesia:get_remote_storages_by_rule_id(RuleId),
+	consume(RemoteStorages),
+	{noreply, State};
+
+handle_cast({continue_discovering}, State) ->
+	mydlp_discover_fs:continue_paused_discovery(),
+	{noreply, State};	
+
 handle_cast({consume, RemoteStorages}, State) ->
 	discover_each_mount(RemoteStorages, []),
 	{noreply, State};
@@ -117,7 +126,7 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
-	timer:send_after(60000, startup),
+	%timer:send_after(60000, startup),
 	{ok, #state{}}.
 
 terminate(_Reason, _State) ->

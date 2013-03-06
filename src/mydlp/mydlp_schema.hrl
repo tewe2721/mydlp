@@ -79,6 +79,14 @@
 	details
 }).
 
+-record(discovery_schedule, {
+	id,
+	rule_id,
+	schedule_hour, 
+	details,
+	available_intervals
+}).
+
 -record(m_user, {
 	id,
 	rule_id,

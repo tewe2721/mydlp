@@ -38,6 +38,7 @@ dist_erl_DATA = \
 	mydlp_discover_fs.erl \
 	mydlp_discover_rfs.erl \
 	mydlp_discover_web.erl \
+	mydlp_discovery_manager.erl \
 	mydlp_distributor.erl \
 	mydlp_dynamic.erl \
 	mydlp_fsm.erl \

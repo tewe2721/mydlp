@@ -343,6 +343,10 @@ init([]) ->
 		{web_servers, <<"SELECT r.proto, r.address, r.port, r.digDepth, r.startPath FROM WebServer r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
 		{app_name_by_rule_id, <<"SELECT a.destinationString FROM ApplicationName AS a, RuleItem AS ri WHERE ri.rule_id=? AND a.id=ri.item_id">>},
 		{email_notification_by_rule_id, <<"SELECT a.email FROM AuthUser AS a, NotificationItem AS ni, EmailNotificationItem AS eni, Rule r WHERE ni.rule_id=? AND ni.id=eni.id AND ni.authUser_id=a.id AND r.id=? AND r.notificationEnabled=1">>},
+		{daily_schedule_by_rule_id, <<"SELECT s.hour FROM RuleSchedule AS rs, Schedule AS s, DailySchedule AS ds WHERE rs.rule_id=? AND rs.schedule_id=s.id AND s.id=ds.id">>},
+		{weekly_schedule_by_rule_id, <<"SELECT s.hour, ws.mon, ws.tue, ws.wed, ws.thu, ws.fri, ws.sat, ws.sun FROM RuleSchedule AS rs, Schedule AS s, WeeklySchedule AS ws WHERE rs.rule_id=? AND rs.schedule_id=s.id AND s.id=ws.id">>},
+		{schedule_intervals_by_rule_id, <<"SELECT si.mon_id, si.tue_id, si.wed_id, si.thu_id, si.fri_id, si.sat_id, si.sun_id FROM RuleSchedule AS rs, ScheduleIntervals si WHERE rs.rule_id=? AND rs.scheduleIntervals_id=si.id">>},
+		{schedule_day_intervals_by_id, <<"SELECT * FROM ScheduleDayInterval WHERE id=?">>},
 		{user_s_by_rule_id, <<"SELECT u.username FROM RuleUserStatic AS u, RuleItem AS ri WHERE ri.rule_id=? AND u.id=ri.item_id">>},
 		{user_ad_u_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=u.id">>},
 		{user_ad_o_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, ADDomainItem i, ADDomainOU o, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=o.id AND o.id=i.parent_id AND i.id=u.id">>},
@@ -536,6 +540,8 @@ populate_rule(OrigId, Channel, UserMessage, Action, FilterId) ->
 
 	populate_remote_storages(OrigId, RuleId),
 
+	populate_discovery_schedule(OrigId, RuleId),
+
 	{ok, RWS} = psq(web_servers, [OrigId]),
 	populate_web_servers(RWS, RuleId),
 
@@ -665,6 +671,39 @@ populate_remote_nfs([[Address, Path]|Rows], RuleId) ->
 	mydlp_mnesia_write(I),
 	populate_remote_nfs(Rows, RuleId);
 populate_remote_nfs([], _RuleId) -> ok.
+
+convert_day_intervals_to_list([_|Rest]) ->
+	L = lists:map(fun(I) -> binary_to_list(I) end, Rest),
+	lists:flatten(L).
+
+populate_day_intervals_as_list([DayIntervalId|Rest], Acc) ->
+	{ok, [DayIntervalList]} = psq(schedule_day_intervals_by_id, [DayIntervalId]),
+	Acc1 = convert_day_intervals_to_list(DayIntervalList),
+	populate_day_intervals_as_list(Rest, [Acc1|Acc]);
+populate_day_intervals_as_list([], Acc) -> lists:reverse(Acc).
+
+populate_discovery_schedule(RuleOrigId, RuleId) ->
+	{ok, [ScheduleDayIntervals]} = psq(schedule_intervals_by_rule_id, [RuleOrigId]),	
+	DayIntervals = populate_day_intervals_as_list(ScheduleDayIntervals, []),	
+
+	{ok, DailySchedule} = psq(daily_schedule_by_rule_id, [RuleOrigId]),
+	populate_discovery_schedule1(DailySchedule, DayIntervals, RuleId, daily),
+
+	{ok, WeeklySchedule} = psq(weekly_schedule_by_rule_id, [RuleOrigId]),
+	populate_discovery_schedule1(WeeklySchedule, DayIntervals, RuleId, weekly).
+
+populate_discovery_schedule1([[Hour]|Rows], ScheduleIntervals, RuleId, daily) ->
+	Id = mydlp_mnesia:get_unique_id(discovery_schedule),
+	I = #discovery_schedule{id=Id, rule_id=RuleId, schedule_hour=Hour, details=daily, available_intervals=ScheduleIntervals},
+	mydlp_mnesia_write(I),
+	populate_discovery_schedule1(Rows, ScheduleIntervals, RuleId, daily);
+populate_discovery_schedule1([[Hour, M, Tu, W, Th, F, Sa, Su]|Rows], ScheduleIntervals, RuleId, weekly) ->
+	Detail = lists:flatten([binary_to_list(M), binary_to_list(Tu), binary_to_list(W), binary_to_list(Th), binary_to_list(F), binary_to_list(Sa), binary_to_list(Su)]),
+	Id = mydlp_mnesia:get_unique_id(discovery_schedule),
+	I = #discovery_schedule{id=Id, rule_id=RuleId, schedule_hour=Hour, details={weekly, Detail}, available_intervals=ScheduleIntervals},
+	mydlp_mnesia_write(I),
+	populate_discovery_schedule1(Rows, ScheduleIntervals, RuleId, weekly);
+populate_discovery_schedule1([], _, _, _) -> ok.
 
 populate_web_servers([[Proto, Address, Port, DigDepth, StartPath]|Rest], RuleId) ->
 	Id = mydlp_mnesia:get_unique_id(web_server),

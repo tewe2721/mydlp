@@ -102,13 +102,18 @@
 	get_matchers/1,
 	get_remote_storages/0,
 	get_remote_storage_by_id/1,
+	get_remote_storages_by_rule_id/1,
 	get_rule_id_by_web_server_id/1,
 	get_web_server/1,
 	get_web_servers/0,
 	get_web_entry/1,
 	add_web_entry/1,
 	web_entry_list_links/1,
-	get_user_message/2
+	get_user_message/2,
+	get_schedules_by_hour/1,
+	get_availabilty_by_rule_id/1,
+	get_rule_id_by_orig_id/1,
+	get_rule_channel/1
 	]).
 
 -endif.
@@ -177,6 +182,7 @@
 	notification, 
 	notification_queue,
 	remote_storage,
+	discovery_schedule,
 	{m_user, ordered_set, 
 		fun() -> mnesia:add_table_index(m_user, un_hash) end},
 	{source_domain, ordered_set, 
@@ -255,6 +261,7 @@ get_record_fields_functional(Record) ->
 		ipr -> record_info(fields, ipr);
 		dest -> record_info(fields, dest);
 		remote_storage -> record_info(fields, remote_storage);
+		discovery_schedule -> record_info(fields, discovery_schedule);
 		notification -> record_info(fields, notification);
 		notification_queue -> record_info(fields, notification_queue);
 		source_domain -> record_info(fields, source_domain);
@@ -398,6 +405,8 @@ get_remote_storages() -> aqc(get_remote_storages, cache).
 
 get_remote_storage_by_id(Id) -> aqc({get_remote_storage_by_id, Id}, cache).
 
+get_remote_storages_by_rule_id(RuleId) -> aqc({get_remote_storages_by_rule_id, RuleId}, cache).
+
 get_rule_id_by_web_server_id(Id) -> aqc({get_rule_id_by_web_server_id, Id}, cache).
 
 get_web_servers() -> aqc(get_web_servers, cache).
@@ -409,6 +418,14 @@ get_web_entry(EntryId) -> aqc({get_web_entry, EntryId}, nocache).
 add_web_entry(Record) when is_tuple(Record) -> write(Record, nocache).
 
 web_entry_list_links(EntryId) -> aqc({web_entry_list_links, EntryId}, nocache).
+
+get_schedules_by_hour(Day) -> aqc({get_schedules_by_hour, Day}, nocache).
+
+get_availabilty_by_rule_id(RuleId) -> aqc({get_availabilty_by_rule_id, RuleId}, nocache).
+
+get_rule_id_by_orig_id(OrigRuleId) -> aqc({get_rule_id_by_orig_id, OrigRuleId}, nocache).
+
+get_rule_channel(RuleId) -> aqc({get_rule_channel, RuleId}, nocache).
 
 -endif.
 
@@ -475,6 +492,7 @@ flush_cache() -> cache_clean0().
 
 -ifdef(__MYDLP_NETWORK).
 
+
 handle_result({get_user_from_address, _IpAddress}, {atomic, Result}) -> 
 	case Result of
 		[] -> {nil, unknown};
@@ -498,10 +516,35 @@ handle_result({get_remote_storage_by_id, _Id}, {atomic, Result}) ->
 		[] -> none;
 		[Table] -> Table end;
 
+%handle_result({get_remote_storages_by_rule_id, _RuleId}, {atomic, Result}) ->
+%	case Result of 
+%		[] -> none;
+%		_ -> Result end;
+
 handle_result({get_rule_id_by_web_server_id, _Id}, {atomic, Result}) ->
 	case Result of 
 		[] -> none;
 		[Table] -> Table end;
+
+handle_result({get_schedules_by_hour, _}, {atomic, Result}) ->
+	case Result of
+		[] -> none;
+		_ -> filter_for_day(Result, []) end;
+
+handle_result({get_availabilty_by_rule_id, _}, {atomic, Result}) ->
+	case Result of
+		[] -> false;
+		_ -> is_available(Result) end;
+
+handle_result({get_rule_id_by_orig_id, _}, {atomic, Result}) ->
+	case Result of
+		[] -> none;
+		[R] -> R end;
+
+handle_result({get_rule_channel, _}, {atomic, Result}) ->
+	case Result of
+		[] -> none;
+		[R] -> R end;
 
 handle_result({get_endpoint_commands, _EntryId}, {atomic, Result}) -> 
 	[ {command, C} || #endpoint_command{command=C} <- Result ];
@@ -889,11 +932,46 @@ handle_query({get_remote_storage_by_id, Id}) ->
 		]),
 	?QLCE(Q);
 
+handle_query({get_remote_storages_by_rule_id, RuleId}) ->
+	Q = ?QLCQ([{R#remote_storage.id, R#remote_storage.rule_id, R#remote_storage.type, R#remote_storage.details} ||
+		R <- mnesia:table(remote_storage),
+		R#remote_storage.rule_id == RuleId
+		]),
+	?QLCE(Q);
+
 handle_query({get_rule_id_by_web_server_id, Id}) ->
 	Q = ?QLCQ([R#web_server.rule_id ||
 		R <- mnesia:table(web_server),
 		R#web_server.id == Id
 		]),
+	?QLCE(Q);
+
+handle_query({get_schedules_by_hour, Hour}) ->
+	Q = ?QLCQ([{D#discovery_schedule.rule_id, D#discovery_schedule.details} ||
+		D <- mnesia:table(discovery_schedule),
+		D#discovery_schedule.schedule_hour == Hour
+	]),
+	?QLCE(Q);
+
+handle_query({get_availabilty_by_rule_id, RuleId}) ->
+	Q = ?QLCQ([D#discovery_schedule.available_intervals ||
+		D <- mnesia:table(discovery_schedule),
+		D#discovery_schedule.rule_id == RuleId
+	]),
+	?QLCE(Q);
+
+handle_query({get_rule_id_by_orig_id, OrigRuleId}) ->
+	Q = ?QLCQ([D#rule.id ||
+		D <- mnesia:table(rule),
+		D#rule.orig_id == OrigRuleId
+	]),
+	?QLCE(Q);
+
+handle_query({get_rule_channel, RuleId}) ->
+	Q = ?QLCQ([D#rule.channel ||
+		D <- mnesia:table(rule),
+		D#rule.id == RuleId
+	]),
 	?QLCE(Q);
 
 handle_query({get_matchers, RuleIDs}) ->
@@ -1848,11 +1926,17 @@ remove_rule(RI) ->
 		]),
 	RSs = ?QLCE(Q8),
 
-	Q9 = ?QLCQ([RS#web_server.id ||	
+	Q9 = ?QLCQ([RS#discovery_schedule.id ||	
+		RS <- mnesia:table(discovery_schedule),
+		RS#discovery_schedule.rule_id == RI
+		]),
+	DSs = ?QLCE(Q9),
+
+	Q10 = ?QLCQ([RS#web_server.id ||	
 		RS <- mnesia:table(web_server),
 		RS#web_server.rule_id == RI
 		]),
-	WSs = ?QLCE(Q9),
+	WSs = ?QLCE(Q10),
 
 	lists:foreach(fun(Id) -> mnesia:delete({ipr, Id}) end, IIs),
 	lists:foreach(fun(Id) -> mnesia:delete({m_user, Id}) end, UIs),
@@ -1860,6 +1944,7 @@ remove_rule(RI) ->
 	lists:foreach(fun(Id) -> mnesia:delete({notification, Id}) end, NIs),
 	lists:foreach(fun(Id) -> mnesia:delete({source_domain, Id}) end, SDs),
 	lists:foreach(fun(Id) -> mnesia:delete({remote_storage, Id}) end, RSs),
+	lists:foreach(fun(Id) -> mnesia:delete({discovery_schedule, Id}) end, DSs),
 	lists:foreach(fun(Id) -> mnesia:delete({web_server, Id}) end, WSs),
 
 	remove_data_formats(DFIs),
@@ -1976,5 +2061,24 @@ remove_regex(GroupId) ->
 	Regexes = mnesia:match_object(#regex{id='_', group_id=GroupId, plain='_', compiled='_', error='_'}),
 	lists:foreach(fun(#regex{id=Id}) -> mnesia:delete({regex, Id}) end, Regexes), ok.
 
+filter_for_day([{R, daily}|Rows], Acc) -> 
+	filter_for_day(Rows, [R|Acc]);
+filter_for_day([{R, {weekly, DayList}}|Rows], Acc) ->
+	DayAsInt = calendar:day_of_the_week(date()),
+	case lists:nth(DayAsInt, DayList) of
+		1 -> filter_for_day(Rows, [R|Acc]);
+		_ -> filter_for_day(Rows, Acc)
+	end;
+filter_for_day([], []) -> none;
+filter_for_day([], Acc) -> Acc.
+
+is_available([DayIntervals]) ->
+	{D, {H, _, _}} = erlang:localtime(),
+	DayAsInt = calendar:day_of_the_week(D),
+	DayInterval = lists:nth(DayAsInt, DayIntervals),
+	case lists:nth(H+1, DayInterval) of
+		1 -> true;
+		_ -> false
+	end.
 -endif.
 

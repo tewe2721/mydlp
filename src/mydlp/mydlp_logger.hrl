@@ -88,6 +88,10 @@
 	?LOGGER_NOTIFY(error, Format, Args)
         ).
 
+-define(OPR_LOG(Format, Args),
+	?LOGGER_NOTIFY(error, "OPR: " ++ Format, Args)
+        ).
+
 -define(BINARY_LOG(ItemName, Binary),
         FN = mydlp_api:ref_to_fn(?CFG(log_dir), "binlog", erlang:now()),
         file:write_file(FN, Binary),
