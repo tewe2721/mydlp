@@ -351,7 +351,7 @@ get_remote_mc_module(FilterId, Addr, UserH) ->
 
 get_fid(SIpAddr) -> aqc({get_fid, SIpAddr}, cache).
 
-remove_site(FilterId) -> aqc({remove_site, FilterId}, flush).
+remove_site(FilterId) -> aqc({remove_site, FilterId}, flush, dirty, 90000).
 
 add_fhash(Hash, FileId, GroupId) when is_binary(Hash) -> 
 	aqc({add_fhash, Hash, FileId, GroupId}, flush).
@@ -431,7 +431,7 @@ pdm_of_gid(Fingerprints, GroupId) -> aqc({pdm_of_gid, Fingerprints, GroupId}, no
 write(RecordList, CacheOption) when is_list(RecordList) -> 
 	T = 15000 + ( length(RecordList) * 10 ),
 	Timeout = case T > 150000 of true -> 150000; _ -> T end,
-	aqc({write, RecordList}, CacheOption, transaction, Timeout);
+	aqc({write, RecordList}, CacheOption, dirty, Timeout);
 write(Record, CacheOption) -> write([Record], CacheOption).
 
 write(Item) -> write(Item, flush).
