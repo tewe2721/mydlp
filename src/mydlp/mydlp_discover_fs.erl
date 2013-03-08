@@ -40,6 +40,7 @@
 	q/2,
 	q/3,
 	continue_paused_discovery/0,
+	is_discovery_finished/1,
 	stop/0]).
 
 -ifdef(__MYDLP_ENDPOINT).
@@ -97,13 +98,18 @@ is_exceptional(_FilePath) -> false.
 
 %%%%%%%%%%%%%  API
 
+is_discovery_finished(RuleId) -> gen_server:call(?MODULE, {is_discovery_finished, RuleId}).
+
 ql(List) -> gen_server:cast(?MODULE, {ql, List}).
 
 q(FilePath, RuleIndex) -> q(none, FilePath, RuleIndex).
 
 q(ParentId, FilePath, RuleIndex) -> gen_server:cast(?MODULE, {q, ParentId, FilePath, RuleIndex}).
 
-continue_paused_discovery() -> gen_server:cast(?MODULE, push_paused_to_proc_queue).
+continue_paused_discovery() ->
+	erlang:display("come here come here"), 
+	gen_server:cast(?MODULE, push_paused_to_proc_queue),
+	consume().
 
 -ifdef(__MYDLP_ENDPOINT).
 
@@ -118,11 +124,19 @@ schedule_discovery() -> gen_server:cast(?MODULE, schedule_discovery).
 handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
 
+handle_call({stop_discovery_by_rule_id, RuleId}, _From, #state{discover_queue=Q}=State) ->
+	Q1 = drop_items_by_rule_id(RuleId, Q),
+	{reply, ok, State#state{discover_queue=Q1}};
+
+handle_call({is_discovery_finished, RuleId}, _From, #state{discover_queue=Q}=State) ->
+	Reply = is_finished_by_rule_id(RuleId, Q),
+	{reply, Reply, State};
+
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
 handle_cast({ql, List}, State) ->
-	[ q(FilePath, RuleIndex) || {FilePath, RuleIndex} <- List ],
+	[ q(FilePath, RuleIndex) || {RuleIndex, FilePath} <- List ],
 	{noreply, State};
 
 handle_cast({q, ParentId, FilePath, RuleIndex}, #state{discover_queue=Q, discover_inprog=false} = State) ->
@@ -135,18 +149,29 @@ handle_cast({q, ParentId, FilePath, RuleIndex}, #state{discover_queue=Q, discove
 	Q1 = queue:in({ParentId, FilePath, RuleIndex}, Q),
 	{noreply,State#state{discover_queue=Q1}};
 
-handle_cast({push_paused_to_proc_queue}, #state{discover_queue=Q, paused_queue=PQ} = State) ->
-	consume(),
+handle_cast(push_paused_to_proc_queue, #state{discover_queue=Q, paused_queue=PQ} = State) ->
+	erlang:display("I am here discovery fs"),
+	reset_discover_cache(),
 	{noreply, State#state{discover_queue=queue:join(Q, PQ), paused_queue=queue:new()}};
+
+handle_cast({del_fs_entries, RuleIndex}, State) ->
+	erlang:display("FS DEL ENTRY"),
+	mydlp_mnesia:del_fs_entries_by_rule_id(RuleIndex),
+	{noreply, State};
 
 handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ} = State) ->
 	case queue:out(Q) of
 		{{value, {ParentId, FilePath, RuleIndex}=Item}, Q1} ->
-			case is_paused_by_rule_id(RuleIndex) of
-				true -> PQ1 = queue:in(Item, PQ),
+			case is_paused_or_stopped_by_rule_id(RuleIndex) of
+				paused -> % rule is paused, push the item pause queue
+					PQ1 = queue:in(Item, PQ),
 					consume(),
 					{noreply, State#state{discover_queue=Q1, paused_queue=PQ1}};
-				false ->
+				stopped -> % rule is stopped, drop item
+					consume(),
+					{noreply, State#state{discover_queue=Q1, paused_queue=PQ}};
+				none ->
+					erlang:display({consume, none, FilePath}),
 					try	case has_discover_rule() of
 							true -> case is_exceptional(FilePath) of
 									false -> discover(ParentId, FilePath, RuleIndex);
@@ -163,9 +188,9 @@ handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ} = State) ->
 							{noreply, State#state{discover_queue=Q1}} end
 			end;
 		{empty, _} ->
-			State1 = schedule_timer(State, ?CFG(discover_fs_interval)),
+			%State1 = schedule_timer(State, ?CFG(discover_fs_interval)),
 			unset_discover_inprog(),
-			{noreply, State1#state{discover_inprog=false}}
+			{noreply, State#state{discover_inprog=false}}
 	end;
 
 handle_cast(stop_discovery, State) ->
@@ -199,7 +224,7 @@ handle_info(_Info, State) ->
 
 -ifdef(__MYDLP_NETWORK).
 
-is_paused_by_rule_id(RuleId) -> gen_server:call(mydlp_discovery_manager, {is_paused, RuleId}).
+is_paused_or_stopped_by_rule_id(RuleId) -> gen_server:call(mydlp_discovery_manager, {is_paused_or_stopped, RuleId}).
 
 has_discover_rule() -> true.
 
@@ -251,6 +276,8 @@ schedule() ->
 
 consume() -> gen_server:cast(?MODULE, consume).
 
+delete_fs_entries_with_rule_index(RuleIndex) -> gen_server:cast(?MODULE, {del_fs_entries, RuleIndex}).
+
 start_link() ->
 	case gen_server:start_link({local, ?MODULE}, ?MODULE, [], []) of
 		{ok, Pid} -> {ok, Pid};
@@ -272,7 +299,7 @@ init([]) ->
 
 init([]) -> 
 	reset_discover_cache(),
-	{ok, #state{discover_queue=queue:new()}}.
+	{ok, #state{discover_queue=queue:new(), paused_queue=queue:new()}}.
 
 -endif.
 
@@ -283,6 +310,29 @@ code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 
 %%%%%%%%%%%%%%%%% internal
+
+is_finished_by_rule_id(RuleId, Q) ->
+	case queue:out(Q) of
+		 {{value, {_ParentId, _FilePath, RuleIndex}=Item}, Q1} -> 
+			case RuleIndex of
+				RuleId -> false;
+				_ -> is_finished_by_rule_id(RuleId, Q1)
+			end;
+		{empty, _Q2} -> true
+	end.
+
+drop_items_by_rule_id(RuleId, Q) -> drop_items_by_rule_id(RuleId, Q, queue:new()).
+
+drop_items_by_rule_id(RuleId, Q, AccQ) ->
+	case queue:out(Q) of
+		 {{value, {_ParentId, _FilePath, RuleIndex}=Item}, Q1} -> 
+			AccQ1 = case RuleIndex of
+					RuleId -> queue:in(Item, AccQ);
+					_ -> AccQ
+				end,
+			drop_items_by_rule_id(RuleId, Q1, AccQ1);
+		{empty, _Q2} -> AccQ
+	end.
 
 meta(FilePath) ->
 	{ok, FileInfo} = file:read_file_info(FilePath),
@@ -322,6 +372,7 @@ set_prop_extra(ObjId) ->
 -endif.
 
 discover_file(#fs_entry{file_id={FP, RuleIndex}}) ->
+	erlang:display({discover_file, FP}),
 	try	timer:sleep(20),
 		{ok, ObjId} = mydlp_container:new(),
 		ok = mydlp_container:setprop(ObjId, "rule_index", RuleIndex),
@@ -362,11 +413,13 @@ discover(ParentId, FilePath, RuleIndex) ->
 discover1(ParentId, FilePath, RuleIndex) ->
 	case filelib:is_regular(FilePath) of
 		true -> E = fs_entry(ParentId, FilePath, RuleIndex),
+			erlang:display({file, is_changed(E)}),
 			case is_changed(E) of
 				true -> discover_file(E);
 				false -> ok end;
 	false -> case filelib:is_dir(FilePath) of
 		true -> E = fs_entry(ParentId, FilePath, RuleIndex),
+			erlang:display({dir, is_changed(E)}),
 			case is_changed(E) of
 				true -> discover_dir(E);
 				false -> discover_dir_dir(E) end;
@@ -392,9 +445,7 @@ unset_discover_inprog() ->
 set_discover_inprog() -> ok.
 
 unset_discover_inprog() -> 
-	reset_discover_cache(),
-	mydlp_discover_rfs:finished().
-
+	reset_discover_cache().
 -endif.
 
 reset_discover_cache() ->

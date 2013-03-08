@@ -53,6 +53,7 @@
 	is_hash_of_gid/2,
 	get_fs_entry/1,
 	del_fs_entry/1,
+	del_fs_entries_by_rule_id/1,
 	add_fs_entry/1,
 	fs_entry_list_dir/1,
 	pdm_of_gid/2,
@@ -449,6 +450,8 @@ get_fs_entry(FilePath) -> aqc({get_fs_entry, FilePath}, nocache).
 
 del_fs_entry(FilePath) -> aqc({del_fs_entry, FilePath}, nocache).
 
+del_fs_entries_by_rule_id(RuleId) -> aqc({del_fs_entries_by_rule_id, RuleId}, nocache).
+
 fs_entry_list_dir(EntryId) -> aqc({fs_entry_list_dir, EntryId}, nocache).
 
 add_fs_entry(Record) when is_tuple(Record) -> write(Record, nocache).
@@ -607,9 +610,14 @@ handle_result({is_valid_usb_device_id, _DeviceId}, {atomic, Result}) ->
 		[] -> false;
 		[_|_] -> true end;
 
+
 handle_result(Query, Result) -> handle_result_common(Query, Result).
 
 -endif.
+
+handle_result_common({del_fs_entries_by_rule_id, RuleId}, {atomic, Result}) ->
+	erlang:display("TABLE IS CLEARED"),
+	remove_reduntant_fs_entries(Result, RuleId);
 
 handle_result_common({is_mime_of_dfid, _Mime, DFIs}, {atomic, MDFIs}) -> 
 	lists:any(fun(I) -> lists:member(I, DFIs) end, MDFIs);
@@ -1164,9 +1172,18 @@ handle_query({is_valid_usb_device_id, DeviceId}) ->
 		]),
 	?QLCE(Q);
 
+
+
 handle_query(Query) -> handle_query_common(Query).
 
 -endif.
+
+handle_query_common({del_fs_entries_by_rule_id, _RuleId}) ->
+	erlang:display("IT IS HERE"),
+	Q = ?QLCQ([F ||
+		F <- mnesia:table(fs_entry)
+		]),
+	?QLCE(Q);
 
 handle_query_common({is_mime_of_dfid, Mime, _DFIs}) ->
 	Q = ?QLCQ([M#mime_type.data_format_id ||
@@ -1833,6 +1850,14 @@ pdm_hit_count([Fingerprint|Rest], GroupId, Acc) ->
 		[] -> pdm_hit_count(Rest, GroupId, Acc);
 		[_|_] -> pdm_hit_count(Rest, GroupId, Acc + 1) end;
 pdm_hit_count([], _GroupId, Acc) -> Acc.
+
+remove_reduntant_fs_entries([#fs_entry{file_id={_, RuleId}}=Item|Rest], RuleId) ->
+	mnesia:dirty_delete_object(Item),
+	remove_reduntant_fs_entries(Rest, RuleId);
+remove_reduntant_fs_entries([_|Rest], RuleId) ->
+	mnesia:dirty_delete_object(Rest, RuleId);
+remove_reduntant_fs_entries([], _RuleId) -> ok.
+
 
 -ifdef(__MYDLP_NETWORK).
 
