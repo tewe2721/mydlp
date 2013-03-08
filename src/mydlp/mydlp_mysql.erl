@@ -38,7 +38,7 @@
 -export([start_link/0,
 	compile_customer/0,
 	compile_customer/1,
-	push_log/9,
+	push_log/10,
 	requeued/1,
 	is_multisite/0,
 	get_denied_page/0,
@@ -75,8 +75,8 @@
 
 %%%%%%%%%%%%% MyDLP Thrift RPC API
 
-push_log(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc) ->
-	gen_server:call(?MODULE, {push_log, {Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc}}, 60000).
+push_log(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc, ReportId) ->
+	gen_server:call(?MODULE, {push_log, {Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc, ReportId}}, 60000).
 
 insert_log_requeue(LogId) -> 
 	gen_server:cast(?MODULE, {insert_log_requeue, LogId}).
@@ -134,14 +134,14 @@ handle_call(get_denied_page, _From, State) ->
 		_Else -> not_found end,
         {reply, Reply, State};
 
-handle_call({push_log, {Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc}}, From, State) ->
+handle_call({push_log, {Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc, ReportId}}, From, State) ->
 	Worker = self(),
 	?ASYNC(fun() ->
-			{_FilterId, RuleId1, Ip1, User1, To1, ActionS, ChannelS, Misc1, Visible} = 
-				pre_push_log(RuleId, Ip, User, To, Action, Channel, Misc),
+			{_FilterId, RuleId1, Ip1, User1, To1, ActionS, ChannelS, Misc1, ReportId1, Visible} = 
+				pre_push_log(RuleId, Ip, User, To, Action, Channel, Misc, ReportId),
 			{atomic, ILId} = ltransaction(fun() ->
 					psqt(insert_incident, 
-						[Time, ChannelS, RuleId1, Ip1, User1, To1, ITypeId, ActionS, Misc1, Visible]),
+						[Time, ChannelS, RuleId1, Ip1, User1, To1, ITypeId, ActionS, Misc1, ReportId1, Visible]),
 					last_insert_id_t() end, 30000),
 			Reply = ILId,	
                         Worker ! {async_reply, Reply, From}
@@ -373,7 +373,7 @@ init([]) ->
 		{usb_devices, <<"SELECT deviceId, action FROM USBDevice">>},
 		{insert_fingerprint, <<"INSERT INTO DocumentFingerprint (id, fingerprint, document_id) VALUES (NULL, ?, ?)">>},
 		%{customer_by_id, <<"SELECT id,static_ip FROM sh_customer WHERE id=?">>},
-		{insert_incident, <<"INSERT INTO IncidentLog (id, date, channel, ruleId, sourceIp, sourceUser, destination, informationTypeId, action, matcherMessage, visible) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)">>},
+		{insert_incident, <<"INSERT INTO IncidentLog (id, date, channel, ruleId, sourceIp, sourceUser, destination, informationTypeId, action, matcherMessage, reportId, visible) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)">>},
 		{insert_incident_file_data, <<"INSERT INTO IncidentLogFile (id, incidentLog_id, filename, content_id) VALUES (NULL, ?, ?, ?)">>},
 		{insert_incident_file_bp, <<"INSERT INTO IncidentLogFile (id, incidentLog_id, filename, blueprint_id) VALUES (NULL, ?, ?, ?)">>},
 %		{insert_archive, <<"INSERT INTO log_archive (id, customer_id, rule_id, protocol, src_ip, src_user, destination, log_archive_file_id) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)">>},
@@ -1229,7 +1229,7 @@ find_match_id([#match{id=Id, func=Func, func_params=FuncParam}|_Rest], Func, Fun
 find_match_id([_M|Rest], Func, FuncParams) -> find_match_id(Rest, Func, FuncParams);
 find_match_id([], _Func, _FuncParams) -> none.
 
-pre_push_log(RuleId, Ip, User, Destination, Action, Channel, Misc) -> 
+pre_push_log(RuleId, Ip, User, Destination, Action, Channel, Misc, ReportId) -> 
 %	{FilterId, RuleId1} = case RuleId of
 %		{dr, CId} -> {CId, 0};
 %		-1 = RuleId -> {mydlp_mnesia:get_dfid(), RuleId};	% this shows default action had been enforeced 
@@ -1279,7 +1279,7 @@ pre_push_log(RuleId, Ip, User, Destination, Action, Channel, Misc) ->
 		M when is_list(M) -> unicode:characters_to_binary(M);
 		Else4 -> Else4
 	end,
-	{0, RuleId, Ip1, User1, Destination1, ActionS, ChannelS, Misc1, Visible}.
+	{0, RuleId, Ip1, User1, Destination1, ActionS, ChannelS, Misc1, ReportId, Visible}.
 
 pre_insert_log(Filename) ->
 	Filename1 = case Filename of

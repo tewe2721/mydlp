@@ -35,9 +35,11 @@
 
 %% API
 -export([start_link/0,
+	stop/0,
 	start_on_demand_discovery/1,
 	stop_discovery_on_demand/1,
 	pause_discovery_on_demand/1,
+	get_report_id/1,
 	start_discovery/1,
 	stop_discovery/1,
 	pause_discovery/1,
@@ -88,10 +90,19 @@ pause_discovery_on_demand(RuleOrigId) ->
 	gen_server:cast(?MODULE, {pause_on_demand, RuleId}),
 	ok.
 
+get_report_id(RuleId) -> gen_server:call(?MODULE, {get_report_id, RuleId}).
+
 %%%%%%%%%%%%%% gen_server handles
 
 handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
+
+handle_call({get_report_id, RuleId}, _From, #state{discovery_dict=Dict}=State) ->
+	Reply = case dict:find(RuleId, Dict) of
+			{ok, {_, ReportId}} -> ReportId;
+			_ -> -1
+		end,
+	{reply, Reply, State};
 
 handle_call({is_paused_or_stopped, RuleId}, _From, #state{discovery_dict=Dict}=State) ->
 	Reply = case dict:find(RuleId, Dict) of
@@ -350,7 +361,7 @@ call_continue_remote_storage_discovery(RuleId, Dict) ->
 
 call_continue_ep_discovery(_RuleId) -> ok.	
 
-generate_discovery_report(ReportId) -> ok.
+generate_discovery_report(_ReportId) -> ok.
 
 generate_report_id(RuleId) ->
 	integer_to_list(RuleId) ++ "_" ++ integer_to_list(calendar:datetime_to_gregorian_seconds(erlang:localtime())).

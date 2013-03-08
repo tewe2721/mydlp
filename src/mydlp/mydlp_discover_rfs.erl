@@ -67,9 +67,9 @@
 
 release_mount_by_rule_id(RuleId) -> erlang:display("HEDE"), gen_server:call(?MODULE, {release_mount_by_rule_id, RuleId}).
 
-start_remote_discovery() ->
-	RemoteStorages = mydlp_mnesia:get_remote_storages(),
-	consume(RemoteStorages).
+start_remote_discovery() -> ok.
+	%RemoteStorages = mydlp_mnesia:get_remote_storages().
+	%consume(RemoteStorages).
 
 finished() -> gen_server:cast(?MODULE, finished).
 
@@ -95,7 +95,7 @@ handle_call({release_mount_by_rule_id, RuleId}, _From, #state{mount_dict=Dict}=S
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-handle_cast({start_by_rule_id, RuleId, ReportId}, #state{mount_dict=Dict}=State) ->
+handle_cast({start_by_rule_id, RuleId, _ReportId}, #state{mount_dict=Dict}=State) ->
 	RemoteStorages = mydlp_mnesia:get_remote_storages_by_rule_id(RuleId),
 	Dict1 = case dict:find(RuleId, Dict) of
 			{ok, FilePath} -> release_mount([FilePath]),

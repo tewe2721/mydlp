@@ -276,8 +276,6 @@ schedule() ->
 
 consume() -> gen_server:cast(?MODULE, consume).
 
-delete_fs_entries_with_rule_index(RuleIndex) -> gen_server:cast(?MODULE, {del_fs_entries, RuleIndex}).
-
 start_link() ->
 	case gen_server:start_link({local, ?MODULE}, ?MODULE, [], []) of
 		{ok, Pid} -> {ok, Pid};
@@ -313,7 +311,7 @@ code_change(_OldVsn, State, _Extra) ->
 
 is_finished_by_rule_id(RuleId, Q) ->
 	case queue:out(Q) of
-		 {{value, {_ParentId, _FilePath, RuleIndex}=Item}, Q1} -> 
+		 {{value, {_ParentId, _FilePath, RuleIndex}}, Q1} -> 
 			case RuleIndex of
 				RuleId -> false;
 				_ -> is_finished_by_rule_id(RuleId, Q1)
@@ -376,6 +374,8 @@ discover_file(#fs_entry{file_id={FP, RuleIndex}}) ->
 	try	timer:sleep(20),
 		{ok, ObjId} = mydlp_container:new(),
 		ok = mydlp_container:setprop(ObjId, "rule_index", RuleIndex),
+		ReportId = mydlp_discovery_manager:get_report_id(RuleIndex),
+		ok = mydlp_container:setprop(ObjId, "report_id", ReportId),
 		set_prop_extra(ObjId),
 		ok = mydlp_container:pushfile(ObjId, {raw, FP}),
 		ok = mydlp_container:eof(ObjId),

@@ -71,7 +71,8 @@
                 itype_id=undefined,
                 file=undefined,
                 misc=undefined,
-                payload=undefined
+                payload=undefined,
+		report_id=undefined
         }).
 
 -define(ACL_LOG(Log),
