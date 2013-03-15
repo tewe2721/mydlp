@@ -69,6 +69,8 @@
        The examples below can be used to load some solr-contribs along 
        with their external dependencies.
     -->
+  <lib dir="../lib" regex=".*\.jar" />
+  <!--
   <lib dir="../../../contrib/extraction/lib" regex=".*\.jar" />
   <lib dir="../../../dist/" regex="solr-cell-\d.*\.jar" />
 
@@ -80,7 +82,7 @@
 
   <lib dir="../../../contrib/velocity/lib" regex=".*\.jar" />
   <lib dir="../../../dist/" regex="solr-velocity-\d.*\.jar" />
-
+  -->
   <!-- If a 'dir' option (with or without a regex) is used and nothing
        is found that matches, it will be ignored
     -->
@@ -101,7 +103,7 @@
        replication is in use, this should match the replication
        configuration.
     -->
-  <dataDir>${solr.data.dir:}</dataDir>
+  <dataDir>${solr.data.dir:/var/lib/mydlp/solr}</dataDir>
 
 
   <!-- The DirectoryFactory to use for indexes.
@@ -319,7 +321,7 @@
          "dir" - the target directory for transaction logs, defaults to the
                 solr data directory.  --> 
     <updateLog>
-      <str name="dir">${solr.ulog.dir:}</str>
+      <str name="dir">${solr.data.dir:}</str>
     </updateLog>
  
     <!-- AutoCommit
