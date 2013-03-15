@@ -21,20 +21,20 @@
 solrdir = $(datadir)/mydlp/solr
 
 solr_DATA = \
-	solr-4.2.0/dist/solr-4.2.0.war
+	apache-solr-4.0.0/dist/apache-solr-4.0.0.war
 
 solrlibdir = $(datadir)/mydlp/solr/lib
 
 solrlib_DATA = \
-	solr-4.2.0/dist/solr-cell-4.2.0.jar
+	apache-solr-4.0.0/dist/apache-solr-cell-4.0.0.jar
 
 backenddir = $(datadir)/mydlp/backend
 
-solr-4.2.0.tgz:
-	@$(WGET) -q http://ftp/ftp/mydlp/mydlp-distro/solr/solr-4.2.0.tgz
+apache-solr-4.0.0.tgz:
+	@$(WGET) -q http://ftp/ftp/mydlp/mydlp-distro/solr/apache-solr-4.0.0.tgz
 
-solr-4.2.0/dist/solr-4.2.0.war solr-4.2.0/dist/solr-cell-4.2.0.jar: solr-4.2.0.tgz
-	@$(TAR) -zxf solr-4.2.0.tgz
+apache-solr-4.0.0/dist/apache-solr-4.0.0.war apache-solr-4.0.0/dist/apache-solr-cell-4.0.0.jar: apache-solr-4.0.0.tgz
+	@$(TAR) -zxf apache-solr-4.0.0.tgz
 	
 
 install-data-hook:
