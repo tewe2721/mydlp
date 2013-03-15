@@ -201,9 +201,9 @@ process_log_tuple(#log{channel=mail, destination={_RcptTo, CompleteRcpts}} = Log
 process_log_tuple(Log) -> process_log_tuple1(Log).
 
 process_log_tuple1(#log{file=[]}) -> ok;
-process_log_tuple1(#log{time=Time, channel=Channel, rule_id=RuleId, action=Action, ip=Ip, user=User, destination=To, file=Files, itype_id = ITypeId, misc=Misc, payload=Payload, report_id=ReportId}) ->
+process_log_tuple1(#log{time=Time, channel=Channel, rule_id=RuleId, action=Action, ip=Ip, user=User, destination=To, file=Files, itype_id = ITypeId, misc=Misc, payload=Payload, group_id=GroupId}) ->
 	IsLogData = mydlp_api:is_store_action(Action),
-	LogId = mydlp_mysql:push_log(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc, ReportId),
+	LogId = mydlp_mysql:push_log(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc, GroupId),
 	notify_users(RuleId),
 	process_log_files(LogId, IsLogData, Files),
 	case {Channel, Action} of

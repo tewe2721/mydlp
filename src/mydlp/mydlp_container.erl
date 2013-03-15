@@ -518,9 +518,9 @@ get_user(_Obj) -> get_ep_meta("user").
 -endif.
 
 log_req(#object{prop_dict=PD}=Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
-	{User, ReportId} = case get_channel(Obj) of
+	{User, GroupId} = case get_channel(Obj) of
 				api -> {get_api_user(Obj), -1};
-				remote_discovery -> {ok, RId} = dict:find("report_id", PD),
+				remote_discovery -> {ok, RId} = dict:find("group_id", PD),
 						{get_remote_user(Obj), RId};
 				_Else -> {get_user(Obj), -1} end,
 	Channel = get_channel(Obj),
@@ -528,7 +528,7 @@ log_req(#object{prop_dict=PD}=Obj, Action, {{rule, RuleId}, {file, File}, {itype
 	Destination = case get_destination(Obj) of
 		undefined -> nil;
 		Else -> Else end,
-	log_req1(Time, Channel, RuleId, Action, User, Destination, IType, File, Misc, ReportId).
+	log_req1(Time, Channel, RuleId, Action, User, Destination, IType, File, Misc, GroupId).
 
 execute_custom_action(seclore, {HotFolderId, ActivityComments}, Obj) ->
 	case get_destination(Obj) of % Assuming this is a discovery or endpoint object with a filepath,
@@ -547,17 +547,17 @@ execute_custom_action(seclore, {HotFolderId, ActivityComments}, Obj) ->
 
 -ifdef(__MYDLP_ENDPOINT).
 
-log_req1(Time, Channel, RuleId, Action, User, Destination, IType, File, Misc, ReportId) ->
+log_req1(Time, Channel, RuleId, Action, User, Destination, IType, File, Misc, GroupId) ->
 	case {Channel, Action, Misc, ?CFG(ignore_discover_max_size_exceeded)} of
 		{discovery, log, max_size_exceeded, true} -> ok;
-		_Else2 -> ?ACL_LOG(#log{time=Time, channel=Channel, rule_id=RuleId, action=Action, ip=nil, user=User, destination=Destination, itype_id=IType, file=File, misc=Misc, report_id=ReportId}) end.
+		_Else2 -> ?ACL_LOG(#log{time=Time, channel=Channel, rule_id=RuleId, action=Action, ip=nil, user=User, destination=Destination, itype_id=IType, file=File, misc=Misc, group_id=GroupId}) end.
 
 -endif.
 
 -ifdef(__MYDLP_NETWORK).
 
-log_req1(Time, Channel, RuleId, Action, User, Destination, IType, File, Misc, ReportId) ->
-	?ACL_LOG(#log{time=Time, channel=Channel, rule_id=RuleId, action=Action, ip=nil, user=User, destination=Destination, itype_id=IType, file=File, misc=Misc, report_id=ReportId}).
+log_req1(Time, Channel, RuleId, Action, User, Destination, IType, File, Misc, GroupId) ->
+	?ACL_LOG(#log{time=Time, channel=Channel, rule_id=RuleId, action=Action, ip=nil, user=User, destination=Destination, itype_id=IType, file=File, misc=Misc, group_id=GroupId}).
 
 -endif.
 

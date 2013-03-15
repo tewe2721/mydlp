@@ -162,6 +162,7 @@ load_src(Src) ->
 	{mysql_password, string, ""},
 	{mysql_database, string, "mydlp"},
 	{mysql_log_database, string, "mydlp_log"},
+	{mysql_report_database, string, "mydlp_report"},
 	{mysql_pool_size, integer, "8"},
 	{resources_dir, string, "/usr/share/mydlp/resources/"},
 	{quarantine_dir, string, "/var/lib/mydlp/quarantine/"},

@@ -106,7 +106,7 @@
 	get_remote_storages_by_rule_id/1,
 	get_rule_id_by_web_server_id/1,
 	get_web_server/1,
-	get_web_servers/0,
+	get_web_servers_by_rule_id/1,
 	get_web_entry/1,
 	add_web_entry/1,
 	web_entry_list_links/1,
@@ -114,6 +114,7 @@
 	get_schedules_by_hour/1,
 	get_availabilty_by_rule_id/1,
 	get_rule_id_by_orig_id/1,
+	get_orig_id_by_rule_id/1,
 	get_rule_channel/1
 	]).
 
@@ -410,7 +411,7 @@ get_remote_storages_by_rule_id(RuleId) -> aqc({get_remote_storages_by_rule_id, R
 
 get_rule_id_by_web_server_id(Id) -> aqc({get_rule_id_by_web_server_id, Id}, cache).
 
-get_web_servers() -> aqc(get_web_servers, cache).
+get_web_servers_by_rule_id(RuleId) -> aqc({get_web_servers_by_rule_id, RuleId}, cache).
 
 get_web_server(WebServerId) -> aqc({get_web_server, WebServerId}, cache).
 
@@ -425,6 +426,8 @@ get_schedules_by_hour(Day) -> aqc({get_schedules_by_hour, Day}, nocache).
 get_availabilty_by_rule_id(RuleId) -> aqc({get_availabilty_by_rule_id, RuleId}, nocache).
 
 get_rule_id_by_orig_id(OrigRuleId) -> aqc({get_rule_id_by_orig_id, OrigRuleId}, nocache).
+
+get_orig_id_by_rule_id(RuleId) -> aqc({get_orig_id_by_rule_id, RuleId}, nocache).
 
 get_rule_channel(RuleId) -> aqc({get_rule_channel, RuleId}, nocache).
 
@@ -544,6 +547,11 @@ handle_result({get_rule_id_by_orig_id, _}, {atomic, Result}) ->
 		[] -> none;
 		[R] -> R end;
 
+handle_result({get_orig_id_by_rule_id, _}, {atomic, Result}) ->
+	case Result of
+		[] -> none;
+		[R] -> R end;
+
 handle_result({get_rule_channel, _}, {atomic, Result}) ->
 	case Result of
 		[] -> none;
@@ -616,7 +624,6 @@ handle_result(Query, Result) -> handle_result_common(Query, Result).
 -endif.
 
 handle_result_common({del_fs_entries_by_rule_id, RuleId}, {atomic, Result}) ->
-	erlang:display("TABLE IS CLEARED"),
 	remove_reduntant_fs_entries(Result, RuleId);
 
 handle_result_common({is_mime_of_dfid, _Mime, DFIs}, {atomic, MDFIs}) -> 
@@ -905,9 +912,10 @@ handle_query({get_matchers, all}) ->
 		]),
 	?QLCE(Q);
 
-handle_query(get_web_servers) ->
+handle_query({get_web_servers_by_rule_id, RuleId}) ->
 	Q = ?QLCQ([W ||
-		W <- mnesia:table(web_server)
+		W <- mnesia:table(web_server),
+		W#web_server.rule_id == RuleId
 		]),
 	?QLCE(Q);
 
@@ -972,6 +980,13 @@ handle_query({get_rule_id_by_orig_id, OrigRuleId}) ->
 	Q = ?QLCQ([D#rule.id ||
 		D <- mnesia:table(rule),
 		D#rule.orig_id == OrigRuleId
+	]),
+	?QLCE(Q);
+
+handle_query({get_orig_id_by_rule_id, RuleId}) ->
+	Q = ?QLCQ([D#rule.orig_id ||
+		D <- mnesia:table(rule),
+		D#rule.id == RuleId
 	]),
 	?QLCE(Q);
 
@@ -1179,7 +1194,6 @@ handle_query(Query) -> handle_query_common(Query).
 -endif.
 
 handle_query_common({del_fs_entries_by_rule_id, _RuleId}) ->
-	erlang:display("IT IS HERE"),
 	Q = ?QLCQ([F ||
 		F <- mnesia:table(fs_entry)
 		]),
@@ -1851,11 +1865,14 @@ pdm_hit_count([Fingerprint|Rest], GroupId, Acc) ->
 		[_|_] -> pdm_hit_count(Rest, GroupId, Acc + 1) end;
 pdm_hit_count([], _GroupId, Acc) -> Acc.
 
-remove_reduntant_fs_entries([#fs_entry{file_id={_, RuleId}}=Item|Rest], RuleId) ->
-	mnesia:dirty_delete_object(Item),
+remove_reduntant_fs_entries([#fs_entry{file_id={_, RuleId1}}=Item|Rest], RuleId) ->
+	case RuleId1 of	
+		RuleId -> mnesia:dirty_delete_object(Item);
+		_ -> ok
+	end,
 	remove_reduntant_fs_entries(Rest, RuleId);
-remove_reduntant_fs_entries([_|Rest], RuleId) ->
-	mnesia:dirty_delete_object(Rest, RuleId);
+%remove_reduntant_fs_entries([_|Rest], RuleId) ->
+%	mnesia:dirty_delete_object(Rest, RuleId);
 remove_reduntant_fs_entries([], _RuleId) -> ok.
 
 

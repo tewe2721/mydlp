@@ -41,6 +41,12 @@
 %	test/0
 ]).
 
+-ifdef(__MYDLP_ENDPOINT)
+
+-define(_OPR_LOG_HANDLE(Context, Term)) -> mydlp_item_push:p({endpoint_opr_log, Context, Term});
+
+-endif.
+
 -record(state, {
 	acl_fd,
 	error_fd,
@@ -88,6 +94,8 @@ handle_event({_ReportLevel, _, {_FromPid, StdType, Report}}, State) when is_atom
 handle_event({EventLevel, _, {_FromPid, Fmt, Data}}, State) ->
 	try	Message = io_lib:format (Fmt, Data),
 		case EventLevel of
+                        {operational, discovery} -> ?_OPR_LOG_HANDLE(discovery, {key, Message});
+                        {operational, general} -> ?_OPR_LOG_HANDLE(general, {key, Message});
 			error -> filelog_err(State, Message);
 			acl_msg -> filelog_acl(State, Message);
 			_Else -> ok

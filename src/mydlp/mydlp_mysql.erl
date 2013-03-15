@@ -39,6 +39,10 @@
 	compile_customer/0,
 	compile_customer/1,
 	push_log/10,
+	push_opr_log/2,
+	push_discovery_report/4,
+	update_report_status/2,
+	update_report_as_finished/1,
 	requeued/1,
 	is_multisite/0,
 	get_denied_page/0,
@@ -66,17 +70,31 @@
 	password,
 	database,
 	database_l,
+	database_r,
 	pool_size,
 	master_pid,
 	pool_pids,
 	pool_pids_l,
+	pool_pids_r,
 	compile_progress
 }).
 
 %%%%%%%%%%%%% MyDLP Thrift RPC API
 
-push_log(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc, ReportId) ->
-	gen_server:call(?MODULE, {push_log, {Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc, ReportId}}, 60000).
+push_log(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc, GroupId) ->
+	gen_server:call(?MODULE, {push_log, {Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc, GroupId}}, 60000).
+
+push_opr_log(Context, Term) ->
+	gen_server:call(?MODULE, {push_opr_log, Context, Term}, 60000).
+
+push_discovery_report(StartDate, GroupId, RuleId, Status) ->
+	gen_server:call(?MODULE, {push_discovery_report, StartDate, GroupId, RuleId, Status}, 60000).
+
+update_report_status(GroupId, NewStatus) ->
+	gen_server:cast(?MODULE, {update_report_status, GroupId, NewStatus}).
+
+update_report_as_finished(GroupId) ->
+	gen_server:cast(?MODULE, {update_report_as_finished, GroupId}).
 
 insert_log_requeue(LogId) -> 
 	gen_server:cast(?MODULE, {insert_log_requeue, LogId}).
@@ -134,14 +152,55 @@ handle_call(get_denied_page, _From, State) ->
 		_Else -> not_found end,
         {reply, Reply, State};
 
-handle_call({push_log, {Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc, ReportId}}, From, State) ->
+handle_call({push_log, {Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc, GroupId}}, From, State) ->
 	Worker = self(),
 	?ASYNC(fun() ->
-			{_FilterId, RuleId1, Ip1, User1, To1, ActionS, ChannelS, Misc1, ReportId1, Visible} = 
-				pre_push_log(RuleId, Ip, User, To, Action, Channel, Misc, ReportId),
+			{_FilterId, RuleId1, Ip1, User1, To1, ActionS, ChannelS, Misc1, GroupId1, Visible} = 
+				pre_push_log(RuleId, Ip, User, To, Action, Channel, Misc, GroupId),
 			{atomic, ILId} = ltransaction(fun() ->
 					psqt(insert_incident, 
-						[Time, ChannelS, RuleId1, Ip1, User1, To1, ITypeId, ActionS, Misc1, ReportId1, Visible]),
+						[Time, ChannelS, RuleId1, Ip1, User1, To1, ITypeId, ActionS, Misc1, GroupId1, Visible]),
+					last_insert_id_t() end, 30000),
+			Reply = ILId,	
+                        Worker ! {async_reply, Reply, From}
+		end, 30000),
+	{noreply, State};
+
+handle_call({push_opr_log, Context, {opr_log, #opr_log{time=Time, channel=Channel, rule_id=RuleId, message_key=MessageKey, group_id=GroupId}}}, From , State) ->
+	erlang:display(push_opr_log_opr_log),
+	Worker = self(),
+	?ASYNC(fun() ->
+			{Time1, _ChannelS, RuleId1, MessageKey1, GroupId1, Visible, Severity} = pre_push_opr_log(Time, Channel, RuleId, MessageKey, GroupId),
+			{atomic, ILId} = ltransaction(fun() ->
+					psqt(insert_opr_log_disc, 
+						[Time1, Context, RuleId1, GroupId1, MessageKey1, Visible, Severity]),
+					last_insert_id_t() end, 30000),
+			Reply = ILId,	
+                        Worker ! {async_reply, Reply, From}
+		end, 30000),
+	{noreply, State};
+
+handle_call({push_opr_log, Context, {key, MessageKey}}, From, State) ->
+	erlang:display(push_opr_log_general),
+	Worker = self(),
+	Time=erlang:universaltime(),
+	?ASYNC(fun() ->
+			{atomic, ILId} = ltransaction(fun() ->
+					psqt(insert_opr_log, 
+						[Time, Context, MessageKey, 1, 0]), % 1 for visible column, 0 for severity
+					last_insert_id_t() end, 30000),
+			Reply = ILId,	
+                        Worker ! {async_reply, Reply, From}
+		end, 30000),
+	{noreply, State};
+
+handle_call({push_discovery_report, StartDate, GroupId, RuleId, Status}, From, State) ->
+	erlang:display(push_discovery_report),
+	Worker = self(),
+	?ASYNC(fun() ->
+			{atomic, ILId} = rtransaction(fun() ->
+					psqt(insert_discovery_report, 
+						[StartDate, GroupId, RuleId, Status]), 
 					last_insert_id_t() end, 30000),
 			Reply = ILId,	
                         Worker ! {async_reply, Reply, From}
@@ -163,6 +222,20 @@ handle_call(stop, _From,  State) ->
 
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
+
+handle_cast({update_report_status, GroupId, NewStatus}, State) ->
+	?ASYNC0(fun() ->
+		rpsq(update_report_status, [NewStatus, GroupId], 60000)
+	end),
+	{noreply, State};
+
+handle_cast({update_report_as_finished, GroupId}, State) ->
+	erlang:display(hede),
+%	Time = erlang:universaltime(),
+	?ASYNC0(fun() ->
+		rpsq(update_report_as_finished, ["status", GroupId], 60000)
+	end),
+	{noreply, State};
 
 handle_cast({insert_log_requeue, LogId}, State) ->
 	?ASYNC(fun() ->
@@ -255,8 +328,8 @@ handle_info({'DOWN', _, _, MPid , _}, #state{master_pid=MPid} = State) ->
 			{stop, normalStop, State} end;
 
 handle_info({'DOWN', _, _, Pid , _} = Msg, #state{host=Host,
-		user=User, password=Password, database=DB, database_l=LDB,
-		pool_pids=PoolPids, pool_pids_l=PoolPidsL} = State) ->
+		user=User, password=Password, database=DB, database_l=LDB, database_r=RDB,
+		pool_pids=PoolPids, pool_pids_l=PoolPidsL, pool_pids_r=PoolPidsR} = State) ->
 	PPTuple  = try case lists:member(Pid, PoolPids) of
 			true -> PoolPids1 = lists:delete(Pid, PoolPids),
 				case mysql:connect(pp, Host, undefined, User, Password, DB, utf8, true) of
@@ -271,7 +344,14 @@ handle_info({'DOWN', _, _, Pid , _} = Msg, #state{host=Host,
 						erlang:monitor(process, NewPid),
 						{PoolPids, [NewPid|PoolPidsL1]};
 					Err2 -> {error, Err2} end;
-			false -> orphan end end
+			false -> case lists:member(Pid, PoolPidsR) of
+			true -> PoolPidsR1 = lists:delete(Pid, PoolPidsR),
+				case mysql:connect(pr, Host, undefined, User, Password, RDB, utf8, true) of
+					{ok, NewPid} -> 
+						erlang:monitor(process, NewPid),
+						{PoolPids, [NewPid|PoolPidsR1]};
+					Err2 -> {error, Err2} end;
+			false -> orphan end end end
 		catch Class:Error -> {error, Class, Error} end,
 
 	case PPTuple of
@@ -309,6 +389,7 @@ init([]) ->
 	Password = ?CFG(mysql_password),
 	DB = ?CFG(mysql_database),
 	LDB = ?CFG(mysql_log_database),
+	RDB = ?CFG(mysql_report_database),
 	PoolSize = ?CFG(mysql_pool_size),
 	
 	{ok, MPid} = mysql:start_link(pp, Host, Port, User, Password, DB, fun(_,_,_,_) -> ok end, utf8),
@@ -324,6 +405,10 @@ init([]) ->
 	PoolReturns2 = [ mysql:connect(pl, Host, undefined, User, Password, LDB, utf8, true) || _I <- lists:seq(1, PoolSize)],
 	PPids2 = [ P || {ok, P} <- PoolReturns2 ],
 	[ erlang:monitor(process, P) || P <- PPids2 ],
+
+	PoolReturns3 = [ mysql:connect(pr, Host, undefined, User, Password, RDB, utf8, true) || _I <- lists:seq(1, PoolSize)],
+	PPids3 = [ P || {ok, P} <- PoolReturns3 ],
+	[ erlang:monitor(process, P) || P <- PPids3 ],
 
 	[ mysql:prepare(Key, Query) || {Key, Query} <- [
 		{last_insert_id, <<"SELECT last_insert_id()">>},
@@ -373,7 +458,7 @@ init([]) ->
 		{usb_devices, <<"SELECT deviceId, action FROM USBDevice">>},
 		{insert_fingerprint, <<"INSERT INTO DocumentFingerprint (id, fingerprint, document_id) VALUES (NULL, ?, ?)">>},
 		%{customer_by_id, <<"SELECT id,static_ip FROM sh_customer WHERE id=?">>},
-		{insert_incident, <<"INSERT INTO IncidentLog (id, date, channel, ruleId, sourceIp, sourceUser, destination, informationTypeId, action, matcherMessage, reportId, visible) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)">>},
+		{insert_incident, <<"INSERT INTO IncidentLog (id, date, channel, ruleId, sourceIp, sourceUser, destination, informationTypeId, action, matcherMessage, groupId, visible) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)">>},
 		{insert_incident_file_data, <<"INSERT INTO IncidentLogFile (id, incidentLog_id, filename, content_id) VALUES (NULL, ?, ?, ?)">>},
 		{insert_incident_file_bp, <<"INSERT INTO IncidentLogFile (id, incidentLog_id, filename, blueprint_id) VALUES (NULL, ?, ?, ?)">>},
 %		{insert_archive, <<"INSERT INTO log_archive (id, customer_id, rule_id, protocol, src_ip, src_user, destination, log_archive_file_id) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)">>},
@@ -386,14 +471,19 @@ init([]) ->
 		{insert_incident_requeue, <<"INSERT INTO IncidentLogRequeueStatus (id, incidentLog_id, isRequeued) VALUES (NULL, ?, false)">>},
 		{delete_incident_requeue, <<"DELETE FROM IncidentLogRequeueStatus WHERE incidentLog_id=?">>},
 		{update_requeue_status, <<"UPDATE IncidentLogRequeueStatus SET isRequeued=TRUE, date=now() WHERE incidentLog_id=?">>},
-		{denied_page, <<"SELECT c.value FROM Config AS c WHERE c.configKey=\"denied_page_html\"">>}
+		{denied_page, <<"SELECT c.value FROM Config AS c WHERE c.configKey=\"denied_page_html\"">>},
+		{insert_opr_log_disc, <<"INSERT INTO OperationLog (id, date, context, ruleId, groupId, message, messageKey, visible, severity) VALUES (NULL, ?, ?, ?, ?, NULL, ?, ?, ?)">>},
+		{insert_opr_log, <<"INSERT INTO OperationLog (id, date, context, ruleId, groupId, message, messageKey, visible, severity) VALUES (NULL, ?, ?, NULL, NULL, NULL, ?, ?, ?)">>},
+		{insert_discovery_report, <<"INSERT INTO DiscoveryReport (id, startDate, finishDate, groupId, ruleId, status) VALUES (NULL, ?, NULL, ?, ?, ?)">>},
+		{update_report_status, <<"UPDATE DiscoveryReport SET status=? WHERE groupId = ?">>},
+		{update_report_as_finished, <<"UPDATE DiscoveryReport SET status=?, finishDate=now() WHERE groupId = ?">>}
 
 	]],
 
 	{ok, #state{host=Host, port=Port, 
 			user=User, password=Password, 
-			database=DB, database_l=LDB, pool_size=PoolSize, 
-			master_pid=MPid, pool_pids=PPids, pool_pids_l=PPids2,
+			database=DB, database_l=LDB, database_r=RDB, pool_size=PoolSize, 
+			master_pid=MPid, pool_pids=PPids, pool_pids_l=PPids2, pool_pids_r=PPids3,
 			compile_progress=done}}.
 
 terminate(_Reason, _State) ->
@@ -426,6 +516,13 @@ lpsq(PreparedKey, Params, Timeout) ->
 		Else -> throw({error, Else})
 	end.
 
+rpsq(PreparedKey, Params, Timeout) ->
+	case mysql:execute(pr, PreparedKey, Params, Timeout) of
+		{data,{mysql_result,_,Result,_,_}} -> {ok, Result};
+		{updated,{mysql_result, _,_,RowCount,_}} -> {updated, RowCount};
+		Else -> throw({error, Else})
+	end.
+
 %transaction(Fun) -> transaction(Fun, 5000).
 
 transaction(Fun, Timeout) -> mysql:transaction(pp, Fun, Timeout).
@@ -433,6 +530,8 @@ transaction(Fun, Timeout) -> mysql:transaction(pp, Fun, Timeout).
 %ltransaction(Fun) -> ltransaction(Fun, 5000).
 
 ltransaction(Fun, Timeout) -> mysql:transaction(pl, Fun, Timeout).
+
+rtransaction(Fun, Timeout) -> mysql:transaction(pr, Fun, Timeout).
 
 last_insert_id_t() ->
 	{ok, [[LIId]]} = psqt(last_insert_id), LIId.
@@ -1229,7 +1328,7 @@ find_match_id([#match{id=Id, func=Func, func_params=FuncParam}|_Rest], Func, Fun
 find_match_id([_M|Rest], Func, FuncParams) -> find_match_id(Rest, Func, FuncParams);
 find_match_id([], _Func, _FuncParams) -> none.
 
-pre_push_log(RuleId, Ip, User, Destination, Action, Channel, Misc, ReportId) -> 
+pre_push_log(RuleId, Ip, User, Destination, Action, Channel, Misc, GroupId) -> 
 %	{FilterId, RuleId1} = case RuleId of
 %		{dr, CId} -> {CId, 0};
 %		-1 = RuleId -> {mydlp_mnesia:get_dfid(), RuleId};	% this shows default action had been enforeced 
@@ -1279,8 +1378,16 @@ pre_push_log(RuleId, Ip, User, Destination, Action, Channel, Misc, ReportId) ->
 		M when is_list(M) -> unicode:characters_to_binary(M);
 		Else4 -> Else4
 	end,
-	{0, RuleId, Ip1, User1, Destination1, ActionS, ChannelS, Misc1, ReportId, Visible}.
+	{0, RuleId, Ip1, User1, Destination1, ActionS, ChannelS, Misc1, GroupId, Visible}.
 
+pre_push_opr_log(Time, Channel, RuleId, MessageKey, GroupId) ->
+	ChannelS = case Channel of
+		remote_discovery -> <<"RD">>;
+		R -> ?ERROR_LOG("Unexpected Rule Type: ["?S"]", [R]),
+			<<"U">>
+	end,
+	{Time, ChannelS, RuleId, MessageKey, GroupId, 1, 0}. % 1 for Visible column 0 for severity
+		
 pre_insert_log(Filename) ->
 	Filename1 = case Filename of
 		F when is_list(F) -> unicode:characters_to_binary(F);

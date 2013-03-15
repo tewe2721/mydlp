@@ -37,7 +37,6 @@
 %% API
 -export([start_link/0,
 	stop_discovery/0,
-	schedule_discovery/0,
 	stop/0]).
 
 %% gen_server callbacks
@@ -54,24 +53,28 @@
 	head_requests,
 	get_requests,
 	discover_queue,
+	paused_queue,
 	discover_inprog=false,
 	timer
 }).
 
 
-q(WebServerId, PagePath) -> q(WebServerId, none, PagePath).
+q(WebServerId, PagePath, RuleId) -> q(WebServerId, none, PagePath, RuleId).
 
-q(WebServerId, ParentId, PagePath) ->
+q(WebServerId, ParentId, PagePath, RuleId) ->
 	case mydlp_mnesia:get_web_server(WebServerId) of
-		#web_server{dig_depth=Depth} -> q(WebServerId, ParentId, PagePath, Depth);
+		#web_server{dig_depth=Depth} -> q(WebServerId, ParentId, PagePath, RuleId, Depth);
 		_Else -> ok end.
 
-q(_WebServerId, _ParentId, _PagePath, 0) -> ok;
-q(WebServerId, ParentId, PagePath, Depth) -> gen_server:cast(?MODULE, {q, WebServerId, ParentId, PagePath, Depth}).
+q(_WebServerId, _ParentId, _PagePath, _RuleId, 0) -> ok;
+q(WebServerId, ParentId, PagePath, RuleId, Depth) -> gen_server:cast(?MODULE, {q, WebServerId, ParentId, PagePath, RuleId, Depth}).
 
 stop_discovery() -> gen_server:cast(?MODULE, stop_discovery).
 
-schedule_discovery() -> gen_server:cast(?MODULE, schedule_discovery).
+
+is_paused_or_stopped_by_rule_id(RuleId) -> gen_server:call(mydlp_discovery_manager, {is_paused_or_stopped, RuleId}).
+
+continue_paused_discovery() -> gen_server:cast(?MODULE, push_paused_queue_to_proc).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -81,40 +84,58 @@ handle_call(stop, _From, State) ->
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-handle_cast({q, WebServerId, ParentId, PagePath, Depth}, #state{discover_queue=Q, discover_inprog=false} = State) ->
-	Q1 = queue:in({WebServerId, ParentId, PagePath, Depth}, Q),
+handle_cast({continue_discovering}, State) ->
+	continue_paused_discovery(),
+	{noreply, State};
+
+handle_cast(push_paused_queue_to_proc, #state{discover_queue=Q, paused_queue=PQ} = State) ->
+	erlang:display("web discovery push queue"),
+	reset_discover_cache(),
+	{noreply, State#state{discover_queue=queue:join(Q, PQ), paused_queue=queue:new()}};
+
+handle_cast({q, WebServerId, ParentId, PagePath, RuleId, Depth}, #state{discover_queue=Q, discover_inprog=false} = State) ->
+	Q1 = queue:in({WebServerId, ParentId, PagePath, RuleId, Depth}, Q),
 	consume(),
 	set_discover_inprog(),
 	{noreply, State#state{discover_queue=Q1, discover_inprog=true}};
 
-handle_cast({q, WebServerId, ParentId, PagePath, Depth}, #state{discover_queue=Q, discover_inprog=true} = State) ->
-	Q1 = queue:in({WebServerId, ParentId, PagePath, Depth}, Q),
+handle_cast({q, WebServerId, ParentId, PagePath, RuleId, Depth}, #state{discover_queue=Q, discover_inprog=true} = State) ->
+	Q1 = queue:in({WebServerId, ParentId, PagePath, RuleId, Depth}, Q),
 	{noreply,State#state{discover_queue=Q1}};
 
-handle_cast(consume, #state{discover_queue=Q, head_requests=HeadT} = State) ->
+handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, head_requests=HeadT} = State) ->
 	case queue:out(Q) of
-		{{value, {WebServerId, ParentId, PagePath, Depth}}, Q1} ->
-			try 	case is_cached({WebServerId, PagePath}) of
-					false -> case fetch_meta(WebServerId, PagePath) of
-						{ok, RequestId} ->
-							HeadT1 = gb_trees:enter(RequestId, {WebServerId, ParentId, PagePath, Depth}, HeadT),
-							consume(),
-							{noreply, State#state{discover_queue=Q1, head_requests=HeadT1}};
-						external -> consume(),
-							{noreply, State#state{discover_queue=Q1}} end;
-					true -> consume(),
+		{{value, {WebServerId, ParentId, PagePath, RuleId, Depth}=Item}, Q1} ->
+			case is_paused_or_stopped_by_rule_id(RuleId) of
+			paused -> % rule is paused push the item paused_queue
+				PQ1 = queue:in(Item, PQ),
+				consume(),
+				{noreply, State#state{discover_queue=Q1, paused_queue=PQ1}};
+			stopped -> % rule is stopped drop item
+				consume(),
+				{noreply, State#state{discover_queue=Q1, paused_queue=PQ}};
+			none ->
+				try 	case is_cached({WebServerId, RuleId, PagePath}) of
+						false -> case fetch_meta(WebServerId, PagePath) of
+							{ok, RequestId} ->
+								HeadT1 = gb_trees:enter(RequestId, {WebServerId, ParentId, PagePath, Depth}, HeadT),
+								consume(),
+								{noreply, State#state{discover_queue=Q1, head_requests=HeadT1}};
+							external -> consume(),
+								{noreply, State#state{discover_queue=Q1}} end;
+						true -> consume(),
+							{noreply, State#state{discover_queue=Q1}} end
+				catch Class:Error ->
+					?ERROR_LOG("Web: Discover Queue Consume: Error occured: "
+							"Class: ["?S"]. Error: ["?S"].~n"
+							"Stack trace: "?S"~nWebServerId: "?S" PagePath: "?S"~nState: "?S"~n ",	
+							[Class, Error, erlang:get_stacktrace(), WebServerId, PagePath, State]),
+						consume(),
 						{noreply, State#state{discover_queue=Q1}} end
-			catch Class:Error ->
-				?ERROR_LOG("Web: Discover Queue Consume: Error occured: "
-						"Class: ["?S"]. Error: ["?S"].~n"
-						"Stack trace: "?S"~nWebServerId: "?S" PagePath: "?S"~nState: "?S"~n ",	
-						[Class, Error, erlang:get_stacktrace(), WebServerId, PagePath, State]),
-					consume(),
-					{noreply, State#state{discover_queue=Q1}} end;
+			end;
 		{empty, _} ->
-			State1 = schedule_timer(State, ?CFG(discover_web_interval)),
 			unset_discover_inprog(),
-			{noreply, State1#state{discover_inprog=false}}
+			{noreply, State#state{discover_inprog=false}}
 	end;
 
 handle_cast(stop_discovery, State) ->
@@ -123,7 +144,12 @@ handle_cast(stop_discovery, State) ->
 	HeadT = gb_tree:empty(),
 	{noreply, State#state{discover_queue=NewQ, get_requests=GetT, head_requests=HeadT}};
 
-handle_cast(schedule_discovery, State) -> handle_info(schedule_now, State);
+handle_cast({start_by_rule_id, RuleId}, State) ->
+	erlang:display("web disc start by id"),
+	reset_discover_cache(),
+	WebServers = mydlp_mnesia:get_web_servers_by_rule_id(RuleId),
+	lists:map(fun(W) -> q(W#web_server.id, W#web_server.start_path, W#web_server.rule_id) end, WebServers),
+	{noreply, State};
 
 handle_cast(_Msg, State) ->
 	{noreply, State}.
@@ -141,17 +167,6 @@ handle_info({http, {RequestId, Result}}, #state{head_requests=HeadT, get_request
 		{noreply, State}
 	end;
 
-handle_info(schedule_now, State) ->
-	State1 = cancel_timer(State),
-	schedule(),
-	{noreply, State1};
-
-handle_info(schedule_startup, State) ->
-	State1 = case ?CFG(discover_web_on_startup) of
-		true -> schedule(), State;
-		false -> schedule_timer(State, ?CFG(discover_web_interval)) end,
-	{noreply, State1};
-
 handle_info({async_reply, Reply, From}, State) ->
 	gen_server:reply(From, Reply),
 	{noreply, State};
@@ -160,25 +175,6 @@ handle_info(_Info, State) ->
 	{noreply, State}.
 
 %%%%%%%%%%%%%%%% Implicit functions
-
-cancel_timer(#state{timer=Timer} = State) ->
-	case Timer of
-		undefined -> ok;
-		TRef ->	(catch timer:cancel(TRef)) end,
-	State#state{timer=undefined}.
-	
-schedule_timer(State, Interval) ->
-	State1 = cancel_timer(State),
-	Timer = case timer:send_after(Interval, schedule_now) of
-		{ok, TRef} -> TRef;
-		{error, _} = Error -> ?ERROR_LOG("Can not create timer. Reason: "?S, [Error]), undefined end,
-	State1#state{timer=Timer}.
-
-schedule() ->
-	reset_discover_cache(),
-	WebServers = mydlp_mnesia:get_web_servers(),
-	lists:map(fun(W) -> q(W#web_server.id, W#web_server.start_path) end, WebServers),
-	ok.
 
 consume() -> gen_server:cast(?MODULE, consume).
 
@@ -193,8 +189,7 @@ stop() ->
 
 init([]) ->
 	inets:start(),
-	timer:send_after(60000, schedule_startup),
-	{ok, #state{discover_queue=queue:new(), head_requests=gb_trees:empty(), get_requests=gb_trees:empty()}}.
+	{ok, #state{discover_queue=queue:new(), paused_queue=queue:new(), head_requests=gb_trees:empty(), get_requests=gb_trees:empty()}}.
 
 terminate(_Reason, _State) ->
 	ok.

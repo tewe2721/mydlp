@@ -128,9 +128,12 @@ handle_call({stop_discovery_by_rule_id, RuleId}, _From, #state{discover_queue=Q}
 	Q1 = drop_items_by_rule_id(RuleId, Q),
 	{reply, ok, State#state{discover_queue=Q1}};
 
-handle_call({is_discovery_finished, RuleId}, _From, #state{discover_queue=Q}=State) ->
+handle_call({is_discovery_finished, RuleId}, _From, #state{discover_queue=Q, paused_queue=PQ}=State) ->
 	Reply = is_finished_by_rule_id(RuleId, Q),
-	{reply, Reply, State};
+	Reply1 = case Reply of
+		true -> is_finished_by_rule_id(RuleId, PQ);
+		false -> false end,
+	{reply, Reply1, State};
 
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
@@ -310,7 +313,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%%%%%%%%%%%%%%%% internal
 
 is_finished_by_rule_id(RuleId, Q) ->
-	case queue:out(Q) of
+	Ret = case queue:out(Q) of
 		 {{value, {_ParentId, _FilePath, RuleIndex}}, Q1} -> 
 			case RuleIndex of
 				RuleId -> false;
@@ -374,8 +377,8 @@ discover_file(#fs_entry{file_id={FP, RuleIndex}}) ->
 	try	timer:sleep(20),
 		{ok, ObjId} = mydlp_container:new(),
 		ok = mydlp_container:setprop(ObjId, "rule_index", RuleIndex),
-		ReportId = mydlp_discovery_manager:get_report_id(RuleIndex),
-		ok = mydlp_container:setprop(ObjId, "report_id", ReportId),
+		GroupId = mydlp_discovery_manager:get_group_id(RuleIndex),
+		ok = mydlp_container:setprop(ObjId, "group_id", GroupId),
 		set_prop_extra(ObjId),
 		ok = mydlp_container:pushfile(ObjId, {raw, FP}),
 		ok = mydlp_container:eof(ObjId),

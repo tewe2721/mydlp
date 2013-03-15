@@ -135,6 +135,9 @@ process_item({IpAddress, {endpoint_log, LogTerm} }) ->
 	#log{file=Files} = LogTerm,
 	Files1 = [ mydlp_api:reconstruct_cr(F) || F <- Files ], % To clean invalid cachrefs
 	?ACL_LOG(LogTerm#log{ip=IpAddress, file=Files1});
+process_item({_IpAddress, {endpoint_opr_log, Context, Term} }) -> 
+	% TODO: should add ip_address
+	mydlp_mysql:push_opr_log(Context, Term);
 process_item(_Item) -> ok. % TODO log unkown item.
 
 -endif.
