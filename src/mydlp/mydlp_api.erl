@@ -209,11 +209,18 @@ to_lowerchar(C) ->
 %% @doc Extracts Text from File records
 %% @end
 %%----------------------------------------------------------------------
-get_text(#file{is_encrypted=true}) -> {error, encrypted};
-get_text(#file{compressed_copy=true}) -> {error, compression};
-get_text(#file{mime_type= <<"application/x-empty">>}) -> {ok, <<>>};
-get_text(#file{mime_type=undefined}) -> {error, unknown_type};
-get_text(#file{mime_type=MimeType, filename=Filename, data=Data}) -> 
+get_text(#file{filename=Filename} = File) ->
+	case get_text1(File) of
+		{ok, ContentText} -> 
+			FNBin = filename_to_bin(Filename),
+			{ok, <<FNBin/binary, "\n", ContentText>>};
+		Else -> Else end.
+
+get_text1(#file{is_encrypted=true}) -> {error, encrypted};
+get_text1(#file{compressed_copy=true}) -> {error, compression};
+get_text1(#file{mime_type= <<"application/x-empty">>}) -> {ok, <<>>};
+get_text1(#file{mime_type=undefined}) -> {error, unknown_type};
+get_text1(#file{mime_type=MimeType, filename=Filename, data=Data}) -> 
 	case mime_category(MimeType) of
 		compression -> {error, compression};
 		audio-> {error, audio};
