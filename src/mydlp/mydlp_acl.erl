@@ -557,8 +557,9 @@ mc_text_f(#file{normal_text=NormalText}, kw) -> mydlp_mc:mc_search(kw, NormalTex
 mc_text_f(#file{normal_text=NormalText}, pd) -> mydlp_mc:mc_search(pd, NormalText).
 
 has_data(#file{dataref={cacheref, _Ref}}) -> true;
-has_data(#file{dataref={memory, Bin}}) -> size(Bin) > 0;
-has_data(#file{data=Data}) when is_binary(Data)-> size(Data) > 0;
+has_data(#file{filename=undefined, dataref={memory, Bin}}) -> size(Bin) > 0;
+has_data(#file{filename=undefined, data=Data}) when is_binary(Data)-> size(Data) > 0;
+has_data(#file{}) -> true;
 has_data(Else) -> throw({error, unexpected_obj, Else}).
 
 drop_nodata(Files) -> lists:filter(fun(F) -> has_data(F) end, Files).

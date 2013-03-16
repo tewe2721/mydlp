@@ -212,8 +212,21 @@ to_lowerchar(C) ->
 get_text(#file{filename=Filename} = File) ->
 	case get_text1(File) of
 		{ok, ContentText} -> 
-			FNBin = filename_to_bin(Filename),
-			{ok, <<FNBin/binary, "\n", ContentText>>};
+			FNBin = case Filename of
+				undefined -> <<>>;
+				_ -> 	FNL = filename_to_list(Filename), 
+					Extension = filename:extension(FNL),
+					RootName = filename:rootname(FNL),
+					RNBin = filename_to_bin(RootName),
+					EBin = case Extension of
+						"" -> <<>>;
+						[$. | RoE] -> filename_to_bin(RoE);
+						_ -> filename_to_bin(Extension) end,
+					<<RNBin/binary, " " , EBin/binary>> end,
+			Text = case FNBin of
+				<<>> -> ContentText;
+				_Else -> <<" ", FNBin/binary, " ", "\n", ContentText/binary>> end,
+			{ok, Text};
 		Else -> Else end.
 
 get_text1(#file{is_encrypted=true}) -> {error, encrypted};
