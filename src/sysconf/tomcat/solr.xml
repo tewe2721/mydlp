@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Context docBase="/usr/share/mydlp/solr/apache-solr-4.0.0.war" debug="0" crossContext="true">
+<Context docBase="/usr/share/mydlp/solr/solr-4.2.0.war" debug="0" crossContext="true">
   <Environment name="solr/home" type="java.lang.String" value="/usr/share/mydlp/solr" override="true"/>
 </Context>
