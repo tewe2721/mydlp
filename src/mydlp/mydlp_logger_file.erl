@@ -41,11 +41,9 @@
 %	test/0
 ]).
 
--ifdef(__MYDLP_ENDPOINT)
 
--define(_OPR_LOG_HANDLE(Context, Term)) -> mydlp_item_push:p({endpoint_opr_log, Context, Term});
+-define(_OPR_LOG_HANDLE(Context, Term), mydlp_item_push:p({endpoint_opr_log, Context, Term})).
 
--endif.
 
 -record(state, {
 	acl_fd,

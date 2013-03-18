@@ -489,26 +489,6 @@ get_user(#object{prop_dict=PD}) ->
 		{ok, User} -> User ++ "@" ++ get_ep_meta("logged_on_domain");
 		_Else -> get_ep_meta("user") end.
 
-get_remote_user(#object{filepath=FP, prop_dict=PD}) ->
-	case dict:find("web_server_id", PD) of
-	{ok, WSId} -> WS = mydlp_mnesia:get_web_server(WSId),
-			WS#web_server.proto ++ "://" ++ WS#web_server.address;
-	_Else ->
-		case filename:split(FP) of %originally should be "/var/lib/mydlp/mounts"
-			["/", "home", "ozgen", "mounts", Id|_Rest] -> construct_source(list_to_integer(Id));
-			_ -> ?ERROR_LOG("Unknown remote discovery file", []), none
-		end
-	end.
-
-construct_source(Id) ->
-	case mydlp_mnesia:get_remote_storage_by_id(Id) of
-		{sshfs, {Address, _, Path, _, _}} -> "sshfs://" ++ binary_to_list(Address) ++ ":" ++binary_to_list(Path);
-		{ftpfs, {Address, Path, _, _}} -> "ftpfs://" ++ binary_to_list(Address) ++ binary_to_list(Path);
-		{cifs, {Address, Path, _, _}} -> "cifs://" ++ binary_to_list(Address) ++ "/" ++ binary_to_list(Path);
-		{dfs, {Address, Path, _, _}} -> "dfs://" ++ binary_to_list(Address) ++ "/" ++ binary_to_list(Path);
-		{nfs, {Address, Path}} -> "nfs://" ++ binary_to_list(Address) ++ "/" ++ binary_to_list(Path)
-	end.
-
 -endif.
 
 -ifdef(__PLATFORM_WINDOWS).
@@ -552,12 +532,35 @@ log_req1(Time, Channel, RuleId, Action, User, Destination, IType, File, Misc, Gr
 		{discovery, log, max_size_exceeded, true} -> ok;
 		_Else2 -> ?ACL_LOG(#log{time=Time, channel=Channel, rule_id=RuleId, action=Action, ip=nil, user=User, destination=Destination, itype_id=IType, file=File, misc=Misc, group_id=GroupId}) end.
 
+get_remote_user(_) -> "undefined".
+
 -endif.
 
 -ifdef(__MYDLP_NETWORK).
 
 log_req1(Time, Channel, RuleId, Action, User, Destination, IType, File, Misc, GroupId) ->
 	?ACL_LOG(#log{time=Time, channel=Channel, rule_id=RuleId, action=Action, ip=nil, user=User, destination=Destination, itype_id=IType, file=File, misc=Misc, group_id=GroupId}).
+
+get_remote_user(#object{filepath=FP, prop_dict=PD}) ->
+	case dict:find("web_server_id", PD) of
+	{ok, WSId} -> WS = mydlp_mnesia:get_web_server(WSId),
+			WS#web_server.proto ++ "://" ++ WS#web_server.address;
+	_Else ->
+		case filename:split(FP) of %originally should be "/var/lib/mydlp/mounts"
+			["/", "home", "ozgen", "mounts", Id|_Rest] -> construct_source(list_to_integer(Id));
+			_ -> ?ERROR_LOG("Unknown remote discovery file", []), none
+		end
+	end.
+
+construct_source(Id) ->
+	case mydlp_mnesia:get_remote_storage_by_id(Id) of
+		{sshfs, {Address, _, Path, _, _}} -> "sshfs://" ++ binary_to_list(Address) ++ ":" ++binary_to_list(Path);
+		{ftpfs, {Address, Path, _, _}} -> "ftpfs://" ++ binary_to_list(Address) ++ binary_to_list(Path);
+		{cifs, {Address, Path, _, _}} -> "cifs://" ++ binary_to_list(Address) ++ "/" ++ binary_to_list(Path);
+		{dfs, {Address, Path, _, _}} -> "dfs://" ++ binary_to_list(Address) ++ "/" ++ binary_to_list(Path);
+		{nfs, {Address, Path}} -> "nfs://" ++ binary_to_list(Address) ++ "/" ++ binary_to_list(Path)
+	end.
+
 
 -endif.
 

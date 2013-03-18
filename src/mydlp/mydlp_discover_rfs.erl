@@ -71,7 +71,7 @@
 
 %%%%%%%%%%%%%  API
 
-release_mount_by_rule_id(RuleId) -> erlang:display("HEDE"), gen_server:call(?MODULE, {release_mount_by_rule_id, RuleId}).
+release_mount_by_rule_id(RuleId) -> gen_server:call(?MODULE, {release_mount_by_rule_id, RuleId}).
 
 start_remote_discovery() -> ok.
 	%RemoteStorages = mydlp_mnesia:get_remote_storages().
@@ -85,7 +85,6 @@ handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
 
 handle_call({stop_discovery,RuleId}, _From, State) ->
-	erlang:display(rFS),
 	Reply = gen_server:call(mydlp_discover_fs, {stop_discovery_by_rule_id, RuleId}),
 	{reply, Reply, State};
 
@@ -113,7 +112,6 @@ handle_cast({start_by_rule_id, RuleId, GroupId}, #state{mount_dict=Dict}=State) 
 	{noreply, State#state{mount_dict=Dict1}};
 
 handle_cast({continue_discovering}, State) ->
-	erlang:display("And it is hereeee"),
 	mydlp_discover_fs:continue_paused_discovery(),
 	{noreply, State};	
 

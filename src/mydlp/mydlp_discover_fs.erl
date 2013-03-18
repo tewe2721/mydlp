@@ -107,7 +107,6 @@ q(FilePath, RuleIndex) -> q(none, FilePath, RuleIndex).
 q(ParentId, FilePath, RuleIndex) -> gen_server:cast(?MODULE, {q, ParentId, FilePath, RuleIndex}).
 
 continue_paused_discovery() ->
-	erlang:display("come here come here"), 
 	gen_server:cast(?MODULE, push_paused_to_proc_queue),
 	consume().
 
@@ -153,12 +152,10 @@ handle_cast({q, ParentId, FilePath, RuleIndex}, #state{discover_queue=Q, discove
 	{noreply,State#state{discover_queue=Q1}};
 
 handle_cast(push_paused_to_proc_queue, #state{discover_queue=Q, paused_queue=PQ} = State) ->
-	erlang:display("I am here discovery fs"),
 	reset_discover_cache(),
 	{noreply, State#state{discover_queue=queue:join(Q, PQ), paused_queue=queue:new()}};
 
 handle_cast({del_fs_entries, RuleIndex}, State) ->
-	erlang:display("FS DEL ENTRY"),
 	mydlp_mnesia:del_fs_entries_by_rule_id(RuleIndex),
 	{noreply, State};
 
@@ -174,7 +171,6 @@ handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ} = State) ->
 					consume(),
 					{noreply, State#state{discover_queue=Q1, paused_queue=PQ}};
 				none ->
-					erlang:display({consume, none, FilePath}),
 					try	case has_discover_rule() of
 							true -> case is_exceptional(FilePath) of
 									false -> discover(ParentId, FilePath, RuleIndex);
@@ -241,7 +237,7 @@ schedule() -> ok.
 
 -ifdef(__MYDLP_ENDPOINT).
 
-is_paused_by_rule_id(_RuleId) -> false.
+is_paused_or_stopped_by_rule_id(_RuleId) -> none.
 
 has_discover_rule() ->
 	case mydlp_mnesia:get_rule_table(discovery) of
@@ -313,9 +309,9 @@ code_change(_OldVsn, State, _Extra) ->
 %%%%%%%%%%%%%%%%% internal
 
 is_finished_by_rule_id(RuleId, Q) ->
-	Ret = case queue:out(Q) of
-		 {{value, {_ParentId, _FilePath, RuleIndex}}, Q1} -> 
-			case RuleIndex of
+	case queue:out(Q) of
+	 	{{value, {_ParentId, _FilePath, RuleIndex}}, Q1} -> 
+		case RuleIndex of
 				RuleId -> false;
 				_ -> is_finished_by_rule_id(RuleId, Q1)
 			end;
@@ -373,7 +369,6 @@ set_prop_extra(ObjId) ->
 -endif.
 
 discover_file(#fs_entry{file_id={FP, RuleIndex}}) ->
-	erlang:display({discover_file, FP}),
 	try	timer:sleep(20),
 		{ok, ObjId} = mydlp_container:new(),
 		ok = mydlp_container:setprop(ObjId, "rule_index", RuleIndex),
@@ -416,13 +411,11 @@ discover(ParentId, FilePath, RuleIndex) ->
 discover1(ParentId, FilePath, RuleIndex) ->
 	case filelib:is_regular(FilePath) of
 		true -> E = fs_entry(ParentId, FilePath, RuleIndex),
-			erlang:display({file, is_changed(E)}),
 			case is_changed(E) of
 				true -> discover_file(E);
 				false -> ok end;
 	false -> case filelib:is_dir(FilePath) of
 		true -> E = fs_entry(ParentId, FilePath, RuleIndex),
-			erlang:display({dir, is_changed(E)}),
 			case is_changed(E) of
 				true -> discover_dir(E);
 				false -> discover_dir_dir(E) end;
