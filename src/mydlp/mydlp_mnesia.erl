@@ -211,8 +211,8 @@
 		fun() -> mnesia:add_table_index(file_hash, hash),
 			 mnesia:add_table_index(file_hash, group_id) end},
 	{file_fingerprint, ordered_set, 
-		fun() -> mnesia:add_table_index(file_hash, fingerprint),
-			 mnesia:add_table_index(file_hash, group_id) end},
+		fun() -> mnesia:add_table_index(file_fingerprint, fingerprint),
+			 mnesia:add_table_index(file_fingerprint, group_id) end},
 	{usb_device, ordered_set, 
 		fun() -> mnesia:add_table_index(usb_device, device_id) end}
 ]).
