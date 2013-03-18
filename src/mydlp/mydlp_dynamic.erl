@@ -290,7 +290,7 @@ load_src(Src) ->
 	{archive_minimum_size, integer, "2048"},
 	{maximum_memory_object, integer, "204800"},
 	{maximum_chunk_size, integer, "1048576"},
-	{query_cache_maximum_size, integer, "1500000"},
+	{query_cache_maximum_size, integer, "3000000"},
 	{query_cache_cleanup_interval, integer, "900000"},
 	{seclore_fs_enable, boolean, "false"},
 	{seclore_fs_address, string, "127.0.0.1"},
