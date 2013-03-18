@@ -207,12 +207,8 @@
 		fun() -> mnesia:add_table_index(mime_type, mime) end},
 	{regex, ordered_set, 
 		fun() -> mnesia:add_table_index(regex, group_id) end},
-	{file_hash, ordered_set, 
-		fun() -> mnesia:add_table_index(file_hash, hash),
-			 mnesia:add_table_index(file_hash, group_id) end},
-	{file_fingerprint, ordered_set, 
-		fun() -> mnesia:add_table_index(file_fingerprint, fingerprint),
-			 mnesia:add_table_index(file_fingerprint, group_id) end},
+	file_hash,
+	file_fingerprint,
 	{usb_device, ordered_set, 
 		fun() -> mnesia:add_table_index(usb_device, device_id) end}
 ]).
@@ -426,7 +422,7 @@ is_mime_of_dfid(Mime, DataFormatIds) ->
 
 is_hash_of_gid(Hash, GroupId) -> aqc({is_hash_of_gid, Hash, GroupId}, nocache, dirty).
 
-pdm_of_gid(Fingerprints, GroupId) -> aqc({pdm_of_gid, Fingerprints, GroupId}, nocache, dirty).
+pdm_of_gid(Fingerprints, GroupId) -> aqc({pdm_of_gid, Fingerprints, GroupId}, nocache, dirty, 60000).
 
 write(RecordList, CacheOption) when is_list(RecordList) -> 
 	T = 15000 + ( length(RecordList) * 10 ),
@@ -531,8 +527,11 @@ handle_result(Query, Result) -> handle_result_common(Query, Result).
 handle_result_common({is_mime_of_dfid, _Mime, DFIs}, {atomic, MDFIs}) -> 
 	lists:any(fun(I) -> lists:member(I, DFIs) end, MDFIs);
 
-handle_result_common({is_hash_of_gid, _Hash, _GroupId}, {atomic, FIs}) -> 
-	case FIs of [] -> false; [_|_] -> true end;
+handle_result_common({is_hash_of_gid, Hash, _GroupId}, {atomic, Set}) -> 
+	gb_sets:is_member(Hash, Set);
+
+handle_result_common({pdm_of_gid, Fingerprints, _GroupId}, {atomic, Set}) -> 
+	pdm_hit_count(Fingerprints, Set, 0);
 
 % TODO: instead of case statements, refining function definitions will make queries faster.
 handle_result_common({get_fid, _SIpAddr}, {atomic, Result}) -> 
@@ -899,14 +898,6 @@ handle_query({remove_site, FI}) ->
 	lists:foreach(fun(Id) -> mnesia:delete({config, Id}) end, CIs),
 	lists:foreach(fun(Id) -> mnesia:delete({usb_device, Id}) end, UDIs);
 
-handle_query({remove_file_entry, FI}) ->
-	Q = ?QLCQ([H#file_hash.id ||
-		H <- mnesia:table(file_hash),
-		H#file_hash.file_id == FI
-		]),
-	FHIs = ?QLCE(Q),
-	lists:foreach(fun(Id) -> mnesia:delete({file_hash, Id}) end, FHIs);
-
 handle_query({save_user_address, IpAddress, UserHash, UserName}) ->
 	{MegaSecs, Secs, _MicroSecs} = erlang:now(),
         Born = 1000000*MegaSecs + Secs,
@@ -1043,16 +1034,15 @@ handle_query_common({is_mime_of_dfid, Mime, _DFIs}) ->
 		]),
 	?QLCE(Q);
 
-handle_query_common({is_hash_of_gid, Hash, GroupId}) ->
-	Q = ?QLCQ([F#file_hash.id ||
-		F <- mnesia:table(file_hash),
-		F#file_hash.group_id == GroupId,
-		F#file_hash.hash == Hash
-		]),
-	?QLCE(Q);
+handle_query_common({is_hash_of_gid, _Hash, GroupId}) ->
+	case mnesia:dirty_match_object(file_hash, #file_hash{group_id=GroupId, gb_set='_'}) of
+		[H] -> H#file_hash.gb_set;
+		[] -> gb_sets:empty() end;
 
-handle_query_common({pdm_of_gid, Fingerprints, GroupId}) ->
-	pdm_hit_count(Fingerprints, GroupId);
+handle_query_common({pdm_of_gid, _Fingerprints, GroupId}) ->
+	case mnesia:dirty_match_object(file_fingerprint, #file_fingerprint{group_id=GroupId, gb_set='_'}) of
+		[F] -> F#file_fingerprint.gb_set;
+		[] -> gb_sets:empty() end;
 
 handle_query_common({get_regexes, GroupId}) ->
 	Q = ?QLCQ([ R#regex.compiled ||
@@ -1687,13 +1677,11 @@ tab_names1([{Tab,_}|Tabs], Returns) -> tab_names1(Tabs, [Tab|Returns]);
 tab_names1([Tab|Tabs], Returns) when is_atom(Tab) ->  tab_names1(Tabs, [Tab|Returns]);
 tab_names1([], Returns) -> lists:reverse(Returns).
 
-pdm_hit_count(Fingerprints, GroupId) -> pdm_hit_count(Fingerprints, GroupId, 0).
-
-pdm_hit_count([Fingerprint|Rest], GroupId, Acc) ->
-	case mnesia:dirty_match_object(file_fingerprint, #file_fingerprint{id='_', file_id='_', group_id=GroupId, fingerprint=Fingerprint}) of
-		[] -> pdm_hit_count(Rest, GroupId, Acc);
-		[_|_] -> pdm_hit_count(Rest, GroupId, Acc + 1) end;
-pdm_hit_count([], _GroupId, Acc) -> Acc.
+pdm_hit_count([Fingerprint|Rest], Set, Acc) ->
+	case gb_sets:is_member(Fingerprint, Set) of
+		false -> pdm_hit_count(Rest, Set, Acc);
+		true -> pdm_hit_count(Rest, Set, Acc + 1) end;
+pdm_hit_count([], _Set, Acc) -> Acc.
 
 -ifdef(__MYDLP_NETWORK).
 
@@ -1877,15 +1865,15 @@ remove_match(MI) -> mnesia:delete({match, MI}).
 remove_filehashes(FHGIs) -> lists:foreach(fun(GroupId) -> remove_filehashes1(GroupId) end, FHGIs), ok.
 
 remove_filehashes1(GroupId) ->
-	FileHashes = mnesia:match_object(#file_hash{id='_', file_id='_', group_id=GroupId, hash='_'}),
-	lists:foreach(fun(#file_hash{id=Id}) -> mnesia:delete({file_hash, Id}) end, FileHashes),
+	FileHashes = mnesia:match_object(#file_hash{group_id=GroupId, gb_set='_'}),
+	lists:foreach(fun(#file_hash{group_id=Id}) -> mnesia:delete({file_hash, Id}) end, FileHashes),
 	ok.
 
 remove_filefingerprints(FHGIs) -> lists:foreach(fun(GroupId) -> remove_filefingerprints1(GroupId) end, FHGIs), ok.
 
 remove_filefingerprints1(GroupId) ->
-	Fingerprints = mnesia:match_object(#file_fingerprint{id='_', file_id='_', group_id=GroupId, fingerprint='_'}),
-	lists:foreach(fun(#file_fingerprint{id=Id}) -> mnesia:delete({file_fingerprint, Id}) end, Fingerprints),
+	Fingerprints = mnesia:match_object(#file_fingerprint{group_id=GroupId, gb_set='_'}),
+	lists:foreach(fun(#file_fingerprint{group_id=Id}) -> mnesia:delete({file_fingerprint, Id}) end, Fingerprints),
 	ok.
 
 remove_keywords(KGIs) -> lists:foreach(fun(GroupId) -> remove_keyword(GroupId) end, KGIs), ok.

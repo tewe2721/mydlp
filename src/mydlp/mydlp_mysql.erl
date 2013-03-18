@@ -355,9 +355,9 @@ init([]) ->
 		{kg_regexes_by_matcher_id, <<"SELECT re.regex FROM MatcherArgument AS ma, NonCascadingArgument AS nca, RegularExpressionGroup_RegularExpressionGroupEntry AS gre, RegularExpressionGroupEntry AS re WHERE ma.coupledMatcher_id=? AND ma.coupledArgument_id=nca.id AND nca.argument_id=gre.RegularExpressionGroup_id AND gre.entries_id=re.id">>},
 		{kg_rdbms_regexes_by_matcher_id, <<"SELECT rev.string FROM MatcherArgument AS ma, NonCascadingArgument AS nca, RegularExpressionGroup AS reg, RDBMSEnumeratedValue AS rev WHERE ma.coupledMatcher_id=? AND ma.coupledArgument_id=nca.id AND nca.argument_id=reg.id AND reg.rdbmsInformationTarget_id=rev.informationTarget_id">>},
 		{dd_by_matcher_id, <<"SELECT dd.id FROM MatcherArgument AS ma, NonCascadingArgument AS nca, DocumentDatabase AS dd WHERE ma.coupledMatcher_id=? AND ma.coupledArgument_id=nca.id AND nca.argument_id=dd.id">>},
-		{filehash_by_dd_id, <<"SELECT ddfe.id, ddfe.md5Hash FROM DocumentDatabase_DocumentDatabaseFileEntry AS dd, DocumentDatabaseFileEntry AS ddfe WHERE dd.DocumentDatabase_id=? AND dd.fileEntries_id=ddfe.id">>},
-		{filefingerprint_by_dd_id, <<"SELECT ddfe.id, df.fingerprint FROM DocumentDatabase_DocumentDatabaseFileEntry AS dd, DocumentDatabaseFileEntry AS ddfe, DocumentFingerprint AS df WHERE dd.DocumentDatabase_id=? AND dd.fileEntries_id=ddfe.id AND df.document_id=ddfe.id">>},
-		{rdbmsfingerprint_by_dd_id, <<"SELECT ddre.id, df.fingerprint FROM DocumentDatabase_DocumentDatabaseRDBMSEntry AS dd, DocumentDatabaseRDBMSEntry AS ddre, DocumentFingerprint AS df WHERE dd.DocumentDatabase_id=? AND dd.rdbmsEntries_id=ddre.id AND df.document_id=ddre.id">>},
+		{filehash_by_dd_id, <<"SELECT ddfe.md5Hash FROM DocumentDatabase_DocumentDatabaseFileEntry AS dd, DocumentDatabaseFileEntry AS ddfe WHERE dd.DocumentDatabase_id=? AND dd.fileEntries_id=ddfe.id">>},
+		{filefingerprint_by_dd_id, <<"SELECT df.fingerprint FROM DocumentDatabase_DocumentDatabaseFileEntry AS dd, DocumentDatabaseFileEntry AS ddfe, DocumentFingerprint AS df WHERE dd.DocumentDatabase_id=? AND dd.fileEntries_id=ddfe.id AND df.document_id=ddfe.id">>},
+		{rdbmsfingerprint_by_dd_id, <<"SELECT df.fingerprint FROM DocumentDatabase_DocumentDatabaseRDBMSEntry AS dd, DocumentDatabaseRDBMSEntry AS ddre, DocumentFingerprint AS df WHERE dd.DocumentDatabase_id=? AND dd.rdbmsEntries_id=ddre.id AND df.document_id=ddre.id">>},
 		%{user_by_rule_id, <<"SELECT eu.id, eu.username FROM sh_ad_entry_user AS eu, sh_ad_cross AS c, sh_ad_rule_cross AS rc WHERE rc.parent_rule_id=? AND rc.group_id=c.group_id AND c.entry_id=eu.entry_id">>},
 		{mimes_by_data_format_id, <<"SELECT m.mimeType FROM MIMEType AS m, DataFormat_MIMEType dm WHERE dm.DataFormat_id=? and dm.mimeTypes_id=m.id">>},
 		{usb_devices, <<"SELECT deviceId, action FROM USBDevice">>},
@@ -921,7 +921,8 @@ populate_match(Id, <<"document_hash">>) ->
 	{ok, DDQ} = psq(dd_by_matcher_id, [Id]),
 	[[DDId]] = DDQ,
 	{ok, FHQ} = psq(filehash_by_dd_id, [DDId]),
-	populate_filehashes(FHQ, DDId),
+	Filehashes = lists:append(FHQ),
+	populate_filehashes(Filehashes, DDId),
 	FuncParams=[DDId],
 	new_match(Func, FuncParams);
 
@@ -930,9 +931,9 @@ populate_match(Id, <<"document_pdm">>) ->
 	{ok, DDQ} = psq(dd_by_matcher_id, [Id]),
 	[[DDId]] = DDQ,
 	{ok, FFQ} = psq(filefingerprint_by_dd_id, [DDId]),
-	populate_filefingerprints(FFQ, DDId),
 	{ok, RFQ} = psq(rdbmsfingerprint_by_dd_id, [DDId]),
-	populate_filefingerprints(RFQ, DDId),
+	Fingerprints = lists:flatten([FFQ,RFQ]),
+	populate_filefingerprints(Fingerprints, DDId),
 	FuncParams=[DDId],
 	new_match(Func, FuncParams);
 
@@ -951,19 +952,24 @@ populate_mimes([[Mime]|Rows], DataFormatId) ->
 	populate_mimes(Rows, DataFormatId);
 populate_mimes([], _DataFormatId) -> ok.
 
-populate_filehashes([[FileId,HexHash]|Rows], DDId) ->
-	Id=mydlp_mnesia:get_unique_id(file_hash),
-	F = #file_hash{id=Id, file_id=FileId, group_id=DDId, hash=mydlp_api:hex2bytelist(HexHash)},
-	mydlp_mnesia_write(F),
-	populate_filehashes(Rows, DDId);
-populate_filehashes([], _DDId) -> ok.
+populate_filehashes(FilehashesHEX, DDId) when is_list(FilehashesHEX) ->
+	case has_mydlp_compile_item(file_hash, DDId) of
+		false -> Filehashes = lists:map(fun(I) -> mydlp_api:hex2bytelist(I) end, FilehashesHEX),
+			GBSet=gb_sets:from_list(Filehashes),
+			F = #file_hash{group_id=DDId, gb_set=GBSet},
+			mydlp_mnesia_write(F),
+			mydlp_compile_add_item(file_hash, DDId);
+		true -> ok end,
+	ok.
 
-populate_filefingerprints([[FileId,Fingerprint]|Rows], DDId) ->
-	Id=mydlp_mnesia:get_unique_id(file_fingerprint),
-	F = #file_fingerprint{id=Id, file_id=FileId, group_id=DDId, fingerprint=Fingerprint},
-	mydlp_mnesia_write(F),
-	populate_filefingerprints(Rows, DDId);
-populate_filefingerprints([], _DDId) -> ok.
+populate_filefingerprints(Fingerprints, DDId) when is_list(Fingerprints) ->
+	case has_mydlp_compile_item(file_fingerprint, DDId) of
+		false -> GBSet=gb_sets:from_list(Fingerprints),
+			F = #file_fingerprint{group_id=DDId, gb_set=GBSet},
+			mydlp_mnesia_write(F),
+			mydlp_compile_add_item(file_fingerprint, DDId);
+		true -> ok end,
+	ok.
 
 %populate_site_desc([[Id, StaticIpI]|Rows]) ->
 %	IpAddr = int_to_ip(StaticIpI),
@@ -1105,12 +1111,23 @@ get_mydlp_mnesia_write() ->
 erase_mydlp_mnesia_write() ->
 	erase(mydlp_mnesia_write),
 	erase(mydlp_mnesia_write_match),
+	erase(mydlp_compile_item),
 	ok.
 
 init_mydlp_mnesia_write() ->
 	put(mydlp_mnesia_write, []),
 	put(mydlp_mnesia_write_match, []),
+	put(mydlp_compile_item, gb_sets:empty()),
 	ok.
+
+mydlp_compile_add_item(Tag, Id) ->
+	S = get(mydlp_compile_item),
+	put(mydlp_compile_item, gb_sets:add({Tag, Id}, S)),
+	ok.
+
+has_mydlp_compile_item(Tag, Id) ->
+	S = get(mydlp_compile_item),
+	gb_sets:is_member({Tag, Id}, S).
 	
 find_match_id(Func, FuncParam) ->
 	MWM = get(mydlp_mnesia_write_match),

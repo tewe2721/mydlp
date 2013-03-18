@@ -178,19 +178,17 @@
 }).
 
 %% refine match_object statements after any change
+%% TODO: problems in multisite use
 -record(file_hash, {
-	id,
-	file_id,
 	group_id,
-	hash
+	gb_set
 }).
 
+%% TODO: problems in multisite use
 %% refine match_object statements after any change
 -record(file_fingerprint, {
-	id,
-	file_id,
 	group_id,
-	fingerprint
+	gb_set
 }).
 
 -record(mime_type, {
