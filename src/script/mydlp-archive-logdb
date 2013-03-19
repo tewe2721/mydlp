@@ -1,0 +1,160 @@
+#!/bin/bash
+PATH=/usr/local/maven/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games
+
+MYDLPCONF="/etc/mydlp/mydlp.conf"
+MYSQLC=/usr/bin/mysql
+MYSQLOPTS="-N"
+
+if [ -n "$1" ]; then
+	MYDLPCONF=$1
+fi
+
+MYSQLHOST=$(grep -e "^mysql_host" $MYDLPCONF|cut -f 2)
+MYSQLPORT=$(grep -e "^mysql_port" $MYDLPCONF|cut -f 2)
+MYSQLUSER=$(grep -e "^mysql_user" $MYDLPCONF|cut -f 2)
+MYSQLPW=$(grep -e "^mysql_password" $MYDLPCONF|cut -f 2)
+MYSQLDB=$(grep -e "^mysql_log_database" $MYDLPCONF|cut -f 2)
+MYSQLARCHIVEDB="$MYSQLDB""_archive"
+
+MYSQLARGS="$MYSQLOPTS "
+
+if [ "$MYSQLHOST" != "localhost" ]; then
+	MYSQLARGS="$MYSQLARGS -h $MYSQLHOST"
+	if [ "$MYSQLPORT" != "3306" ]; then
+		MYSQLARGS="$MYSQLARGS -P $MYSQLPORT"
+	fi
+fi
+
+MYSQLARGS="$MYSQLARGS -u $MYSQLUSER"
+
+if [ "$MYSQLPW" != '""' ]; then
+	MYSQLARGS="$MYSQLARGS -p$MYSQLPW"
+fi
+
+MYSQLARGS="$MYSQLARGS"
+MYSQL="$MYSQLC $MYSQLARGS"
+INTERVAL="1500"
+CHUNKSIZE=10
+CHUNKSIZE2=7
+
+LIMITDBCID=$(echo "SELECT MAX(id) FROM $MYSQLDB.IncidentLogFileContent"|$MYSQL)
+LIMITDBBID=$(echo "SELECT MAX(id) FROM $MYSQLDB.IncidentLogFileBlueprint"|$MYSQL)
+LIMITDBID=$(echo "SELECT ( MAX(id) - $INTERVAL ) FROM $MYSQLDB.IncidentLog"|$MYSQL)
+
+MINDBID="0"
+NEXTMINDBID="0"
+
+MINDBBID="0"
+NEXTMINDBBID="0"
+
+MINDBCID="0"
+NEXTMINDBCID="0"
+
+echo $LTIMESTAMP;
+
+function create_database() {
+	echo "CREATE DATABASE IF NOT EXISTS $MYSQLARCHIVEDB DEFAULT CHARACTER SET utf8mb4 DEFAULT COLLATE utf8mb4_general_ci"|$MYSQL
+}
+
+
+function create_table() {
+	echo "CREATE TABLE IF NOT EXISTS $MYSQLARCHIVEDB.$1 LIKE $MYSQLDB.$1"|$MYSQL
+	echo "SHOW INDEX FROM $MYSQLARCHIVEDB.$1 WHERE Key_name != 'PRIMARY'"|$MYSQL|while read line
+	do
+		local DI_TABLE=$(echo $line|cut -f1 -d' ')
+		local DI_NAME=$(echo $line|cut -f3 -d' ')
+		echo "DROP INDEX $DI_NAME ON $MYSQLARCHIVEDB.$DI_TABLE"|$MYSQL
+	done
+}
+
+function generate_mindb_id() {
+	MINDBID=$NEXTMINDBID
+	NEXTMINDBID=$(echo "SELECT (MIN(id) + $CHUNKSIZE) as nextmindbid FROM $MYSQLDB.IncidentLog"|$MYSQL)
+}
+
+function generate_mindbb_id() {
+	MINDBBID=$NEXTMINDBBID
+	NEXTMINDBBID=$(( $NEXTMINDBBID + $CHUNKSIZE2 ))
+}
+
+function generate_mindbc_id() {
+	MINDBCID=$NEXTMINDBCID
+	NEXTMINDBCID=$(( $NEXTMINDBCID + $CHUNKSIZE2 ))
+}
+
+function insert_logs() {
+	echo "INSERT LOW_PRIORITY IGNORE INTO $MYSQLARCHIVEDB.IncidentLog SELECT * FROM $MYSQLDB.IncidentLog WHERE id BETWEEN $MINDBID AND $NEXTMINDBID"|$MYSQL
+}
+
+function insert_logfiles() {
+	echo "INSERT LOW_PRIORITY IGNORE INTO $MYSQLARCHIVEDB.IncidentLogFile SELECT * FROM $MYSQLDB.IncidentLogFile WHERE incidentLog_id BETWEEN $MINDBID AND $NEXTMINDBID"|$MYSQL
+}
+
+function insert_blueprints() {
+	echo "INSERT LOW_PRIORITY IGNORE INTO $MYSQLARCHIVEDB.IncidentLogFileBlueprint SELECT q.* FROM $MYSQLDB.IncidentLogFileBlueprint q WHERE q.id BETWEEN $MINDBBID AND $NEXTMINDBBID AND q.id NOT IN (SELECT b.id FROM $MYSQLDB.IncidentLogFileBlueprint as b, $MYSQLDB.IncidentLogFile f where f.blueprint_id=b.id)"|$MYSQL
+}
+
+function insert_contents() {
+	echo "INSERT LOW_PRIORITY IGNORE INTO $MYSQLARCHIVEDB.IncidentLogFileContent SELECT q.* FROM $MYSQLDB.IncidentLogFileContent q WHERE q.id BETWEEN $MINDBCID AND $NEXTMINDBCID AND q.id NOT IN (SELECT c.id FROM $MYSQLDB.IncidentLogFileContent as c, $MYSQLDB.IncidentLogFile f where f.content_id=c.id)"|$MYSQL
+}
+
+function delete_logs() {
+	echo "DELETE LOW_PRIORITY FROM $MYSQLDB.IncidentLog WHERE id BETWEEN $MINDBID AND $NEXTMINDBID"|$MYSQL
+}
+
+function delete_logfiles() {
+	echo "DELETE LOW_PRIORITY FROM $MYSQLDB.IncidentLogFile WHERE incidentLog_id BETWEEN $MINDBID AND $NEXTMINDBID"|$MYSQL
+}
+
+function delete_blueprints() {
+	echo "DELETE LOW_PRIORITY FROM $MYSQLDB.IncidentLogFileBlueprint WHERE id IN (SELECT b.id FROM $MYSQLARCHIVEDB.IncidentLogFileBlueprint as b WHERE b.id BETWEEN $MINDBBID AND $NEXTMINDBBID)"|$MYSQL
+}
+
+function delete_contents() {
+	echo "DELETE LOW_PRIORITY FROM $MYSQLDB.IncidentLogFileContent WHERE id IN (SELECT b.id FROM $MYSQLARCHIVEDB.IncidentLogFileContent as b WHERE b.id BETWEEN $MINDBCID AND $NEXTMINDBCID)"|$MYSQL
+}
+
+function move_logs_to_archive() {
+	generate_mindb_id
+	while [ "$NEXTMINDBID" -lt "$LIMITDBID" ]
+	do
+		insert_logs || exit 1
+		insert_logfiles || exit 1
+		delete_logfiles || exit 1
+		delete_logs || exit 1
+		generate_mindb_id
+	done
+}
+
+function move_unreferenced_blueprint_to_archive() {
+	generate_mindbb_id
+	while [ "$NEXTMINDBBID" -lt "$LIMITDBBID" ]
+	do
+		insert_blueprints || exit 1
+		delete_blueprints || exit 1
+		generate_mindbb_id
+	done
+}
+
+function move_unreferenced_content_to_archive() {
+	generate_mindbc_id
+	while [ "$NEXTMINDBCID" -lt "$LIMITDBCID" ]
+	do
+		insert_contents || exit 1
+		delete_contents || exit 1
+		generate_mindbc_id
+	done
+}
+
+
+create_database
+create_table IncidentLog
+create_table IncidentLogFile
+create_table IncidentLogFileBlueprint
+create_table IncidentLogFileContent
+
+move_logs_to_archive
+move_unreferenced_blueprint_to_archive
+move_unreferenced_content_to_archive
+
+
