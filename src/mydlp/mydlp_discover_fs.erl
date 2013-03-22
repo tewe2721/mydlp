@@ -46,7 +46,7 @@
 
 -ifdef(__MYDLP_ENDPOINT).
 
--export([stop_discovery_by_rule_id/0,
+-export([stop_discovery_by_rule_id/1,
 	schedule_discovery/0
 	]).
 
