@@ -87,6 +87,14 @@
 	available_intervals
 }).
 
+-record(discovery_endpoint_schedules, {
+	id, 
+	rule_id,
+	orig_id,
+	group_id,
+	eps=[]
+}).
+
 -record(m_user, {
 	id,
 	rule_id,
@@ -135,6 +143,7 @@
 	id,
 	endpoint_id,
 	command,
+	args,
 	date
 }).
 

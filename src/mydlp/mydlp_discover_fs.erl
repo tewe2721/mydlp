@@ -37,10 +37,11 @@
 %% API
 -export([start_link/0,
 	ql/1,
-	q/2,
 	q/3,
-	continue_paused_discovery/0,
+	q/4,
+	continue_paused_discovery/1,
 	is_discovery_finished/1,
+	update_rule_status/2,
 	stop/0]).
 
 -ifdef(__MYDLP_ENDPOINT).
@@ -64,6 +65,7 @@
 -record(state, {
 	discover_queue,
 	paused_queue,
+	group_id_dict,
 	discover_inprog=false,
 	timer
 }).
@@ -102,17 +104,19 @@ is_discovery_finished(RuleId) -> gen_server:call(?MODULE, {is_discovery_finished
 
 ql(List) -> gen_server:cast(?MODULE, {ql, List}).
 
-q(FilePath, RuleIndex) -> q(none, FilePath, RuleIndex).
+q(FilePath, RuleIndex, GroupId) -> q(none, FilePath, RuleIndex, GroupId).
 
-q(ParentId, FilePath, RuleIndex) -> gen_server:cast(?MODULE, {q, ParentId, FilePath, RuleIndex}).
+q(ParentId, FilePath, RuleIndex, GroupId) -> gen_server:cast(?MODULE, {q, ParentId, FilePath, RuleIndex, GroupId}).
 
-continue_paused_discovery() ->
-	gen_server:cast(?MODULE, push_paused_to_proc_queue),
+continue_paused_discovery(RuleId) ->
+	gen_server:cast(?MODULE, {push_paused_to_proc_queue, RuleId}),
 	consume().
+
+update_rule_status(RuleId, Status) -> gen_server:cast(?MODULE, {update_rule_status, RuleId, Status}).
 
 -ifdef(__MYDLP_ENDPOINT).
 
-stop_discovery() -> gen_server:cast(?MODULE, stop_discovery).
+stop_discovery_by_rule_id(RuleId) -> gen_server:cast(?MODULE, {stop_discovery_by_rule_id, RuleId}).
 
 schedule_discovery() -> gen_server:cast(?MODULE, schedule_discovery).
 
@@ -123,9 +127,10 @@ schedule_discovery() -> gen_server:cast(?MODULE, schedule_discovery).
 handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
 
-handle_call({stop_discovery_by_rule_id, RuleId}, _From, #state{discover_queue=Q}=State) ->
+handle_call({stop_discovery_by_rule_id, RuleId}, _From, #state{discover_queue=Q, group_id_dict=GroupDict}=State) ->
 	Q1 = drop_items_by_rule_id(RuleId, Q),
-	{reply, ok, State#state{discover_queue=Q1}};
+	GroupDict1 = dict:erase(RuleId, GroupDict),
+	{reply, ok, State#state{discover_queue=Q1, group_id_dict=GroupDict1}};
 
 handle_call({is_discovery_finished, RuleId}, _From, #state{discover_queue=Q, paused_queue=PQ}=State) ->
 	Reply = is_finished_by_rule_id(RuleId, Q),
@@ -137,32 +142,51 @@ handle_call({is_discovery_finished, RuleId}, _From, #state{discover_queue=Q, pau
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
+handle_cast({update_rule_status, RuleId, Status}, #state{group_id_dict=GroupDict}=State) ->
+	GroupDict1 = case dict:find(RuleId, GroupDict) of
+			{ok, {GroupId, _}} -> dict:store(RuleId, {GroupId, Status}, GroupDict);
+			error -> ?ERROR_LOG("Unknown RuleId: "?S"", [RuleId]), GroupDict
+	end,
+	{noreply, State#state{group_id_dict=GroupDict1}};
+
 handle_cast({ql, List}, State) ->
-	[ q(FilePath, RuleIndex) || {RuleIndex, FilePath} <- List ],
+	[ q(FilePath, RuleIndex, GroupId) || {RuleIndex, FilePath, GroupId} <- List ],
 	{noreply, State};
 
-handle_cast({q, ParentId, FilePath, RuleIndex}, #state{discover_queue=Q, discover_inprog=false} = State) ->
+handle_cast({q, ParentId, FilePath, RuleIndex, GroupId}, #state{discover_queue=Q, group_id_dict=GroupDict, discover_inprog=false} = State) ->
 	Q1 = queue:in({ParentId, FilePath, RuleIndex}, Q),
+	GroupDict1 = case dict:find(RuleIndex, GroupDict) of
+			{ok, _Val} -> GroupDict;
+			error -> dict:store(RuleIndex, {GroupId, disc}, GroupDict)
+		end,
 	consume(),
 	set_discover_inprog(),
-	{noreply, State#state{discover_queue=Q1, discover_inprog=true}};
+	{noreply, State#state{discover_queue=Q1, discover_inprog=true, group_id_dict=GroupDict1}};
 
-handle_cast({q, ParentId, FilePath, RuleIndex}, #state{discover_queue=Q, discover_inprog=true} = State) ->
+handle_cast({q, ParentId, FilePath, RuleIndex, GroupId}, #state{discover_queue=Q, group_id_dict=GroupDict, discover_inprog=true} = State) ->
 	Q1 = queue:in({ParentId, FilePath, RuleIndex}, Q),
-	{noreply,State#state{discover_queue=Q1}};
+	GroupDict1 = case dict:find(RuleIndex, GroupDict) of
+			{ok, _Val} -> GroupDict;
+			error -> dict:store(RuleIndex, {GroupId, disc}, GroupDict)
+		end,
+	{noreply,State#state{discover_queue=Q1, group_id_dict=GroupDict1}};
 
-handle_cast(push_paused_to_proc_queue, #state{discover_queue=Q, paused_queue=PQ} = State) ->
+handle_cast({push_paused_to_proc_queue, RuleId}, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=GroupDict} = State) ->
 	reset_discover_cache(),
-	{noreply, State#state{discover_queue=queue:join(Q, PQ), paused_queue=queue:new()}};
+	GroupDict1 = case dict:find(RuleId, GroupDict) of
+			{ok, {GId, _S}} -> dict:store(RuleId, {GId, disc}, GroupDict);
+			error -> ?ERROR_LOG("Unknown Rule id: "?S"", [RuleId])
+	end,
+	{noreply, State#state{discover_queue=queue:join(Q, PQ), paused_queue=queue:new(), group_id_dict=GroupDict1}};
 
 handle_cast({del_fs_entries, RuleIndex}, State) ->
 	mydlp_mnesia:del_fs_entries_by_rule_id(RuleIndex),
 	{noreply, State};
 
-handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ} = State) ->
+handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=GroupDict} = State) ->
 	case queue:out(Q) of
 		{{value, {ParentId, FilePath, RuleIndex}=Item}, Q1} ->
-			case is_paused_or_stopped_by_rule_id(RuleIndex) of
+			case is_paused_or_stopped_by_rule_id(RuleIndex, GroupDict) of
 				paused -> % rule is paused, push the item pause queue
 					PQ1 = queue:in(Item, PQ),
 					consume(),
@@ -170,10 +194,10 @@ handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ} = State) ->
 				stopped -> % rule is stopped, drop item
 					consume(),
 					{noreply, State#state{discover_queue=Q1, paused_queue=PQ}};
-				none ->
+				_ ->
 					try	case has_discover_rule() of
 							true -> case is_exceptional(FilePath) of
-									false -> discover(ParentId, FilePath, RuleIndex);
+									false -> discover(ParentId, FilePath, RuleIndex, GroupDict);
 									true -> ok end;
 							false -> ok end,
 						consume(),
@@ -187,7 +211,6 @@ handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ} = State) ->
 							{noreply, State#state{discover_queue=Q1}} end
 			end;
 		{empty, _} ->
-			%State1 = schedule_timer(State, ?CFG(discover_fs_interval)),
 			unset_discover_inprog(),
 			{noreply, State#state{discover_inprog=false}}
 	end;
@@ -207,10 +230,8 @@ handle_info(schedule_now, State) ->
 	{noreply, State1};
 
 handle_info(schedule_startup, State) ->
-	State1 = case ?CFG(discover_fs_on_startup) of
-		true -> schedule(), State;
-		false -> schedule_timer(State, ?CFG(discover_fs_interval)) end,
-	{noreply, State1};
+	schedule(),
+	{noreply, State};
 
 handle_info({async_reply, Reply, From}, State) ->
 	gen_server:reply(From, Reply),
@@ -223,7 +244,13 @@ handle_info(_Info, State) ->
 
 -ifdef(__MYDLP_NETWORK).
 
-is_paused_or_stopped_by_rule_id(RuleId) -> gen_server:call(mydlp_discovery_manager, {is_paused_or_stopped, RuleId}).
+is_paused_or_stopped_by_rule_id(RuleId, GroupDict) -> 
+	%gen_server:call(mydlp_discovery_manager, {is_paused_or_stopped, RuleId}).
+	erlang:display({psne, dict:find(RuleId, GroupDict)}),
+	case dict:find(RuleId, GroupDict) of
+		{ok, {_GroupId, Status}} -> Status;
+		_ -> none
+	end.
 
 has_discover_rule() -> true.
 
@@ -269,7 +296,7 @@ schedule() ->
 				Index} end
 			, L) end,	
 	reset_discover_cache(),
-	lists:foreach(fun({P, I}) -> q(P, I) end, PathList),
+	%lists:foreach(fun({P, I}) -> q(P, I) end, PathList),
 	ok.
 -endif.
 
@@ -284,21 +311,9 @@ start_link() ->
 stop() ->
 	gen_server:call(?MODULE, stop).
 
--ifdef(__MYDLP_ENDPOINT).
-
-init([]) ->
-	timer:send_after(60000, schedule_startup),
-	{ok, #state{discover_queue=queue:new(), paused_queue=queue:new()}}.
-
--endif.
-
--ifdef(__MYDLP_NETWORK).
-
 init([]) -> 
 	reset_discover_cache(),
-	{ok, #state{discover_queue=queue:new(), paused_queue=queue:new()}}.
-
--endif.
+	{ok, #state{discover_queue=queue:new(), paused_queue=queue:new(), group_id_dict=dict:new()}}.
 
 terminate(_Reason, _State) ->
 	ok.
@@ -324,8 +339,8 @@ drop_items_by_rule_id(RuleId, Q, AccQ) ->
 	case queue:out(Q) of
 		 {{value, {_ParentId, _FilePath, RuleIndex}=Item}, Q1} -> 
 			AccQ1 = case RuleIndex of
-					RuleId -> queue:in(Item, AccQ);
-					_ -> AccQ
+					RuleId -> erlang:display({dropped, Item}),AccQ;
+					_ -> queue:in(Item, AccQ)
 				end,
 			drop_items_by_rule_id(RuleId, Q1, AccQ1);
 		{empty, _Q2} -> AccQ
@@ -368,11 +383,11 @@ set_prop_extra(ObjId) ->
 
 -endif.
 
-discover_file(#fs_entry{file_id={FP, RuleIndex}}) ->
+discover_file(#fs_entry{file_id={FP, RuleIndex}}, GroupDict) ->
 	try	timer:sleep(20),
 		{ok, ObjId} = mydlp_container:new(),
 		ok = mydlp_container:setprop(ObjId, "rule_index", RuleIndex),
-		GroupId = mydlp_discovery_manager:get_group_id(RuleIndex),
+		{ok, {GroupId, _}} = dict:find(RuleIndex, GroupDict),
 		ok = mydlp_container:setprop(ObjId, "group_id", GroupId),
 		set_prop_extra(ObjId),
 		ok = mydlp_container:pushfile(ObjId, {raw, FP}),
@@ -389,36 +404,38 @@ discover_file(#fs_entry{file_id={FP, RuleIndex}}) ->
 	end,
 	ok.
 
-discover_dir(#fs_entry{file_id={FP, RuleIndex}, entry_id=EId}) ->
+discover_dir(#fs_entry{file_id={FP, RuleIndex}, entry_id=EId}, GroupDict) ->
 	CList = case file:list_dir(FP) of
 		{ok, LD} -> LD;
 		{error, _} -> [] end,
 	OList = mydlp_mnesia:fs_entry_list_dir(EId),
 	MList = lists:umerge([CList, OList]),
-	[ q(EId, filename:absname(FN, FP), RuleIndex) || FN <- MList ],
+	GroupId = dict:find(RuleIndex, GroupDict),
+	[ q(EId, filename:absname(FN, FP), RuleIndex, GroupId) || FN <- MList ],
 	ok.
 
-discover_dir_dir(#fs_entry{file_id={FP, RuleIndex}, entry_id=EId}) ->
+discover_dir_dir(#fs_entry{file_id={FP, RuleIndex}, entry_id=EId}, GroupDict) ->
 	OList = mydlp_mnesia:fs_entry_list_dir(EId),
-	[ q(EId, filename:absname(FN, FP), RuleIndex) || FN <- OList ],
+	GroupId = dict:find(RuleIndex, GroupDict),
+	[ q(EId, filename:absname(FN, FP), RuleIndex, GroupId) || FN <- OList ],
 	ok.
 
-discover(ParentId, FilePath, RuleIndex) ->
+discover(ParentId, FilePath, RuleIndex, GroupDict) ->
 	case is_cached({FilePath, RuleIndex}) of
 		true -> ok;
-		false -> discover1(ParentId, FilePath, RuleIndex) end.
+		false -> discover1(ParentId, FilePath, RuleIndex, GroupDict) end.
 
-discover1(ParentId, FilePath, RuleIndex) ->
+discover1(ParentId, FilePath, RuleIndex, GroupDict) ->
 	case filelib:is_regular(FilePath) of
 		true -> E = fs_entry(ParentId, FilePath, RuleIndex),
 			case is_changed(E) of
-				true -> discover_file(E);
+				true -> discover_file(E, GroupDict);
 				false -> ok end;
 	false -> case filelib:is_dir(FilePath) of
 		true -> E = fs_entry(ParentId, FilePath, RuleIndex),
 			case is_changed(E) of
-				true -> discover_dir(E);
-				false -> discover_dir_dir(E) end;
+				true -> discover_dir(E, GroupDict);
+				false -> discover_dir_dir(E, GroupDict) end;
 	false -> mydlp_mnesia:del_fs_entry(FilePath) end end, % Means file does not exists
 	ok.
 
@@ -430,6 +447,7 @@ set_discover_inprog() ->
 	mydlp_sync:sync_now().
 
 unset_discover_inprog() ->
+	
 	reset_discover_cache(),
 	mydlp_container:set_ep_meta("discover_inprog", "no"),
 	mydlp_sync:sync_now().

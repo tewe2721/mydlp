@@ -134,7 +134,7 @@ handle_event({EventLevel, _, {_FromPid, Fmt, Data}}, State) ->
 			_ -> io_lib:format(Fmt, Data)
 			end,
 		case EventLevel of
-			{operational, discovery} -> erlang:display("HAHAH"), ?_OPR_LOG_HANDLE(discovery, {opr_log, Message});
+			{operational, discovery} -> ?_OPR_LOG_HANDLE(discovery, {opr_log, Message});
 			{operational, general} -> ?_OPR_LOG_HANDLE(general, {key, Message});
 			error -> syslog_err(State, Message);
 			warning_msg -> syslog_syswarn(State, Message);

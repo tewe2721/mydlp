@@ -52,6 +52,7 @@
 	delete_log_requeue/1,
 	repopulate_mnesia/0,
 	save_fingerprints/2,
+	populate_discovery_endpoint_schedules/1,
 	get_progress/0,
 	stop/0]).
 
@@ -110,6 +111,9 @@ insert_log_data(LogId, Filename, MimeType, Size, Hash, Path) ->
 
 save_fingerprints(DocumentId, FingerprintList) -> 
 	gen_server:call(?MODULE, {save_fingerprints, DocumentId, FingerprintList}, 60000).
+
+populate_discovery_endpoint_schedules(RuleId) ->
+	gen_server:call(?MODULE, {populate_discovery_endpoint_schedules, RuleId}, 60000).
 
 requeued(LogId) -> 
 	gen_server:cast(?MODULE, {requeued, LogId}).
@@ -217,6 +221,12 @@ handle_call({save_fingerprints, DocumentId, FingerprintList}, From, State) ->
 		end, 60000),
         {noreply, State};
 
+handle_call({populate_discovery_endpoint_schedules, RuleId}, _From, State) ->
+	{ok, Aliasses} =  psq(get_endpoint_alias),
+	IpsAndNames = get_identities(Aliasses),
+	lists:map(fun(I) -> mydlp_mnesia:update_ep_schedules(I, RuleId) end, IpsAndNames),
+	{reply, ok, State};
+
 handle_call(stop, _From,  State) ->
 	{stop, normalStop, State};
 
@@ -230,10 +240,8 @@ handle_cast({update_report_status, GroupId, NewStatus}, State) ->
 	{noreply, State};
 
 handle_cast({update_report_as_finished, GroupId}, State) ->
-	erlang:display(hede),
-%	Time = erlang:universaltime(),
 	?ASYNC0(fun() ->
-		rpsq(update_report_as_finished, ["status", GroupId], 60000)
+		rpsq(update_report_as_finished, ["stopped", GroupId], 60000)
 	end),
 	{noreply, State};
 
@@ -476,7 +484,9 @@ init([]) ->
 		{insert_opr_log, <<"INSERT INTO OperationLog (id, date, context, ruleId, groupId, message, messageKey, visible, severity) VALUES (NULL, ?, ?, NULL, NULL, NULL, ?, ?, ?)">>},
 		{insert_discovery_report, <<"INSERT INTO DiscoveryReport (id, startDate, finishDate, groupId, ruleId, status) VALUES (NULL, ?, NULL, ?, ?, ?)">>},
 		{update_report_status, <<"UPDATE DiscoveryReport SET status=? WHERE groupId = ?">>},
-		{update_report_as_finished, <<"UPDATE DiscoveryReport SET status=?, finishDate=now() WHERE groupId = ?">>}
+		{update_report_as_finished, <<"UPDATE DiscoveryReport SET status=?, finishDate=now() WHERE groupId = ?">>},
+		{get_endpoint_alias, <<"SELECT endpointAlias FROM Endpoint">>},
+		{get_ip_and_username, <<"SELECT ipAddress, username FROM EndpointStatus where endpointAlias=?">>}
 
 	]],
 
@@ -547,6 +557,13 @@ psqt(PreparedKey, Params) ->
 
 %%%%%%%%%%%% internal
 	
+
+get_identities(Rows) -> get_identities(Rows, []).
+
+get_identities([[Alias]|Rows], Acc) ->
+	{ok, [[Ip,Username]]} = lpsq(get_ip_and_username, [Alias], 30000),
+	get_identities(Rows, [{Alias, Ip, Username}|Acc]);
+get_identities([], Acc) -> Acc.
 
 populate_site(FilterId) ->
 	set_progress(compile),
@@ -640,6 +657,8 @@ populate_rule(OrigId, Channel, UserMessage, Action, FilterId) ->
 	populate_remote_storages(OrigId, RuleId),
 
 	populate_discovery_schedule(OrigId, RuleId),
+
+	populate_ep_schedules_entries(RuleId, OrigId),
 
 	{ok, RWS} = psq(web_servers, [OrigId]),
 	populate_web_servers(RWS, RuleId),
@@ -803,6 +822,12 @@ populate_discovery_schedule1([[Hour, M, Tu, W, Th, F, Sa, Su]|Rows], ScheduleInt
 	mydlp_mnesia_write(I),
 	populate_discovery_schedule1(Rows, ScheduleIntervals, RuleId, weekly);
 populate_discovery_schedule1([], _, _, _) -> ok.
+
+populate_ep_schedules_entries(RuleId, OrigId) ->
+	Id = mydlp_mnesia:get_unique_id(discovery_endpoint_schedules),
+	I = #discovery_endpoint_schedules{id=Id, rule_id=RuleId, orig_id=OrigId, eps=[]},
+	mydlp_mnesia_write(I),
+	ok.
 
 populate_web_servers([[Proto, Address, Port, DigDepth, StartPath]|Rest], RuleId) ->
 	Id = mydlp_mnesia:get_unique_id(web_server),
@@ -1383,6 +1408,7 @@ pre_push_log(RuleId, Ip, User, Destination, Action, Channel, Misc, GroupId) ->
 pre_push_opr_log(Time, Channel, RuleId, MessageKey, GroupId) ->
 	ChannelS = case Channel of
 		remote_discovery -> <<"RD">>;
+		discovery -> <<"D">>;
 		R -> ?ERROR_LOG("Unexpected Rule Type: ["?S"]", [R]),
 			<<"U">>
 	end,

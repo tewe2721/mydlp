@@ -94,9 +94,9 @@
 	save_user_address/3,
 	remove_old_user_address/0,
 	get_user_from_address/1,
-	save_endpoint_command/2,
+	save_endpoint_command/3,
 	remove_old_endpoint_command/0,
-	remove_endpoint_command/2,
+	remove_endpoint_command/3,
 	get_endpoint_commands/1,
 	get_keywords/1,
 	get_matchers/0,
@@ -115,7 +115,10 @@
 	get_availabilty_by_rule_id/1,
 	get_rule_id_by_orig_id/1,
 	get_orig_id_by_rule_id/1,
-	get_rule_channel/1
+	get_rule_channel/1,
+	get_discovery_rule_ids/2,
+	update_ep_schedules/2,
+	get_endpoints_by_rule_id/1
 	]).
 
 -endif.
@@ -185,6 +188,7 @@
 	notification_queue,
 	remote_storage,
 	discovery_schedule,
+	discovery_endpoint_schedules,
 	{m_user, ordered_set, 
 		fun() -> mnesia:add_table_index(m_user, un_hash) end},
 	{source_domain, ordered_set, 
@@ -264,6 +268,7 @@ get_record_fields_functional(Record) ->
 		dest -> record_info(fields, dest);
 		remote_storage -> record_info(fields, remote_storage);
 		discovery_schedule -> record_info(fields, discovery_schedule);
+		discovery_endpoint_schedules -> record_info(fields, discovery_endpoint_schedules);
 		notification -> record_info(fields, notification);
 		notification_queue -> record_info(fields, notification_queue);
 		source_domain -> record_info(fields, source_domain);
@@ -387,11 +392,11 @@ remove_old_user_address() -> aqc(remove_old_user_address, nocache, dirty).
 
 get_user_from_address(IpAddress) -> aqc({get_user_from_address, IpAddress}, nocache, dirty).
 
-save_endpoint_command(EndpointId, Command) -> aqc({save_endpoint_command, EndpointId, Command}, nocache, dirty).
+save_endpoint_command(EndpointId, Command, Args) -> aqc({save_endpoint_command, EndpointId, Command, Args}, nocache, dirty).
 
 remove_old_endpoint_command() -> aqc(remove_old_endpoint_command, nocache, dirty).
 
-remove_endpoint_command(EndpointId, Command) -> aqc({remove_endpoint_command, EndpointId, Command}, nocache, dirty).
+remove_endpoint_command(EndpointId, Command, Args) -> aqc({remove_endpoint_command, EndpointId, Command, Args}, nocache, dirty).
 
 get_endpoint_commands(EndpointId) -> aqc({get_endpoint_commands, EndpointId}, nocache, dirty).
 
@@ -430,6 +435,17 @@ get_rule_id_by_orig_id(OrigRuleId) -> aqc({get_rule_id_by_orig_id, OrigRuleId}, 
 get_orig_id_by_rule_id(RuleId) -> aqc({get_orig_id_by_rule_id, RuleId}, nocache).
 
 get_rule_channel(RuleId) -> aqc({get_rule_channel, RuleId}, nocache).
+
+get_discovery_rule_ids(Ip, Username) -> aqc({get_discovery_rule_ids, Ip, Username}, nocache).
+
+update_ep_schedules({Alias, Ip, Username}, TargetRuleId) ->
+	SrcUserH = mydlp_api:hash_un(Username),
+	ClientIp = mydlp_api:str_to_ip(binary_to_list(Ip)),
+	AclQ = #aclq{src_addr=ClientIp, src_user_h=SrcUserH},
+	RuleIds = get_rule_ids(get_dfid(), AclQ#aclq{channel=discovery}),
+	aqc({update_ep_schedules, Alias, RuleIds, TargetRuleId}, nocache).
+
+get_endpoints_by_rule_id(RuleId) -> aqc({get_endpoints_by_rule_id, RuleId}, nocache).
 
 -endif.
 
@@ -756,6 +772,7 @@ handle_query({update_notification_queue_item, RuleId, Status}) ->
 
 handle_query({get_remote_rule_tables, FilterId, Addr, UserH}) ->
 	AclQ = #aclq{src_addr=Addr, src_user_h=UserH},
+	erlang:display({asd, Addr, UserH}),
 	RemovableStorageRuleTable = get_rules(FilterId, AclQ#aclq{channel=removable}),
 	PrinterRuleTable = get_rules(FilterId, AclQ#aclq{channel=printer}),
 	InboundRuleTable = get_rules(FilterId, AclQ#aclq{channel=inbound}),
@@ -997,6 +1014,26 @@ handle_query({get_rule_channel, RuleId}) ->
 	]),
 	?QLCE(Q);
 
+handle_query({get_discovery_rule_ids, Ip, Username}) ->
+	AclQ = #aclq{src_addr=Ip, src_user_h=Username},
+	get_rule_ids(get_dfid(), AclQ#aclq{channel=discovery});
+
+handle_query({update_ep_schedules, Alias, RuleIds, TargetRuleId}) -> 
+	case lists:member(TargetRuleId, RuleIds) of
+		true ->
+			[I] = mnesia:match_object(#discovery_endpoint_schedules{id='_', rule_id=TargetRuleId, orig_id='_', eps='_'}),
+			AliasList = [Alias|I#discovery_endpoint_schedules.eps],
+			mnesia:dirty_write(I#discovery_endpoint_schedules{eps=AliasList});
+		false -> ok
+	end;
+
+handle_query({get_endpoints_by_rule_id, RuleId}) ->
+	Q = ?QLCQ([D#discovery_endpoint_schedules.eps ||
+		D <- mnesia:table(discovery_endpoint_schedules),
+		D#discovery_endpoint_schedules.rule_id == RuleId
+	]),
+	?QLCE(Q);
+	
 handle_query({get_matchers, RuleIDs}) ->
 	ML = lists:map(fun(RId) ->
 		Q1 = ?QLCQ([F#ifeature.match_id ||
@@ -1097,29 +1134,38 @@ handle_query(remove_old_user_address) ->
 handle_query({get_user_from_address, IpAddress}) ->
 	mnesia:dirty_read(user_address, IpAddress);
 
-handle_query({save_endpoint_command, EndpointId, Command}) ->
+handle_query({save_endpoint_command, EndpointId, Command, [{ruleId, RuleId}, {groupId, GroupId}]=Args}) ->
 	{MegaSecs, Secs, _MicroSecs} = erlang:now(),
         Born = 1000000*MegaSecs + Secs,
-        L = mnesia:match_object(#endpoint_command{id='_', endpoint_id=EndpointId, command=Command, date='_'}),
+        L = mnesia:match_object(#endpoint_command{id='_', endpoint_id=EndpointId, command=Command, date='_', args=Args}),
 	EC = case L of
 		[] -> 	Id = get_unique_id(endpoint_command),
-			#endpoint_command{id=Id, endpoint_id=EndpointId, command=Command, date=Born};
+			#endpoint_command{id=Id, endpoint_id=EndpointId, command=Command, date=Born, args=Args};
 		[E] ->	E#endpoint_command{date=Born} end,
+	Time = erlang:universaltime(),
+	erlang:display({save, EndpointId, Command}),
+	OprLog = #opr_log{time=Time, channel=discovery, rule_id=RuleId, message_key="command_created", group_id=GroupId},
+	?DISCOVERY_OPR_LOG(OprLog),
 	mnesia:dirty_write(EC),
 	case Command of
-		stop_discovery -> remove_endpoint_command(EndpointId, schedule_discovery);
-		schedule_discovery -> remove_endpoint_command(EndpointId, stop_discovery);
+		stop_discovery -> remove_endpoint_command(EndpointId, schedule_discovery, Args);
+		schedule_discovery -> remove_endpoint_command(EndpointId, stop_discovery, Args);
 		_Else -> ok end,
 	ok;
 
 handle_query({get_endpoint_commands, EndpointId}) ->
-        Items = mnesia:match_object(#endpoint_command{id='_', endpoint_id=EndpointId, command='_', date='_'}),
-	lists:foreach(fun(#endpoint_command{id=Id}) -> mnesia:dirty_delete({endpoint_command, Id}) end, Items),
+        Items = mnesia:match_object(#endpoint_command{id='_', endpoint_id=EndpointId, command='_', date='_', args='_'}),
+	Time=erlang:universaltime(),
+	lists:foreach(fun(#endpoint_command{id=Id, args=Args}) -> 
+		[{ruleId, RuleId}, {groupId, GroupId}] = Args,
+		OprLog = #opr_log{time=Time, channel=discovery, rule_id=RuleId, message_key="command_sent", group_id=GroupId},
+		?DISCOVERY_OPR_LOG(OprLog),
+		mnesia:dirty_delete({endpoint_command, Id}) end, Items),
 	Items;
 
 handle_query(remove_old_endpoint_command) ->
 	{MegaSecs, Secs, _MicroSecs} = erlang:now(),
-        AgeLimit = 1000000*MegaSecs + Secs - 900,
+        AgeLimit = 1000000*MegaSecs + Secs - 9000,
 	Q = ?QLCQ([E#endpoint_command.id ||
 		E <- mnesia:table(endpoint_command),
 		E#endpoint_command.date < AgeLimit
@@ -1127,8 +1173,8 @@ handle_query(remove_old_endpoint_command) ->
 	ECIs = ?QLCE(Q),
 	lists:foreach(fun(Id) -> mnesia:dirty_delete({endpoint_command, Id}) end, ECIs);
 
-handle_query({remove_endpoint_command, EndpointId, Command}) ->
-        Items = mnesia:match_object(#endpoint_command{id='_', endpoint_id=EndpointId, command=Command, date='_'}),
+handle_query({remove_endpoint_command, EndpointId, Command, Args}) ->
+        Items = mnesia:match_object(#endpoint_command{id='_', endpoint_id=EndpointId, command=Command, date='_', args=Args}),
 	lists:foreach(fun(#endpoint_command{id=Id}) -> mnesia:dirty_delete({endpoint_command, Id}) end, Items);
 
 handle_query(Query) -> handle_query_common(Query).
@@ -1968,17 +2014,23 @@ remove_rule(RI) ->
 		]),
 	RSs = ?QLCE(Q8),
 
-	Q9 = ?QLCQ([RS#discovery_schedule.id ||	
+	Q9 = ?QLCQ([RS#discovery_schedule.id ||	% Removing these two table may cause inconsistency in policy compilation
 		RS <- mnesia:table(discovery_schedule),
 		RS#discovery_schedule.rule_id == RI
 		]),
 	DSs = ?QLCE(Q9),
 
-	Q10 = ?QLCQ([RS#web_server.id ||	
+	Q10 = ?QLCQ([DES#discovery_endpoint_schedules.id ||	
+		DES <- mnesia:table(discovery_endpoint_schedules),
+		DES#discovery_schedule.rule_id == RI
+		]),
+	DESs = ?QLCE(Q10),
+
+	Q11 = ?QLCQ([RS#web_server.id ||	
 		RS <- mnesia:table(web_server),
 		RS#web_server.rule_id == RI
 		]),
-	WSs = ?QLCE(Q10),
+	WSs = ?QLCE(Q11),
 
 	lists:foreach(fun(Id) -> mnesia:delete({ipr, Id}) end, IIs),
 	lists:foreach(fun(Id) -> mnesia:delete({m_user, Id}) end, UIs),
@@ -1987,6 +2039,7 @@ remove_rule(RI) ->
 	lists:foreach(fun(Id) -> mnesia:delete({source_domain, Id}) end, SDs),
 	lists:foreach(fun(Id) -> mnesia:delete({remote_storage, Id}) end, RSs),
 	lists:foreach(fun(Id) -> mnesia:delete({discovery_schedule, Id}) end, DSs),
+	lists:foreach(fun(Id) -> mnesia:delete({discovery_endpoint_schedules, Id}) end, DESs),
 	lists:foreach(fun(Id) -> mnesia:delete({web_server, Id}) end, WSs),
 
 	remove_data_formats(DFIs),

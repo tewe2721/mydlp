@@ -3045,7 +3045,7 @@ apply_cdbobj({{rule_tables, RuleTables}, {mc, MCModule}, {items, ItemDump}}) ->
 	mydlp_tc:load(),
 	mydlp_container:schedule_confupdate(),
 	ok;
-apply_cdbobj({command, L}) when is_list(L) -> lists:foreach(fun(C) -> apply_cdbobj({command, C}) end, L);
+apply_cdbobj({command, L}) when is_list(L) -> erlang:display({commands, L}), lists:foreach(fun(C) -> apply_cdbobj({command, C}) end, L);
 apply_cdbobj({command, stop_discovery}) ->
 	?ASYNC0(fun() -> mydlp_discover_fs:stop_discovery() end), ok;
 apply_cdbobj({command, schedule_discovery}) ->

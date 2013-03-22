@@ -20,6 +20,7 @@
 
 %%%-------------------------------------------------------------------
 %%% @author H. Kerem Cevahir <kerem@mydlp.com>
+%%% @author Ozgen Muzac <ozgen@mydlp.com>
 %%% @copyright 2011, H. Kerem Cevahir
 %%% @doc Worker for mydlp.
 %%% @end
@@ -27,6 +28,7 @@
 
 -module(mydlp_discover_rfs).
 -author("kerem@mydlp.com").
+-author("ozgen@mydlp.com").
 -behaviour(gen_server).
 
 -include("mydlp.hrl").
@@ -85,7 +87,7 @@ handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
 
 handle_call({stop_discovery,RuleId}, _From, State) ->
-	Reply = gen_server:call(mydlp_discover_fs, {stop_discovery_by_rule_id, RuleId}),
+	Reply = gen_server:call(mydlp_discover_fs, {stop_discovery_by_rule_id, RuleId}, 60000),
 	{reply, Reply, State};
 
 handle_call({release_mount_by_rule_id, RuleId}, _From, #state{mount_dict=Dict}=State) ->
@@ -111,13 +113,14 @@ handle_cast({start_by_rule_id, RuleId, GroupId}, #state{mount_dict=Dict}=State) 
 	consume(RemoteStorages, GroupId),
 	{noreply, State#state{mount_dict=Dict1}};
 
-handle_cast({continue_discovering}, State) ->
-	mydlp_discover_fs:continue_paused_discovery(),
+handle_cast({continue_discovering, RuleId}, State) ->
+	erlang:display(rfs_continue_discovering),
+	mydlp_discover_fs:continue_paused_discovery(RuleId),
 	{noreply, State};	
 
 handle_cast({consume, RemoteStorages, GroupId}, #state{mount_dict=Dict}=State) ->
 	Dict1 = discover_each_mount(RemoteStorages, Dict, GroupId),
-	mydlp_discover_fs:ql([{RuleId, MountPath}|| {RuleId, {MountPath, _RId}}<- dict:to_list(Dict1)]),
+	mydlp_discover_fs:ql([{RuleId, MountPath, GroupId}|| {RuleId, {MountPath, _RId}}<- dict:to_list(Dict1)]),
 	{noreply, State#state{mount_dict=Dict1}};
 
 handle_cast(finished, State) ->
@@ -172,38 +175,38 @@ add_mount_path_to_dict({MountPath, RuleId}, Dict, GroupId) -> dict:store(RuleId,
 
 
 mount_path(MountPath, Command, Args, Envs, Stdin, RuleId, GroupId, 1) ->
-	Time = erlang:universaltime(),
-	OrigRuleId = mydlp_mnesia:get_orig_id_by_rule_id(RuleId),
+	%Time = erlang:universaltime(),
+	%OrigRuleId = mydlp_mnesia:get_orig_id_by_rule_id(RuleId),
 	case mydlp_api:cmd_bool(?MOUNTPOINT_COMMAND, ["-q", MountPath]) of
-		true -> ReportId = mydlp_mysql:push_discovery_report(Time, GroupId, OrigRuleId, ?REPORT_STATUS_DISC),
-			OprLog = #opr_log{time=Time, channel=remote_discovery, rule_id=RuleId, message_key=?SUCCESS_MOUNT_KEY, group_id=GroupId, report_id=ReportId},
-			?DISCOVERY_OPR_LOG(OprLog),
+		true -> %ReportId = mydlp_mysql:push_discovery_report(Time, GroupId, OrigRuleId, ?REPORT_STATUS_DISC),
+			%OprLog = #opr_log{time=Time, channel=remote_discovery, rule_id=RuleId, message_key=?SUCCESS_MOUNT_KEY, group_id=GroupId, report_id=ReportId},
+			%?DISCOVERY_OPR_LOG(OprLog),
 			{MountPath, RuleId};
 		false ->
 			case mydlp_api:cmd(Command, Args, Envs, Stdin) of
 				ok -> {MountPath, RuleId};
 				E -> ?ERROR_LOG("Remote Discovery: Error Occcured on mount: "
                                                 "FilePath: "?S"~nError: "?S"~n ", [MountPath, E]),
-				ReportId = mydlp_mysql:push_discovery_report(Time, GroupId, OrigRuleId, ?REPORT_STATUS_ERROR),
-				OprLog = #opr_log{time=erlang:universaltime(), channel=remote_discovery, rule_id=RuleId, message_key=?UNSUCCESS_MOUNT_KEY, group_id=GroupId, report_id=ReportId},
-				?DISCOVERY_OPR_LOG(OprLog),
+				%ReportId = mydlp_mysql:push_discovery_report(Time, GroupId, OrigRuleId, ?REPORT_STATUS_ERROR),
+				%OprLog = #opr_log{time=erlang:universaltime(), channel=remote_discovery, rule_id=RuleId, message_key=?UNSUCCESS_MOUNT_KEY, group_id=GroupId, report_id=ReportId},
+				%?DISCOVERY_OPR_LOG(OprLog),
 				none end
 	end;
 						
 mount_path(MountPath, Command, Args, Envs, Stdin, RuleId, GroupId, TryCount) ->
-	Time = erlang:universaltime(),
-	OrigRuleId = mydlp_mnesia:get_orig_id_by_rule_id(RuleId),
+	%Time = erlang:universaltime(),
+	%OrigRuleId = mydlp_mnesia:get_orig_id_by_rule_id(RuleId),
 	case mydlp_api:cmd_bool(?MOUNTPOINT_COMMAND, ["-q", MountPath]) of
-		true -> ReportId = mydlp_mysql:push_discovery_report(Time, GroupId, OrigRuleId, ?REPORT_STATUS_DISC),
-			OprLog = #opr_log{time=Time, channel=remote_discovery, rule_id=RuleId, message_key=?SUCCESS_MOUNT_KEY, group_id=GroupId, report_id=ReportId},
-			?DISCOVERY_OPR_LOG(OprLog),
+		true -> %ReportId = mydlp_mysql:push_discovery_report(Time, GroupId, OrigRuleId, ?REPORT_STATUS_DISC),
+			%OprLog = #opr_log{time=Time, channel=remote_discovery, rule_id=RuleId, message_key=?SUCCESS_MOUNT_KEY, group_id=GroupId, report_id=ReportId},
+			%?DISCOVERY_OPR_LOG(OprLog),
 			{MountPath, RuleId};
 		false ->
 			case mydlp_api:cmd(Command, Args, Envs, Stdin) of
 				ok ->
-					ReportId = mydlp_mysql:push_discovery_report(Time, GroupId, OrigRuleId, ?REPORT_STATUS_DISC),
-					OprLog = #opr_log{time=Time, channel=remote_discovery, rule_id=RuleId, message_key=?SUCCESS_MOUNT_KEY, group_id=GroupId, report_id=ReportId},
-					?DISCOVERY_OPR_LOG(OprLog),
+					%ReportId = mydlp_mysql:push_discovery_report(Time, GroupId, OrigRuleId, ?REPORT_STATUS_DISC),
+					%OprLog = #opr_log{time=Time, channel=remote_discovery, rule_id=RuleId, message_key=?SUCCESS_MOUNT_KEY, group_id=GroupId, report_id=ReportId},
+					%?DISCOVERY_OPR_LOG(OprLog),
 					 {MountPath, RuleId};
 				_ -> timer:sleep(500),
 					mount_path(MountPath, Command, Args, Envs, Stdin, RuleId, GroupId, TryCount-1) end

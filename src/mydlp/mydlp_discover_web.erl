@@ -74,7 +74,7 @@ stop_discovery() -> gen_server:cast(?MODULE, stop_discovery).
 
 is_paused_or_stopped_by_rule_id(RuleId) -> gen_server:call(mydlp_discovery_manager, {is_paused_or_stopped, RuleId}).
 
-continue_paused_discovery() -> gen_server:cast(?MODULE, push_paused_queue_to_proc).
+continue_paused_discovery(RuleId) -> gen_server:cast(?MODULE, push_paused_queue_to_proc).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -84,8 +84,8 @@ handle_call(stop, _From, State) ->
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-handle_cast({continue_discovering}, State) ->
-	continue_paused_discovery(),
+handle_cast({continue_discovering, RuleId}, State) ->
+	continue_paused_discovery(RuleId),
 	{noreply, State};
 
 handle_cast(push_paused_queue_to_proc, #state{discover_queue=Q, paused_queue=PQ} = State) ->

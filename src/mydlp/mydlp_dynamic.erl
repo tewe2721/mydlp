@@ -274,7 +274,6 @@ load_src(Src) ->
 
 -define(CONFDEF_FUNCTIONAL, [
 	{maximum_push_size, integer, "1048576"},
-	{sync_interval, integer, "300000"},
 	{discover_fs_on_startup, boolean, "false"},
 	{ignore_discover_max_size_exceeded, boolean, "true"},
 	{log_level, integer, "0"},
@@ -289,6 +288,7 @@ load_src(Src) ->
 -endif.
 
 -define(CONFDEF_COMMON, [
+	{sync_interval, integer, "300000"},
 	{error_action, atom, "pass"},
 	{maximum_object_size, integer, "10485760"},
 	{archive_minimum_size, integer, "2048"},
