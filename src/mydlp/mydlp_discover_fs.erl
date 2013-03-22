@@ -46,7 +46,7 @@
 
 -ifdef(__MYDLP_ENDPOINT).
 
--export([stop_discovery/0,
+-export([stop_discovery_by_rule_id/0,
 	schedule_discovery/0
 	]).
 
@@ -242,15 +242,15 @@ handle_info(_Info, State) ->
 
 %%%%%%%%%%%%%%%% Implicit functions
 
--ifdef(__MYDLP_NETWORK).
 
 is_paused_or_stopped_by_rule_id(RuleId, GroupDict) -> 
-	%gen_server:call(mydlp_discovery_manager, {is_paused_or_stopped, RuleId}).
 	erlang:display({psne, dict:find(RuleId, GroupDict)}),
 	case dict:find(RuleId, GroupDict) of
 		{ok, {_GroupId, Status}} -> Status;
 		_ -> none
 	end.
+
+-ifdef(__MYDLP_NETWORK).
 
 has_discover_rule() -> true.
 
@@ -264,7 +264,6 @@ schedule() -> ok.
 
 -ifdef(__MYDLP_ENDPOINT).
 
-is_paused_or_stopped_by_rule_id(_RuleId) -> none.
 
 has_discover_rule() ->
 	case mydlp_mnesia:get_rule_table(discovery) of
