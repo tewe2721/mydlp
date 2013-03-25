@@ -485,7 +485,7 @@ init([]) ->
 		{insert_discovery_report, <<"INSERT INTO DiscoveryReport (id, startDate, finishDate, groupId, ruleId, status) VALUES (NULL, ?, NULL, ?, ?, ?)">>},
 		{update_report_status, <<"UPDATE DiscoveryReport SET status=? WHERE groupId = ?">>},
 		{update_report_as_finished, <<"UPDATE DiscoveryReport SET status=?, finishDate=now() WHERE groupId = ?">>},
-		{get_endpoint_alias, <<"SELECT endpointAlias FROM Endpoint">>},
+		{get_endpoint_alias, <<"SELECT endpointAlias, endpointId FROM Endpoint">>},
 		{get_ip_and_username, <<"SELECT ipAddress, username FROM EndpointStatus where endpointAlias=?">>}
 
 	]],
@@ -560,9 +560,9 @@ psqt(PreparedKey, Params) ->
 
 get_identities(Rows) -> get_identities(Rows, []).
 
-get_identities([[Alias]|Rows], Acc) ->
+get_identities([[Alias, EndpointId]|Rows], Acc) ->
 	{ok, [[Ip,Username]]} = lpsq(get_ip_and_username, [Alias], 30000),
-	get_identities(Rows, [{Alias, Ip, Username}|Acc]);
+	get_identities(Rows, [{EndpointId, Ip, Username}|Acc]);
 get_identities([], Acc) -> Acc.
 
 populate_site(FilterId) ->
@@ -801,14 +801,19 @@ populate_day_intervals_as_list([DayIntervalId|Rest], Acc) ->
 populate_day_intervals_as_list([], Acc) -> lists:reverse(Acc).
 
 populate_discovery_schedule(RuleOrigId, RuleId) ->
-	{ok, [ScheduleDayIntervals]} = psq(schedule_intervals_by_rule_id, [RuleOrigId]),	
-	DayIntervals = populate_day_intervals_as_list(ScheduleDayIntervals, []),	
+	{ok, Result} = psq(schedule_intervals_by_rule_id, [RuleOrigId]),
 
-	{ok, DailySchedule} = psq(daily_schedule_by_rule_id, [RuleOrigId]),
-	populate_discovery_schedule1(DailySchedule, DayIntervals, RuleId, daily),
-
-	{ok, WeeklySchedule} = psq(weekly_schedule_by_rule_id, [RuleOrigId]),
-	populate_discovery_schedule1(WeeklySchedule, DayIntervals, RuleId, weekly).
+	case Result of 
+		[] -> ok;
+		[ScheduleDayIntervals] -> 	
+			DayIntervals = populate_day_intervals_as_list(ScheduleDayIntervals, []),	
+	
+			{ok, DailySchedule} = psq(daily_schedule_by_rule_id, [RuleOrigId]),
+			populate_discovery_schedule1(DailySchedule, DayIntervals, RuleId, daily),
+		
+			{ok, WeeklySchedule} = psq(weekly_schedule_by_rule_id, [RuleOrigId]),
+			populate_discovery_schedule1(WeeklySchedule, DayIntervals, RuleId, weekly)
+	end.
 
 populate_discovery_schedule1([[Hour]|Rows], ScheduleIntervals, RuleId, daily) ->
 	Id = mydlp_mnesia:get_unique_id(discovery_schedule),

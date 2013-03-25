@@ -486,10 +486,11 @@ set_command_to_endpoints(RuleId, Command, Args) ->
 		_ -> ok
 	end,
 	[Endpoints] = mydlp_mnesia:get_endpoints_by_rule_id(RuleId), 
-	set_each_endpoint_command(Endpoints, RuleId, Command, [{ruleId, RuleId}|Args]).
+	OrigRuleId = mydlp_mnesia:get_orig_id_by_rule_id(RuleId),
+	set_each_endpoint_command(Endpoints, RuleId, Command, [{ruleId, OrigRuleId}|Args]).
 
 set_each_endpoint_command([Alias|Endpoints], RuleId, Command, Args) ->
-	mydlp_mnesia:save_endpoint_command(Alias, schedule_discovery, Args),
+	mydlp_mnesia:save_endpoint_command(Alias, Command, Args),
 	set_each_endpoint_command(Endpoints, RuleId, Command, Args);
 set_each_endpoint_command([], _RuleId, _Command, _Args) -> ok.
 
@@ -503,6 +504,7 @@ generate_group_id(RuleId, Channel) ->
 	Time = erlang:universaltime(),
 	GroupId = integer_to_list(RuleId) ++ "_" ++ integer_to_list(calendar:datetime_to_gregorian_seconds(erlang:localtime())),
 	OrigRuleId = mydlp_mnesia:get_orig_id_by_rule_id(RuleId),
+	erlang:display({rule_id, RuleId}),
 	mydlp_mysql:push_discovery_report(Time, GroupId, OrigRuleId, ?REPORT_STATUS_DISC),
 	OprLog = #opr_log{time=Time, channel=Channel, rule_id=RuleId, message_key=?SUCCESS_MOUNT_KEY, group_id=GroupId},
 	?DISCOVERY_OPR_LOG(OprLog),

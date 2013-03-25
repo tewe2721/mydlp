@@ -3002,12 +3002,14 @@ str_to_ip(IpStr) ->
 %%-------------------------------------------------------------------------
 %%%%%%%%%%%%% TODO: beware of race condifitons when compile_customer had been called.
 generate_client_policy(EndpointId, IpAddr, UserH, RevisionId) -> 
-	RuleTables = mydlp_acl:get_remote_rule_tables(IpAddr, UserH), 
+	RuleTables = mydlp_acl:get_remote_rule_tables(IpAddr, UserH),
+	erlang:display({ruleTable, RuleTables}),
 	ItemDump = mydlp_mnesia:dump_client_tables(),
 	MCModule = mydlp_mnesia:get_remote_mc_module(mydlp_mnesia:get_dfid(), IpAddr, UserH),
 	CDBObj = {{rule_tables, RuleTables}, {mc, MCModule}, {items, ItemDump}},
 	CDBHash = erlang:phash2(CDBObj),
 	Commands = mydlp_mnesia:get_endpoint_commands(EndpointId),
+	erlang:display({commands, Commands}),
 	case {CDBHash, Commands} of
 		{RevisionId, []} -> <<"up-to-date">>;
 		{RevisionId, Commands} ->  erlang:term_to_binary(Commands, [compressed]);
@@ -3046,11 +3048,15 @@ apply_cdbobj({{rule_tables, RuleTables}, {mc, MCModule}, {items, ItemDump}}) ->
 	mydlp_container:schedule_confupdate(),
 	ok;
 apply_cdbobj({command, L}) when is_list(L) -> erlang:display({commands, L}), lists:foreach(fun(C) -> apply_cdbobj({command, C}) end, L);
-apply_cdbobj({command, stop_discovery}) ->
+apply_cdbobj({command, stop_discovery, [{ruleId, RuleId}, {groupId, GroupId}]}) ->
 	?ASYNC0(fun() -> mydlp_discover_fs:stop_discovery() end), ok;
-apply_cdbobj({command, schedule_discovery}) ->
+apply_cdbobj({command, start_discovery, [{ruleId, RuleId}, {groupId, GroupId}]}) ->
 	?ASYNC0(fun() -> mydlp_discover_fs:schedule_discovery() end), ok;
-apply_cdbobj({command, Else}) ->
+apply_cdbobj({command, pause_discovery, [{ruleId, RuleId}, {groupId, GroupId}]}) ->
+	?ASYNC0(fun() -> mydlp_discover_fs:pause_discovery() end), ok;
+apply_cdbobj({command, continue_discovery, [{ruleId, RuleId}, {groupId, GroupId}]}) ->
+	?ASYNC0(fun() -> mydlp_discover_fs:continue_discovery() end), ok;
+apply_cdbobj({command, Else, _}) ->
 	?ERROR_LOG("Unknown remote command: "?S, [Else]);
 apply_cdbobj(Else) ->
 	?ERROR_LOG("Unkown cdbobj: "?S, [Else]).

@@ -46,8 +46,10 @@
 
 -ifdef(__MYDLP_ENDPOINT).
 
--export([stop_discovery_by_rule_id/1,
-	schedule_discovery/0
+-export([start_discovery/2,
+	stop_discovery/2,
+	pause_discovery/2,
+	continue_discovery/2
 	]).
 
 -endif.
@@ -116,9 +118,13 @@ update_rule_status(RuleId, Status) -> gen_server:cast(?MODULE, {update_rule_stat
 
 -ifdef(__MYDLP_ENDPOINT).
 
-stop_discovery_by_rule_id(RuleId) -> gen_server:cast(?MODULE, {stop_discovery_by_rule_id, RuleId}).
+start_discovery(RuleId, GroupId) -> gen_server:cast(?MODULE, {start_discovery, RuleId, GroupId}).
 
-schedule_discovery() -> gen_server:cast(?MODULE, schedule_discovery).
+stop_discovery(RuleId, GroupId) -> gen_server:cast(?MODULE, {stop_discovery_by_rule_id, RuleId, GroupId}).
+
+pause_discovery(RuleId, GroupId) -> gen_server:cast(?MODULE, {pause_discovery, RuleId, GroupId}).
+
+continue_discovery(RuleId, GroupId) -> gen_server:cast(?MODULE, {continue_discovery, RuleId, GroupId}).
 
 -endif.
 
@@ -219,6 +225,19 @@ handle_cast(stop_discovery, State) ->
 	NewQ = queue:new(),
 	{noreply, State#state{discover_queue=NewQ}};
 
+handle_cast({start_discovery, RuleId, GroupId}, #state{group_id_dict=GroupDict}=State) ->
+	GroupDict1 = dict:store(RuleId, {GroupId, disc}, GroupDict),
+	PathList = case mydlp_mnesia:get_discovery_directory(RuleId) of
+		none -> [];
+		L when is_list(L) ->
+			lists:map(fun(P) -> 
+				try unicode:characters_to_list(P)
+					catch _:_ -> binary_to_list(P) end  %% TODO: log this case
+				 end
+			, L) end,	
+	lists:map(fun(P) -> q(P, RuleId, GroupId) end, PathList),
+	{noreply, State#state{group_id_dict=GroupDict1}};
+
 handle_cast(schedule_discovery, State) -> handle_info(schedule_now, State);
 
 handle_cast(_Msg, State) ->
@@ -277,13 +296,13 @@ cancel_timer(#state{timer=Timer} = State) ->
 		TRef ->	(catch timer:cancel(TRef)) end,
 	State#state{timer=undefined}.
 	
-schedule_timer(State, Interval) ->
-	State1 = cancel_timer(State),
-	Timer = case timer:send_after(Interval, schedule_now) of
-		{ok, TRef} -> TRef;
-		{error, _} = Error -> ?ERROR_LOG("Can not create timer. Reason: "?S, [Error]), undefined end,
-	State1#state{timer=Timer}.
-
+%schedule_timer(State, Interval) ->
+%	State1 = cancel_timer(State),
+%	Timer = case timer:send_after(Interval, schedule_now) of
+%		{ok, TRef} -> TRef;
+%		{error, _} = Error -> ?ERROR_LOG("Can not create timer. Reason: "?S, [Error]), undefined end,
+%	State1#state{timer=Timer}.
+%
 schedule() ->
 	PathsWithRuleIndex = mydlp_mnesia:get_discovery_directory(), % {Path, IndexInWhichRuleHasThisPath}
 	PathList = case PathsWithRuleIndex of

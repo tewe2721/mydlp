@@ -129,7 +129,7 @@
 -export([
 	get_rule_table/1,
 	get_rule_table/2,
-	get_discovery_directory/0,
+	get_discovery_directory/1,
 	get_prtscr_app_name/0,
 	get_inbound_rule/0,
 	is_valid_usb_device_id/1
@@ -438,12 +438,12 @@ get_rule_channel(RuleId) -> aqc({get_rule_channel, RuleId}, nocache).
 
 get_discovery_rule_ids(Ip, Username) -> aqc({get_discovery_rule_ids, Ip, Username}, nocache).
 
-update_ep_schedules({Alias, Ip, Username}, TargetRuleId) ->
+update_ep_schedules({EndpointId, Ip, Username}, TargetRuleId) ->
 	SrcUserH = mydlp_api:hash_un(Username),
 	ClientIp = mydlp_api:str_to_ip(binary_to_list(Ip)),
 	AclQ = #aclq{src_addr=ClientIp, src_user_h=SrcUserH},
 	RuleIds = get_rule_ids(get_dfid(), AclQ#aclq{channel=discovery}),
-	aqc({update_ep_schedules, Alias, RuleIds, TargetRuleId}, nocache).
+	aqc({update_ep_schedules, EndpointId, RuleIds, TargetRuleId}, nocache).
 
 get_endpoints_by_rule_id(RuleId) -> aqc({get_endpoints_by_rule_id, RuleId}, nocache).
 
@@ -455,7 +455,7 @@ get_rule_table(Channel) -> aqc({get_rule_table, Channel}, cache).
 
 get_rule_table(Channel, RuleIndex) -> aqc({get_rule_table, Channel, RuleIndex}, cache).
 
-get_discovery_directory() -> aqc({get_discovery_directory}, cache).
+get_discovery_directory(RuleId) -> aqc({get_discovery_directory, RuleId}, cache).
 
 get_prtscr_app_name() -> aqc({get_prtscr_app_name}, cache).
 
@@ -574,7 +574,7 @@ handle_result({get_rule_channel, _}, {atomic, Result}) ->
 		[R] -> R end;
 
 handle_result({get_endpoint_commands, _EntryId}, {atomic, Result}) -> 
-	[ {command, C} || #endpoint_command{command=C} <- Result ];
+	[ {command, C, Args} || #endpoint_command{command=C, args=Args} <- Result ];
 
 handle_result({get_matchers, _Source}, {atomic, Result}) -> lists:usort(Result);
 
@@ -608,16 +608,17 @@ handle_result({get_rule_table, _Channel, _RuleIndex}, {atomic, Result}) ->
 		[] -> none;
 		[Table] -> Table end;
 
-handle_result({get_discovery_directory}, {atomic, Result}) -> 
-	case Result of
-		[] -> none;
-		[Table] -> lists:map(fun({P, I}) ->
-						case P of
-							all -> {<<"C:/">>, I};
-				       			_ -> {P, I}
-						end
-					end, Table)	
-	end;
+handle_result({get_discovery_directory, RuleId}, {atomic, Result}) ->
+	FilePaths = case Result of
+			[] -> none;
+			[{FileaPaths, {_, _, Rules}}] -> get_directory_by_rule_id(FileaPaths, Rules, RuleId, 0)
+		end,
+	lists:map(fun(P) ->
+			case P of
+				all -> <<"C:/">>;
+				_ -> P
+			end
+		end, FilePaths);	
 
 handle_result({get_prtscr_app_name}, {atomic, Result}) -> 
 	case Result of
@@ -1018,12 +1019,15 @@ handle_query({get_discovery_rule_ids, Ip, Username}) ->
 	AclQ = #aclq{src_addr=Ip, src_user_h=Username},
 	get_rule_ids(get_dfid(), AclQ#aclq{channel=discovery});
 
-handle_query({update_ep_schedules, Alias, RuleIds, TargetRuleId}) -> 
+handle_query({update_ep_schedules, EndpointId, RuleIds, TargetRuleId}) -> 
 	case lists:member(TargetRuleId, RuleIds) of
 		true ->
 			[I] = mnesia:match_object(#discovery_endpoint_schedules{id='_', rule_id=TargetRuleId, orig_id='_', eps='_'}),
-			AliasList = [Alias|I#discovery_endpoint_schedules.eps],
-			mnesia:dirty_write(I#discovery_endpoint_schedules{eps=AliasList});
+			EpList = I#discovery_endpoint_schedules.eps,
+			case lists:member(EndpointId, EpList) of
+				true -> ok;
+				false -> mnesia:dirty_write(I#discovery_endpoint_schedules{eps=[EndpointId|EpList]})
+			end;
 		false -> ok
 	end;
 
@@ -1148,13 +1152,17 @@ handle_query({save_endpoint_command, EndpointId, Command, [{ruleId, RuleId}, {gr
 	?DISCOVERY_OPR_LOG(OprLog),
 	mnesia:dirty_write(EC),
 	case Command of
-		stop_discovery -> remove_endpoint_command(EndpointId, schedule_discovery, Args);
-		schedule_discovery -> remove_endpoint_command(EndpointId, stop_discovery, Args);
+		stop_discovery -> remove_endpoint_command(EndpointId, [start_discovery, pause_discovery, continue_discovery], Args);
+		start_discovery -> remove_endpoint_command(EndpointId, [stop_discovery, pause_discovery, continue_discovery], Args);
+		pause_discovery -> remove_endpoint_command(EndpointId, [start_discovery, stop_discovery, continue_discovery], Args);
+		continue_discovery -> remove_endpoint_command(EndpointId, [start_discovery, pause_discovery, stop_discovery], Args);
 		_Else -> ok end,
 	ok;
 
 handle_query({get_endpoint_commands, EndpointId}) ->
         Items = mnesia:match_object(#endpoint_command{id='_', endpoint_id=EndpointId, command='_', date='_', args='_'}),
+	erlang:display(binary_to_list(EndpointId)),
+	erlang:display({items, Items}),
 	Time=erlang:universaltime(),
 	lists:foreach(fun(#endpoint_command{id=Id, args=Args}) -> 
 		[{ruleId, RuleId}, {groupId, GroupId}] = Args,
@@ -1173,9 +1181,10 @@ handle_query(remove_old_endpoint_command) ->
 	ECIs = ?QLCE(Q),
 	lists:foreach(fun(Id) -> mnesia:dirty_delete({endpoint_command, Id}) end, ECIs);
 
-handle_query({remove_endpoint_command, EndpointId, Command, Args}) ->
-        Items = mnesia:match_object(#endpoint_command{id='_', endpoint_id=EndpointId, command=Command, date='_', args=Args}),
-	lists:foreach(fun(#endpoint_command{id=Id}) -> mnesia:dirty_delete({endpoint_command, Id}) end, Items);
+handle_query({remove_endpoint_command, EndpointId, CommandList, Args}) ->
+        lists:map(fun(Command) -> Items = mnesia:match_object(#endpoint_command{id='_', endpoint_id=EndpointId, command=Command, date='_', args=Args}),
+				lists:foreach(fun(#endpoint_command{id=Id}) -> mnesia:dirty_delete({endpoint_command, Id}) end, Items)
+				end, CommandList);
 
 handle_query(Query) -> handle_query_common(Query).
 
@@ -1202,8 +1211,8 @@ handle_query({get_rule_table, Channel, RuleIndex}) ->
 			UniqueRule = lists:nth(RuleIndex+1, RuleTables),
 			[{Req, IdAndDefaultAction, [UniqueRule]}] end;
 
-handle_query({get_discovery_directory}) ->
-	Q = ?QLCQ([ R#rule_table.destination ||
+handle_query({get_discovery_directory, _RuleId}) ->
+	Q = ?QLCQ([{R#rule_table.destination, R#rule_table.table} ||
 		R <- mnesia:table(rule_table),
 		R#rule_table.channel == discovery
 		]),
@@ -2177,3 +2186,21 @@ is_available([DayIntervals]) ->
 	end.
 -endif.
 
+-ifdef(__MYDLP_ENDPOINT).
+
+get_directory_by_rule_id(FilePaths, [{RuleId, _, _}|Rest], TargetRuleId, Index) ->
+	case RuleId of
+		TargetRuleId -> get_file_paths(FilePaths, Index);
+		_ -> get_directory_by_rule_id(FilePaths, Rest, TargetRuleId, Index+1)
+	end;
+get_directory_by_rule_id(_FilePath, [], TargetRuleId, _Index) ->
+	?ERROR_LOG("Unknown rule id for discovery channel: ["?S"]", [TargetRuleId]).
+
+get_file_paths(FilePaths, TargetRuleIndex) -> get_file_paths(FilePaths, TargetRuleIndex, []).
+get_file_paths([{Path, Index}|Rest], TargetIndex, Acc) ->
+	case Index of
+		TargetIndex -> get_file_paths(Rest, TargetIndex, [Path|Acc]);
+		_ -> get_file_paths(Rest, TargetIndex, Acc)
+	end;
+get_file_paths([], _TargetIndex, Acc) -> Acc.
+-endif.
