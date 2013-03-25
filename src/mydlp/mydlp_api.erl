@@ -3049,13 +3049,13 @@ apply_cdbobj({{rule_tables, RuleTables}, {mc, MCModule}, {items, ItemDump}}) ->
 	ok;
 apply_cdbobj({command, L}) when is_list(L) -> erlang:display({commands, L}), lists:foreach(fun(C) -> apply_cdbobj({command, C}) end, L);
 apply_cdbobj({command, stop_discovery, [{ruleId, RuleId}, {groupId, GroupId}]}) ->
-	?ASYNC0(fun() -> mydlp_discover_fs:stop_discovery() end), ok;
+	?ASYNC0(fun() -> mydlp_discover_fs:stop_discovery(RuleId, GroupId) end), ok;
 apply_cdbobj({command, start_discovery, [{ruleId, RuleId}, {groupId, GroupId}]}) ->
-	?ASYNC0(fun() -> mydlp_discover_fs:schedule_discovery() end), ok;
+	?ASYNC0(fun() -> mydlp_discover_fs:schedule_discovery(RuleId, GroupId) end), ok;
 apply_cdbobj({command, pause_discovery, [{ruleId, RuleId}, {groupId, GroupId}]}) ->
-	?ASYNC0(fun() -> mydlp_discover_fs:pause_discovery() end), ok;
+	?ASYNC0(fun() -> mydlp_discover_fs:pause_discovery(RuleId, GroupId) end), ok;
 apply_cdbobj({command, continue_discovery, [{ruleId, RuleId}, {groupId, GroupId}]}) ->
-	?ASYNC0(fun() -> mydlp_discover_fs:continue_discovery() end), ok;
+	?ASYNC0(fun() -> mydlp_discover_fs:continue_discovery(RuleId, GroupId) end), ok;
 apply_cdbobj({command, Else, _}) ->
 	?ERROR_LOG("Unknown remote command: "?S, [Else]);
 apply_cdbobj(Else) ->
