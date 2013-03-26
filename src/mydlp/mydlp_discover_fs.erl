@@ -286,10 +286,11 @@ schedule() -> ok.
 
 
 has_discover_rule() ->
-	case mydlp_mnesia:get_rule_table(discovery) of
-		none -> false;
-		{_ACLOpts, {_Id, pass}, []} -> false;
-		_Else -> true end.
+	true.
+	%case mydlp_mnesia:get_rule_table(discovery) of
+	%	none -> false;
+	%	{_ACLOpts, {_Id, pass}, []} -> false;
+	%	_Else -> true end.
 
 cancel_timer(#state{timer=Timer} = State) ->
 	case Timer of

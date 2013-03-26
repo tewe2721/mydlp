@@ -603,10 +603,14 @@ handle_result({get_rule_table, _Channel}, {atomic, Result}) ->
 		[] -> none;
 		[Table] -> Table end;
 
-handle_result({get_rule_table, _Channel, _RuleIndex}, {atomic, Result}) -> 
+handle_result({get_rule_table, _Channel, RuleIndex}, {atomic, Result}) -> 
 	case Result of
 		[] -> none;
-		[Table] -> Table end;
+		[{Req, IdAndDefaultAction, RuleTables}] ->
+			UniqueRule = get_rule_with_id(RuleTables, RuleIndex),
+			%UniqueRule = lists:nth(RuleIndex+1, RuleTables),
+			{Req, IdAndDefaultAction, [UniqueRule]} end;
+	
 
 handle_result({get_discovery_directory, RuleId}, {atomic, Result}) ->
 	FilePaths = case Result of
@@ -1200,16 +1204,12 @@ handle_query({get_rule_table, Channel}) ->
 		]),
 	?QLCE(Q);
 
-handle_query({get_rule_table, Channel, RuleIndex}) ->
+handle_query({get_rule_table, Channel, _RuleIndex}) ->
 	Q = ?QLCQ([R#rule_table.table ||
 		R <- mnesia:table(rule_table),
 		R#rule_table.channel == Channel
 		]),
-	case ?QLCE(Q) of
-		[] -> [];
-		[{Req, IdAndDefaultAction, RuleTables}] ->
-			UniqueRule = lists:nth(RuleIndex+1, RuleTables),
-			[{Req, IdAndDefaultAction, [UniqueRule]}] end;
+	?QLCE(Q);
 
 handle_query({get_discovery_directory, _RuleId}) ->
 	Q = ?QLCQ([{R#rule_table.destination, R#rule_table.table} ||
@@ -2187,6 +2187,14 @@ is_available([DayIntervals]) ->
 -endif.
 
 -ifdef(__MYDLP_ENDPOINT).
+
+get_rule_with_id([{RuleId, _, _}=Rule|Rest], TargetRuleId) ->
+	case RuleId of
+		TargetRuleId -> Rule;
+		_ -> get_rule_with_id(Rest, TargetRuleId)
+	end;
+get_rule_with_id([], TargetRuleId) ->
+	?ERROR_LOG("Unknown rule id for discovery channel: ["?S"]", [TargetRuleId]).
 
 get_directory_by_rule_id(FilePaths, [{RuleId, _, _}|Rest], TargetRuleId, Index) ->
 	case RuleId of
