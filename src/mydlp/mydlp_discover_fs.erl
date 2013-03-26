@@ -372,7 +372,7 @@ drop_items_by_rule_id(RuleId, Q, AccQ) ->
 	case queue:out(Q) of
 		 {{value, {_ParentId, _FilePath, RuleIndex}=Item}, Q1} -> 
 			AccQ1 = case RuleIndex of
-					RuleId -> erlang:display({dropped, Item}),AccQ;
+					RuleId -> AccQ;
 					_ -> queue:in(Item, AccQ)
 				end,
 			drop_items_by_rule_id(RuleId, Q1, AccQ1);
