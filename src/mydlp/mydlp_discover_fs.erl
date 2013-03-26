@@ -120,7 +120,7 @@ update_rule_status(RuleId, Status) -> gen_server:cast(?MODULE, {update_rule_stat
 
 start_discovery(RuleId, GroupId) -> gen_server:cast(?MODULE, {start_discovery, RuleId, GroupId}).
 
-stop_discovery(RuleId, GroupId) -> gen_server:cast(?MODULE, {stop_discovery_by_rule_id, RuleId, GroupId}).
+stop_discovery(RuleId, _GroupId) -> gen_server:cast(?MODULE, {stop_discovery_by_rule_id, RuleId}).
 
 pause_discovery(RuleId, GroupId) -> gen_server:cast(?MODULE, {pause_discovery, RuleId, GroupId}).
 
@@ -133,10 +133,12 @@ continue_discovery(RuleId, GroupId) -> gen_server:cast(?MODULE, {continue_discov
 handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
 
-handle_call({stop_discovery_by_rule_id, RuleId}, _From, #state{discover_queue=Q, group_id_dict=GroupDict}=State) ->
+handle_call({stop_discovery_by_rule_id, RuleId}, _From, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=GroupDict}=State) ->
+	erlang:display({stop_discovery, RuleId}),
 	Q1 = drop_items_by_rule_id(RuleId, Q),
+	PQ1 = drop_items_by_rule_id(RuleId, PQ),
 	GroupDict1 = dict:erase(RuleId, GroupDict),
-	{reply, ok, State#state{discover_queue=Q1, group_id_dict=GroupDict1}};
+	{reply, ok, State#state{discover_queue=Q1, paused_queue=PQ1, group_id_dict=GroupDict1}};
 
 handle_call({is_discovery_finished, RuleId}, _From, #state{discover_queue=Q, paused_queue=PQ}=State) ->
 	Reply = is_finished_by_rule_id(RuleId, Q),
@@ -276,7 +278,6 @@ handle_info(_Info, State) ->
 
 
 is_paused_or_stopped_by_rule_id(RuleId, GroupDict) -> 
-	erlang:display({psne, dict:find(RuleId, GroupDict)}),
 	case dict:find(RuleId, GroupDict) of
 		{ok, {_GroupId, Status}} -> Status;
 		_ -> none
