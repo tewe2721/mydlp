@@ -502,6 +502,8 @@ log_req(#object{prop_dict=PD}=Obj, Action, {{rule, RuleId}, {file, File}, {itype
 				api -> {get_api_user(Obj), -1};
 				remote_discovery -> {ok, RId} = dict:find("group_id", PD),
 						{get_remote_user(Obj), RId};
+				discovery -> {ok, RId} = dict:find("group_id", PD),
+						{get_user(Obj), RId};
 				_Else -> {get_user(Obj), -1} end,
 	Channel = get_channel(Obj),
 	Time = erlang:universaltime(),
