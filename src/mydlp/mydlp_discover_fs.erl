@@ -124,7 +124,9 @@ stop_discovery(RuleId, _GroupId) -> gen_server:call(?MODULE, {stop_discovery_by_
 
 pause_discovery(RuleId, GroupId) -> gen_server:cast(?MODULE, {pause_discovery, RuleId, GroupId}).
 
-continue_discovery(RuleId, GroupId) -> gen_server:cast(?MODULE, {continue_discovery, RuleId, GroupId}).
+continue_discovery(RuleId, GroupId) -> 
+	gen_server:cast(?MODULE, {continue_discovery, RuleId, GroupId}),
+	consume().
 
 -endif.
 

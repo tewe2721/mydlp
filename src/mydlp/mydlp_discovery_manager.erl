@@ -340,7 +340,7 @@ call_ep_discovery(RuleId, Dict, IsOnDemand) ->
 		{paused, GroupId} -> 
 			case IsOnDemand of
 				true -> update_discovery_report(GroupId, ?REPORT_STATUS_DISC),
-					set_command_to_endpoints(RuleId, ?CONTINUE_EP_COMMAND, []),
+					set_command_to_endpoints(RuleId, ?CONTINUE_EP_COMMAND, [{groupId, GroupId}]),
 					dict:store(RuleId, {?ON_DEMAND_DISC, GroupId}, Dict);
 				false -> break_ep_discovery(RuleId, GroupId, Dict)
 			end;
@@ -348,7 +348,7 @@ call_ep_discovery(RuleId, Dict, IsOnDemand) ->
 			case IsOnDemand of
 				true -> % means that user paused discovery while ago and now starts again
 					update_discovery_report(GroupId, ?REPORT_STATUS_DISC),
-					set_command_to_endpoints(RuleId, ?CONTINUE_EP_COMMAND, [{}]),
+					set_command_to_endpoints(RuleId, ?CONTINUE_EP_COMMAND, [{groupId, GroupId}]),
 					dict:store(RuleId, {?ON_DEMAND_DISC, GroupId}, Dict);
 				false ->% means that user paused discovery while ago and now it is time to schedule
 					% New discovery with a new report id. Ensure that last discovery is stopped.
