@@ -234,7 +234,8 @@ handle_cast({start_discovery, RuleId, GroupId}, #state{group_id_dict=GroupDict}=
 				try unicode:characters_to_list(P)
 					catch _:_ -> binary_to_list(P) end  %% TODO: log this case
 				 end
-			, L) end,	
+			, L) end,
+	erlang:display({pathList, PathList}),
 	lists:map(fun(P) -> q(P, RuleId, GroupId) end, PathList),
 	{noreply, State#state{group_id_dict=GroupDict1}};
 

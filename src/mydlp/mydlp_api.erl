@@ -3051,7 +3051,7 @@ apply_cdbobj({command, L}) when is_list(L) -> erlang:display({commands, L}), lis
 apply_cdbobj({command, stop_discovery, [{ruleId, RuleId}, {groupId, GroupId}]}) ->
 	?ASYNC0(fun() -> mydlp_discover_fs:stop_discovery(RuleId, GroupId) end), ok;
 apply_cdbobj({command, start_discovery, [{ruleId, RuleId}, {groupId, GroupId}]}) ->
-	?ASYNC0(fun() -> mydlp_discover_fs:schedule_discovery(RuleId, GroupId) end), ok;
+	?ASYNC0(fun() -> mydlp_discover_fs:start_discovery(RuleId, GroupId) end), ok;
 apply_cdbobj({command, pause_discovery, [{ruleId, RuleId}, {groupId, GroupId}]}) ->
 	?ASYNC0(fun() -> mydlp_discover_fs:pause_discovery(RuleId, GroupId) end), ok;
 apply_cdbobj({command, continue_discovery, [{ruleId, RuleId}, {groupId, GroupId}]}) ->
