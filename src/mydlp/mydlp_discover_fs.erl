@@ -120,7 +120,7 @@ update_rule_status(RuleId, Status) -> gen_server:cast(?MODULE, {update_rule_stat
 
 start_discovery(RuleId, GroupId) -> gen_server:cast(?MODULE, {start_discovery, RuleId, GroupId}).
 
-stop_discovery(RuleId, _GroupId) -> gen_server:cast(?MODULE, {stop_discovery_by_rule_id, RuleId}).
+stop_discovery(RuleId, _GroupId) -> gen_server:call(?MODULE, {stop_discovery_by_rule_id, RuleId}).
 
 pause_discovery(RuleId, GroupId) -> gen_server:cast(?MODULE, {pause_discovery, RuleId, GroupId}).
 
