@@ -171,7 +171,6 @@ handle_call({push_log, {Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Mi
 	{noreply, State};
 
 handle_call({push_opr_log, Context, {opr_log, #opr_log{time=Time, channel=Channel, rule_id=RuleId, message_key=MessageKey, group_id=GroupId}}}, From , State) ->
-	erlang:display(push_opr_log_opr_log),
 	Worker = self(),
 	?ASYNC(fun() ->
 			{Time1, _ChannelS, RuleId1, MessageKey1, GroupId1, Visible, Severity} = pre_push_opr_log(Time, Channel, RuleId, MessageKey, GroupId),
@@ -185,7 +184,6 @@ handle_call({push_opr_log, Context, {opr_log, #opr_log{time=Time, channel=Channe
 	{noreply, State};
 
 handle_call({push_opr_log, Context, {key, MessageKey}}, From, State) ->
-	erlang:display(push_opr_log_general),
 	Worker = self(),
 	Time=erlang:universaltime(),
 	?ASYNC(fun() ->
@@ -199,7 +197,6 @@ handle_call({push_opr_log, Context, {key, MessageKey}}, From, State) ->
 	{noreply, State};
 
 handle_call({push_discovery_report, StartDate, GroupId, RuleId, Status}, From, State) ->
-	erlang:display(push_discovery_report),
 	Worker = self(),
 	?ASYNC(fun() ->
 			{atomic, ILId} = rtransaction(fun() ->

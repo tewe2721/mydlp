@@ -778,7 +778,6 @@ handle_query({update_notification_queue_item, RuleId, Status}) ->
 
 handle_query({get_remote_rule_tables, FilterId, Addr, UserH}) ->
 	AclQ = #aclq{src_addr=Addr, src_user_h=UserH},
-	erlang:display({asd, Addr, UserH}),
 	RemovableStorageRuleTable = get_rules(FilterId, AclQ#aclq{channel=removable}),
 	PrinterRuleTable = get_rules(FilterId, AclQ#aclq{channel=printer}),
 	InboundRuleTable = get_rules(FilterId, AclQ#aclq{channel=inbound}),
@@ -1152,7 +1151,6 @@ handle_query({save_endpoint_command, EndpointId, Command, [{ruleId, RuleId}, {gr
 			#endpoint_command{id=Id, endpoint_id=EndpointId, command=Command, date=Born, args=Args};
 		[E] ->	E#endpoint_command{date=Born} end,
 	Time = erlang:universaltime(),
-	erlang:display({save, EndpointId, Command}),
 	OprLog = #opr_log{time=Time, channel=discovery, rule_id=RuleId, message_key="command_created", group_id=GroupId},
 	?DISCOVERY_OPR_LOG(OprLog),
 	mnesia:dirty_write(EC),
@@ -1166,8 +1164,6 @@ handle_query({save_endpoint_command, EndpointId, Command, [{ruleId, RuleId}, {gr
 
 handle_query({get_endpoint_commands, EndpointId}) ->
         Items = mnesia:match_object(#endpoint_command{id='_', endpoint_id=EndpointId, command='_', date='_', args='_'}),
-	erlang:display(binary_to_list(EndpointId)),
-	erlang:display({items, Items}),
 	Time=erlang:universaltime(),
 	lists:foreach(fun(#endpoint_command{id=Id, args=Args}) -> 
 		[{ruleId, RuleId}, {groupId, GroupId}] = Args,

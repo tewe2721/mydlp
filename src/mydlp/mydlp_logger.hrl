@@ -101,7 +101,6 @@
 	).
 
 -define(LOGGER_NOTIFY_0(Tag,Format,Args),
-	erlang:display("HEDE LOG"),
         mydlp_logger:notify(Tag, Format, lists:append([ [I,32] || I <- (Args)]))
 	).
 
@@ -114,7 +113,6 @@
         ).
 
 -define(DISCOVERY_OPR_LOG(OprLog),
-	erlang:display("COMES HERE LOG"),
 	?LOGGER_NOTIFY_0({operational, discovery}, OprLog, [])
 	).
 
