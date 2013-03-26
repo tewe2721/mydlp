@@ -604,13 +604,14 @@ handle_result({get_rule_table, _Channel}, {atomic, Result}) ->
 		[Table] -> Table end;
 
 handle_result({get_rule_table, _Channel, RuleIndex}, {atomic, Result}) -> 
-	case Result of
+	Res = case Result of
 		[] -> none;
 		[{Req, IdAndDefaultAction, RuleTables}] ->
 			UniqueRule = get_rule_with_id(RuleTables, RuleIndex),
 			%UniqueRule = lists:nth(RuleIndex+1, RuleTables),
-			{Req, IdAndDefaultAction, [UniqueRule]} end;
-	
+			{Req, IdAndDefaultAction, [UniqueRule]} end,
+	erlang:display(Res),
+	Res;
 
 handle_result({get_discovery_directory, RuleId}, {atomic, Result}) ->
 	FilePaths = case Result of

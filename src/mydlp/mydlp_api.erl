@@ -3003,7 +3003,6 @@ str_to_ip(IpStr) ->
 %%%%%%%%%%%%% TODO: beware of race condifitons when compile_customer had been called.
 generate_client_policy(EndpointId, IpAddr, UserH, RevisionId) -> 
 	RuleTables = mydlp_acl:get_remote_rule_tables(IpAddr, UserH),
-	erlang:display({ruleTable, RuleTables}),
 	ItemDump = mydlp_mnesia:dump_client_tables(),
 	MCModule = mydlp_mnesia:get_remote_mc_module(mydlp_mnesia:get_dfid(), IpAddr, UserH),
 	CDBObj = {{rule_tables, RuleTables}, {mc, MCModule}, {items, ItemDump}},

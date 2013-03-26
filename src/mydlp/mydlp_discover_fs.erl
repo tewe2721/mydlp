@@ -221,9 +221,10 @@ handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=Gro
 			{noreply, State#state{discover_inprog=false}}
 	end;
 
-handle_cast(stop_discovery, State) ->
-	NewQ = queue:new(),
-	{noreply, State#state{discover_queue=NewQ}};
+handle_cast({stop_discovery, RuleId, GroupId}, #state{group_id_dict=GroupDict}=State) ->
+	erlang:display({stop_discovery, RuleId}),
+	GroupDict1 = dict:store(RuleId, {GroupId, stopped}, GroupDict),	
+	{noreply, State#state{group_id_dict=GroupDict1}};
 
 handle_cast({start_discovery, RuleId, GroupId}, #state{group_id_dict=GroupDict}=State) ->
 	GroupDict1 = dict:store(RuleId, {GroupId, disc}, GroupDict),
@@ -238,6 +239,17 @@ handle_cast({start_discovery, RuleId, GroupId}, #state{group_id_dict=GroupDict}=
 	erlang:display({pathList, PathList}),
 	lists:map(fun(P) -> q(P, RuleId, GroupId) end, PathList),
 	{noreply, State#state{group_id_dict=GroupDict1}};
+
+handle_cast({pause_discovery, RuleId, GroupId}, #state{group_id_dict=GroupDict}=State) ->
+	erlang:display({pause_discovery, RuleId}),
+	GroupDict1 = dict:store(RuleId, {GroupId, paused}, GroupDict),
+	{noreply, State#state{group_id_dict=GroupDict1}};
+
+handle_cast({continue_discovery, RuleId, GroupId}, #state{group_id_dict=GroupDict}=State) ->
+	erlang:display({continue_discovery, RuleId}),
+	reset_discover_cache(),
+	GroupDict1 = dict:store(RuleId, {GId, disc}, GroupDict);
+	{noreply, State#state{discover_queue=queue:join(Q, PQ), paused_queue=queue:new(), group_id_dict=GroupDict1}};
 
 handle_cast(schedule_discovery, State) -> handle_info(schedule_now, State);
 
