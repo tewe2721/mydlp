@@ -72,8 +72,8 @@
 	timer
 }).
 
--define(DISCOVERY_FINISHED, "finished").
--define(DISCOVERY_PAUSED, "paused").
+-define(DISCOVERY_FINISHED, "ep_finished").
+-define(DISCOVERY_PAUSED, "ep_paused").
 
 is_substring(_FileName, []) -> false;
 is_substring(FileName, [Head|Tail]) ->

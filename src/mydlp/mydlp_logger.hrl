@@ -124,7 +124,7 @@
 -ifdef(__MYDLP_ENDPOINT).
 
 -define(DISCOVERY_OPR_LOG(OprLog),
-	mydlp_item_push:p({enpoint_opr_log, discovery, OprLog})
+	mydlp_item_push:p({endpoint_opr_log, discovery, OprLog})
 	).
 
 -endif.
