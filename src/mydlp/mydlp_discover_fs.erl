@@ -72,6 +72,8 @@
 	timer
 }).
 
+-define(DISCOVERY_FINISHED, "finished").
+-define(DISCOVERY_PAUSED, "paused").
 
 is_substring(_FileName, []) -> false;
 is_substring(FileName, [Head|Tail]) ->
@@ -86,6 +88,7 @@ is_substring(FileName, [Head|Tail]) ->
 	"ntuser.dat",
 	"apache-tika-"
 ]).
+
 
 is_exceptional(FilePath) ->
 	FileName = filename:basename(FilePath, ""),
@@ -221,6 +224,7 @@ handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=Gro
 							{noreply, State#state{discover_queue=Q1}} end
 			end;
 		{empty, _} ->
+			mark_finished_rules(PQ, GroupDict),
 			unset_discover_inprog(),
 			{noreply, State#state{discover_inprog=false}}
 	end;
@@ -284,6 +288,26 @@ is_paused_or_stopped_by_rule_id(RuleId, GroupDict) ->
 		{ok, {_GroupId, Status}} -> Status;
 		_ -> none
 	end.
+
+mark_finished_rules(PausedQ, GroupDict) ->
+	RuleStatus = dict:to_list(GroupDict),
+	erlang:display({ruleStatus, RuleStatus}),
+	lists:map(fun({RuleId, {GroupId, _Status}}) -> mark_finished_each_rule(RuleId, GroupId, PausedQ) end, RuleStatus).
+
+mark_finished_each_rule(RuleId, GroupId, Q) ->
+	Time = erlang:universaltime(),
+	case queue:out(Q) of
+	 	{{value, {_ParentId, _FilePath, RuleIndex}}, Q1} -> 
+			case RuleIndex of
+				RuleId ->OprLog = #opr_log{time=Time, channel=discovery, rule_id=RuleId, message_key=?DISCOVERY_PAUSED, group_id=GroupId},
+		        		?DISCOVERY_OPR_LOG(OprLog);
+				_ -> mark_finished_each_rule(RuleId, GroupId, Q1)
+			end;
+		{empty, _Q2} ->
+			OprLog = #opr_log{time=Time, channel=discovery, rule_id=RuleId, message_key=?DISCOVERY_FINISHED, group_id=GroupId},
+		        ?DISCOVERY_OPR_LOG(OprLog)
+	end.
+
 
 -ifdef(__MYDLP_NETWORK).
 
@@ -482,7 +506,6 @@ set_discover_inprog() ->
 	mydlp_sync:sync_now().
 
 unset_discover_inprog() ->
-	
 	reset_discover_cache(),
 	mydlp_container:set_ep_meta("discover_inprog", "no"),
 	mydlp_sync:sync_now().
