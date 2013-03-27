@@ -54,6 +54,7 @@
 	save_fingerprints/2,
 	populate_discovery_endpoint_schedules/1,
 	get_progress/0,
+	get_endpoint_id/1,
 	stop/0]).
 
 %% gen_server callbacks
@@ -177,6 +178,25 @@ handle_call({push_opr_log, Context, {opr_log, #opr_log{time=Time, channel=Channe
 			{atomic, ILId} = ltransaction(fun() ->
 					psqt(insert_opr_log_disc, 
 						[Time1, Context, RuleId1, GroupId1, MessageKey1, Visible, Severity]),
+					last_insert_id_t() end, 30000),
+			Reply = ILId,	
+                        Worker ! {async_reply, Reply, From}
+		end, 30000),
+	{noreply, State};
+
+handle_call({push_opr_log, Context, {ep_opr_log, #opr_log{time=Time, channel=Channel, rule_id=RuleId, message_key=MessageKey, group_id=GroupId, ip_address=IpAddress}}}, From , State) ->
+	Worker = self(),
+	?ASYNC(fun() ->
+			{Time1, _ChannelS, RuleId1, MessageKey1, GroupId1, Visible, Severity} = pre_push_opr_log(Time, Channel, RuleId, MessageKey, GroupId),
+			erlang:display({ip, IpAddress}),
+			{I1, I2, I3, I4} = IpAddress,
+			IpAddress1 = integer_to_list(I1)++"."++integer_to_list(I2)++"."++integer_to_list(I3)++"."++integer_to_list(I4),
+			{ok, [[Alias]]} = lpsq(get_alias_with_ip, [IpAddress1], 5000),
+			{ok, [[Source]]} = psq(get_id_with_endpoint_alias, [Alias]),
+			Source1 = binary_to_list(Source),
+			{atomic, ILId} = ltransaction(fun() ->
+					psqt(insert_opr_log_ep_disc, 
+						[Time1, Context, RuleId1, GroupId1, MessageKey1, Visible, Severity, Source1]),
 					last_insert_id_t() end, 30000),
 			Reply = ILId,	
                         Worker ! {async_reply, Reply, From}
@@ -477,13 +497,16 @@ init([]) ->
 		{delete_incident_requeue, <<"DELETE FROM IncidentLogRequeueStatus WHERE incidentLog_id=?">>},
 		{update_requeue_status, <<"UPDATE IncidentLogRequeueStatus SET isRequeued=TRUE, date=now() WHERE incidentLog_id=?">>},
 		{denied_page, <<"SELECT c.value FROM Config AS c WHERE c.configKey=\"denied_page_html\"">>},
-		{insert_opr_log_disc, <<"INSERT INTO OperationLog (id, date, context, ruleId, groupId, message, messageKey, visible, severity) VALUES (NULL, ?, ?, ?, ?, NULL, ?, ?, ?)">>},
-		{insert_opr_log, <<"INSERT INTO OperationLog (id, date, context, ruleId, groupId, message, messageKey, visible, severity) VALUES (NULL, ?, ?, NULL, NULL, NULL, ?, ?, ?)">>},
+		{insert_opr_log_disc, <<"INSERT INTO OperationLog (id, date, context, ruleId, groupId, message, messageKey, visible, severity, source) VALUES (NULL, ?, ?, ?, ?, NULL, ?, ?, ?, NULL)">>},
+		{insert_opr_log_ep_disc, <<"INSERT INTO OperationLog (id, date, context, ruleId, groupId, message, messageKey, visible, severity, source) VALUES (NULL, ?, ?, ?, ?, NULL, ?, ?, ?, ?)">>},
+		{insert_opr_log, <<"INSERT INTO OperationLog (id, date, context, ruleId, groupId, message, messageKey, visible, severity, source) VALUiES (NULL, ?, ?, NULL, NULL, NULL, ?, ?, ?), NULL">>},
 		{insert_discovery_report, <<"INSERT INTO DiscoveryReport (id, startDate, finishDate, groupId, ruleId, status) VALUES (NULL, ?, NULL, ?, ?, ?)">>},
 		{update_report_status, <<"UPDATE DiscoveryReport SET status=? WHERE groupId = ?">>},
 		{update_report_as_finished, <<"UPDATE DiscoveryReport SET status=?, finishDate=now() WHERE groupId = ?">>},
 		{get_endpoint_alias, <<"SELECT endpointAlias, endpointId FROM Endpoint">>},
-		{get_ip_and_username, <<"SELECT ipAddress, username FROM EndpointStatus where endpointAlias=?">>}
+		{get_id_with_endpoint_alias, <<"SELECT endpointId FROM Endpoint where endpointAlias=?">>},
+		{get_ip_and_username, <<"SELECT ipAddress, username FROM EndpointStatus where endpointAlias=?">>},
+		{get_alias_with_ip, <<"SELECT endpointAlias FROM EndpointStatus where ipAddress=?">>}
 
 	]],
 
@@ -1422,6 +1445,15 @@ pre_insert_log(Filename) ->
 		F when is_binary(F) -> F end,
 
 	{Filename1}.
+
+get_endpoint_id(IpAddress) ->
+	{I1, I2, I3, I4} = IpAddress,
+	IpAddress1 = integer_to_list(I1)++"."++integer_to_list(I2)++"."++integer_to_list(I3)++"."++integer_to_list(I4),
+	erlang:display({ip1, IpAddress1}),
+	{ok, [[Alias]]} = lpsq(get_alias_with_ip, [IpAddress1], 5000),
+	erlang:display({alias, binary_to_list(Alias)}),
+	{ok, [[Source]]} = psq(get_id_with_endpoint_alias, [Alias]),
+	erlang:display({source, binary_to_list(Source)}).
 
 
 -endif.
