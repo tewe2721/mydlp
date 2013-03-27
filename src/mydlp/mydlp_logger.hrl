@@ -108,13 +108,26 @@
 	?LOGGER_NOTIFY(error, Format, Args)
         ).
 
+
 -define(OPR_LOG(Format, Args),
 	?LOGGER_NOTIFY_0({operational, general}, Format, Args)
         ).
 
+-ifdef(__MYDLP_NETWORK).
+
 -define(DISCOVERY_OPR_LOG(OprLog),
 	?LOGGER_NOTIFY_0({operational, discovery}, OprLog, [])
 	).
+
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
+-define(DISCOVERY_OPR_LOG(OprLog),
+	mydlp_item_push:p({enpoint_opr_log, discovery, OprLog})
+	).
+
+-endif.
 
 -define(BINARY_LOG(ItemName, Binary),
         FN = mydlp_api:ref_to_fn(?CFG(log_dir), "binlog", erlang:now()),
