@@ -310,8 +310,7 @@ call_remote_storage_discovery(RuleId, Dict, IsOnDemand) ->
 		{disc, GroupId} -> 
 			case IsOnDemand of
 				true -> Dict;
-				false -> mydlp_mnesia:del_fs_entries_by_rule_id(RuleId),
-					break_discovery(RuleId, GroupId, Dict)
+				false -> break_discovery(RuleId, GroupId, Dict)
 			end;
 		{paused, GroupId} -> call_continue_discovery_on_remote(RuleId),
 			case IsOnDemand of
@@ -327,7 +326,6 @@ call_remote_storage_discovery(RuleId, Dict, IsOnDemand) ->
 					dict:store(RuleId, {?ON_DEMAND_DISC, GroupId}, Dict);
 				false ->% means that user paused discovery while ago and now it is time to schedule
 					% New discovery with a new report id. Ensure that last discovery is stopped.
-					mydlp_mnesia:del_fs_entries_by_rule_id(RuleId),
 					break_discovery(RuleId, GroupId, Dict)
 			end; 
 		_ -> % Discovering should be start with new Report id.

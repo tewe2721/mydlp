@@ -123,9 +123,7 @@ update_rule_status(RuleId, Status) -> gen_server:cast(?MODULE, {update_rule_stat
 
 start_discovery(RuleId, GroupId) -> gen_server:cast(?MODULE, {start_discovery, RuleId, GroupId}).
 
-stop_discovery(RuleId, _GroupId) -> 
-	gen_server:call(?MODULE, {stop_discovery_by_rule_id, RuleId}, 60000),
-	mydlp_mnesia:del_fs_entries_by_rule_id(RuleId).
+stop_discovery(RuleId, _GroupId) -> gen_server:call(?MODULE, {stop_discovery_by_rule_id, RuleId}, 60000).
 
 pause_discovery(RuleId, GroupId) -> gen_server:cast(?MODULE, {pause_discovery, RuleId, GroupId}).
 
@@ -145,6 +143,11 @@ handle_call({stop_discovery_by_rule_id, RuleId}, _From, #state{discover_queue=Q,
 	Q1 = drop_items_by_rule_id(RuleId, Q),
 	PQ1 = drop_items_by_rule_id(RuleId, PQ),
 	GroupDict1 = dict:erase(RuleId, GroupDict),
+	case dict:find(RuleId, GroupDict1) of
+		{ok, {_GId, disc}} -> mydlp_mnesia:del_fs_entries_by_rule_id(RuleId);
+		{ok, {_GID, paused}} -> mydlp_mnesia:del_fs_entries_by_rule_id(RuleId);
+		_ -> ok
+	end,
 	{reply, ok, State#state{discover_queue=Q1, paused_queue=PQ1, group_id_dict=GroupDict1}};
 
 handle_call({is_discovery_finished, RuleId}, _From, #state{discover_queue=Q, paused_queue=PQ}=State) ->
@@ -222,9 +225,9 @@ handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=Gro
 							{noreply, State#state{discover_queue=Q1}} end
 			end;
 		{empty, _} ->
-			mark_finished_rules(PQ, GroupDict),
+			GroupDict1 = mark_finished_rules(PQ, GroupDict),
 			unset_discover_inprog(),
-			{noreply, State#state{discover_inprog=false}}
+			{noreply, State#state{discover_inprog=false, group_id_dict=GroupDict1}}
 	end;
 
 handle_cast({stop_discovery, RuleId, GroupId}, #state{group_id_dict=GroupDict}=State) ->
@@ -290,7 +293,8 @@ is_paused_or_stopped_by_rule_id(RuleId, GroupDict) ->
 mark_finished_rules(PausedQ, GroupDict) ->
 	RuleStatus = dict:to_list(GroupDict),
 	erlang:display({ruleStatus, RuleStatus}),
-	lists:map(fun({RuleId, {GroupId, _Status}}) -> mark_finished_each_rule(RuleId, GroupId, PausedQ) end, RuleStatus).
+	DictList = lists:map(fun({RuleId, {GroupId, _Status}}) -> mark_finished_each_rule(RuleId, GroupId, PausedQ) end, RuleStatus),
+	dict:from_list(DictList).
 
 mark_finished_each_rule(RuleId, GroupId, Q) ->
 	Time = erlang:universaltime(),
@@ -298,12 +302,14 @@ mark_finished_each_rule(RuleId, GroupId, Q) ->
 	 	{{value, {_ParentId, _FilePath, RuleIndex}}, Q1} -> 
 			case RuleIndex of
 				RuleId ->OprLog = #opr_log{time=Time, channel=discovery, rule_id=RuleId, message_key=?DISCOVERY_PAUSED, group_id=GroupId},
-		        		?DISCOVERY_OPR_LOG(OprLog);
+		        		?DISCOVERY_OPR_LOG(OprLog),
+					{RuleId, {GroupId, paused}};
 				_ -> mark_finished_each_rule(RuleId, GroupId, Q1)
 			end;
 		{empty, _Q2} ->
 			OprLog = #opr_log{time=Time, channel=discovery, rule_id=RuleId, message_key=?DISCOVERY_FINISHED, group_id=GroupId},
-		        ?DISCOVERY_OPR_LOG(OprLog)
+		        ?DISCOVERY_OPR_LOG(OprLog),
+			{RuleId, {GroupId, stopped}}
 	end.
 
 
