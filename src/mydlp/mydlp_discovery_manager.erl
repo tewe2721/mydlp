@@ -85,6 +85,8 @@
 -define(CONTINUE_EP_COMMAND, continue_discovery).
 
 -define(EP_CONTROL_TIME, ?CFG(sync_interval)).
+-define(EP_DISC_FINISHED, "ep_finished").
+-define(EP_DISC_PAUSED, "ep_paused").
 
 %%%%%%%%%%%%%  API
 
@@ -233,13 +235,16 @@ handle_info({is_discovery_finished, RuleId}, #state{discovery_dict=DiscDict, tim
 	end;
 
 handle_info({is_ep_discovery_finished, RuleId}, #state{discovery_dict=DiscDict, timer_dict=TimerDict}=State) ->
+	erlang:display("EP TIMER IS ELAPSED"),
 	case dict:find(RuleId, TimerDict) of
 		error -> {noreply, State};
 		{ok, Timer} ->
 			try
 			cancel_timer(Timer),
 			{ok, {_, GroupId}} = dict:find(RuleId, DiscDict),
-			case mydlp_mysql:is_all_ep_discovery_finished(GroupId) of
+			[Endpoints] = mydlp_mnesia:get_endpoints_by_rule_id(RuleId), 
+			erlang:display({endpoints, Endpoints}),
+			case mydlp_mysql:is_all_ep_discovery_finished(GroupId, Endpoints, ?EP_DISC_FINISHED) of
 				true -> TimerDict1 = dict:erase(RuleId, TimerDict),
 					update_report_as_finished(GroupId),
 					DiscDict1 = dict:store(RuleId, {?FINISHED, GroupId}, DiscDict),
@@ -433,11 +438,11 @@ call_stop_discovery_on_target(RuleId, Dict, IsOnDemand) ->
 	end. 
 
 call_stop_remote_storage_discovery(RuleId, Dict, IsOnDemand) ->
-	mydlp_mnesia:del_fs_entries_by_rule_id(RuleId),
 	case get_discovery_status(RuleId, Dict) of
 		none -> Dict;
 		stop -> Dict;
 		{_, GroupId} -> % discovering or paused
+			mydlp_mnesia:del_fs_entries_by_rule_id(RuleId),
 			update_report_as_finished(GroupId),
 			cancel_timer(RuleId),
 			mydlp_discover_fs:update_rule_status(RuleId, stopped),
@@ -521,7 +526,7 @@ create_timer(RuleId, TimerDict) ->
 	case mydlp_mnesia:get_rule_channel(RuleId) of
 		remote_discovery -> Timer = timer:send_after(60000, {is_discovery_finished, RuleId}),
 				dict:store(RuleId, Timer, TimerDict);
-		discovery -> Timer = timer:send_after(?EP_CONTROL_TIME, {is_ep_discovery_finished, RuleId}),
+		discovery -> erlang:display({discovery_timer, ?EP_CONTROL_TIME}),Timer = timer:send_after(?EP_CONTROL_TIME, {is_ep_discovery_finished, RuleId}),
 				dict:store(RuleId, Timer, TimerDict)
 	end.
 

@@ -123,7 +123,9 @@ update_rule_status(RuleId, Status) -> gen_server:cast(?MODULE, {update_rule_stat
 
 start_discovery(RuleId, GroupId) -> gen_server:cast(?MODULE, {start_discovery, RuleId, GroupId}).
 
-stop_discovery(RuleId, _GroupId) -> gen_server:call(?MODULE, {stop_discovery_by_rule_id, RuleId}).
+stop_discovery(RuleId, _GroupId) -> 
+	gen_server:call(?MODULE, {stop_discovery_by_rule_id, RuleId}, 60000),
+	mydlp_mnesia:del_fs_entries_by_rule_id(RuleId).
 
 pause_discovery(RuleId, GroupId) -> gen_server:cast(?MODULE, {pause_discovery, RuleId, GroupId}).
 
@@ -191,10 +193,6 @@ handle_cast({push_paused_to_proc_queue, RuleId}, #state{discover_queue=Q, paused
 			error -> ?ERROR_LOG("Unknown Rule id: "?S"", [RuleId])
 	end,
 	{noreply, State#state{discover_queue=queue:join(Q, PQ), paused_queue=queue:new(), group_id_dict=GroupDict1}};
-
-handle_cast({del_fs_entries, RuleIndex}, State) ->
-	mydlp_mnesia:del_fs_entries_by_rule_id(RuleIndex),
-	{noreply, State};
 
 handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=GroupDict} = State) ->
 	case queue:out(Q) of
@@ -480,9 +478,11 @@ discover_dir_dir(#fs_entry{file_id={FP, RuleIndex}, entry_id=EId}, GroupDict) ->
 	ok.
 
 discover(ParentId, FilePath, RuleIndex, GroupDict) ->
-	case is_cached({FilePath, RuleIndex}) of
-		true -> ok;
-		false -> discover1(ParentId, FilePath, RuleIndex, GroupDict) end.
+	%erlang:displa
+	%case is_cached({FilePath, RuleIndex}) of
+	%	true -> ok;
+	%	false -> discover1(ParentId, FilePath, RuleIndex, GroupDict) end.
+	discover1(ParentId, FilePath, RuleIndex, GroupDict).
 
 discover1(ParentId, FilePath, RuleIndex, GroupDict) ->
 	case filelib:is_regular(FilePath) of

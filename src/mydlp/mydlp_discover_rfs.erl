@@ -92,7 +92,7 @@ handle_call({stop_discovery,RuleId}, _From, State) ->
 
 handle_call({release_mount_by_rule_id, RuleId}, _From, #state{mount_dict=Dict}=State) ->
 	Dict1 = case dict:find(RuleId, Dict) of
-			{ok, {FilePath, _R}} -> release_mount([FilePath]),
+			{ok, {FilePaths, _R}} -> release_mount(FilePaths),
 					dict:erase(RuleId, Dict);
 			_ -> ?OPR_LOG("mydlp_discover_rfs: Unknown Rule Id: ["?S"]", [RuleId]), 
 				Dict
@@ -105,12 +105,12 @@ handle_call(_Msg, _From, State) ->
 handle_cast({start_by_rule_id, RuleId, GroupId}, #state{mount_dict=Dict}=State) ->
 	RemoteStorages = mydlp_mnesia:get_remote_storages_by_rule_id(RuleId),
 	Dict1 = case dict:find(RuleId, Dict) of
-			{ok, {FilePath, _R}} -> release_mount([FilePath]),
+			{ok, {FilePaths, _R}} -> release_mount(FilePaths),
 					dict:erase(RuleId, Dict);
 			_ -> ?OPR_LOG("mydlp_discover_rfs: Unknown Rule Id: ["?S"]", [RuleId]), 
 				Dict
 		end,
-	consume(RemoteStorages, GroupId),
+	consume(RemoteStorages, GroupId, RuleId),
 	{noreply, State#state{mount_dict=Dict1}};
 
 handle_cast({continue_discovering, RuleId}, State) ->
@@ -118,9 +118,11 @@ handle_cast({continue_discovering, RuleId}, State) ->
 	mydlp_discover_fs:continue_paused_discovery(RuleId),
 	{noreply, State};	
 
-handle_cast({consume, RemoteStorages, GroupId}, #state{mount_dict=Dict}=State) ->
+handle_cast({consume, RemoteStorages, GroupId, RuleId}, #state{mount_dict=Dict}=State) ->
 	Dict1 = discover_each_mount(RemoteStorages, Dict, GroupId),
-	mydlp_discover_fs:ql([{RuleId, MountPath, GroupId}|| {RuleId, {MountPath, _RId}}<- dict:to_list(Dict1)]),
+	{ok, {MountPaths, GroupId}} = dict:find(RuleId, Dict1),
+	erlang:display({paths, MountPaths}),
+	mydlp_discover_fs:ql([{RuleId, MountPath, GroupId}|| MountPath <- MountPaths]),
 	{noreply, State#state{mount_dict=Dict1}};
 
 handle_cast(finished, State) ->
@@ -147,7 +149,7 @@ handle_info(_Info, State) ->
 
 %%%%%%%%%%%%%%%% Implicit functions
 
-consume(RemoteStorages, GroupId) -> gen_server:cast(?MODULE, {consume, RemoteStorages, GroupId}).
+consume(RemoteStorages, GroupId, RuleId) -> gen_server:cast(?MODULE, {consume, RemoteStorages, GroupId, RuleId}).
 
 start_link() ->
 	case gen_server:start_link({local, ?MODULE}, ?MODULE, [], []) of
@@ -171,8 +173,11 @@ code_change(_OldVsn, State, _Extra) ->
 %%%%%%%%%%%%%%%%% internal
 
 add_mount_path_to_dict(none, Dict, _GroupId) -> Dict;
-add_mount_path_to_dict({MountPath, RuleId}, Dict, GroupId) -> dict:store(RuleId, {MountPath, GroupId}, Dict).
-
+add_mount_path_to_dict({MountPath, RuleId}, Dict, GroupId) -> 
+	case dict:find(RuleId, Dict) of
+		error -> dict:store(RuleId, {[MountPath], GroupId}, Dict);
+		{ok, {Paths, GId}} -> dict:store(RuleId, {[MountPath|Paths], GId}, Dict)
+	end.
 
 mount_path(MountPath, Command, Args, Envs, Stdin, RuleId, GroupId, 1) ->
 	%Time = erlang:universaltime(),
@@ -307,7 +312,7 @@ umount_path(FilePath, TryCount) ->
 				E ->
 					case TryCount of
 						1 -> ?ERROR_LOG("Remote Discovery: Error Occured umount directory. MountPath: ["?S"]~n. Error: ["?S"]~n", [FilePath, E]) ;
-						_ -> timer:sleep(400),
+						_ -> timer:sleep(1000),
 							umount_path(FilePath, TryCount-1)
 					end
 			end
