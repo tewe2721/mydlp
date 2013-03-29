@@ -113,6 +113,8 @@
 	get_user_message/2,
 	get_schedules_by_hour/1,
 	get_availabilty_by_rule_id/1,
+	register_schedule/2,
+	get_waiting_schedule_by_rule_id/1,
 	get_rule_id_by_orig_id/1,
 	get_orig_id_by_rule_id/1,
 	get_rule_channel/1,
@@ -189,6 +191,7 @@
 	remote_storage,
 	discovery_schedule,
 	discovery_endpoint_schedules,
+	waiting_schedules,
 	{m_user, ordered_set, 
 		fun() -> mnesia:add_table_index(m_user, un_hash) end},
 	{source_domain, ordered_set, 
@@ -269,6 +272,7 @@ get_record_fields_functional(Record) ->
 		remote_storage -> record_info(fields, remote_storage);
 		discovery_schedule -> record_info(fields, discovery_schedule);
 		discovery_endpoint_schedules -> record_info(fields, discovery_endpoint_schedules);
+		waiting_schedules -> record_info(fields, waiting_schedules);
 		notification -> record_info(fields, notification);
 		notification_queue -> record_info(fields, notification_queue);
 		source_domain -> record_info(fields, source_domain);
@@ -429,6 +433,10 @@ web_entry_list_links(EntryId) -> aqc({web_entry_list_links, EntryId}, nocache).
 get_schedules_by_hour(Day) -> aqc({get_schedules_by_hour, Day}, nocache).
 
 get_availabilty_by_rule_id(RuleId) -> aqc({get_availabilty_by_rule_id, RuleId}, nocache).
+
+register_schedule(RuleId, GroupId) -> aqc({register_schedule, RuleId, GroupId}, nocache).
+
+get_waiting_schedule_by_rule_id(RuleId) -> aqc({get_waiting_schedule_by_rule_id, RuleId}, nocache).
 
 get_rule_id_by_orig_id(OrigRuleId) -> aqc({get_rule_id_by_orig_id, OrigRuleId}, nocache).
 
@@ -997,6 +1005,22 @@ handle_query({get_availabilty_by_rule_id, RuleId}) ->
 		D#discovery_schedule.rule_id == RuleId
 	]),
 	?QLCE(Q);
+
+handle_query({register_schedule, RuleId, GroupId}) ->
+	Id = get_unique_id(endpoint_command),
+	WS = #waiting_schedules{id=Id, rule_id=RuleId, group_id=GroupId},
+	mnesia:dirty_write(WS);
+
+handle_query({get_waiting_schedule_by_rule_id, RuleId}) ->
+	Q = ?QLCQ([W ||
+		W <- mnesia:table(waiting_schedules),
+		W#waiting_schedules.rule_id == RuleId
+	]),
+	case ?QLCE(Q) of
+		[] -> none;
+		[WS] -> mnesia:dirty_delete({waiting_schedules, WS#waiting_schedules.id}),
+			WS#waiting_schedules.group_id
+	end;
 
 handle_query({get_rule_id_by_orig_id, OrigRuleId}) ->
 	Q = ?QLCQ([D#rule.id ||
@@ -2032,11 +2056,17 @@ remove_rule(RI) ->
 		]),
 	DESs = ?QLCE(Q10),
 
-	Q11 = ?QLCQ([RS#web_server.id ||	
+	Q11 = ?QLCQ([WS#waiting_schedules.id ||	
+		WS <- mnesia:table(waiting_schedules),
+		WS#waiting_schedules.rule_id == RI
+		]),
+	WSCs = ?QLCE(Q11),
+
+	Q12 = ?QLCQ([RS#web_server.id ||	
 		RS <- mnesia:table(web_server),
 		RS#web_server.rule_id == RI
 		]),
-	WSs = ?QLCE(Q11),
+	WSs = ?QLCE(Q12),
 
 	lists:foreach(fun(Id) -> mnesia:delete({ipr, Id}) end, IIs),
 	lists:foreach(fun(Id) -> mnesia:delete({m_user, Id}) end, UIs),
@@ -2046,6 +2076,7 @@ remove_rule(RI) ->
 	lists:foreach(fun(Id) -> mnesia:delete({remote_storage, Id}) end, RSs),
 	lists:foreach(fun(Id) -> mnesia:delete({discovery_schedule, Id}) end, DSs),
 	lists:foreach(fun(Id) -> mnesia:delete({discovery_endpoint_schedules, Id}) end, DESs),
+	lists:foreach(fun(Id) -> mnesia:delete({waiting_schedules, Id}) end, WSCs),
 	lists:foreach(fun(Id) -> mnesia:delete({web_server, Id}) end, WSs),
 
 	remove_data_formats(DFIs),

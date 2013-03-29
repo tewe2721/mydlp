@@ -219,7 +219,10 @@ handle_info({is_discovery_finished, RuleId}, #state{discovery_dict=DiscDict, tim
 					{ok, {_, GroupId}} = dict:find(RuleId, DiscDict),
 					mydlp_discover_rfs:release_mount_by_rule_id(RuleId),
 					update_report_as_finished(GroupId),
-					DiscDict1 = dict:store(RuleId,{?FINISHED, GroupId}, DiscDict),
+					DiscDict1 = case mydlp_mnesia:get_waiting_schedule_by_rule_id(RuleId) of
+							none ->	dict:store(RuleId,{?FINISHED, GroupId}, DiscDict);
+							GId -> call_start_discovery_by_rule_id(RuleId, GId, DiscDict, false)
+						end,
 					{noreply, State#state{discovery_dict=DiscDict1, timer_dict=TimerDict1}};
 				false -> 
 					Timer1 = timer:send_after(60000, {is_discovery_finished, RuleId}),
@@ -247,7 +250,10 @@ handle_info({is_ep_discovery_finished, RuleId}, #state{discovery_dict=DiscDict, 
 			case mydlp_mysql:is_all_ep_discovery_finished(GroupId, Endpoints, ?EP_DISC_FINISHED) of
 				true -> TimerDict1 = dict:erase(RuleId, TimerDict),
 					update_report_as_finished(GroupId),
-					DiscDict1 = dict:store(RuleId, {?FINISHED, GroupId}, DiscDict),
+					DiscDict1 = case mydlp_mnesia:get_waiting_schedule_by_rule_id(RuleId) of
+							none -> dict:store(RuleId, {?FINISHED, GroupId}, DiscDict);
+							GId -> call_start_discovery_on_ep(RuleId, GId, DiscDict, false)
+						end,
 					{noreply, State#state{discovery_dict=DiscDict1, timer_dict=TimerDict1}};
 				false -> Timer1 = timer:send_after(?EP_CONTROL_TIME, {is_ep_discovery_finished, RuleId}),
 					TimerDict1 = dict:store(RuleId, Timer1, TimerDict),
@@ -328,8 +334,15 @@ call_remote_storage_discovery(RuleId, Dict, IsOnDemand) ->
 					% New discovery with a new report id. Ensure that last discovery is stopped.
 					break_discovery(RuleId, GroupId, Dict)
 			end; 
+		{user_disc, _GroupId} ->
+			case IsOnDemand of 
+				true -> Dict; %looks impossible
+				false -> register_schedules_for_future(RuleId, remote_discovery),% This will be stored and will be runned when discovery finish 
+					Dict
+			end;
 		_ -> % Discovering should be start with new Report id.
-			call_start_discovery_by_rule_id(RuleId, Dict, IsOnDemand)
+			GId = generate_group_id(RuleId, remote_discovery),
+			call_start_discovery_by_rule_id(RuleId, GId, Dict, IsOnDemand)
 	end.
 
 call_ep_discovery(RuleId, Dict, IsOnDemand) -> 
@@ -357,15 +370,21 @@ call_ep_discovery(RuleId, Dict, IsOnDemand) ->
 					% New discovery with a new report id. Ensure that last discovery is stopped.
 					break_ep_discovery(RuleId, GroupId, Dict)
 			end;	
-		_ -> call_start_discovery_on_ep(RuleId, Dict, IsOnDemand)
+		{user_disc, _GroupId} ->
+			case IsOnDemand of 
+				true -> Dict; %looks impossible
+				false -> register_schedules_for_future(RuleId, discovery),% This will be stored and will be runned when discovery finish 
+					Dict
+			end;
+		_ -> GId = generate_group_id(RuleId, discovery),
+			call_start_discovery_on_ep(RuleId, GId, Dict, IsOnDemand)
 	end.
 
 call_continue_discovery_on_remote(RuleId) ->
 	gen_server:cast(?REMOTE_DISCOVERY, {continue_discovering, RuleId}),
 	gen_server:cast(?WEB_DISCOVERY, {continue_discovering, RuleId}).
 
-call_start_discovery_by_rule_id(RuleId, Dict, IsOnDemand) -> 
-	GroupId = generate_group_id(RuleId, remote_discovery),
+call_start_discovery_by_rule_id(RuleId, GroupId, Dict, IsOnDemand) -> 
 	gen_server:cast(?REMOTE_DISCOVERY, {start_by_rule_id, RuleId, GroupId}),
 	gen_server:cast(?WEB_DISCOVERY, {start_by_rule_id, RuleId, GroupId}),
 	case IsOnDemand of
@@ -373,8 +392,7 @@ call_start_discovery_by_rule_id(RuleId, Dict, IsOnDemand) ->
 		false -> dict:store(RuleId, {?DISC, GroupId}, Dict)
 	end.
 
-call_start_discovery_on_ep(RuleId, Dict, IsOnDemand) ->
-	GroupId = generate_group_id(RuleId, discovery),
+call_start_discovery_on_ep(RuleId, GroupId, Dict, IsOnDemand) ->
 	set_command_to_endpoints(RuleId, ?START_EP_COMMAND, [{groupId, GroupId}]),
 	case IsOnDemand of
 		true -> dict:store(RuleId, {?ON_DEMAND_DISC, GroupId}, Dict);
@@ -509,9 +527,18 @@ generate_group_id(RuleId, Channel) ->
 	OrigRuleId = mydlp_mnesia:get_orig_id_by_rule_id(RuleId),
 	erlang:display({rule_id, RuleId}),
 	mydlp_mysql:push_discovery_report(Time, GroupId, OrigRuleId, ?REPORT_STATUS_DISC),
-	OprLog = #opr_log{time=Time, channel=Channel, rule_id=RuleId, message_key=?SUCCESS_MOUNT_KEY, group_id=GroupId},
+	OprLog = #opr_log{time=Time, channel=Channel, rule_id=RuleId, message_key=?SUCCESS_MOUNT_KEY, group_id=GroupId},%TODO: message key should be revised.
 	?DISCOVERY_OPR_LOG(OprLog),
 	GroupId .
+
+register_schedules_for_future(RuleId, Channel) ->
+	GroupId = generate_group_id(RuleId, Channel),
+	WaitingSchedules = mydlp_mnesia:get_waiting_schedule_by_rule_id(RuleId),
+	case WaitingSchedules of 
+		none -> ok;
+		GId -> update_report_as_finished(GId)
+	end,
+	mydlp_mnesia:register_schedule(RuleId, GroupId).
 
 cancel_timer(RuleId) -> gen_server:cast(?MODULE, {cancel_timer, RuleId}).
 
@@ -531,7 +558,8 @@ create_timer(RuleId, TimerDict) ->
 break_discovery(RuleId, GroupId, Dict) ->
 	case gen_server:call(?REMOTE_DISCOVERY, {stop_discovery, RuleId}, 60000) of
 		ok -> update_report_as_finished(GroupId),
-			call_start_discovery_by_rule_id(RuleId, Dict, false);
+			GId = generate_group_id(RuleId, remote_discovery),
+			call_start_discovery_by_rule_id(RuleId, GId, Dict, false);
 		R -> ?OPR_LOG("Failed to scheduling discovery: "?S"", [R]), 
 			Dict
 	end.
@@ -539,7 +567,8 @@ break_discovery(RuleId, GroupId, Dict) ->
 break_ep_discovery(RuleId, GroupId, Dict) ->
 	set_command_to_endpoints(RuleId, ?STOP_EP_COMMAND, [{groupId, GroupId}]),
 	update_report_as_finished(GroupId),
-	call_start_discovery_on_ep(RuleId, Dict, false).
+	GId = generate_group_id(RuleId, discovery),
+	call_start_discovery_on_ep(RuleId, GId, Dict, false).
 
 get_discovery_status(RuleId, Dict) ->
 	case dict:find(RuleId, Dict) of
@@ -592,4 +621,4 @@ start_discovery_scheduling() ->
 	{_D, {H, _M, _S}} = erlang:localtime(),
 	Schedules = mydlp_mnesia:get_schedules_by_hour(H),
 	gen_server:cast(?MODULE, {manage_schedules, Schedules}),
-	timer:send_after(600000, start_discovery_scheduling).
+	timer:send_after(60000, start_discovery_scheduling).

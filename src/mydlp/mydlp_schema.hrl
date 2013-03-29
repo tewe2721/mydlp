@@ -1,4 +1,4 @@
-%%
+%%%
 %%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@medra.com.tr>
 %%%
 %%%--------------------------------------------------------------------------
@@ -85,6 +85,12 @@
 	schedule_hour, 
 	details,
 	available_intervals
+}).
+
+-record(waiting_schedules, {
+	id,
+	rule_id,
+	group_id
 }).
 
 -record(discovery_endpoint_schedules, {

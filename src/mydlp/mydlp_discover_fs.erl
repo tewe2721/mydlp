@@ -168,14 +168,17 @@ handle_cast({update_rule_status, RuleId, Status}, #state{group_id_dict=GroupDict
 	{noreply, State#state{group_id_dict=GroupDict1}};
 
 handle_cast({ql, List}, State) ->
+%	lists:map(fun({RuleIndex, FilePath, GroupId}) ->
+%			dict:store(RuleIndex, {GroupId, disc}),
+%			q(FilePath, RuleIndex, GroupId) end, List),
 	[ q(FilePath, RuleIndex, GroupId) || {RuleIndex, FilePath, GroupId} <- List ],
 	{noreply, State};
 
 handle_cast({q, ParentId, FilePath, RuleIndex, GroupId}, #state{discover_queue=Q, group_id_dict=GroupDict, discover_inprog=false} = State) ->
 	Q1 = queue:in({ParentId, FilePath, RuleIndex}, Q),
 	GroupDict1 = case dict:find(RuleIndex, GroupDict) of
-			{ok, _Val} -> GroupDict;
-			error -> dict:store(RuleIndex, {GroupId, disc}, GroupDict)
+			{ok, {GroupId, _Status}} -> GroupDict;
+			_ -> dict:store(RuleIndex, {GroupId, disc}, GroupDict)
 		end,
 	consume(),
 	set_discover_inprog(),
@@ -184,8 +187,8 @@ handle_cast({q, ParentId, FilePath, RuleIndex, GroupId}, #state{discover_queue=Q
 handle_cast({q, ParentId, FilePath, RuleIndex, GroupId}, #state{discover_queue=Q, group_id_dict=GroupDict, discover_inprog=true} = State) ->
 	Q1 = queue:in({ParentId, FilePath, RuleIndex}, Q),
 	GroupDict1 = case dict:find(RuleIndex, GroupDict) of
-			{ok, _Val} -> GroupDict;
-			error -> dict:store(RuleIndex, {GroupId, disc}, GroupDict)
+			{ok, {GroupId, _Status}} -> GroupDict;
+			_ -> dict:store(RuleIndex, {GroupId, disc}, GroupDict)
 		end,
 	{noreply,State#state{discover_queue=Q1, group_id_dict=GroupDict1}};
 
@@ -473,13 +476,13 @@ discover_dir(#fs_entry{file_id={FP, RuleIndex}, entry_id=EId}, GroupDict) ->
 		{error, _} -> [] end,
 	OList = mydlp_mnesia:fs_entry_list_dir(EId),
 	MList = lists:umerge([CList, OList]),
-	GroupId = dict:find(RuleIndex, GroupDict),
+	{ok, {GroupId, _}} = dict:find(RuleIndex, GroupDict),
 	[ q(EId, filename:absname(FN, FP), RuleIndex, GroupId) || FN <- MList ],
 	ok.
 
 discover_dir_dir(#fs_entry{file_id={FP, RuleIndex}, entry_id=EId}, GroupDict) ->
 	OList = mydlp_mnesia:fs_entry_list_dir(EId),
-	GroupId = dict:find(RuleIndex, GroupDict),
+	{ok, {GroupId, _}} = dict:find(RuleIndex, GroupDict),
 	[ q(EId, filename:absname(FN, FP), RuleIndex, GroupId) || FN <- OList ],
 	ok.
 
