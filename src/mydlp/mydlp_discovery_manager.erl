@@ -352,9 +352,13 @@ call_remote_storage_discovery(RuleId, Dict, IsOnDemand) ->
 				false -> register_schedules_for_future(RuleId, remote_discovery),% This will be stored and will be runned when discovery finish 
 					Dict
 			end;
-		_ -> % Discovering should be start with new Report id.
-			GId = generate_group_id(RuleId, remote_discovery),
-			call_start_discovery_by_rule_id(RuleId, GId, Dict, IsOnDemand)
+		_ -> 	
+			case mydlp_mnesia:get_waiting_schedule_by_rule_id(RuleId) of
+				none -> GId = generate_group_id(RuleId, remote_discovery),
+					call_start_discovery_by_rule_id(RuleId, GId, Dict, IsOnDemand);
+				GIdW -> update_report_as_finished(GIdW),
+					register_schedules_for_future(RuleId, remote_discovery),
+					Dict end
 	end.
 
 call_ep_discovery(RuleId, Dict, IsOnDemand) -> 
@@ -388,8 +392,13 @@ call_ep_discovery(RuleId, Dict, IsOnDemand) ->
 				false -> register_schedules_for_future(RuleId, discovery),% This will be stored and will be runned when discovery finish 
 					Dict
 			end;
-		_ -> GId = generate_group_id(RuleId, discovery),
-			call_start_discovery_on_ep(RuleId, GId, Dict, IsOnDemand)
+		_ -> 
+			case mydlp_mnesia:get_waiting_schedule_by_rule_id(RuleId) of
+				none -> GId = generate_group_id(RuleId, discovery),
+					call_start_discovery_on_ep(RuleId, GId, Dict, IsOnDemand);
+				GIdW -> update_report_as_finished(GIdW),
+					register_schedules_for_future(RuleId, discovery),
+					Dict end
 	end.
 
 call_continue_discovery_on_remote(RuleId) ->

@@ -153,6 +153,7 @@ handle_call({stop_discovery_by_rule_id, RuleId}, _From, #state{discover_queue=Q,
 		_ -> ?ERROR_LOG("Unknown Rule Id: ["?S"]", [RuleId])
 	end,
 	GroupDict1 = dict:erase(RuleId, GroupDict),
+	erlang:display(dict:to_list(GroupDict1)),
 	filter_discover_cache(RuleId),
 	{reply, ok, State#state{discover_queue=Q1, paused_queue=PQ1, group_id_dict=GroupDict1}};
 
@@ -288,6 +289,7 @@ is_paused_or_stopped_by_rule_id(RuleId, GroupDict) ->
 
 mark_finished_rules(PausedQ, GroupDict) ->
 	RuleStatus = dict:to_list(GroupDict),
+	erlang:display(RuleStatus),
 	DictList = lists:map(fun({RuleId, {GroupId, _Status}}) -> mark_finished_each_rule(RuleId, GroupId, PausedQ) end, RuleStatus),
 	dict:from_list(DictList).
 
