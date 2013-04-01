@@ -142,12 +142,14 @@ handle_call({stop_discovery_by_rule_id, RuleId}, _From, #state{discover_queue=Q,
 	erlang:display({stop_discovery, RuleId}),
 	Q1 = drop_items_by_rule_id(RuleId, Q),
 	PQ1 = drop_items_by_rule_id(RuleId, PQ),
-	GroupDict1 = dict:erase(RuleId, GroupDict),
-	case dict:find(RuleId, GroupDict1) of
-		{ok, {_GId, disc}} -> mydlp_mnesia:del_fs_entries_by_rule_id(RuleId);
-		{ok, {_GID, paused}} -> mydlp_mnesia:del_fs_entries_by_rule_id(RuleId);
+	{ok, {GId, Status}} = dict:find(RuleId, GroupDict),
+	push_opr_log(RuleId, GId, ?DISCOVERY_FINISHED),
+	case Status of
+		disc -> mydlp_mnesia:del_fs_entries_by_rule_id(RuleId);
+		paused -> mydlp_mnesia:del_fs_entries_by_rule_id(RuleId);
 		_ -> ok
 	end,
+	GroupDict1 = dict:erase(RuleId, GroupDict),
 	filter_discover_cache(RuleId),
 	{reply, ok, State#state{discover_queue=Q1, paused_queue=PQ1, group_id_dict=GroupDict1}};
 
@@ -287,19 +289,14 @@ mark_finished_rules(PausedQ, GroupDict) ->
 	dict:from_list(DictList).
 
 mark_finished_each_rule(RuleId, GroupId, Q) ->
-	Time = erlang:universaltime(),
 	case queue:out(Q) of
 	 	{{value, {_ParentId, _FilePath, RuleIndex}}, Q1} -> 
 			case RuleIndex of
-				RuleId ->OprLog = #opr_log{time=Time, channel=discovery, rule_id=RuleId, message_key=?DISCOVERY_PAUSED, group_id=GroupId},
-		        		?DISCOVERY_OPR_LOG(OprLog),
-					{RuleId, {GroupId, paused}};
+				RuleId -> push_opr_log(RuleId, GroupId, ?DISCOVERY_PAUSED);
 				_ -> mark_finished_each_rule(RuleId, GroupId, Q1)
 			end;
 		{empty, _Q2} ->
-			OprLog = #opr_log{time=Time, channel=discovery, rule_id=RuleId, message_key=?DISCOVERY_FINISHED, group_id=GroupId},
-		        ?DISCOVERY_OPR_LOG(OprLog),
-			{RuleId, {GroupId, stopped}}
+			push_opr_log(RuleId, GroupId, ?DISCOVERY_FINISHED)
 	end.
 
 
@@ -307,10 +304,14 @@ mark_finished_each_rule(RuleId, GroupId, Q) ->
 
 has_discover_rule() -> true. % may be redundant
 
+push_opr_log(RuleId, GroupId, Message) ->
+	Time = erlang:universaltime(),
+	OprLog = #opr_log{time=Time, channel=remote_discovery, rule_id=RuleId, message_key=Message, group_id=GroupId},
+	?DISCOVERY_OPR_LOG(OprLog).
+
 -endif.
 
 -ifdef(__MYDLP_ENDPOINT).
-
 
 has_discover_rule() ->
 	true.
@@ -319,6 +320,11 @@ has_discover_rule() ->
 	%	{_ACLOpts, {_Id, pass}, []} -> false;
 	%	_Else -> true end.
 	
+push_opr_log(RuleId, GroupId, Message) ->
+	Time = erlang:universaltime(),
+	OprLog = #opr_log{time=Time, channel=discovery, rule_id=RuleId, message_key=Message, group_id=GroupId},
+	?DISCOVERY_OPR_LOG(OprLog).
+
 -endif.
 
 consume() -> gen_server:cast(?MODULE, consume).
