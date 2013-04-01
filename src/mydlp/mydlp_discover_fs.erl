@@ -142,12 +142,15 @@ handle_call({stop_discovery_by_rule_id, RuleId}, _From, #state{discover_queue=Q,
 	erlang:display({stop_discovery, RuleId}),
 	Q1 = drop_items_by_rule_id(RuleId, Q),
 	PQ1 = drop_items_by_rule_id(RuleId, PQ),
-	{ok, {GId, Status}} = dict:find(RuleId, GroupDict),
-	push_opr_log(RuleId, GId, ?DISCOVERY_FINISHED),
-	case Status of
-		disc -> mydlp_mnesia:del_fs_entries_by_rule_id(RuleId);
-		paused -> mydlp_mnesia:del_fs_entries_by_rule_id(RuleId);
-		_ -> ok
+	case dict:find(RuleId, GroupDict) of
+		{ok, {GId, Status}} ->
+			push_opr_log(RuleId, GId, ?DISCOVERY_FINISHED),
+			case Status of
+				disc -> mydlp_mnesia:del_fs_entries_by_rule_id(RuleId);
+				paused -> mydlp_mnesia:del_fs_entries_by_rule_id(RuleId);
+				_ -> ok
+			end;
+		_ -> ?ERROR_LOG("Unknown Rule Id: ["?S"]", [RuleId])
 	end,
 	GroupDict1 = dict:erase(RuleId, GroupDict),
 	filter_discover_cache(RuleId),
