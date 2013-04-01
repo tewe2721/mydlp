@@ -148,6 +148,7 @@ handle_call({stop_discovery_by_rule_id, RuleId}, _From, #state{discover_queue=Q,
 		{ok, {_GID, paused}} -> mydlp_mnesia:del_fs_entries_by_rule_id(RuleId);
 		_ -> ok
 	end,
+	filter_discover_cache(RuleId),
 	{reply, ok, State#state{discover_queue=Q1, paused_queue=PQ1, group_id_dict=GroupDict1}};
 
 handle_call({is_discovery_finished, RuleId}, _From, #state{discover_queue=Q, paused_queue=PQ}=State) ->
@@ -168,9 +169,6 @@ handle_cast({update_rule_status, RuleId, Status}, #state{group_id_dict=GroupDict
 	{noreply, State#state{group_id_dict=GroupDict1}};
 
 handle_cast({ql, List}, State) ->
-%	lists:map(fun({RuleIndex, FilePath, GroupId}) ->
-%			dict:store(RuleIndex, {GroupId, disc}),
-%			q(FilePath, RuleIndex, GroupId) end, List),
 	[ q(FilePath, RuleIndex, GroupId) || {RuleIndex, FilePath, GroupId} <- List ],
 	{noreply, State};
 
@@ -193,7 +191,7 @@ handle_cast({q, ParentId, FilePath, RuleIndex, GroupId}, #state{discover_queue=Q
 	{noreply,State#state{discover_queue=Q1, group_id_dict=GroupDict1}};
 
 handle_cast({push_paused_to_proc_queue, RuleId}, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=GroupDict} = State) ->
-	reset_discover_cache(),
+	%reset_discover_cache(),
 	GroupDict1 = case dict:find(RuleId, GroupDict) of
 			{ok, {GId, _S}} -> dict:store(RuleId, {GId, disc}, GroupDict);
 			error -> ?ERROR_LOG("Unknown Rule id: "?S"", [RuleId])
@@ -249,6 +247,7 @@ handle_cast({start_discovery, RuleId, GroupId}, #state{group_id_dict=GroupDict}=
 				 end
 			, L) end,
 	erlang:display({pathList, PathList}),
+	filter_discover_cache(RuleId),
 	lists:map(fun(P) -> q(P, RuleId, GroupId) end, PathList),
 	{noreply, State#state{group_id_dict=GroupDict1}};
 
@@ -259,23 +258,12 @@ handle_cast({pause_discovery, RuleId, GroupId}, #state{group_id_dict=GroupDict}=
 
 handle_cast({continue_discovery, RuleId, GroupId}, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=GroupDict}=State) ->
 	erlang:display({continue_discovery, RuleId}),
-	reset_discover_cache(),
+	%reset_discover_cache(),
 	GroupDict1 = dict:store(RuleId, {GroupId, disc}, GroupDict),
 	{noreply, State#state{discover_queue=queue:join(Q, PQ), paused_queue=queue:new(), group_id_dict=GroupDict1}};
 
-handle_cast(schedule_discovery, State) -> handle_info(schedule_now, State);
-
 handle_cast(_Msg, State) ->
 	{noreply, State}.
-
-handle_info(schedule_now, State) ->
-	State1 = cancel_timer(State),
-	schedule(),
-	{noreply, State1};
-
-handle_info(schedule_startup, State) ->
-	schedule(),
-	{noreply, State};
 
 handle_info({async_reply, Reply, From}, State) ->
 	gen_server:reply(From, Reply),
@@ -295,7 +283,6 @@ is_paused_or_stopped_by_rule_id(RuleId, GroupDict) ->
 
 mark_finished_rules(PausedQ, GroupDict) ->
 	RuleStatus = dict:to_list(GroupDict),
-	erlang:display({ruleStatus, RuleStatus}),
 	DictList = lists:map(fun({RuleId, {GroupId, _Status}}) -> mark_finished_each_rule(RuleId, GroupId, PausedQ) end, RuleStatus),
 	dict:from_list(DictList).
 
@@ -318,13 +305,7 @@ mark_finished_each_rule(RuleId, GroupId, Q) ->
 
 -ifdef(__MYDLP_NETWORK).
 
-has_discover_rule() -> true.
-
-cancel_timer(State) -> State.
-
-schedule_timer(State, _Interval) -> State.
-
-schedule() -> ok.
+has_discover_rule() -> true. % may be redundant
 
 -endif.
 
@@ -337,33 +318,7 @@ has_discover_rule() ->
 	%	none -> false;
 	%	{_ACLOpts, {_Id, pass}, []} -> false;
 	%	_Else -> true end.
-
-cancel_timer(#state{timer=Timer} = State) ->
-	case Timer of
-		undefined -> ok;
-		TRef ->	(catch timer:cancel(TRef)) end,
-	State#state{timer=undefined}.
 	
-%schedule_timer(State, Interval) ->
-%	State1 = cancel_timer(State),
-%	Timer = case timer:send_after(Interval, schedule_now) of
-%		{ok, TRef} -> TRef;
-%		{error, _} = Error -> ?ERROR_LOG("Can not create timer. Reason: "?S, [Error]), undefined end,
-%	State1#state{timer=Timer}.
-%
-schedule() ->
-	PathsWithRuleIndex = mydlp_mnesia:get_discovery_directory(), % {Path, IndexInWhichRuleHasThisPath}
-	PathList = case PathsWithRuleIndex of
-		none -> [];
-		L when is_list(L) ->
-			lists:map(fun({P, Index}) -> 
-				{try unicode:characters_to_list(P)
-					catch _:_ -> binary_to_list(P) end,  %% TODO: log this case
-				Index} end
-			, L) end,	
-	reset_discover_cache(),
-	%lists:foreach(fun({P, I}) -> q(P, I) end, PathList),
-	ok.
 -endif.
 
 consume() -> gen_server:cast(?MODULE, consume).
@@ -487,11 +442,9 @@ discover_dir_dir(#fs_entry{file_id={FP, RuleIndex}, entry_id=EId}, GroupDict) ->
 	ok.
 
 discover(ParentId, FilePath, RuleIndex, GroupDict) ->
-	%erlang:displa
-	%case is_cached({FilePath, RuleIndex}) of
-	%	true -> ok;
-	%	false -> discover1(ParentId, FilePath, RuleIndex, GroupDict) end.
-	discover1(ParentId, FilePath, RuleIndex, GroupDict).
+	case is_cached({FilePath, RuleIndex}) of
+		true -> ok;
+		false -> discover1(ParentId, FilePath, RuleIndex, GroupDict) end.
 
 discover1(ParentId, FilePath, RuleIndex, GroupDict) ->
 	case filelib:is_regular(FilePath) of
@@ -528,6 +481,11 @@ set_discover_inprog() -> ok.
 unset_discover_inprog() -> 
 	reset_discover_cache().
 -endif.
+
+filter_discover_cache(RuleId) ->
+	CS = get(cache),
+	CS1 = gb_sets:filter(fun({_FP, RuleIndex}) -> RuleIndex /= RuleId end, CS),
+	put(cache, CS1), ok.
 
 reset_discover_cache() ->
 	put(cache, gb_sets:new()), ok.

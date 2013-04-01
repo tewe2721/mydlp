@@ -266,8 +266,9 @@ handle_cast({update_report_status, GroupId, NewStatus}, State) ->
 	{noreply, State};
 
 handle_cast({update_report_as_finished, GroupId}, State) ->
+	Time = erlang:universaltime(),
 	?ASYNC0(fun() ->
-		rpsq(update_report_as_finished, ["stopped", GroupId], 60000)
+		rpsq(update_report_as_finished, ["stopped", Time, GroupId], 60000)
 	end),
 	{noreply, State};
 
@@ -511,7 +512,7 @@ init([]) ->
 		{insert_opr_log, <<"INSERT INTO OperationLog (id, date, context, ruleId, groupId, message, messageKey, visible, severity, source) VALUES (NULL, ?, ?, NULL, NULL, NULL, ?, ?, ?, NULL)">>},
 		{insert_discovery_report, <<"INSERT INTO DiscoveryReport (id, startDate, finishDate, groupId, ruleId, status) VALUES (NULL, ?, NULL, ?, ?, ?)">>},
 		{update_report_status, <<"UPDATE DiscoveryReport SET status=? WHERE groupId = ?">>},
-		{update_report_as_finished, <<"UPDATE DiscoveryReport SET status=?, finishDate=now() WHERE groupId = ?">>},
+		{update_report_as_finished, <<"UPDATE DiscoveryReport SET status=?, finishDate=? WHERE groupId = ?">>},
 		{get_endpoint_alias, <<"SELECT endpointAlias, endpointId FROM Endpoint">>},
 		{get_id_with_endpoint_alias, <<"SELECT endpointId FROM Endpoint where endpointAlias=?">>},
 		{get_ip_and_username, <<"SELECT ipAddress, username FROM EndpointStatus where endpointAlias=?">>},

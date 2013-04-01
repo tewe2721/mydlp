@@ -3034,9 +3034,8 @@ use_client_policy(CDBBin) ->
 	end,
 	ok.
 
-apply_cdbobj(L) when is_list(L) -> lists:foreach(fun(C) -> apply_cdbobj(C) end, L);
+apply_cdbobj(L) when is_list(L) -> lists:foreach(fun(C) -> apply_cdbobj(C) end, L); % TODO: Updating mnesia rule table before commands should be guarented.
 apply_cdbobj({{rule_tables, RuleTables}, {mc, MCModule}, {items, ItemDump}}) ->
-	erlang:display("Rule Table first"),
 	mydlp_mnesia:truncate_nondata(),
 	( catch mydlp_mnesia:write(ItemDump) ),
 	( catch mydlp_mnesia:write([ MCModule ]) ),
@@ -3049,16 +3048,12 @@ apply_cdbobj({{rule_tables, RuleTables}, {mc, MCModule}, {items, ItemDump}}) ->
 	ok;
 apply_cdbobj({command, L}) when is_list(L) -> lists:foreach(fun(C) -> apply_cdbobj({command, C}) end, L);
 apply_cdbobj({command, stop_discovery, [{ruleId, RuleId}, {groupId, GroupId}]}) ->
-	erlang:display("Command first"),
 	?ASYNC0(fun() -> mydlp_discover_fs:stop_discovery(RuleId, GroupId) end), ok;
 apply_cdbobj({command, start_discovery, [{ruleId, RuleId}, {groupId, GroupId}]}) ->
-	erlang:display("Command first"),
 	?ASYNC0(fun() -> mydlp_discover_fs:start_discovery(RuleId, GroupId) end), ok;
 apply_cdbobj({command, pause_discovery, [{ruleId, RuleId}, {groupId, GroupId}]}) ->
-	erlang:display("Command first"),
 	?ASYNC0(fun() -> mydlp_discover_fs:pause_discovery(RuleId, GroupId) end), ok;
 apply_cdbobj({command, continue_discovery, [{ruleId, RuleId}, {groupId, GroupId}]}) ->
-	erlang:display("Command first"),
 	?ASYNC0(fun() -> mydlp_discover_fs:continue_discovery(RuleId, GroupId) end), ok;
 apply_cdbobj({command, Else, _}) ->
 	?ERROR_LOG("Unknown remote command: "?S, [Else]);
