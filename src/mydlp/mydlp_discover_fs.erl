@@ -292,11 +292,13 @@ mark_finished_each_rule(RuleId, GroupId, Q) ->
 	case queue:out(Q) of
 	 	{{value, {_ParentId, _FilePath, RuleIndex}}, Q1} -> 
 			case RuleIndex of
-				RuleId -> push_opr_log(RuleId, GroupId, ?DISCOVERY_PAUSED);
+				RuleId -> push_opr_log(RuleId, GroupId, ?DISCOVERY_PAUSED),
+					{RuleId, {GroupId, paused}};
 				_ -> mark_finished_each_rule(RuleId, GroupId, Q1)
 			end;
 		{empty, _Q2} ->
-			push_opr_log(RuleId, GroupId, ?DISCOVERY_FINISHED)
+			push_opr_log(RuleId, GroupId, ?DISCOVERY_FINISHED),
+			{RuleId, {GroupId, stopped}}
 	end.
 
 
