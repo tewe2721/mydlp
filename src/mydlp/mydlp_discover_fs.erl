@@ -69,6 +69,7 @@
 	paused_queue,
 	group_id_dict,
 	discover_inprog=false,
+	is_new=false,
 	timer
 }).
 
@@ -200,21 +201,22 @@ handle_cast({push_paused_to_proc_queue, RuleId}, #state{discover_queue=Q, paused
 	%reset_discover_cache(),
 	GroupDict1 = case dict:find(RuleId, GroupDict) of
 			{ok, {GId, _S}} -> dict:store(RuleId, {GId, disc}, GroupDict);
-			error -> ?ERROR_LOG("Unknown Rule id: "?S"", [RuleId])
+			error -> ?ERROR_LOG("Unknown Rule id: "?S"", [RuleId]),
+				GroupDict
 	end,
 	{noreply, State#state{discover_queue=queue:join(Q, PQ), paused_queue=queue:new(), group_id_dict=GroupDict1}};
 
-handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=GroupDict} = State) ->
+handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=GroupDict, is_new=IsNew} = State) ->
 	case queue:out(Q) of
 		{{value, {ParentId, FilePath, RuleIndex}=Item}, Q1} ->
 			case is_paused_or_stopped_by_rule_id(RuleIndex, GroupDict) of
 				paused -> % rule is paused, push the item pause queue
 					PQ1 = queue:in(Item, PQ),
 					consume(),
-					{noreply, State#state{discover_queue=Q1, paused_queue=PQ1}};
+					{noreply, State#state{discover_queue=Q1, paused_queue=PQ1, is_new=false}};
 				stopped -> % rule is stopped, drop item
 					consume(),
-					{noreply, State#state{discover_queue=Q1, paused_queue=PQ}};
+					{noreply, State#state{discover_queue=Q1, paused_queue=PQ, is_new=false}};
 				_ ->
 					try	case has_discover_rule() of
 							true -> case is_exceptional(FilePath) of
@@ -222,19 +224,21 @@ handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=Gro
 									true -> ok end;
 							false -> ok end,
 						consume(),
-						{noreply, State#state{discover_queue=Q1}}
+						{noreply, State#state{discover_queue=Q1, is_new=false}}
 					catch Class:Error ->
 						?ERROR_LOG("Discover Queue Consume: Error occured: "
 								"Class: ["?S"]. Error: ["?S"].~n"
 								"Stack trace: "?S"~n.FilePath: "?S"~nState: "?S"~n ",	
 								[Class, Error, erlang:get_stacktrace(), FilePath, State]),
 							consume(),
-							{noreply, State#state{discover_queue=Q1}} end
+							{noreply, State#state{discover_queue=Q1, is_new=false}} end
 			end;
 		{empty, _} ->
-			GroupDict1 = mark_finished_rules(PQ, GroupDict),
+			GroupDict1 = case IsNew of
+					true -> GroupDict;
+					false -> mark_finished_rules(PQ, GroupDict) end,
 			unset_discover_inprog(),
-			{noreply, State#state{discover_inprog=false, group_id_dict=GroupDict1}}
+			{noreply, State#state{discover_inprog=false, group_id_dict=GroupDict1, is_new=false}}
 	end;
 
 handle_cast({stop_discovery, RuleId, GroupId}, #state{group_id_dict=GroupDict}=State) ->
@@ -255,7 +259,7 @@ handle_cast({start_discovery, RuleId, GroupId}, #state{group_id_dict=GroupDict}=
 	erlang:display({pathList, PathList}),
 	filter_discover_cache(RuleId),
 	lists:map(fun(P) -> q(P, RuleId, GroupId) end, PathList),
-	{noreply, State#state{group_id_dict=GroupDict1}};
+	{noreply, State#state{group_id_dict=GroupDict1, is_new=true}};
 
 handle_cast({pause_discovery, RuleId, GroupId}, #state{group_id_dict=GroupDict}=State) ->
 	erlang:display({pause_discovery, RuleId}),

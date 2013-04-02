@@ -36,7 +36,6 @@
 
 %% API
 -export([start_link/0,
-	stop_discovery/0,
 	stop/0]).
 
 %% gen_server callbacks
@@ -54,6 +53,7 @@
 	get_requests,
 	discover_queue,
 	paused_queue,
+	group_id_dict,
 	discover_inprog=false,
 	timer
 }).
@@ -69,29 +69,33 @@ q(WebServerId, ParentId, PagePath, RuleId) ->
 q(_WebServerId, _ParentId, _PagePath, _RuleId, 0) -> ok;
 q(WebServerId, ParentId, PagePath, RuleId, Depth) -> gen_server:cast(?MODULE, {q, WebServerId, ParentId, PagePath, RuleId, Depth}).
 
-stop_discovery() -> gen_server:cast(?MODULE, stop_discovery).
-
-
 is_paused_or_stopped_by_rule_id(RuleId) -> gen_server:call(mydlp_discovery_manager, {is_paused_or_stopped, RuleId}).
 
-continue_paused_discovery(RuleId) -> gen_server:cast(?MODULE, push_paused_queue_to_proc).
 
 %%%%%%%%%%%%%% gen_server handles
 
 handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
 
+handle_call({stop_discovery, RuleId}, _From, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=GroupDict}=State) ->
+	NewQ = drop_items_by_rule_id(RuleId, Q),
+	NewPQ = drop_items_by_rule_id(RuleId, PQ),
+	GetT = gb_tree:empty(),
+	HeadT = gb_tree:empty(),
+	GroupDict1 = dict:erase(RuleId, GroupDict),
+	filter_discover_cache(RuleId),
+	{reply, ok, State#state{head_requests=HeadT, get_requests=GetT, discover_queue=NewQ, paused_queue=NewPQ, group_id_dict=GroupDict1}};
+
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-handle_cast({continue_discovering, RuleId}, State) ->
-	continue_paused_discovery(RuleId),
-	{noreply, State};
-
-handle_cast(push_paused_queue_to_proc, #state{discover_queue=Q, paused_queue=PQ} = State) ->
-	erlang:display("web discovery push queue"),
-	reset_discover_cache(),
-	{noreply, State#state{discover_queue=queue:join(Q, PQ), paused_queue=queue:new()}};
+handle_cast({continue_discovering, RuleId}, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=GroupDict}=State) ->
+	GroupDict1 = case dict:find(RuleId, GroupDict) of
+			{ok, {GId, _S}} -> dict:store(RuleId, {GId, disc}, GroupDict);
+			error -> ?ERROR_LOG("Unknown Rule id: "?S"", [RuleId]),
+				GroupDict
+	end,
+	{noreply, State#state{discover_queue=queue:join(Q, PQ), paused_queue=queue:new(), group_id_dict=GroupDict1}};
 
 handle_cast({q, WebServerId, ParentId, PagePath, RuleId, Depth}, #state{discover_queue=Q, discover_inprog=false} = State) ->
 	Q1 = queue:in({WebServerId, ParentId, PagePath, RuleId, Depth}, Q),
@@ -138,18 +142,13 @@ handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, head_requests=Hea
 			{noreply, State#state{discover_inprog=false}}
 	end;
 
-handle_cast(stop_discovery, State) ->
-	NewQ = queue:new(),
-	GetT = gb_tree:empty(),
-	HeadT = gb_tree:empty(),
-	{noreply, State#state{discover_queue=NewQ, get_requests=GetT, head_requests=HeadT}};
-
-handle_cast({start_by_rule_id, RuleId}, State) ->
+handle_cast({start_by_rule_id, RuleId, GroupId}, #state{group_id_dict=GroupDict}=State) ->
 	erlang:display("web disc start by id"),
-	reset_discover_cache(),
+	GroupDict1 = dict:store(RuleId, {GroupId, disc}, GroupDict),
+	filter_discover_cache(RuleId),
 	WebServers = mydlp_mnesia:get_web_servers_by_rule_id(RuleId),
 	lists:map(fun(W) -> q(W#web_server.id, W#web_server.start_path, W#web_server.rule_id) end, WebServers),
-	{noreply, State};
+	{noreply, State#state{group_id_dict=GroupDict1}};
 
 handle_cast(_Msg, State) ->
 	{noreply, State}.
@@ -189,7 +188,8 @@ stop() ->
 
 init([]) ->
 	inets:start(),
-	{ok, #state{discover_queue=queue:new(), paused_queue=queue:new(), head_requests=gb_trees:empty(), get_requests=gb_trees:empty()}}.
+	{ok, #state{discover_queue=queue:new(), paused_queue=queue:new(), group_id_dict=dict:new(),
+			head_requests=gb_trees:empty(), get_requests=gb_trees:empty()}}.
 
 terminate(_Reason, _State) ->
 	ok.
@@ -198,6 +198,18 @@ code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 
 %%%%%%%%%%%%%%%%% internal
+drop_items_by_rule_id(RuleId, Q) -> drop_items_by_rule_id(RuleId, Q, queue:new()).
+
+drop_items_by_rule_id(RuleId, Q, AccQ) ->
+	case queue:out(Q) of
+		 {{value, {_WebServerId, _ParentId, _PagePath, RuleIndex, _Depth}=Item}, Q1} -> 
+			AccQ1 = case RuleIndex of
+					RuleId -> AccQ;
+					_ -> queue:in(Item, AccQ)
+				end,
+			drop_items_by_rule_id(RuleId, Q1, AccQ1);
+		{empty, _Q2} -> AccQ
+	end.
 
 get_base_url(W) ->
 	case W of
@@ -406,6 +418,11 @@ set_discover_inprog() -> ok.
 unset_discover_inprog() ->
 	reset_discover_cache(),
 	ok.
+filter_discover_cache(RuleId) ->
+	CS = get(cache),
+	CS1 = gb_sets:filter(fun({_WS, RuleIndex}) -> RuleIndex /= RuleId end, CS),
+	put(cache, CS1), ok.
+
 
 reset_discover_cache() ->
 	put(cache, gb_sets:new()), ok.

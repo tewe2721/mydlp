@@ -485,7 +485,6 @@ call_stop_remote_storage_discovery(RuleId, Dict, IsOnDemand) ->
 			update_report_as_finished(GroupId),
 			%cancel_timer(RuleId),
 			mydlp_discover_fs:update_rule_status(RuleId, stopped),
-			%mydlp_discover_rfs:release_mount_by_rule_id(RuleId),
 			case IsOnDemand of
 				true -> dict:store(RuleId, {?USER_STOPPED, GroupId}, Dict);
 				false -> dict:store(RuleId, {?SYSTEM_STOPPED, GroupId}, Dict) end
@@ -633,4 +632,4 @@ start_discovery_scheduling() ->
 	{_D, {H, _M, _S}} = erlang:localtime(),
 	Schedules = mydlp_mnesia:get_schedules_by_hour(H),
 	gen_server:cast(?MODULE, {manage_schedules, Schedules}),
-	timer:send_after(180000, start_discovery_scheduling).
+	timer:send_after(60000, start_discovery_scheduling).
