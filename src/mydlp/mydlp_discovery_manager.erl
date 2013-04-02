@@ -87,6 +87,8 @@
 -define(EP_CONTROL_TIME, ?CFG(sync_interval)).
 -define(EP_DISC_FINISHED, "ep_finished").
 -define(EP_DISC_PAUSED, "ep_paused").
+-define(RFS_DISC_FINISHED, "rfs_finished").
+-define(RFS_DISC_PAUSED, "rfs_paused").
 
 %%%%%%%%%%%%%  API
 
@@ -223,7 +225,9 @@ handle_info({is_discovery_finished, RuleId}, #state{discovery_dict=DiscDict, tim
 		{ok, Timer} ->
 			try
 			cancel_timer(Timer),
-			Reply = mydlp_discover_fs:is_discovery_finished(RuleId),
+			%Reply = mydlp_discover_fs:is_discovery_finished(RuleId),
+			{ok, {_, GroupId}} = dict:find(RuleId, DiscDict),
+			Reply = mydlp_mysql:is_all_discovery_finished(GroupId),
 			erlang:display({is_finished_resp, Reply}),
 			case Reply of
 				true ->	 
@@ -525,7 +529,7 @@ call_continue_ep_discovery(RuleId, Dict) ->
 
 set_command_to_endpoints(RuleId, Command, Args) ->
 	case Command of
-		?START_EP_COMMAND -> mydlp_mysql:populate_discovery_endpoint_schedules(RuleId);
+		?START_EP_COMMAND -> mydlp_mysql:populate_discovery_targets(RuleId);
 		_ -> ok
 	end,
 	[Endpoints] = mydlp_mnesia:get_endpoints_by_rule_id(RuleId), 

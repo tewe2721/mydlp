@@ -120,6 +120,7 @@
 	get_rule_channel/1,
 	get_discovery_rule_ids/2,
 	update_ep_schedules/2,
+	%update_rfs_and_web_schedules/1,
 	get_endpoints_by_rule_id/1
 	]).
 
@@ -190,7 +191,7 @@
 	notification_queue,
 	remote_storage,
 	discovery_schedule,
-	discovery_endpoint_schedules,
+	discovery_targets,
 	waiting_schedules,
 	{m_user, ordered_set, 
 		fun() -> mnesia:add_table_index(m_user, un_hash) end},
@@ -271,7 +272,7 @@ get_record_fields_functional(Record) ->
 		dest -> record_info(fields, dest);
 		remote_storage -> record_info(fields, remote_storage);
 		discovery_schedule -> record_info(fields, discovery_schedule);
-		discovery_endpoint_schedules -> record_info(fields, discovery_endpoint_schedules);
+		discovery_targets -> record_info(fields, discovery_targets);
 		waiting_schedules -> record_info(fields, waiting_schedules);
 		notification -> record_info(fields, notification);
 		notification_queue -> record_info(fields, notification_queue);
@@ -452,6 +453,13 @@ update_ep_schedules({EndpointId, Ip, Username}, TargetRuleId) ->
 	AclQ = #aclq{src_addr=ClientIp, src_user_h=SrcUserH},
 	RuleIds = get_rule_ids(get_dfid(), AclQ#aclq{channel=discovery}),
 	aqc({update_ep_schedules, EndpointId, RuleIds, TargetRuleId}, nocache).
+
+%update_rfs_and_web_schedules(RuleId) ->
+%	WebServers = aqc({get_web_servers_id_by_rule_id, RuleId}, nocache),
+%	erlang:display({web, WebServers}),
+%	Rfs = aqc({get_remote_storages_id_by_rule_id, RuleId}, nocache),
+%	erlang:display({rfs, Rfs}),
+%	aqc({update_rfs_and_web_schedules, RuleId, WebServers, Rfs}, nocache).
 
 get_endpoints_by_rule_id(RuleId) -> aqc({get_endpoints_by_rule_id, RuleId}, nocache).
 
@@ -949,6 +957,13 @@ handle_query({get_web_servers_by_rule_id, RuleId}) ->
 		]),
 	?QLCE(Q);
 
+%handle_query({get_web_servers_id_by_rule_id, RuleId}) ->
+%	Q = ?QLCQ([W#web_server.id ||
+%		W <- mnesia:table(web_server),
+%		W#web_server.rule_id == RuleId
+%		]),
+%	?QLCE(Q);
+
 handle_query({get_web_server, WebServerId}) ->
 	mnesia:read(web_server, WebServerId);
 
@@ -984,6 +999,13 @@ handle_query({get_remote_storages_by_rule_id, RuleId}) ->
 		R#remote_storage.rule_id == RuleId
 		]),
 	?QLCE(Q);
+
+%handle_query({get_remote_storages_id_by_rule_id, RuleId}) ->
+%	Q = ?QLCQ([R#remote_storage.id ||
+%		R <- mnesia:table(remote_storage),
+%		R#remote_storage.rule_id ==  RuleId
+%		]),
+%	?QLCE(Q);
 
 handle_query({get_rule_id_by_web_server_id, Id}) ->
 	Q = ?QLCQ([R#web_server.rule_id ||
@@ -1050,19 +1072,23 @@ handle_query({get_discovery_rule_ids, Ip, Username}) ->
 handle_query({update_ep_schedules, EndpointId, RuleIds, TargetRuleId}) -> 
 	case lists:member(TargetRuleId, RuleIds) of
 		true ->
-			[I] = mnesia:match_object(#discovery_endpoint_schedules{id='_', rule_id=TargetRuleId, orig_id='_', eps='_'}),
-			EpList = I#discovery_endpoint_schedules.eps,
+			[I] = mnesia:match_object(#discovery_targets{id='_', rule_id=TargetRuleId, orig_id='_', targets='_'}),
+			EpList = I#discovery_targets.targets,
 			case lists:member(EndpointId, EpList) of
 				true -> ok;
-				false -> mnesia:dirty_write(I#discovery_endpoint_schedules{eps=[EndpointId|EpList]})
+				false -> mnesia:dirty_write(I#discovery_targets{channel=discovery, targets=[EndpointId|EpList]})
 			end;
 		false -> ok
 	end;
 
+%handle_query({update_rfs_and_web_schedules, RuleId, WebServers, Rfs}) ->
+%	[I] = mnesia:match_object(#discovery_targets{id='_', rule_id=RuleId, orig_id='_', targets='_'}),
+%	mnesia:dirty_write(I#discovery_targets{channel=remote_discovery, targets=[{web, WebServers},{rfs, Rfs}]});
+
 handle_query({get_endpoints_by_rule_id, RuleId}) ->
-	Q = ?QLCQ([D#discovery_endpoint_schedules.eps ||
-		D <- mnesia:table(discovery_endpoint_schedules),
-		D#discovery_endpoint_schedules.rule_id == RuleId
+	Q = ?QLCQ([D#discovery_targets.targets ||
+		D <- mnesia:table(discovery_targets),
+		D#discovery_targets.rule_id == RuleId
 	]),
 	?QLCE(Q);
 	
@@ -2050,9 +2076,9 @@ remove_rule(RI) ->
 		]),
 	DSs = ?QLCE(Q9),
 
-	Q10 = ?QLCQ([DES#discovery_endpoint_schedules.id ||	
-		DES <- mnesia:table(discovery_endpoint_schedules),
-		DES#discovery_schedule.rule_id == RI
+	Q10 = ?QLCQ([DES#discovery_targets.id ||	
+		DES <- mnesia:table(discovery_targets),
+		DES#discovery_targets.rule_id == RI
 		]),
 	DESs = ?QLCE(Q10),
 
@@ -2075,7 +2101,7 @@ remove_rule(RI) ->
 	lists:foreach(fun(Id) -> mnesia:delete({source_domain, Id}) end, SDs),
 	lists:foreach(fun(Id) -> mnesia:delete({remote_storage, Id}) end, RSs),
 	lists:foreach(fun(Id) -> mnesia:delete({discovery_schedule, Id}) end, DSs),
-	lists:foreach(fun(Id) -> mnesia:delete({discovery_endpoint_schedules, Id}) end, DESs),
+	lists:foreach(fun(Id) -> mnesia:delete({discovery_targets, Id}) end, DESs),
 	lists:foreach(fun(Id) -> mnesia:delete({waiting_schedules, Id}) end, WSCs),
 	lists:foreach(fun(Id) -> mnesia:delete({web_server, Id}) end, WSs),
 

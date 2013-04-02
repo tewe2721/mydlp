@@ -52,9 +52,10 @@
 	delete_log_requeue/1,
 	repopulate_mnesia/0,
 	save_fingerprints/2,
-	populate_discovery_endpoint_schedules/1,
+	populate_discovery_targets/1,
 	get_progress/0,
 	is_all_ep_discovery_finished/3,
+	is_all_discovery_finished/1,
 	stop/0]).
 
 %% gen_server callbacks
@@ -81,6 +82,9 @@
 	compile_progress
 }).
 
+-define(RFS_FINISHED, "rfs_finished").
+-define(WEB_FINISHED, "web_finished").
+
 %%%%%%%%%%%%% MyDLP Thrift RPC API
 
 push_log(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc, GroupId) ->
@@ -101,6 +105,9 @@ update_report_as_finished(GroupId) ->
 is_all_ep_discovery_finished(GroupId, Endpoints, Status) ->
 	gen_server:call(?MODULE, {is_all_ep_discovery_finished, GroupId, Endpoints, Status}, 60000).
 
+is_all_discovery_finished(GroupId) ->
+	gen_server:call(?MODULE, {is_all_discovery_finished, GroupId}, 60000).
+
 insert_log_requeue(LogId) -> 
 	gen_server:cast(?MODULE, {insert_log_requeue, LogId}).
 
@@ -116,8 +123,8 @@ insert_log_data(LogId, Filename, MimeType, Size, Hash, Path) ->
 save_fingerprints(DocumentId, FingerprintList) -> 
 	gen_server:call(?MODULE, {save_fingerprints, DocumentId, FingerprintList}, 60000).
 
-populate_discovery_endpoint_schedules(RuleId) ->
-	gen_server:call(?MODULE, {populate_discovery_endpoint_schedules, RuleId}, 60000).
+populate_discovery_targets(RuleId) ->
+	gen_server:call(?MODULE, {populate_discovery_targets, RuleId}, 60000).
 
 requeued(LogId) -> 
 	gen_server:cast(?MODULE, {requeued, LogId}).
@@ -237,6 +244,17 @@ handle_call({is_all_ep_discovery_finished, GroupId, Endpoints, Status}, From, St
 		end, 30000),
 	{noreply, State};
 
+handle_call({is_all_discovery_finished, GroupId}, From, State) ->
+	Worker = self(),
+	case lpsq(get_opr_with_group_id_and_status, [GroupId, ?RFS_FINISHED], 5000) of
+		{ok, [[_]]} -> 
+			case lpsq(get_opr_with_group_id_and_status, [GroupId, ?RFS_FINISHED], 5000) of
+				{ok, [[_]]} -> Worker ! {async_reply, true, From};
+				_ -> Worker ! {async_reply, false, From} end;
+		_ -> Worker ! {async_reply, false, From}
+	end,
+	{noreply, State};
+
 handle_call({save_fingerprints, DocumentId, FingerprintList}, From, State) ->
 	Worker = self(),
 	?ASYNC(fun() ->
@@ -247,7 +265,7 @@ handle_call({save_fingerprints, DocumentId, FingerprintList}, From, State) ->
 		end, 60000),
         {noreply, State};
 
-handle_call({populate_discovery_endpoint_schedules, RuleId}, _From, State) ->
+handle_call({populate_discovery_targets, RuleId}, _From, State) ->
 	{ok, Aliasses} =  psq(get_endpoint_alias),
 	IpsAndNames = get_identities(Aliasses),
 	lists:map(fun(I) -> mydlp_mnesia:update_ep_schedules(I, RuleId) end, IpsAndNames),
@@ -517,7 +535,8 @@ init([]) ->
 		{get_id_with_endpoint_alias, <<"SELECT endpointId FROM Endpoint where endpointAlias=?">>},
 		{get_ip_and_username, <<"SELECT ipAddress, username FROM EndpointStatus where endpointAlias=?">>},
 		{get_alias_with_ip, <<"SELECT endpointAlias FROM EndpointStatus where ipAddress=?">>},
-		{get_opr_with_group_id_and_ep, <<"SELECT o.id FROM OperationLog AS o WHERE groupId=? AND source=? AND messageKey=?">>}
+		{get_opr_with_group_id_and_ep, <<"SELECT o.id FROM OperationLog AS o WHERE groupId=? AND source=? AND messageKey=?">>},
+		{get_opr_with_group_id_and_status, <<"SELECT o.id FROM OperationLog AS o WHERE groupId=? AND messageKey=?">>}
 
 	]],
 
@@ -860,8 +879,8 @@ populate_discovery_schedule1([[Hour, M, Tu, W, Th, F, Sa, Su]|Rows], ScheduleInt
 populate_discovery_schedule1([], _, _, _) -> ok.
 
 populate_ep_schedules_entries(RuleId, OrigId) ->
-	Id = mydlp_mnesia:get_unique_id(discovery_endpoint_schedules),
-	I = #discovery_endpoint_schedules{id=Id, rule_id=RuleId, orig_id=OrigId, eps=[]},
+	Id = mydlp_mnesia:get_unique_id(discovery_targets),
+	I = #discovery_targets{id=Id, rule_id=RuleId, orig_id=OrigId, targets=[]},
 	mydlp_mnesia_write(I),
 	ok.
 

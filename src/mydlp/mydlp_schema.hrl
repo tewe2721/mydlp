@@ -93,12 +93,13 @@
 	group_id
 }).
 
--record(discovery_endpoint_schedules, {
-	id, 
+-record(discovery_targets, {
+	id,
+	channel, 
 	rule_id,
 	orig_id,
 	group_id,
-	eps=[]
+	targets=[]
 }).
 
 -record(m_user, {
@@ -165,6 +166,7 @@
 
 -record(web_entry, {
 	entry_id,
+	rule_id,
 	parent_id,
 	is_html,
 	size,
