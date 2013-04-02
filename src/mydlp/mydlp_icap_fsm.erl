@@ -576,6 +576,7 @@ reply(What, #state{socket=Socket, icap_request=IcapReq, http_request=HttpReq,
 				"Transfer-Complete: \r\n"
 				"Transfer-Ignore: \r\n"
 				"Transfer-Preview: *\r\n"
+				"X-Include: X-Client-IP\r\n" % X-Server-IP, X-Authenticated-User, X-Authenticated-Groups could be added also
 				"Allow: 204\r\n\r\n"];
 		{ok, true, _Reqmod_Or_Respmod} -> [
 				?ICAP_RESP_LINE_204,
