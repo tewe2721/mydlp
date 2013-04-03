@@ -85,11 +85,20 @@ handle_call(stop, _From, State) ->
 handle_call({stop_discovery, RuleId}, _From, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=GroupDict}=State) ->
 	NewQ = drop_items_by_rule_id(RuleId, Q),
 	NewPQ = drop_items_by_rule_id(RuleId, PQ),
-	GetT = gb_tree:empty(),
-	HeadT = gb_tree:empty(),
+	%GetT = gb_tree:empty(),
+	%HeadT = gb_tree:empty(),
+	case dict:find(RuleId, GroupDict) of
+		{ok, {GId, Status}} -> 
+			push_opr_log(RuleId, GId, ?DISCOVERY_FINISHED),
+			case Status of
+				disc -> mydlp_mnesia:del_web_entries_by_rule_id(RuleId);
+				paused -> mydlp_mnesia:del_web_entries_by_rule_id(RuleId)
+			end;
+		_ -> ?ERROR_LOG("mydlp_discover web: Unknown Rule Id: ["?S"]", [RuleId])
+	end,
 	GroupDict1 = dict:erase(RuleId, GroupDict),
 	filter_discover_cache(RuleId),
-	{reply, ok, State#state{head_requests=HeadT, get_requests=GetT, discover_queue=NewQ, paused_queue=NewPQ, group_id_dict=GroupDict1}};
+	{reply, ok, State#state{discover_queue=NewQ, paused_queue=NewPQ, group_id_dict=GroupDict1}};
 
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.

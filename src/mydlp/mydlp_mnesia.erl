@@ -110,6 +110,7 @@
 	get_web_entry/1,
 	add_web_entry/1,
 	web_entry_list_links/1,
+	del_web_entries_by_rule_id/1,
 	get_user_message/2,
 	get_schedules_by_hour/1,
 	get_availabilty_by_rule_id/1,
@@ -431,6 +432,8 @@ add_web_entry(Record) when is_tuple(Record) -> write(Record, nocache).
 
 web_entry_list_links(EntryId) -> aqc({web_entry_list_links, EntryId}, nocache).
 
+del_web_entries_by_rule_id(RuleId) -> aqc({del_web_entries_by_rule_id, RuleId}, nocache).
+
 get_schedules_by_hour(Day) -> aqc({get_schedules_by_hour, Day}, nocache).
 
 get_availabilty_by_rule_id(RuleId) -> aqc({get_availabilty_by_rule_id, RuleId}, nocache).
@@ -607,6 +610,8 @@ handle_result({get_web_entry, _EntryId}, {atomic, Result}) ->
 handle_result({web_entry_list_links, _EntryId}, {atomic, Result}) -> 
 	[ LP || #web_entry{entry_id={_WebServerId, LP}} <- Result ];
 
+handle_result({del_web_entries_by_rule_id, RuleId}, {atomic, Result}) ->
+	remove_reduntant_web_entries(Result, RuleId);
 
 handle_result(Query, Result) -> handle_result_common(Query, Result).
 
@@ -1236,6 +1241,12 @@ handle_query({remove_endpoint_command, EndpointId, CommandList, Args}) ->
         lists:map(fun(Command) -> Items = mnesia:match_object(#endpoint_command{id='_', endpoint_id=EndpointId, command=Command, date='_', args=Args}),
 				lists:foreach(fun(#endpoint_command{id=Id}) -> mnesia:dirty_delete({endpoint_command, Id}) end, Items)
 				end, CommandList);
+
+handle_query({del_web_entries_by_rule_id, _RuleId}) ->
+	Q = ?QLCQ([F ||
+		F <- mnesia:table(fs_entry)
+		]),
+	?QLCE(Q);
 
 handle_query(Query) -> handle_query_common(Query).
 
@@ -1981,6 +1992,15 @@ remove_reduntant_fs_entries([], _RuleId) -> ok.
 -ifdef(__MYDLP_NETWORK).
 
 %% File Group functions
+remove_reduntant_web_entries([#web_entry{entry_id={_, _, RuleId1}}=Item|Rest], RuleId) ->
+	case RuleId1 of	
+		RuleId -> mnesia:dirty_delete_object(Item);
+		_ -> ok
+	end,
+	remove_reduntant_web_entries(Rest, RuleId);
+%remove_reduntant_fs_entries([_|Rest], RuleId) ->
+%	mnesia:dirty_delete_object(Rest, RuleId);
+remove_reduntant_web_entries([], _RuleId) -> ok.
 
 remove_filters(FIs) -> lists:foreach(fun(Id) -> remove_filter(Id) end, FIs), ok.
 
