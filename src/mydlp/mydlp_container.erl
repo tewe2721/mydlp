@@ -592,17 +592,17 @@ get_printer_name(#object{prop_dict=PD} = Obj) ->
 			"Unknown printer" end.
 
 get_discovery_rule_index(#object{prop_dict=PD}) ->
-	Ret = case dict:find("rule_index", PD) of
+	case dict:find("rule_index", PD) of
 		{ok, RuleIndex} -> RuleIndex;
 		error -> none
-	end,
-
-	case Ret of 
-		none -> case dict:find("web_server_id", PD) of
-			{ok, WebServerId} -> mydlp_mnesia:get_rule_id_by_web_server_id(WebServerId);
-			error -> none end;
-		R -> R
 	end.
+
+	%case Ret of 
+	%	none -> case dict:find("web_server_id", PD) of
+	%		{ok, WebServerId} -> mydlp_mnesia:get_rule_id_by_web_server_id(WebServerId);
+	%		error -> none end;
+	%	R -> R
+	%end.
 
 get_type(#object{prop_dict=PD}) ->
 	case dict:find("type", PD) of

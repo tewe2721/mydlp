@@ -121,15 +121,19 @@ handle_cast({continue_discovering, RuleId}, State) ->
 
 handle_cast({consume, RemoteStorages, GroupId, RuleId}, #state{mount_dict=Dict}=State) ->
 	Dict1 = discover_each_mount(RemoteStorages, Dict, GroupId),
-	{ok, {MountPaths, GroupId}} = dict:find(RuleId, Dict1),
-	erlang:display({paths, MountPaths}),
-	case MountPaths of
-		[] -> Time = erlang:universaltime(),
+	case dict:find(RuleId, Dict) of
+		{ok, {MountPaths, GroupId}} -> mydlp_discover_fs:ql([{RuleId, MountPath, GroupId}|| MountPath <- MountPaths]);
+		_ ->	Time = erlang:universaltime(),
 			OprLog = #opr_log{time=Time, channel=remote_discovery, rule_id=RuleId, message_key=?RFS_DISC_FINISHED, group_id=GroupId},
-			?DISCOVERY_OPR_LOG(OprLog);
-		_ -> ok
+			?DISCOVERY_OPR_LOG(OprLog)
 	end,
-	mydlp_discover_fs:ql([{RuleId, MountPath, GroupId}|| MountPath <- MountPaths]),
+%	case MountPaths of
+%		[] -> Time = erlang:universaltime(),
+%			OprLog = #opr_log{time=Time, channel=remote_discovery, rule_id=RuleId, message_key=?RFS_DISC_FINISHED, group_id=GroupId},
+%			?DISCOVERY_OPR_LOG(OprLog);
+%		_ -> {ok, {MountPaths, GroupId}} = dict:find(RuleId, Dict1),
+%			mydlp_discover_fs:ql([{RuleId, MountPath, GroupId}|| MountPath <- MountPaths])
+%	end,
 	{noreply, State#state{mount_dict=Dict1}};
 
 handle_cast(finished, State) ->

@@ -73,8 +73,19 @@
 	timer
 }).
 
+-ifdef(__MYDLP_ENDPOINT).
+
 -define(DISCOVERY_FINISHED, "ep_finished").
 -define(DISCOVERY_PAUSED, "ep_paused").
+
+-endif.
+
+-ifdef(__MYDLP_NETWORK).
+
+-define(DISCOVERY_FINISHED, "rfs_finished").
+-define(DISCOVERY_PAUSED, "rfs_paused").
+
+-endif.
 
 is_substring(_FileName, []) -> false;
 is_substring(FileName, [Head|Tail]) ->

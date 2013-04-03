@@ -52,12 +52,13 @@
 -record(state, {
 	head_requests,
 	get_requests,
+	rule_age,
 	discover_queue,
 	paused_queue,
 	group_id_dict,
 	discover_inprog=false,
 	is_new=false,
-	timer
+	timer_dict
 }).
 
 -define(DISCOVERY_FINISHED, "web_finished").
@@ -111,7 +112,7 @@ handle_cast({q, WebServerId, ParentId, PagePath, RuleId, Depth}, #state{discover
 	Q1 = queue:in({WebServerId, ParentId, PagePath, RuleId, Depth}, Q),
 	{noreply,State#state{discover_queue=Q1}};
 
-handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=GroupDict, head_requests=HeadT, is_new=IsNew} = State) ->
+handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=GroupDict, timer_dict=TimerDict, head_requests=HeadT} = State) ->
 	case queue:out(Q) of
 		{{value, {WebServerId, ParentId, PagePath, RuleId, Depth}=Item}, Q1} ->
 			case is_paused_or_stopped_by_rule_id(RuleId, GroupDict) of
@@ -122,11 +123,12 @@ handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=Gro
 			stopped -> % rule is stopped drop item
 				consume(),
 				{noreply, State#state{discover_queue=Q1, paused_queue=PQ, is_new=false}};
-			none ->
-				try 	case is_cached({WebServerId, RuleId, PagePath}) of
+			_ ->
+				erlang:display({web_disc, PagePath}),
+				try 	case is_cached({WebServerId, PagePath, RuleId}) of
 						false -> case fetch_meta(WebServerId, PagePath) of
 							{ok, RequestId} ->
-								HeadT1 = gb_trees:enter(RequestId, {WebServerId, ParentId, PagePath, Depth}, HeadT),
+								HeadT1 = gb_trees:enter(RequestId, {WebServerId, ParentId, PagePath, RuleId, Depth}, HeadT),
 								consume(),
 								{noreply, State#state{discover_queue=Q1, head_requests=HeadT1, is_new=false}};
 							external -> consume(),
@@ -142,25 +144,24 @@ handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=Gro
 						{noreply, State#state{discover_queue=Q1, is_new=false}} end
 			end;
 		{empty, _} ->
-			GroupDict1 = case IsNew of
-					true -> GroupDict;
-					false -> mark_finished_rules(PQ, GroupDict) end,
+			cancel_all_timers(TimerDict),
+			TimerDictList = lists:map(fun({RuleId, _}) -> start_timer_for_each_rule(RuleId) end, dict:to_list(GroupDict)),
 			unset_discover_inprog(),
-			{noreply, State#state{discover_inprog=false, group_id_dict=GroupDict1, is_new=false}}
+			{noreply, State#state{discover_inprog=false, timer_dict=dict:from_list(TimerDictList), is_new=false}}
 	end;
 
 handle_cast({update_rule_status, RuleId, Status}, #state{group_id_dict=GroupDict}=State) ->
+	erlang:display({"UPDATE RULE STATUS", Status}),
 	GroupDict1 = case dict:find(RuleId, GroupDict) of
 			{ok, {GroupId, _Status}} -> dict:store(RuleId, {GroupId, Status}, GroupDict);
 			_ -> GroupDict end,
 	{noreply, State#state{group_id_dict=GroupDict1}};
 
 handle_cast({start_by_rule_id, RuleId, GroupId}, #state{group_id_dict=GroupDict}=State) ->
-	erlang:display("web disc start by id"),
 	filter_discover_cache(RuleId),
 	WebServers = mydlp_mnesia:get_web_servers_by_rule_id(RuleId),
 	GroupDict1 = case WebServers of
-			[] -> push_opr_log(RuleId, GroupId, ?DISCOVERY_FINISHED),
+			[] -> erlang:display("DAHA EN BASINDA"),push_opr_log(RuleId, GroupId, ?DISCOVERY_FINISHED),
 				GroupDict;
 			_ -> dict:store(RuleId, {GroupId, disc}, GroupDict) end,
 	lists:map(fun(W) -> q(W#web_server.id, W#web_server.start_path, W#web_server.rule_id) end, WebServers),
@@ -180,6 +181,23 @@ handle_info({http, {RequestId, Result}}, #state{head_requests=HeadT, get_request
 		"Stack trace: "?S"~nRequestId: "?S" Result: "?S"~nState: "?S"~n ",	
 		[Class, Error, erlang:get_stacktrace(), RequestId, Result, State]),
 		{noreply, State}
+	end;
+
+handle_info({is_finished, RuleId}, #state{timer_dict=TimerDict, group_id_dict=GroupDict, paused_queue=PausedQ, rule_age=RuleAge}=State) ->
+	erlang:display({"IS FINISHED", RuleId}),
+	{ok, {GroupId, _Status}} = dict:find(RuleId, GroupDict),
+	NowS = calendar:datetime_to_gregorian_seconds(calendar:universal_time()),
+	Age = gb_trees:get(RuleId, RuleAge),
+	case dict:find(RuleId, TimerDict) of
+		{ok, Timer} -> (catch timer:cancel(Timer));
+		_ -> ok end,
+	case ((NowS - Age) > 180) of
+		true -> GroupDict1 = dict:store(RuleId, {GroupId, stopped}, GroupDict),
+			TimerDict1 = dict:store(RuleId, none, TimerDict),
+			control_rule_status(RuleId, GroupId, PausedQ),
+			{noreply, State#state{group_id_dict=GroupDict1, timer_dict=TimerDict1}};
+		false -> Timer1 = timer:send_after(60000, {is_finished, RuleId}),
+			{noreply, State#state{timer_dict=dict:store(RuleId, Timer1, TimerDict)}}
 	end;
 
 handle_info({async_reply, Reply, From}, State) ->
@@ -206,7 +224,7 @@ init([]) ->
 	reset_discover_cache(),
 	inets:start(),
 	{ok, #state{discover_queue=queue:new(), paused_queue=queue:new(), group_id_dict=dict:new(),
-			head_requests=gb_trees:empty(), get_requests=gb_trees:empty()}}.
+			head_requests=gb_trees:empty(), get_requests=gb_trees:empty(), rule_age=gb_trees:empty(), timer_dict=dict:new()}}.
 
 terminate(_Reason, _State) ->
 	ok.
@@ -222,25 +240,33 @@ is_paused_or_stopped_by_rule_id(RuleId, GroupDict) ->
 		_ -> none
 	end.
 
-mark_finished_rules(PausedQ, GroupDict) ->
-	RuleStatus = dict:to_list(GroupDict),
-	erlang:display(RuleStatus),
-	DictList = lists:map(fun({RuleId, {GroupId, _Status}}) -> mark_finished_each_rule(RuleId, GroupId, PausedQ) end, RuleStatus),
-	dict:from_list(DictList).
+cancel_all_timers(TimerDict) ->
+	lists:map(fun({_RuleId, Timer}) -> case Timer of
+						none -> ok;
+						_ -> timer:cancel(Timer) end end, dict:to_list(TimerDict)).
 
-mark_finished_each_rule(RuleId, GroupId, Q) ->
+start_timer_for_each_rule(RuleId) -> {RuleId, timer:send_after(60000, {is_finished, RuleId})}.
+
+%mark_finished_rules(PausedQ, GroupDict) ->
+%	RuleStatus = dict:to_list(GroupDict),
+%	erlang:display(RuleStatus),
+%	DictList = lists:map(fun({RuleId, {GroupId, _Status}}) -> mark_each_finished_rule(RuleId, GroupId, PausedQ) end, RuleStatus),
+%	dict:from_list(DictList).
+
+control_rule_status(RuleId, GroupId, Q) ->
 	case queue:out(Q) of
-	 	{{value, {_ParentId, _FilePath, RuleIndex}}, Q1} -> 
+		{{value, {_, _, _, RuleIndex, _}}, Q1} ->
 			case RuleIndex of
 				RuleId -> push_opr_log(RuleId, GroupId, ?DISCOVERY_PAUSED),
 					{RuleId, {GroupId, paused}};
-				_ -> mark_finished_each_rule(RuleId, GroupId, Q1)
+				_ -> control_rule_status(RuleId, GroupId, Q1)
 			end;
 		{empty, _Q2} ->
 			push_opr_log(RuleId, GroupId, ?DISCOVERY_FINISHED),
 			{RuleId, {GroupId, stopped}}
 	end.
 push_opr_log(RuleId, GroupId, Message) ->
+	erlang:display("PUSH OPR LOG"),
 	Time = erlang:universaltime(),
 	OprLog = #opr_log{time=Time, channel=remote_discovery, rule_id=RuleId, message_key=Message, group_id=GroupId},
 	?DISCOVERY_OPR_LOG(OprLog).
@@ -296,8 +322,8 @@ add_link_to_path1(PagePath, LinkPath) ->
 		0 -> LinkPath;
 		I -> string:substr(PagePath, 1, I) ++ LinkPath end.
 
-web_entry(WebServerId, PagePath, ParentId) ->
-	EntryId = {WebServerId, PagePath},
+web_entry(WebServerId, PagePath, ParentId, RuleId) ->
+	EntryId = {WebServerId, PagePath, RuleId},
 	case mydlp_mnesia:get_web_entry(EntryId) of
 		none ->	E = #web_entry{entry_id=EntryId, parent_id=ParentId},
 			mydlp_mnesia:add_web_entry(E), %% bulk write may improve performance
@@ -310,8 +336,8 @@ fetch_meta(WebServerId, PagePath) ->
 		external -> external;
 		_ -> httpc:request(head, {URL, []}, [], [{sync, false}]) end.
 
-is_changed(WebServerId, PagePath, ParentId, Headers) ->
-	WE = web_entry(WebServerId, PagePath, ParentId),
+is_changed(WebServerId, PagePath, ParentId, RuleId, Headers) ->
+	WE = web_entry(WebServerId, PagePath, ParentId, RuleId),
 	IsChanged = is_changed(WE, Headers),
 	WE1 = update_web_entry(WE, Headers),
 	mydlp_mnesia:add_web_entry(WE1),
@@ -369,35 +395,40 @@ fetch_data(WebServerId, PagePath) ->
 	URL = get_url(WebServerId, PagePath),
 	httpc:request(get, {URL, []}, [], [{sync, false}]).
 
-handle_head(RequestId, {{_, 404, _}, _Headers, _}, #state{head_requests=HeadT, get_requests=_GetT} = State) ->
-	{_WebServerId, _ParentId, PagePath, _Depth} = gb_trees:get(RequestId, HeadT),
-	erlang:display({not_found, PagePath}),
-	State;
+handle_head(_RequestId, {{_, 404, _}, _Headers, _}, State) -> State;
 	
-handle_head(RequestId, {{_, 200, _}, Headers, _}, #state{head_requests=HeadT, get_requests=GetT} = State) ->
-	{WebServerId, ParentId, PagePath, Depth} = gb_trees:get(RequestId, HeadT),
+handle_head(RequestId, {{_, 200, _}, Headers, _}, #state{head_requests=HeadT, get_requests=GetT, rule_age=RuleAge} = State) ->
+	{WebServerId, ParentId, PagePath, RuleId, Depth} = gb_trees:get(RequestId, HeadT),
+	Nows = calendar:datetime_to_gregorian_seconds(calendar:universal_time()),
+	RuleAge1 = case gb_trees:is_defined(RuleId, RuleAge) of
+			false -> gb_trees:enter(RuleId, Nows, RuleAge);
+			true -> gb_trees:update(RuleId, Nows, RuleAge) end,
 	HeadT1 = gb_trees:delete(RequestId, HeadT),
-	EntryId = {WebServerId, PagePath},
-	GetT1 = case is_changed(WebServerId, PagePath, ParentId, Headers) of
+	EntryId = {WebServerId, PagePath, RuleId},
+	GetT1 = case is_changed(WebServerId, PagePath, ParentId, RuleId, Headers) of
 		true -> case has_exceed_maxobj_size(EntryId) of
 			false -> {ok, RequestId2} = fetch_data(WebServerId, PagePath),
-				gb_trees:enter(RequestId2, {WebServerId, ParentId, PagePath, Depth}, GetT);
+				gb_trees:enter(RequestId2, {WebServerId, ParentId, PagePath, RuleId, Depth}, GetT);
 			true -> GetT end;
 		false -> case is_html(EntryId) of
-			true -> discover_cached_page(EntryId, Depth - 1);
+			true -> discover_cached_page(EntryId, RuleId, Depth - 1);
 			false -> ok end,
 			GetT end,
-	State#state{head_requests=HeadT1, get_requests=GetT1}.
+	State#state{head_requests=HeadT1, get_requests=GetT1, rule_age=RuleAge1}.
 
-handle_get(RequestId, {{_, 200, _}, _Headers, Data}, #state{get_requests=GetT} = State) ->
-	{WebServerId, _ParentId, PagePath, Depth} = gb_trees:get(RequestId, GetT),
+handle_get(RequestId, {{_, 200, _}, _Headers, Data}, #state{get_requests=GetT, rule_age=RuleAge} = State) ->
+	{WebServerId, _ParentId, PagePath, RuleId, Depth} = gb_trees:get(RequestId, GetT),
+	Nows = calendar:datetime_to_gregorian_seconds(calendar:universal_time()),
+	RuleAge1 = case gb_trees:is_defined(RuleId, RuleAge) of
+			false -> gb_trees:enter(RuleId, Nows, RuleAge);
+			true -> gb_trees:update(RuleId, Nows, RuleAge) end,
 	GetT1 = gb_trees:delete(RequestId, GetT),
-	EntryId = {WebServerId, PagePath},
+	EntryId = {WebServerId, PagePath, RuleId},
 	discover_item(EntryId, Data),
 	case is_html(EntryId) of 
 		true -> discover_links(EntryId, Data, Depth - 1);
 		false -> ok end,
-	State#state{get_requests=GetT1}.
+	State#state{get_requests=GetT1, rule_age=RuleAge1}.
 
 get_fn(WebServerId, PagePath) -> 
 	URL = get_url(WebServerId, PagePath),
@@ -412,11 +443,12 @@ get_fn(WebServerId, PagePath) ->
 				end
 		end.
 
-discover_item({WebServerId, PagePath}, Data) ->
+discover_item({WebServerId, PagePath, RuleId}, Data) ->
 	try	timer:sleep(20),
 		{ok, ObjId} = mydlp_container:new(),
 		ok = mydlp_container:setprop(ObjId, "channel", "remote_discovery"),
 		ok = mydlp_container:setprop(ObjId, "web_server_id", WebServerId),
+		ok = mydlp_container:setprop(ObjId, "rule_index", RuleId),
 		ok = mydlp_container:setprop(ObjId, "page_path", PagePath),
 		ok = mydlp_container:setprop(ObjId, "filename_unicode", get_fn(WebServerId, PagePath)),
 		ok = mydlp_container:push(ObjId, Data),
@@ -444,20 +476,20 @@ has_exceed_maxobj_size(EntryId) ->
 		_ -> ( W#web_entry.size > ?CFG(maximum_object_size) ) end.
 
 discover_links(_, _, 0) -> ok;
-discover_links({_WebServerId, _PagePath} = EntryId, Data, Depth) ->
+discover_links({_WebServerId, _PagePath, _RuleId} = EntryId, Data, Depth) ->
 	Links = mydlp_tc:extract_links(Data),
 	schedule_links(Links, EntryId, Depth).
 
 schedule_links([L|Links], EntryId, Depth) when is_binary(L) ->
 	schedule_links([binary_to_list(L)|Links],  EntryId, Depth);
-schedule_links([L|Links], {WebServerId, PagePath} = EntryId, Depth) when is_list(L) ->
+schedule_links([L|Links], {WebServerId, PagePath, RuleId} = EntryId, Depth) when is_list(L) ->
 	LPath = add_link_to_path(WebServerId, PagePath, L),
-	q(WebServerId, EntryId, LPath, Depth),
+	q(WebServerId, EntryId, LPath, RuleId, Depth),
 	schedule_links(Links, EntryId, Depth);
 schedule_links([], _, _) -> ok.
 
-discover_cached_page(_, 0) -> ok;
-discover_cached_page({_WebServerId, _PagePath} = EntryId, Depth) ->
+discover_cached_page(_, _, 0) -> ok;
+discover_cached_page({_WebServerId, _PagePath, RuleId} = EntryId, RuleId, Depth) ->
 	Links = mydlp_mnesia:web_entry_list_links(EntryId),
 	schedule_links(Links, EntryId, Depth).
 
@@ -468,7 +500,7 @@ unset_discover_inprog() ->
 	ok.
 filter_discover_cache(RuleId) ->
 	CS = get(cache),
-	CS1 = gb_sets:filter(fun({_, RuleIndex, _}) -> RuleIndex /= RuleId end, CS),
+	CS1 = gb_sets:filter(fun({_, _, RuleIndex}) -> RuleIndex /= RuleId end, CS),
 	put(cache, CS1), ok.
 
 
