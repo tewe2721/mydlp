@@ -150,7 +150,7 @@
 	id,
 	endpoint_id,
 	command,
-	args,
+	args=[],
 	date
 }).
 

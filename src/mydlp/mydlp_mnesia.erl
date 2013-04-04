@@ -95,6 +95,7 @@
 	remove_old_user_address/0,
 	get_user_from_address/1,
 	save_endpoint_command/3,
+	save_endpoint_command/2,
 	remove_old_endpoint_command/0,
 	remove_endpoint_command/3,
 	get_endpoint_commands/1,
@@ -397,6 +398,8 @@ get_user_from_address(IpAddress) -> aqc({get_user_from_address, IpAddress}, noca
 
 save_endpoint_command(EndpointId, Command, Args) -> aqc({save_endpoint_command, EndpointId, Command, Args}, nocache, dirty).
 
+save_endpoint_command(EndpointId, Command) -> aqc({save_endpoint_command, EndpointId, Command}, nocache, dirty).
+
 remove_old_endpoint_command() -> aqc(remove_old_endpoint_command, nocache, dirty).
 
 remove_endpoint_command(EndpointId, Command, Args) -> aqc({remove_endpoint_command, EndpointId, Command, Args}, nocache, dirty).
@@ -595,7 +598,11 @@ handle_result({get_rule_channel, _}, {atomic, Result}) ->
 		[R] -> R end;
 
 handle_result({get_endpoint_commands, _EntryId}, {atomic, Result}) -> 
-	[ {command, C, Args} || #endpoint_command{command=C, args=Args} <- Result ];
+	lists:map(fun(#endpoint_command{command=C, args=Args}) ->
+			case C of
+				{set_enc_key, _} -> {command, C};
+				_ -> {command, C, Args} end end , Result);
+	%[ {command, C, Args} || #endpoint_command{command=C, args=Args} <- Result ];
 
 handle_result({get_matchers, _Source}, {atomic, Result}) -> lists:usort(Result);
 
@@ -1240,13 +1247,29 @@ handle_query({save_endpoint_command, EndpointId, Command, [{ruleId, RuleId}, {gr
 		_Else -> ok end,
 	ok;
 
+handle_query({save_endpoint_command, EndpointId, Command}) ->
+	{MegaSecs, Secs, _MicroSecs} = erlang:now(),
+        Born = 1000000*MegaSecs + Secs,
+        L = mnesia:match_object(#endpoint_command{id='_', endpoint_id=EndpointId, command=Command, date='_'}),
+	EC = case L of
+		[] -> 	Id = get_unique_id(endpoint_command),
+			#endpoint_command{id=Id, endpoint_id=EndpointId, command=Command, date=Born};
+		[E] ->	E#endpoint_command{date=Born} end,
+	mnesia:dirty_write(EC),
+	ok;
+
 handle_query({get_endpoint_commands, EndpointId}) ->
         Items = mnesia:match_object(#endpoint_command{id='_', endpoint_id=EndpointId, command='_', date='_', args='_'}),
 	Time=erlang:universaltime(),
-	lists:foreach(fun(#endpoint_command{id=Id, args=Args}) -> 
-		[{ruleId, RuleId}, {groupId, GroupId}] = Args,
-		OprLog = #opr_log{time=Time, channel=discovery, rule_id=RuleId, message_key="command_sent", group_id=GroupId},
-		?DISCOVERY_OPR_LOG(OprLog),
+	erlang:display(get_endpoint_command),
+	lists:foreach(fun(#endpoint_command{command=Command, id=Id, args=Args}) -> 
+		erlang:display({command, Command}),
+		case Command of
+			{set_enc_key, _} -> erlang:display("set_enckey"), ok;
+			_ ->
+				[{ruleId, RuleId}, {groupId, GroupId}] = Args,
+				OprLog = #opr_log{time=Time, channel=discovery, rule_id=RuleId, message_key="command_sent", group_id=GroupId},
+				?DISCOVERY_OPR_LOG(OprLog) end,
 		mnesia:dirty_delete({endpoint_command, Id}) end, Items),
 	Items;
 

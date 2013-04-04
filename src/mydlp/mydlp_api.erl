@@ -3069,7 +3069,7 @@ use_client_policy(CDBBin) ->
 	ok.
 
 apply_cdbobj(L) when is_list(L) -> lists:foreach(fun(C) -> apply_cdbobj(C) end, L); % TODO: Updating mnesia rule table before commands should be guarented.
-apply_cdbobj({{rule_tables, RuleTables}, {mc, MCModule}, {items, ItemDump}}) ->
+apply_cdbobj({{rule_tables, RuleTables}, {mc, MCModule}, {items, ItemDump}}=PolicyObj) ->
 	mydlp_mnesia:truncate_nondata(),
 	( catch mydlp_mnesia:write(ItemDump) ),
 	( catch mydlp_mnesia:write([ MCModule ]) ),
