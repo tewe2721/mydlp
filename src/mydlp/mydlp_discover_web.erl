@@ -57,7 +57,6 @@
 	paused_queue,
 	group_id_dict,
 	discover_inprog=false,
-	is_new=false,
 	timer_dict
 }).
 
@@ -74,6 +73,8 @@ q(WebServerId, ParentId, PagePath, RuleId) ->
 
 q(_WebServerId, _ParentId, _PagePath, _RuleId, 0) -> ok;
 q(WebServerId, ParentId, PagePath, RuleId, Depth) -> gen_server:cast(?MODULE, {q, WebServerId, ParentId, PagePath, RuleId, Depth}).
+
+%pause_discovery(RuleId) -> gen_server:cast(?MODULE, {pause_discovery, RuleId}).
 
 update_rule_status(RuleId, Status) -> gen_server:cast(?MODULE, {update_rule_status, RuleId, Status}).
 
@@ -103,13 +104,28 @@ handle_call({stop_discovery, RuleId}, _From, #state{discover_queue=Q, paused_que
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-handle_cast({continue_discovering, RuleId}, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=GroupDict}=State) ->
-	GroupDict1 = case dict:find(RuleId, GroupDict) of
-			{ok, {GId, _S}} -> dict:store(RuleId, {GId, disc}, GroupDict);
-			error -> ?ERROR_LOG("Unknown Rule id: "?S"", [RuleId]),
-				GroupDict
-	end,
-	{noreply, State#state{discover_queue=queue:join(Q, PQ), paused_queue=queue:new(), group_id_dict=GroupDict1}};
+%handle_cast({pause_discovery, RuleId}, #state{timer_dict=TimerDict, group_id_dict=GroupDict}) ->
+%	case dict:find(RuleId, TimerDict) of
+%		{ok, Timer} -> timer:cancel(Timer),
+%				TimerDict1 = dict:store(RuleId, none, TimerDict),
+%				GroupDict1 = case dict:find(RuleId, GroupDict) of
+%						{ok, {GId, _Status}} -> dict:store(RuleId, {GId, paused});
+%						_ -> GroupDict end,
+%				{noreply, State#state{timer_dict=TimerDict1, group_id_dict=GroupDict}};
+%		_ -> {noreply, State};
+%	end;
+
+handle_cast({continue_discovering, RuleId}, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=GroupDict, timer_dict=TimerDict}=State) ->
+	erlang:display({"web_continue_discovering", queue:len(PQ)}),
+	case dict:find(RuleId, GroupDict) of
+		{ok, {GId, _S}} -> GroupDict1 = dict:store(RuleId, {GId, disc}, GroupDict),
+					{ok, Timer} = timer:send_after(60000, {is_finished, RuleId}),
+					TimerDict1 = dict:store(RuleId, Timer, TimerDict),
+					consume(),
+					{noreply, State#state{discover_queue=queue:join(Q, PQ), paused_queue=queue:new(), group_id_dict=GroupDict1, timer_dict=TimerDict1}};
+		_ -> ?ERROR_LOG("Unknown Rule id: "?S"", [RuleId]),
+			{noreply, State}
+	end;
 
 handle_cast({q, WebServerId, ParentId, PagePath, RuleId, Depth}, #state{discover_queue=Q, discover_inprog=false} = State) ->
 	Q1 = queue:in({WebServerId, ParentId, PagePath, RuleId, Depth}, Q),
@@ -121,17 +137,18 @@ handle_cast({q, WebServerId, ParentId, PagePath, RuleId, Depth}, #state{discover
 	Q1 = queue:in({WebServerId, ParentId, PagePath, RuleId, Depth}, Q),
 	{noreply,State#state{discover_queue=Q1}};
 
-handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=GroupDict, timer_dict=TimerDict, head_requests=HeadT} = State) ->
+handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=GroupDict, head_requests=HeadT} = State) ->
 	case queue:out(Q) of
 		{{value, {WebServerId, ParentId, PagePath, RuleId, Depth}=Item}, Q1} ->
 			case is_paused_or_stopped_by_rule_id(RuleId, GroupDict) of
 			paused -> % rule is paused push the item paused_queue
+				erlang:display(paused_web_disc),
 				PQ1 = queue:in(Item, PQ),
 				consume(),
-				{noreply, State#state{discover_queue=Q1, paused_queue=PQ1, is_new=false}};
+				{noreply, State#state{discover_queue=Q1, paused_queue=PQ1}};
 			stopped -> % rule is stopped drop item
 				consume(),
-				{noreply, State#state{discover_queue=Q1, paused_queue=PQ, is_new=false}};
+				{noreply, State#state{discover_queue=Q1, paused_queue=PQ}};
 			_ ->
 				erlang:display({web_disc, PagePath}),
 				try 	case is_cached({WebServerId, PagePath, RuleId}) of
@@ -139,42 +156,47 @@ handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=Gro
 							{ok, RequestId} ->
 								HeadT1 = gb_trees:enter(RequestId, {WebServerId, ParentId, PagePath, RuleId, Depth}, HeadT),
 								consume(),
-								{noreply, State#state{discover_queue=Q1, head_requests=HeadT1, is_new=false}};
+								{noreply, State#state{discover_queue=Q1, head_requests=HeadT1}};
 							external -> consume(),
-								{noreply, State#state{discover_queue=Q1, is_new=false}} end;
+								{noreply, State#state{discover_queue=Q1}} end;
 						true -> consume(),
-							{noreply, State#state{discover_queue=Q1, is_new=false}} end
+							{noreply, State#state{discover_queue=Q1}} end
 				catch Class:Error ->
 					?ERROR_LOG("Web: Discover Queue Consume: Error occured: "
 							"Class: ["?S"]. Error: ["?S"].~n"
 							"Stack trace: "?S"~nWebServerId: "?S" PagePath: "?S"~nState: "?S"~n ",	
 							[Class, Error, erlang:get_stacktrace(), WebServerId, PagePath, State]),
 						consume(),
-						{noreply, State#state{discover_queue=Q1, is_new=false}} end
+						{noreply, State#state{discover_queue=Q1}} end
 			end;
 		{empty, _} ->
-			cancel_all_timers(TimerDict),
-			TimerDictList = lists:map(fun({RuleId, _}) -> start_timer_for_each_rule(RuleId) end, dict:to_list(GroupDict)),
 			unset_discover_inprog(),
-			{noreply, State#state{discover_inprog=false, timer_dict=dict:from_list(TimerDictList), is_new=false}}
+			{noreply, State#state{discover_inprog=false}}
 	end;
 
-handle_cast({update_rule_status, RuleId, Status}, #state{group_id_dict=GroupDict}=State) ->
+handle_cast({update_rule_status, RuleId, Status}, #state{group_id_dict=GroupDict, timer_dict=TimerDict}=State) ->
 	erlang:display({"UPDATE RULE STATUS", Status}),
 	GroupDict1 = case dict:find(RuleId, GroupDict) of
 			{ok, {GroupId, _Status}} -> dict:store(RuleId, {GroupId, Status}, GroupDict);
 			_ -> GroupDict end,
-	{noreply, State#state{group_id_dict=GroupDict1}};
+	TimerDict1 = case dict:find(RuleId, TimerDict) of
+			{ok, Timer} -> timer:cancel(Timer),
+					dict:store(RuleId, none, TimerDict);
+			_ -> TimerDict end,
+	{noreply, State#state{group_id_dict=GroupDict1, timer_dict=TimerDict1}};
 
-handle_cast({start_by_rule_id, RuleId, GroupId}, #state{group_id_dict=GroupDict}=State) ->
+handle_cast({start_by_rule_id, RuleId, GroupId}, #state{group_id_dict=GroupDict, timer_dict=TimerDict}=State) ->
 	filter_discover_cache(RuleId),
 	WebServers = mydlp_mnesia:get_web_servers_by_rule_id(RuleId),
-	GroupDict1 = case WebServers of
-			[] -> erlang:display("DAHA EN BASINDA"),push_opr_log(RuleId, GroupId, ?DISCOVERY_FINISHED),
-				GroupDict;
-			_ -> dict:store(RuleId, {GroupId, disc}, GroupDict) end,
-	lists:map(fun(W) -> q(W#web_server.id, W#web_server.start_path, W#web_server.rule_id) end, WebServers),
-	{noreply, State#state{group_id_dict=GroupDict1, is_new=true}};
+	case WebServers of
+		[] -> push_opr_log(RuleId, GroupId, ?DISCOVERY_FINISHED),
+			{noreply, State};
+		_ -> GroupDict1 = dict:store(RuleId, {GroupId, disc}, GroupDict),
+			{ok, Timer} = timer:send_after(60000, {is_finished, RuleId}),
+			TimerDict1 = dict:store(RuleId, Timer, TimerDict),
+			lists:map(fun(W) -> q(W#web_server.id, W#web_server.start_path, W#web_server.rule_id) end, WebServers),
+			{noreply, State#state{group_id_dict=GroupDict1, timer_dict=TimerDict1}}
+	end;
 
 handle_cast(_Msg, State) ->
 	{noreply, State}.
@@ -200,12 +222,14 @@ handle_info({is_finished, RuleId}, #state{timer_dict=TimerDict, group_id_dict=Gr
 	case dict:find(RuleId, TimerDict) of
 		{ok, Timer} -> (catch timer:cancel(Timer));
 		_ -> ok end,
+	R = NowS - Age,
+	erlang:display({res, R}),
 	case ((NowS - Age) > 180) of
 		true -> GroupDict1 = dict:store(RuleId, {GroupId, stopped}, GroupDict),
 			TimerDict1 = dict:store(RuleId, none, TimerDict),
 			control_rule_status(RuleId, GroupId, PausedQ),
 			{noreply, State#state{group_id_dict=GroupDict1, timer_dict=TimerDict1}};
-		false -> Timer1 = timer:send_after(60000, {is_finished, RuleId}),
+		false -> {ok, Timer1} = timer:send_after(60000, {is_finished, RuleId}),
 			{noreply, State#state{timer_dict=dict:store(RuleId, Timer1, TimerDict)}}
 	end;
 
@@ -249,12 +273,21 @@ is_paused_or_stopped_by_rule_id(RuleId, GroupDict) ->
 		_ -> none
 	end.
 
-cancel_all_timers(TimerDict) ->
-	lists:map(fun({_RuleId, Timer}) -> case Timer of
-						none -> ok;
-						_ -> timer:cancel(Timer) end end, dict:to_list(TimerDict)).
+%cancel_all_timers(TimerDict) ->
+%	lists:map(fun({RuleId, Timer}) -> case Timer of
+%						none -> ok;
+%						_ -> erlang:display({timer_canceled, RuleId}), timer:cancel(Timer) end end, dict:to_list(TimerDict)).
 
-start_timer_for_each_rule(RuleId) -> {RuleId, timer:send_after(60000, {is_finished, RuleId})}.
+%start_timer_for_each_rule(RuleId) -> 
+%	erlang:display({timer_created, RuleId}),
+%	Timer = case timer:send_after(60000, {is_finished, RuleId}) of
+%		{ok, TRef} -> TRef;
+%		{error, _} = Error -> ?ERROR_LOG("Can not create timer. Reason: "?S, [Error]), none end,
+%	{RuleId, Timer}.
+%	case dict:find(RuleId, TimerDict) of
+%		{ok, Timer} -> {RuleId, Timer};
+%		_ -> {RuleId, timer:send_after(60000, {is_finished, RuleId})}
+%	end.
 
 %mark_finished_rules(PausedQ, GroupDict) ->
 %	RuleStatus = dict:to_list(GroupDict),
@@ -400,6 +433,12 @@ update_web_entry(WE, [{"cache-control",CacheS}| Headers]) ->
 update_web_entry(WE, [_|Headers]) -> update_web_entry(WE, Headers);
 update_web_entry(WE, []) -> WE.
 
+update_rule_age(RuleId, RuleAge) ->
+	Nows = calendar:datetime_to_gregorian_seconds(calendar:universal_time()),
+	case gb_trees:is_defined(RuleId, RuleAge) of
+		false -> gb_trees:enter(RuleId, Nows, RuleAge);
+		true -> gb_trees:update(RuleId, Nows, RuleAge) end.
+	
 fetch_data(WebServerId, PagePath) ->
 	URL = get_url(WebServerId, PagePath),
 	httpc:request(get, {URL, []}, [], [{sync, false}]).
@@ -408,10 +447,7 @@ handle_head(_RequestId, {{_, 404, _}, _Headers, _}, State) -> State;
 	
 handle_head(RequestId, {{_, 200, _}, Headers, _}, #state{head_requests=HeadT, get_requests=GetT, rule_age=RuleAge} = State) ->
 	{WebServerId, ParentId, PagePath, RuleId, Depth} = gb_trees:get(RequestId, HeadT),
-	Nows = calendar:datetime_to_gregorian_seconds(calendar:universal_time()),
-	RuleAge1 = case gb_trees:is_defined(RuleId, RuleAge) of
-			false -> gb_trees:enter(RuleId, Nows, RuleAge);
-			true -> gb_trees:update(RuleId, Nows, RuleAge) end,
+	RuleAge1 = update_rule_age(RuleId, RuleAge),
 	HeadT1 = gb_trees:delete(RequestId, HeadT),
 	EntryId = {WebServerId, PagePath, RuleId},
 	GetT1 = case is_changed(WebServerId, PagePath, ParentId, RuleId, Headers) of
@@ -427,10 +463,7 @@ handle_head(RequestId, {{_, 200, _}, Headers, _}, #state{head_requests=HeadT, ge
 
 handle_get(RequestId, {{_, 200, _}, _Headers, Data}, #state{get_requests=GetT, rule_age=RuleAge} = State) ->
 	{WebServerId, _ParentId, PagePath, RuleId, Depth} = gb_trees:get(RequestId, GetT),
-	Nows = calendar:datetime_to_gregorian_seconds(calendar:universal_time()),
-	RuleAge1 = case gb_trees:is_defined(RuleId, RuleAge) of
-			false -> gb_trees:enter(RuleId, Nows, RuleAge);
-			true -> gb_trees:update(RuleId, Nows, RuleAge) end,
+	RuleAge1 = update_rule_age(RuleId, RuleAge),
 	GetT1 = gb_trees:delete(RequestId, GetT),
 	EntryId = {WebServerId, PagePath, RuleId},
 	discover_item(EntryId, Data),

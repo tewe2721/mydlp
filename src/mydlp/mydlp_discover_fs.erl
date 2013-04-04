@@ -152,22 +152,21 @@ handle_call(stop, _From, State) ->
 
 handle_call({stop_discovery_by_rule_id, RuleId}, _From, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=GroupDict}=State) ->
 	erlang:display({stop_discovery, RuleId}),
-	Q1 = drop_items_by_rule_id(RuleId, Q),
-	PQ1 = drop_items_by_rule_id(RuleId, PQ),
 	case dict:find(RuleId, GroupDict) of
 		{ok, {GId, Status}} ->
+			Q1 = drop_items_by_rule_id(RuleId, Q),
+			PQ1 = drop_items_by_rule_id(RuleId, PQ),
 			push_opr_log(RuleId, GId, ?DISCOVERY_FINISHED),
 			case Status of
 				disc -> mydlp_mnesia:del_fs_entries_by_rule_id(RuleId);
 				paused -> mydlp_mnesia:del_fs_entries_by_rule_id(RuleId);
 				_ -> ok
-			end;
-		_ -> ?ERROR_LOG("Unknown Rule Id: ["?S"]", [RuleId])
-	end,
-	GroupDict1 = dict:erase(RuleId, GroupDict),
-	erlang:display(dict:to_list(GroupDict1)),
-	filter_discover_cache(RuleId),
-	{reply, ok, State#state{discover_queue=Q1, paused_queue=PQ1, group_id_dict=GroupDict1}};
+			end,
+			GroupDict1 = dict:erase(RuleId, GroupDict),
+			filter_discover_cache(RuleId),
+			{reply, ok, State#state{discover_queue=Q1, paused_queue=PQ1, group_id_dict=GroupDict1}};
+		_ -> {reply, ok, State}
+	end;
 
 handle_call({is_discovery_finished, RuleId}, _From, #state{discover_queue=Q, paused_queue=PQ}=State) ->
 	Reply = is_finished_by_rule_id(RuleId, Q),
@@ -182,7 +181,7 @@ handle_call(_Msg, _From, State) ->
 handle_cast({update_rule_status, RuleId, Status}, #state{group_id_dict=GroupDict}=State) ->
 	GroupDict1 = case dict:find(RuleId, GroupDict) of
 			{ok, {GroupId, _}} -> dict:store(RuleId, {GroupId, Status}, GroupDict);
-			error -> ?ERROR_LOG("Unknown RuleId: "?S"", [RuleId]), GroupDict
+			error -> GroupDict
 	end,
 	{noreply, State#state{group_id_dict=GroupDict1}};
 

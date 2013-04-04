@@ -248,7 +248,7 @@ handle_call({is_all_discovery_finished, GroupId}, From, State) ->
 	Worker = self(),
 	case lpsq(get_opr_with_group_id_and_status, [GroupId, ?RFS_FINISHED], 5000) of
 		{ok, [[_]]} -> 
-			case lpsq(get_opr_with_group_id_and_status, [GroupId, ?RFS_FINISHED], 5000) of
+			case lpsq(get_opr_with_group_id_and_status, [GroupId, ?WEB_FINISHED], 5000) of
 				{ok, [[_]]} -> Worker ! {async_reply, true, From};
 				_ -> Worker ! {async_reply, false, From} end;
 		_ -> Worker ! {async_reply, false, From}

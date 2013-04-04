@@ -121,7 +121,7 @@ handle_cast({continue_discovering, RuleId}, State) ->
 
 handle_cast({consume, RemoteStorages, GroupId, RuleId}, #state{mount_dict=Dict}=State) ->
 	Dict1 = discover_each_mount(RemoteStorages, Dict, GroupId),
-	case dict:find(RuleId, Dict) of
+	case dict:find(RuleId, Dict1) of
 		{ok, {MountPaths, GroupId}} -> mydlp_discover_fs:ql([{RuleId, MountPath, GroupId}|| MountPath <- MountPaths]);
 		_ ->	Time = erlang:universaltime(),
 			OprLog = #opr_log{time=Time, channel=remote_discovery, rule_id=RuleId, message_key=?RFS_DISC_FINISHED, group_id=GroupId},
