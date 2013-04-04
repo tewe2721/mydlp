@@ -1,4 +1,4 @@
-%%
+%%%
 %%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@medra.com.tr>
 %%%
 %%%--------------------------------------------------------------------------
@@ -72,6 +72,36 @@
 	domain_name
 }).
 
+-record(remote_storage, {
+	id,
+	rule_id,
+	type,
+	details
+}).
+
+-record(discovery_schedule, {
+	id,
+	rule_id,
+	schedule_hour, 
+	details,
+	available_intervals
+}).
+
+-record(waiting_schedules, {
+	id,
+	rule_id,
+	group_id
+}).
+
+-record(discovery_targets, {
+	id,
+	channel, 
+	rule_id,
+	orig_id,
+	group_id,
+	targets=[]
+}).
+
 -record(m_user, {
 	id,
 	rule_id,
@@ -120,7 +150,29 @@
 	id,
 	endpoint_id,
 	command,
+	args,
 	date
+}).
+
+-record(web_server, {
+	id,
+	rule_id,
+	proto,
+	address,
+	port,
+	dig_depth,
+	start_path
+}).
+
+-record(web_entry, {
+	entry_id,
+	rule_id,
+	parent_id,
+	is_html,
+	size,
+	maxage,
+	expires,
+	last_modified
 }).
 
 -endif.
@@ -134,14 +186,6 @@
 	table=[]
 }).
 
--record(fs_entry, {
-	file_id,
-	entry_id,
-	parent_id,
-	file_size,
-	last_modified
-}).
-
 -endif.
 
 -record(config, {
@@ -149,6 +193,14 @@
 	filter_id,
 	key,
 	value
+}).
+
+-record(fs_entry, {
+	file_id,
+	entry_id,
+	parent_id,
+	file_size,
+	last_modified
 }).
 
 -record(usb_device, {

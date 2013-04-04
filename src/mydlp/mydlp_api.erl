@@ -977,8 +977,8 @@ get_port_resp(Port, Ret, Timeout) ->
 	receive
 		{ Port, {data, Data}} -> get_port_resp(Port, [Data|Ret]);
 		{ Port, {exit_status, 0}} -> {ok, list_to_binary(lists:reverse(Ret))};
-		{ Port, {exit_status, RetCode}} -> { error, {retcode, RetCode} }
-	after Timeout -> { error, port_timeout }
+		{ Port, {exit_status, RetCode}} -> { error, {retcode, RetCode, list_to_binary(lists:reverse(Ret))} }
+	after Timeout -> { error, { port_timeout , list_to_binary(lists:reverse(Ret)) } }
 	end.
 
 get_port_resp(Port) ->
@@ -1420,6 +1420,7 @@ str_channel(web) -> "Web";
 str_channel(mail) -> "Mail";
 str_channel(removable) -> "Removable Storage";
 str_channel(printer) -> "Printer";
+str_channel(remote_discovery) -> "Remote Discovery";
 str_channel(discovery) -> "Discovery";
 str_channel(api) -> "API";
 str_channel(_) -> "Unknown".
@@ -1495,6 +1496,7 @@ get_message(web, log) -> "Transfer of sensitive information to web has been logg
 get_message(mail, log) -> "Transfer of e-mail containing sensitive information has been logged.";
 get_message(removable, log) -> "Transfer of file containing sensitive information to a removable storage device on endpoint has been logged.";
 get_message(discovery, log) -> "A file containing sensitive information on endpoint has been discovered and logged.";
+get_message(remote_discovery, log) -> "A file containing sensitive information on remote has been discovered and logged.";
 get_message(printer, log) -> "Printing of document containing sensitive information on endpoint has been logged.";
 get_message(api, log) -> "Specified file should not be blocked in response to API query and logged query.";
 get_message(web, quarantined) -> "Transfer of sensitive information to web has been blocked and a copy of file has been quarantined at central data store.";
@@ -1507,6 +1509,7 @@ get_message(web, archive) -> "Transfer of sensitive information to web has been 
 get_message(mail, archive) -> "Transfer of e-mail containing sensitive information has been logged and a copy of file has been archived in central data store.";
 get_message(removable, archive) -> "Transfer of file containing sensitive information to a removable storage devicea on endpoint has been logged and a copy has been archived in central data store.";
 get_message(discovery, archive) -> "A file containing sensitive information on endpoint has been discovered, logged and a copy has been archived in central data store.";
+get_message(remote_discovery, archive) -> "A file containing sensitive information on remote has been discovered, logged and a copy has been archived in central data store.";
 get_message(printer, archive) -> "Printing of document containing sensitive information on endpoint has been logged and a copy has been archived in data store.";
 get_message(api, archive) -> "Specified file should not be blocked in response to API query, logged query and a copy of file has been archived in central data store.";
 get_message(discovery, {custom, {seclore, pass, _, _}}) -> "A file containing sensitive information has been discovered, logged and protected with Seclore FileSecure IRM.";
@@ -3035,12 +3038,13 @@ str_to_ip(IpStr) ->
 %%-------------------------------------------------------------------------
 %%%%%%%%%%%%% TODO: beware of race condifitons when compile_customer had been called.
 generate_client_policy(EndpointId, IpAddr, UserH, RevisionId) -> 
-	RuleTables = mydlp_acl:get_remote_rule_tables(IpAddr, UserH), 
+	RuleTables = mydlp_acl:get_remote_rule_tables(IpAddr, UserH),
 	ItemDump = mydlp_mnesia:dump_client_tables(),
 	MCModule = mydlp_mnesia:get_remote_mc_module(mydlp_mnesia:get_dfid(), IpAddr, UserH),
 	CDBObj = {{rule_tables, RuleTables}, {mc, MCModule}, {items, ItemDump}},
 	CDBHash = erlang:phash2(CDBObj),
 	Commands = mydlp_mnesia:get_endpoint_commands(EndpointId),
+	erlang:display({commands, Commands}),
 	case {CDBHash, Commands} of
 		{RevisionId, []} -> <<"up-to-date">>;
 		{RevisionId, Commands} -> erlang:term_to_binary(Commands, [compressed]);
@@ -3064,8 +3068,8 @@ use_client_policy(CDBBin) ->
 	end,
 	ok.
 
-apply_cdbobj(L) when is_list(L) -> lists:foreach(fun(C) -> apply_cdbobj(C) end, L);
-apply_cdbobj({{rule_tables, RuleTables}, {mc, MCModule}, {items, ItemDump}} = PolicyObj) ->
+apply_cdbobj(L) when is_list(L) -> lists:foreach(fun(C) -> apply_cdbobj(C) end, L); % TODO: Updating mnesia rule table before commands should be guarented.
+apply_cdbobj({{rule_tables, RuleTables}, {mc, MCModule}, {items, ItemDump}}) ->
 	mydlp_mnesia:truncate_nondata(),
 	( catch mydlp_mnesia:write(ItemDump) ),
 	( catch mydlp_mnesia:write([ MCModule ]) ),
@@ -3080,13 +3084,15 @@ apply_cdbobj({{rule_tables, RuleTables}, {mc, MCModule}, {items, ItemDump}} = Po
 	mydlp_container:schedule_confupdate(),
 	ok;
 apply_cdbobj({command, L}) when is_list(L) -> lists:foreach(fun(C) -> apply_cdbobj({command, C}) end, L);
-apply_cdbobj({command, stop_discovery}) ->
-	?ASYNC0(fun() -> mydlp_discover_fs:stop_discovery() end), ok;
-apply_cdbobj({command, schedule_discovery}) ->
-	?ASYNC0(fun() -> mydlp_discover_fs:schedule_discovery() end), ok;
-apply_cdbobj({command, {set_enc_key, EncKey}}) when is_binary(EncKey), size(EncKey) == 64 ->
-	?ASYNC0(fun() -> mydlp_sync:set_enc_key(EncKey), mydlp_container:schedule_confupdate() end), ok;
-apply_cdbobj({command, Else}) ->
+apply_cdbobj({command, stop_discovery, [{ruleId, RuleId}, {groupId, GroupId}]}) ->
+	?ASYNC0(fun() -> mydlp_discover_fs:stop_discovery(RuleId, GroupId) end), ok;
+apply_cdbobj({command, start_discovery, [{ruleId, RuleId}, {groupId, GroupId}]}) ->
+	?ASYNC0(fun() -> mydlp_discover_fs:start_discovery(RuleId, GroupId) end), ok;
+apply_cdbobj({command, pause_discovery, [{ruleId, RuleId}, {groupId, GroupId}]}) ->
+	?ASYNC0(fun() -> mydlp_discover_fs:pause_discovery(RuleId, GroupId) end), ok;
+apply_cdbobj({command, continue_discovery, [{ruleId, RuleId}, {groupId, GroupId}]}) ->
+	?ASYNC0(fun() -> mydlp_discover_fs:continue_discovery(RuleId, GroupId) end), ok;
+apply_cdbobj({command, Else, _}) ->
 	?ERROR_LOG("Unknown remote command: "?S, [Else]);
 apply_cdbobj(Else) ->
 	?ERROR_LOG("Unkown cdbobj: "?S, [Else]).
@@ -3507,4 +3513,77 @@ write_to_tmpfile(Bin) when is_binary(Bin) ->
 	ok = file:write_file(FN, Bin, [raw]),
 	{ok, FN}.
 
+-ifdef(__MYDLP_NETWORK).
+
+-ifdef(__PLATFORM_LINUX).
+
+cmd(Command) -> cmd(Command, []).
+
+cmd(Command, Args) -> cmd(Command, Args, []). 
+
+cmd(Command, Args, Envs) -> cmd(Command, Args, Envs, none). % Last variable for Stdin
+
+% envs should be like [{"key","value"}] and Stdin shold be "Stdin\n" format
+cmd(Command, Args, Envs, Stdin) when is_list(Args), is_list(Envs) ->
+       Port = open_port({spawn_executable, Command},
+                       [{args, Args},
+                       {env, Envs},
+                       use_stdio,
+                       exit_status,
+                       stderr_to_stdout]),
+
+	case Stdin of 
+		none -> ok;
+		S -> port_command(Port, S) 
+	end,
+
+	case get_port_resp(Port, []) of
+		{ok, _Data} -> ok;
+		{error, _} = Error -> ?ERROR_LOG("Error calling "?S", Args: "?S"~nOutput: "?S, [Command, Args, Error]),
+			Error end.
+
+cmd_retcode(Command) -> cmd_retcode(Command, []).
+
+cmd_retcode(Command, Args) -> cmd_retcode(Command, Args, []). 
+
+cmd_retcode(Command, Args, Envs) -> cmd_retcode(Command, Args, Envs, none). % Last variable for Stdin
+
+% envs should be like [{"key","value"}] and Stdin shold be "Stdin\n" format
+cmd_retcode(Command, Args, Envs, Stdin) when is_list(Args), is_list(Envs) ->
+       Port = open_port({spawn_executable, Command},
+                       [{args, Args},
+                       {env, Envs},
+                       use_stdio,
+                       exit_status,
+                       stderr_to_stdout]),
+
+	case Stdin of 
+		none -> ok;
+		S -> port_command(Port, S) 
+	end,
+
+	case get_port_resp(Port, []) of
+		{ok, _Data} -> ok;
+		{error, {retcode, I, _}} when is_integer(I) ->  {retcode, I};
+		{error, _} = Error -> ?ERROR_LOG("Error calling "?S", Args: "?S"~nOutput: "?S, [Command, Args, Error]),
+			Error end.
+
+
+cmd_bool(Command) -> cmd_bool(Command, []).
+
+cmd_bool(Command, Args) -> cmd_bool(Command, Args, []). 
+
+cmd_bool(Command, Args, Envs) -> cmd_bool(Command, Args, Envs, none). % Last variable for Stdin
+
+% envs should be like [{"key","value"}] and Stdin shold be "Stdin\n" format
+cmd_bool(Command, Args, Envs, Stdin) when is_list(Args), is_list(Envs) ->
+	case cmd_retcode(Command, Args, Envs, Stdin) of
+		ok -> true;
+		{retcode, _Else} -> false;
+		Else -> Else end.
+
+
+-endif.
+
+-endif.
 

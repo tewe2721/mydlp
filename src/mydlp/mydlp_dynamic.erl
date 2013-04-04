@@ -162,9 +162,11 @@ load_src(Src) ->
 	{mysql_password, string, ""},
 	{mysql_database, string, "mydlp"},
 	{mysql_log_database, string, "mydlp_log"},
+	{mysql_report_database, string, "mydlp_report"},
 	{mysql_pool_size, integer, "8"},
 	{resources_dir, string, "/usr/share/mydlp/resources/"},
 	{quarantine_dir, string, "/var/lib/mydlp/quarantine/"},
+	{mount_dir, string, "/var/lib/mydlp/mounts"},
 	{quarantine_uid, integer, "33"},
 	{quarantine_gid, integer, "33"},
 	% TODO : should resolve mnesia -> auto dist conf circular dependency
@@ -258,9 +260,12 @@ load_src(Src) ->
 	{syslog_report_facility, syslog_facility, "local7"},
 	{seclore_fs_server_pool_size, integer, "8"},
 	{thrift_server_pool_size, integer, "24"},
+	{discover_rfs_on_startup, boolean, false},
 	{email_notification_message_from, string, "support@mydlp.com"},
 	{email_notification_message_subject, string, "Notifications from MyDLP"},
-	{email_notification_message, string, "Hello,\r\nThis is an auto-generated message. This message aims to inform you about some incidents that have been recently occurred and logged in your MyDLP system.\r\nYou are recieving this message because you have subscribed to be notified for incidents related to a rule in MyDLP.\r\nFor details, please log on to MyDLP Management Console and go to Logs screen.\r\nIf you do not want to recieve these emails, please contact to your system administrator."}
+	{email_notification_message, string, "Hello,\r\nThis is an auto-generated message. This message aims to inform you about some incidents that have been recently occurred and logged in your MyDLP system.\r\nYou are recieving this message because you have subscribed to be notified for incidents related to a rule in MyDLP.\r\nFor details, please log on to MyDLP Management Console and go to Logs screen.\r\nIf you do not want to recieve these emails, please contact to your system administrator."},
+	{discover_web_interval, integer, "7200000"},
+	{discover_web_on_startup, boolean, "false"}
 ]).
 
 -endif.
@@ -269,8 +274,6 @@ load_src(Src) ->
 
 -define(CONFDEF_FUNCTIONAL, [
 	{maximum_push_size, integer, "1048576"},
-	{sync_interval, integer, "300000"},
-	{discover_fs_interval, integer, "7200000"},
 	{discover_fs_on_startup, boolean, "false"},
 	{ignore_discover_max_size_exceeded, boolean, "true"},
 	{log_level, integer, "2"}, % defaulted to debug
@@ -285,6 +288,7 @@ load_src(Src) ->
 -endif.
 
 -define(CONFDEF_COMMON, [
+	{sync_interval, integer, "300000"},
 	{error_action, atom, "pass"},
 	{maximum_object_size, integer, "10485760"},
 	{archive_minimum_size, integer, "2048"},
@@ -292,6 +296,8 @@ load_src(Src) ->
 	{maximum_chunk_size, integer, "1048576"},
 	{query_cache_maximum_size, integer, "3000000"},
 	{query_cache_cleanup_interval, integer, "900000"},
+	{discover_fs_interval, integer, "7200000"},
+	{discover_rfs_interval, integer, "7200000"},
 	{seclore_fs_enable, boolean, "false"},
 	{seclore_fs_address, string, "127.0.0.1"},
 	{seclore_fs_port, integer, "443"},
@@ -460,6 +466,7 @@ val_to_type_src(boolean, "true") -> "true";
 val_to_type_src(boolean, "no") -> "false";
 val_to_type_src(boolean, "n") -> "false";
 val_to_type_src(boolean, "false") -> "false";
+val_to_type_src(boolean, false) -> "false";
 val_to_type_src(string, V) -> "\"" ++ escape_string(V) ++ "\"";
 val_to_type_src(integer, V) -> V;
 val_to_type_src(atom, V) -> V;

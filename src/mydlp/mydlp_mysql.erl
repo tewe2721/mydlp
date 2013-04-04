@@ -38,7 +38,11 @@
 -export([start_link/0,
 	compile_customer/0,
 	compile_customer/1,
-	push_log/9,
+	push_log/10,
+	push_opr_log/2,
+	push_discovery_report/4,
+	update_report_status/2,
+	update_report_as_finished/1,
 	requeued/1,
 	is_multisite/0,
 	get_denied_page/0,
@@ -48,7 +52,10 @@
 	delete_log_requeue/1,
 	repopulate_mnesia/0,
 	save_fingerprints/2,
+	populate_discovery_targets/1,
 	get_progress/0,
+	is_all_ep_discovery_finished/3,
+	is_all_discovery_finished/1,
 	stop/0]).
 
 %% gen_server callbacks
@@ -66,17 +73,40 @@
 	password,
 	database,
 	database_l,
+	database_r,
 	pool_size,
 	master_pid,
 	pool_pids,
 	pool_pids_l,
+	pool_pids_r,
 	compile_progress
 }).
 
+-define(RFS_FINISHED, "rfs_finished").
+-define(WEB_FINISHED, "web_finished").
+
 %%%%%%%%%%%%% MyDLP Thrift RPC API
 
-push_log(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc) ->
-	gen_server:call(?MODULE, {push_log, {Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc}}, 60000).
+push_log(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc, GroupId) ->
+	gen_server:call(?MODULE, {push_log, {Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc, GroupId}}, 60000).
+
+push_opr_log(Context, Term) ->
+	gen_server:call(?MODULE, {push_opr_log, Context, Term}, 60000).
+
+push_discovery_report(StartDate, GroupId, RuleId, Status) ->
+	gen_server:call(?MODULE, {push_discovery_report, StartDate, GroupId, RuleId, Status}, 60000).
+
+update_report_status(GroupId, NewStatus) ->
+	gen_server:cast(?MODULE, {update_report_status, GroupId, NewStatus}).
+
+update_report_as_finished(GroupId) ->
+	gen_server:cast(?MODULE, {update_report_as_finished, GroupId}).
+
+is_all_ep_discovery_finished(GroupId, Endpoints, Status) ->
+	gen_server:call(?MODULE, {is_all_ep_discovery_finished, GroupId, Endpoints, Status}, 60000).
+
+is_all_discovery_finished(GroupId) ->
+	gen_server:call(?MODULE, {is_all_discovery_finished, GroupId}, 60000).
 
 insert_log_requeue(LogId) -> 
 	gen_server:cast(?MODULE, {insert_log_requeue, LogId}).
@@ -92,6 +122,9 @@ insert_log_data(LogId, Filename, MimeType, Size, Hash, Path) ->
 
 save_fingerprints(DocumentId, FingerprintList) -> 
 	gen_server:call(?MODULE, {save_fingerprints, DocumentId, FingerprintList}, 60000).
+
+populate_discovery_targets(RuleId) ->
+	gen_server:call(?MODULE, {populate_discovery_targets, RuleId}, 60000).
 
 requeued(LogId) -> 
 	gen_server:cast(?MODULE, {requeued, LogId}).
@@ -134,18 +167,92 @@ handle_call(get_denied_page, _From, State) ->
 		_Else -> not_found end,
         {reply, Reply, State};
 
-handle_call({push_log, {Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc}}, From, State) ->
+handle_call({push_log, {Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc, GroupId}}, From, State) ->
 	Worker = self(),
 	?ASYNC(fun() ->
-			{_FilterId, RuleId1, Ip1, User1, To1, ActionS, ChannelS, Misc1, Visible} = 
-				pre_push_log(RuleId, Ip, User, To, Action, Channel, Misc),
+			{_FilterId, RuleId1, Ip1, User1, To1, ActionS, ChannelS, Misc1, GroupId1, Visible} = 
+				pre_push_log(RuleId, Ip, User, To, Action, Channel, Misc, GroupId),
 			{atomic, ILId} = ltransaction(fun() ->
 					psqt(insert_incident, 
-						[Time, ChannelS, RuleId1, Ip1, User1, To1, ITypeId, ActionS, Misc1, Visible]),
+						[Time, ChannelS, RuleId1, Ip1, User1, To1, ITypeId, ActionS, Misc1, GroupId1, Visible]),
 					last_insert_id_t() end, 30000),
 			Reply = ILId,	
                         Worker ! {async_reply, Reply, From}
 		end, 30000),
+	{noreply, State};
+
+handle_call({push_opr_log, Context, {opr_log, #opr_log{time=Time, channel=Channel, rule_id=RuleId, message_key=MessageKey, group_id=GroupId}}}, From , State) ->
+	Worker = self(),
+	?ASYNC(fun() ->
+			{Time1, _ChannelS, RuleId1, MessageKey1, GroupId1, Visible, Severity} = pre_push_opr_log(Time, Channel, RuleId, MessageKey, GroupId),
+			{atomic, ILId} = ltransaction(fun() ->
+					psqt(insert_opr_log_disc, 
+						[Time1, Context, RuleId1, GroupId1, MessageKey1, Visible, Severity]),
+					last_insert_id_t() end, 30000),
+			Reply = ILId,	
+                        Worker ! {async_reply, Reply, From}
+		end, 30000),
+	{noreply, State};
+
+handle_call({push_opr_log, Context, {ep_opr_log, #opr_log{time=Time, channel=Channel, rule_id=RuleId, message_key=MessageKey, group_id=GroupId, ip_address=IpAddress}}}, From , State) ->
+	Worker = self(),
+	?ASYNC(fun() ->
+			{Time1, _ChannelS, RuleId1, MessageKey1, GroupId1, Visible, Severity} = pre_push_opr_log(Time, Channel, RuleId, MessageKey, GroupId),
+			{I1, I2, I3, I4} = IpAddress,
+			IpAddress1 = integer_to_list(I1)++"."++integer_to_list(I2)++"."++integer_to_list(I3)++"."++integer_to_list(I4),
+			{ok, [[Alias]]} = lpsq(get_alias_with_ip, [IpAddress1], 5000),
+			{ok, [[Source]]} = psq(get_id_with_endpoint_alias, [Alias]),
+			{atomic, ILId} = ltransaction(fun() ->
+					psqt(insert_opr_log_ep_disc, 
+						[Time1, Context, RuleId1, GroupId1, MessageKey1, Visible, Severity, Source]),
+					last_insert_id_t() end, 30000),
+			Reply = ILId,	
+                        Worker ! {async_reply, Reply, From}
+		end, 30000),
+	{noreply, State};
+
+handle_call({push_opr_log, Context, {key, MessageKey}}, From, State) ->
+	Worker = self(),
+	Time=erlang:universaltime(),
+	?ASYNC(fun() ->
+			{atomic, ILId} = ltransaction(fun() ->
+					psqt(insert_opr_log, 
+						[Time, Context, MessageKey, 1, 0]), % 1 for visible column, 0 for severity
+					last_insert_id_t() end, 30000),
+			Reply = ILId,	
+                        Worker ! {async_reply, Reply, From}
+		end, 30000),
+	{noreply, State};
+
+handle_call({push_discovery_report, StartDate, GroupId, RuleId, Status}, From, State) ->
+	Worker = self(),
+	?ASYNC(fun() ->
+			{atomic, ILId} = rtransaction(fun() ->
+					psqt(insert_discovery_report, 
+						[StartDate, GroupId, RuleId, Status]), 
+					last_insert_id_t() end, 30000),
+			Reply = ILId,	
+                        Worker ! {async_reply, Reply, From}
+		end, 30000),
+	{noreply, State};
+
+handle_call({is_all_ep_discovery_finished, GroupId, Endpoints, Status}, From, State) ->
+	Worker = self(),
+	?ASYNC(fun() ->
+			Reply = lists:all(fun(E) -> is_ep_discovery_finished(GroupId, E, Status) end, Endpoints),
+                        Worker ! {async_reply, Reply, From}
+		end, 30000),
+	{noreply, State};
+
+handle_call({is_all_discovery_finished, GroupId}, From, State) ->
+	Worker = self(),
+	case lpsq(get_opr_with_group_id_and_status, [GroupId, ?RFS_FINISHED], 5000) of
+		{ok, [[_]]} -> 
+			case lpsq(get_opr_with_group_id_and_status, [GroupId, ?WEB_FINISHED], 5000) of
+				{ok, [[_]]} -> Worker ! {async_reply, true, From};
+				_ -> Worker ! {async_reply, false, From} end;
+		_ -> Worker ! {async_reply, false, From}
+	end,
 	{noreply, State};
 
 handle_call({save_fingerprints, DocumentId, FingerprintList}, From, State) ->
@@ -158,11 +265,30 @@ handle_call({save_fingerprints, DocumentId, FingerprintList}, From, State) ->
 		end, 60000),
         {noreply, State};
 
+handle_call({populate_discovery_targets, RuleId}, _From, State) ->
+	{ok, Aliasses} =  psq(get_endpoint_alias),
+	IpsAndNames = get_identities(Aliasses),
+	lists:map(fun(I) -> mydlp_mnesia:update_ep_schedules(I, RuleId) end, IpsAndNames),
+	{reply, ok, State};
+
 handle_call(stop, _From,  State) ->
 	{stop, normalStop, State};
 
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
+
+handle_cast({update_report_status, GroupId, NewStatus}, State) ->
+	?ASYNC0(fun() ->
+		rpsq(update_report_status, [NewStatus, GroupId], 60000)
+	end),
+	{noreply, State};
+
+handle_cast({update_report_as_finished, GroupId}, State) ->
+	Time = erlang:universaltime(),
+	?ASYNC0(fun() ->
+		rpsq(update_report_as_finished, ["stopped", Time, GroupId], 60000)
+	end),
+	{noreply, State};
 
 handle_cast({insert_log_requeue, LogId}, State) ->
 	?ASYNC(fun() ->
@@ -255,8 +381,8 @@ handle_info({'DOWN', _, _, MPid , _}, #state{master_pid=MPid} = State) ->
 			{stop, normalStop, State} end;
 
 handle_info({'DOWN', _, _, Pid , _} = Msg, #state{host=Host,
-		user=User, password=Password, database=DB, database_l=LDB,
-		pool_pids=PoolPids, pool_pids_l=PoolPidsL} = State) ->
+		user=User, password=Password, database=DB, database_l=LDB, database_r=RDB,
+		pool_pids=PoolPids, pool_pids_l=PoolPidsL, pool_pids_r=PoolPidsR} = State) ->
 	PPTuple  = try case lists:member(Pid, PoolPids) of
 			true -> PoolPids1 = lists:delete(Pid, PoolPids),
 				case mysql:connect(pp, Host, undefined, User, Password, DB, utf8, true) of
@@ -271,7 +397,14 @@ handle_info({'DOWN', _, _, Pid , _} = Msg, #state{host=Host,
 						erlang:monitor(process, NewPid),
 						{PoolPids, [NewPid|PoolPidsL1]};
 					Err2 -> {error, Err2} end;
-			false -> orphan end end
+			false -> case lists:member(Pid, PoolPidsR) of
+			true -> PoolPidsR1 = lists:delete(Pid, PoolPidsR),
+				case mysql:connect(pr, Host, undefined, User, Password, RDB, utf8, true) of
+					{ok, NewPid} -> 
+						erlang:monitor(process, NewPid),
+						{PoolPids, [NewPid|PoolPidsR1]};
+					Err2 -> {error, Err2} end;
+			false -> orphan end end end
 		catch Class:Error -> {error, Class, Error} end,
 
 	case PPTuple of
@@ -309,6 +442,7 @@ init([]) ->
 	Password = ?CFG(mysql_password),
 	DB = ?CFG(mysql_database),
 	LDB = ?CFG(mysql_log_database),
+	RDB = ?CFG(mysql_report_database),
 	PoolSize = ?CFG(mysql_pool_size),
 	
 	{ok, MPid} = mysql:start_link(pp, Host, Port, User, Password, DB, fun(_,_,_,_) -> ok end, utf8),
@@ -325,6 +459,10 @@ init([]) ->
 	PPids2 = [ P || {ok, P} <- PoolReturns2 ],
 	[ erlang:monitor(process, P) || P <- PPids2 ],
 
+	PoolReturns3 = [ mysql:connect(pr, Host, undefined, User, Password, RDB, utf8, true) || _I <- lists:seq(1, PoolSize)],
+	PPids3 = [ P || {ok, P} <- PoolReturns3 ],
+	[ erlang:monitor(process, P) || P <- PPids3 ],
+
 	[ mysql:prepare(Key, Query) || {Key, Query} <- [
 		{last_insert_id, <<"SELECT last_insert_id()">>},
 		{configs, <<"SELECT configKey,value FROM Config">>},
@@ -335,8 +473,18 @@ init([]) ->
 		{domain_by_rule_id, <<"SELECT d.destinationString FROM Domain AS d, RuleItem AS ri WHERE ri.rule_id=? AND d.id=ri.item_id">>},
 		{directory_by_rule_id, <<"SELECT d.destinationString FROM FileSystemDirectory AS d, RuleItem AS ri WHERE ri.rule_id=? AND d.id=ri.item_id">>},
 		{source_domain_by_rule_id, <<"SELECT s.sourceDomain FROM SourceDomainName AS s, RuleItem AS ri WHERE ri.rule_id=? AND s.id=ri.item_id">>},
+		{remote_sshfs, <<"SELECT r.address, r.port, r.path, r.username, r.password FROM RemoteStorageSSHFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
+		{remote_ftpfs, <<"SELECT r.address, r.path, r.username, r.password FROM RemoteStorageFTPFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
+		{remote_cifs, <<"SELECT r.windowsShare, r.path, r.username, r.password FROM RemoteStorageCIFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
+		{remote_dfs, <<"SELECT r.windowsShare, r.path, r.username, r.password FROM RemoteStorageDFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
+		{remote_nfs, <<"SELECT r.address, r.path FROM RemoteStorageNFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
+		{web_servers, <<"SELECT r.proto, r.address, r.port, r.digDepth, r.startPath FROM WebServer r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
 		{app_name_by_rule_id, <<"SELECT a.destinationString FROM ApplicationName AS a, RuleItem AS ri WHERE ri.rule_id=? AND a.id=ri.item_id">>},
 		{email_notification_by_rule_id, <<"SELECT a.email FROM AuthUser AS a, NotificationItem AS ni, EmailNotificationItem AS eni, Rule r WHERE ni.rule_id=? AND ni.id=eni.id AND ni.authUser_id=a.id AND r.id=? AND r.notificationEnabled=1">>},
+		{daily_schedule_by_rule_id, <<"SELECT s.hour FROM RuleSchedule AS rs, Schedule AS s, DailySchedule AS ds WHERE rs.rule_id=? AND rs.schedule_id=s.id AND s.id=ds.id">>},
+		{weekly_schedule_by_rule_id, <<"SELECT s.hour, ws.mon, ws.tue, ws.wed, ws.thu, ws.fri, ws.sat, ws.sun FROM RuleSchedule AS rs, Schedule AS s, WeeklySchedule AS ws WHERE rs.rule_id=? AND rs.schedule_id=s.id AND s.id=ws.id">>},
+		{schedule_intervals_by_rule_id, <<"SELECT si.mon_id, si.tue_id, si.wed_id, si.thu_id, si.fri_id, si.sat_id, si.sun_id FROM RuleSchedule AS rs, ScheduleIntervals si WHERE rs.rule_id=? AND rs.scheduleIntervals_id=si.id">>},
+		{schedule_day_intervals_by_id, <<"SELECT * FROM ScheduleDayInterval WHERE id=?">>},
 		{user_s_by_rule_id, <<"SELECT u.username FROM RuleUserStatic AS u, RuleItem AS ri WHERE ri.rule_id=? AND u.id=ri.item_id">>},
 		{user_ad_u_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=u.id">>},
 		{user_ad_o_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, ADDomainItem i, ADDomainOU o, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=o.id AND o.id=i.parent_id AND i.id=u.id">>},
@@ -363,7 +511,7 @@ init([]) ->
 		{usb_devices, <<"SELECT deviceId, action FROM USBDevice">>},
 		{insert_fingerprint, <<"INSERT INTO DocumentFingerprint (id, fingerprint, document_id) VALUES (NULL, ?, ?)">>},
 		%{customer_by_id, <<"SELECT id,static_ip FROM sh_customer WHERE id=?">>},
-		{insert_incident, <<"INSERT INTO IncidentLog (id, date, channel, ruleId, sourceIp, sourceUser, destination, informationTypeId, action, matcherMessage, visible) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)">>},
+		{insert_incident, <<"INSERT INTO IncidentLog (id, date, channel, ruleId, sourceIp, sourceUser, destination, informationTypeId, action, matcherMessage, groupId, visible) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)">>},
 		{insert_incident_file_data, <<"INSERT INTO IncidentLogFile (id, incidentLog_id, filename, content_id) VALUES (NULL, ?, ?, ?)">>},
 		{insert_incident_file_bp, <<"INSERT INTO IncidentLogFile (id, incidentLog_id, filename, blueprint_id) VALUES (NULL, ?, ?, ?)">>},
 %		{insert_archive, <<"INSERT INTO log_archive (id, customer_id, rule_id, protocol, src_ip, src_user, destination, log_archive_file_id) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)">>},
@@ -376,14 +524,26 @@ init([]) ->
 		{insert_incident_requeue, <<"INSERT INTO IncidentLogRequeueStatus (id, incidentLog_id, isRequeued) VALUES (NULL, ?, false)">>},
 		{delete_incident_requeue, <<"DELETE FROM IncidentLogRequeueStatus WHERE incidentLog_id=?">>},
 		{update_requeue_status, <<"UPDATE IncidentLogRequeueStatus SET isRequeued=TRUE, date=now() WHERE incidentLog_id=?">>},
-		{denied_page, <<"SELECT c.value FROM Config AS c WHERE c.configKey=\"denied_page_html\"">>}
+		{denied_page, <<"SELECT c.value FROM Config AS c WHERE c.configKey=\"denied_page_html\"">>},
+		{insert_opr_log_disc, <<"INSERT INTO OperationLog (id, date, context, ruleId, groupId, message, messageKey, visible, severity, source) VALUES (NULL, ?, ?, ?, ?, NULL, ?, ?, ?, NULL)">>},
+		{insert_opr_log_ep_disc, <<"INSERT INTO OperationLog (id, date, context, ruleId, groupId, message, messageKey, visible, severity, source) VALUES (NULL, ?, ?, ?, ?, NULL, ?, ?, ?, ?)">>},
+		{insert_opr_log, <<"INSERT INTO OperationLog (id, date, context, ruleId, groupId, message, messageKey, visible, severity, source) VALUES (NULL, ?, ?, NULL, NULL, NULL, ?, ?, ?, NULL)">>},
+		{insert_discovery_report, <<"INSERT INTO DiscoveryReport (id, startDate, finishDate, groupId, ruleId, status) VALUES (NULL, ?, NULL, ?, ?, ?)">>},
+		{update_report_status, <<"UPDATE DiscoveryReport SET status=? WHERE groupId = ?">>},
+		{update_report_as_finished, <<"UPDATE DiscoveryReport SET status=?, finishDate=? WHERE groupId = ?">>},
+		{get_endpoint_alias, <<"SELECT endpointAlias, endpointId FROM Endpoint">>},
+		{get_id_with_endpoint_alias, <<"SELECT endpointId FROM Endpoint where endpointAlias=?">>},
+		{get_ip_and_username, <<"SELECT ipAddress, username FROM EndpointStatus where endpointAlias=?">>},
+		{get_alias_with_ip, <<"SELECT endpointAlias FROM EndpointStatus where ipAddress=?">>},
+		{get_opr_with_group_id_and_ep, <<"SELECT o.id FROM OperationLog AS o WHERE groupId=? AND source=? AND messageKey=?">>},
+		{get_opr_with_group_id_and_status, <<"SELECT o.id FROM OperationLog AS o WHERE groupId=? AND messageKey=?">>}
 
 	]],
 
 	{ok, #state{host=Host, port=Port, 
 			user=User, password=Password, 
-			database=DB, database_l=LDB, pool_size=PoolSize, 
-			master_pid=MPid, pool_pids=PPids, pool_pids_l=PPids2,
+			database=DB, database_l=LDB, database_r=RDB, pool_size=PoolSize, 
+			master_pid=MPid, pool_pids=PPids, pool_pids_l=PPids2, pool_pids_r=PPids3,
 			compile_progress=done}}.
 
 terminate(_Reason, _State) ->
@@ -416,6 +576,13 @@ lpsq(PreparedKey, Params, Timeout) ->
 		Else -> throw({error, Else})
 	end.
 
+rpsq(PreparedKey, Params, Timeout) ->
+	case mysql:execute(pr, PreparedKey, Params, Timeout) of
+		{data,{mysql_result,_,Result,_,_}} -> {ok, Result};
+		{updated,{mysql_result, _,_,RowCount,_}} -> {updated, RowCount};
+		Else -> throw({error, Else})
+	end.
+
 %transaction(Fun) -> transaction(Fun, 5000).
 
 transaction(Fun, Timeout) -> mysql:transaction(pp, Fun, Timeout).
@@ -423,6 +590,8 @@ transaction(Fun, Timeout) -> mysql:transaction(pp, Fun, Timeout).
 %ltransaction(Fun) -> ltransaction(Fun, 5000).
 
 ltransaction(Fun, Timeout) -> mysql:transaction(pl, Fun, Timeout).
+
+rtransaction(Fun, Timeout) -> mysql:transaction(pr, Fun, Timeout).
 
 last_insert_id_t() ->
 	{ok, [[LIId]]} = psqt(last_insert_id), LIId.
@@ -438,6 +607,13 @@ psqt(PreparedKey, Params) ->
 
 %%%%%%%%%%%% internal
 	
+
+get_identities(Rows) -> get_identities(Rows, []).
+
+get_identities([[Alias, EndpointId]|Rows], Acc) ->
+	{ok, [[Ip,Username]]} = lpsq(get_ip_and_username, [Alias], 30000),
+	get_identities(Rows, [{EndpointId, Ip, Username}|Acc]);
+get_identities([], Acc) -> Acc.
 
 populate_site(FilterId) ->
 	set_progress(compile),
@@ -528,6 +704,15 @@ populate_rule(OrigId, Channel, UserMessage, Action, FilterId) ->
 	{ok, SDN} = psq(source_domain_by_rule_id, [OrigId]),
 	populate_source_domains(SDN, RuleId),
 
+	populate_remote_storages(OrigId, RuleId),
+
+	populate_discovery_schedule(OrigId, RuleId),
+
+	populate_ep_schedules_entries(RuleId, OrigId),
+
+	{ok, RWS} = psq(web_servers, [OrigId]),
+	populate_web_servers(RWS, RuleId),
+
 	R = #rule{id=RuleId, orig_id=OrigId, channel=Channel, action=Action, filter_id=FilterId},
 	mydlp_mnesia_write(R).
 
@@ -601,7 +786,112 @@ populate_source_domains([[SourceDomain]|Rows], RuleId) ->
 	I = #source_domain{id=Id, rule_id=RuleId, domain_name=S},
 	mydlp_mnesia_write(I),
 	populate_source_domains(Rows, RuleId);
-populate_source_domains([], _RuleId) ->ok.	
+populate_source_domains([], _RuleId) ->ok.
+
+populate_remote_storages(RuleOrigId, RuleId) ->
+	{ok, RSSHFS} = psq(remote_sshfs, [RuleOrigId]),
+	populate_remote_sshfs(RSSHFS, RuleId),
+
+	{ok, RFTPFS} = psq(remote_ftpfs, [RuleOrigId]),
+	populate_remote_ftpfs(RFTPFS, RuleId),
+
+	{ok, RCIFS} = psq(remote_cifs, [RuleOrigId]),
+	populate_remote_cifs(RCIFS, RuleId),
+
+	{ok, RDFS} = psq(remote_dfs, [RuleOrigId]),
+	populate_remote_dfs(RDFS, RuleId),
+
+	{ok, RNFS} = psq(remote_nfs, [RuleOrigId]),
+	populate_remote_nfs(RNFS, RuleId),
+
+	ok.
+
+populate_remote_sshfs([[Address, Port, Path, Username, Password]|Rows], RuleId) ->
+	Id = mydlp_mnesia:get_unique_id(remote_storage),
+	I = #remote_storage{id=Id, rule_id=RuleId, type=sshfs, details={Address, Port, Path, Username, Password}},
+	mydlp_mnesia_write(I),
+	populate_remote_sshfs(Rows, RuleId);
+populate_remote_sshfs([], _RuleId) -> ok.
+
+populate_remote_ftpfs([[Address, Path, Username, Password]|Rows], RuleId) ->
+	Id = mydlp_mnesia:get_unique_id(remote_storage),
+	I = #remote_storage{id=Id, rule_id=RuleId, type=ftpfs, details={Address, Path, Username, Password}},
+	mydlp_mnesia_write(I),
+	populate_remote_ftpfs(Rows, RuleId);
+populate_remote_ftpfs([], _RuleId) -> ok.
+
+populate_remote_cifs([[WindowsShare, Path, Username, Password]|Rows], RuleId) ->
+	Id = mydlp_mnesia:get_unique_id(remote_storage),
+	I = #remote_storage{id=Id, rule_id=RuleId, type=cifs, details={WindowsShare, Path, Username, Password}},
+	mydlp_mnesia_write(I),
+	populate_remote_cifs(Rows, RuleId);
+populate_remote_cifs([], _RuleId) -> ok.
+
+populate_remote_dfs([[WindowsShare, Path, Username, Password]|Rows], RuleId) ->
+	Id = mydlp_mnesia:get_unique_id(remote_storage),
+	I = #remote_storage{id=Id, rule_id=RuleId, type=dfs, details={WindowsShare, Path, Username, Password}},
+	mydlp_mnesia_write(I),
+	populate_remote_dfs(Rows, RuleId);
+populate_remote_dfs([], _RuleId) -> ok.
+
+populate_remote_nfs([[Address, Path]|Rows], RuleId) ->
+	Id = mydlp_mnesia:get_unique_id(remote_storage),
+	I = #remote_storage{id=Id, rule_id=RuleId, type=nfs, details={Address, Path}},
+	mydlp_mnesia_write(I),
+	populate_remote_nfs(Rows, RuleId);
+populate_remote_nfs([], _RuleId) -> ok.
+
+convert_day_intervals_to_list([_|Rest]) ->
+	L = lists:map(fun(I) -> binary_to_list(I) end, Rest),
+	lists:flatten(L).
+
+populate_day_intervals_as_list([DayIntervalId|Rest], Acc) ->
+	{ok, [DayIntervalList]} = psq(schedule_day_intervals_by_id, [DayIntervalId]),
+	Acc1 = convert_day_intervals_to_list(DayIntervalList),
+	populate_day_intervals_as_list(Rest, [Acc1|Acc]);
+populate_day_intervals_as_list([], Acc) -> lists:reverse(Acc).
+
+populate_discovery_schedule(RuleOrigId, RuleId) ->
+	{ok, Result} = psq(schedule_intervals_by_rule_id, [RuleOrigId]),
+
+	case Result of 
+		[] -> ok;
+		[ScheduleDayIntervals] -> 	
+			DayIntervals = populate_day_intervals_as_list(ScheduleDayIntervals, []),	
+	
+			{ok, DailySchedule} = psq(daily_schedule_by_rule_id, [RuleOrigId]),
+			populate_discovery_schedule1(DailySchedule, DayIntervals, RuleId, daily),
+		
+			{ok, WeeklySchedule} = psq(weekly_schedule_by_rule_id, [RuleOrigId]),
+			populate_discovery_schedule1(WeeklySchedule, DayIntervals, RuleId, weekly)
+	end.
+
+populate_discovery_schedule1([[Hour]|Rows], ScheduleIntervals, RuleId, daily) ->
+	Id = mydlp_mnesia:get_unique_id(discovery_schedule),
+	I = #discovery_schedule{id=Id, rule_id=RuleId, schedule_hour=Hour, details=daily, available_intervals=ScheduleIntervals},
+	mydlp_mnesia_write(I),
+	populate_discovery_schedule1(Rows, ScheduleIntervals, RuleId, daily);
+populate_discovery_schedule1([[Hour, M, Tu, W, Th, F, Sa, Su]|Rows], ScheduleIntervals, RuleId, weekly) ->
+	Detail = lists:flatten([binary_to_list(M), binary_to_list(Tu), binary_to_list(W), binary_to_list(Th), binary_to_list(F), binary_to_list(Sa), binary_to_list(Su)]),
+	Id = mydlp_mnesia:get_unique_id(discovery_schedule),
+	I = #discovery_schedule{id=Id, rule_id=RuleId, schedule_hour=Hour, details={weekly, Detail}, available_intervals=ScheduleIntervals},
+	mydlp_mnesia_write(I),
+	populate_discovery_schedule1(Rows, ScheduleIntervals, RuleId, weekly);
+populate_discovery_schedule1([], _, _, _) -> ok.
+
+populate_ep_schedules_entries(RuleId, OrigId) ->
+	Id = mydlp_mnesia:get_unique_id(discovery_targets),
+	I = #discovery_targets{id=Id, rule_id=RuleId, orig_id=OrigId, targets=[]},
+	mydlp_mnesia_write(I),
+	ok.
+
+populate_web_servers([[Proto, Address, Port, DigDepth, StartPath]|Rest], RuleId) ->
+	Id = mydlp_mnesia:get_unique_id(web_server),
+	I = #web_server{id=Id, rule_id=RuleId, proto=binary_to_list(Proto), address=binary_to_list(Address), port=Port, dig_depth=DigDepth, start_path=binary_to_list(StartPath)},
+	mydlp_mnesia_write(I),
+	populate_web_servers(Rest, RuleId);
+populate_web_servers([], _RuleId) -> ok.
+	
 
 populate_rule_users(RuleOrigId, RuleId) -> 
 	{ok, USQ} = psq(user_s_by_rule_id, [RuleOrigId]),
@@ -1039,6 +1329,7 @@ rule_dtype_to_channel(<<"MailRule">>) -> mail;
 rule_dtype_to_channel(<<"RemovableStorageRule">>) -> removable;
 rule_dtype_to_channel(<<"PrinterRule">>) -> printer;
 rule_dtype_to_channel(<<"DiscoveryRule">>) -> discovery;
+rule_dtype_to_channel(<<"RemoteStorageRule">>) -> remote_discovery;
 rule_dtype_to_channel(<<"ApiRule">>) -> api;
 rule_dtype_to_channel(<<"RemovableStorageInboundRule">>) -> inbound;
 rule_dtype_to_channel(<<"RemovableStorageEncryptionRule">>) -> encryption;
@@ -1074,6 +1365,9 @@ validate_action_for_channel(discovery, archive) -> ok;
 validate_action_for_channel(discovery, quarantine) -> ok;
 validate_action_for_channel(discovery, {custom, {seclore, pass, _, {HotFolderId, _}}}) 
 		when is_integer(HotFolderId)-> ok;
+validate_action_for_channel(remote_discovery, pass) -> ok;
+validate_action_for_channel(remote_discovery, log) -> ok;
+validate_action_for_channel(remote_discovery, archive) -> ok;
 validate_action_for_channel(api, pass) -> ok;
 validate_action_for_channel(api, log) -> ok;
 validate_action_for_channel(api, block) -> ok;
@@ -1137,7 +1431,7 @@ find_match_id([#match{id=Id, func=Func, func_params=FuncParam}|_Rest], Func, Fun
 find_match_id([_M|Rest], Func, FuncParams) -> find_match_id(Rest, Func, FuncParams);
 find_match_id([], _Func, _FuncParams) -> none.
 
-pre_push_log(RuleId, Ip, User, Destination, Action, Channel, Misc) -> 
+pre_push_log(RuleId, Ip, User, Destination, Action, Channel, Misc, GroupId) -> 
 %	{FilterId, RuleId1} = case RuleId of
 %		{dr, CId} -> {CId, 0};
 %		-1 = RuleId -> {mydlp_mnesia:get_dfid(), RuleId};	% this shows default action had been enforeced 
@@ -1174,6 +1468,7 @@ pre_push_log(RuleId, Ip, User, Destination, Action, Channel, Misc) ->
 		removable -> <<"R">>;
 		printer -> <<"P">>;
 		discovery -> <<"D">>;
+		remote_discovery -> <<"RD">>;
 		api -> <<"A">> ;
 		inbound -> <<"I">>
 	end,
@@ -1185,8 +1480,17 @@ pre_push_log(RuleId, Ip, User, Destination, Action, Channel, Misc) ->
 		M when is_list(M) -> unicode:characters_to_binary(M);
 		Else4 -> Else4
 	end,
-	{0, RuleId, Ip1, User1, Destination1, ActionS, ChannelS, Misc1, Visible}.
+	{0, RuleId, Ip1, User1, Destination1, ActionS, ChannelS, Misc1, GroupId, Visible}.
 
+pre_push_opr_log(Time, Channel, RuleId, MessageKey, GroupId) ->
+	ChannelS = case Channel of
+		remote_discovery -> <<"RD">>;
+		discovery -> <<"D">>;
+		R -> ?ERROR_LOG("Unexpected Rule Type: ["?S"]", [R]),
+			<<"U">>
+	end,
+	{Time, ChannelS, RuleId, MessageKey, GroupId, 1, 0}. % 1 for Visible column 0 for severity
+		
 pre_insert_log(Filename) ->
 	Filename1 = case Filename of
 		F when is_list(F) -> unicode:characters_to_binary(F);
@@ -1194,6 +1498,11 @@ pre_insert_log(Filename) ->
 
 	{Filename1}.
 
+is_ep_discovery_finished(GroupId, Endpoint, Status) ->
+	case lpsq(get_opr_with_group_id_and_ep, [GroupId, Endpoint, Status], 5000) of
+		{ok, [[_]]} -> true;
+		_ -> false
+	end.
 
 -endif.
 

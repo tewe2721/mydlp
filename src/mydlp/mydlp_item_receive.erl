@@ -36,6 +36,7 @@
 %% API
 -export([start_link/0,
 	r/2,
+	process_item/1,
 	stop/0]).
 
 %% gen_server callbacks
@@ -135,6 +136,8 @@ process_item({IpAddress, {endpoint_log, LogTerm} }) ->
 	#log{file=Files} = LogTerm,
 	Files1 = [ mydlp_api:reconstruct_cr(F) || F <- Files ], % To clean invalid cachrefs
 	?ACL_LOG(LogTerm#log{ip=IpAddress, file=Files1});
+process_item({IpAddress, {endpoint_opr_log, Context, Term}}) -> 
+	mydlp_mysql:push_opr_log(Context, {ep_opr_log, Term#opr_log{ip_address=IpAddress}});
 process_item(_Item) -> ok. % TODO log unkown item.
 
 -endif.

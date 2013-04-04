@@ -41,6 +41,18 @@
 %	test/0
 ]).
 
+-ifdef(__MYDLP_NETWORK).
+
+-define(_OPR_LOG_HANDLE(Context, Term), mydlp_mysql:push_opr_log(Context, Term)).
+
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
+-define(_OPR_LOG_HANDLE(Context, Term), mydlp_item_push:p({endpoint_opr_log, Context, Term})).
+
+-endif.
+
 -record(state, {
 	beam_pid,
 	syslog_acl_fd,
@@ -116,8 +128,14 @@ handle_event({ReportLevel, _, {_FromPid, StdType, Report}}, State) when is_atom(
 	{ok, State};
 
 handle_event({EventLevel, _, {_FromPid, Fmt, Data}}, State) ->
-	try	Message = io_lib:format (Fmt, Data),
+	try	%Message = io_lib:format (Fmt, Data),
+		Message = case EventLevel of 
+			{operational, discovery} -> Fmt;
+			_ -> io_lib:format(Fmt, Data)
+			end,
 		case EventLevel of
+			{operational, discovery} -> ?_OPR_LOG_HANDLE(discovery, {opr_log, Message});
+			{operational, general} -> ?_OPR_LOG_HANDLE(general, {key, Message});
 			error -> syslog_err(State, Message);
 			warning_msg -> syslog_syswarn(State, Message);
 			info_msg -> syslog_debug(State, Message);

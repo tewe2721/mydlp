@@ -53,7 +53,10 @@
 	registerCommand/2,
 	saveLicenseKey/1,
 	getLicense/0,
-	apiQuery/3
+	apiQuery/3,
+	startDiscoveryOnDemand/1,
+	stopDiscoveryOnDemand/1,
+	pauseDiscoveryOnDemand/1
 	]).
 
 %%%%% EXTERNAL INTERFACE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -206,6 +209,12 @@ saveLicenseKey(LicenseKey) ->
 	list_to_binary(Msg).
 
 getLicense() -> mydlp_license:license().
+
+startDiscoveryOnDemand(RuleId) -> mydlp_discovery_manager:start_on_demand_discovery(RuleId).
+
+stopDiscoveryOnDemand(RuleId) -> mydlp_discovery_manager:stop_discovery_on_demand(RuleId).
+
+pauseDiscoveryOnDemand(RuleId) -> mydlp_discovery_manager:pause_discovery_on_demand(RuleId).
 
 -endif.
 

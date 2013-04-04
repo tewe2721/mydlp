@@ -78,11 +78,12 @@
         }).
 
 -record(aclq, {
-		channel :: 'web' | 'mail' | 'removable' | 'printer' | 'discovery',
+		channel :: 'web' | 'mail' | 'removable' | 'printer' | 'discovery' | 'remote_discovery',
 		src_domain=undefined,
 		src_addr=unknown,
 		src_user_h=unknown,
 		destinations=[],
 		has_hidden_destinations=false
         }).
+
 -endif.

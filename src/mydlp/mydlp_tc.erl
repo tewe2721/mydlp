@@ -38,6 +38,7 @@
 		get_text/3,
 		get_unicode_text/1,
 		get_unicode_text/2,
+		extract_links/1,
 		seclore_initialize/7,
 		seclore_protect/3,
 		seclore_terminate/0,
@@ -175,6 +176,13 @@ get_unicode_text(Encoding, Data) ->
 	catch Class:Error ->
 		?ERROR_LOG("Error occured when extractiong unicode text. Encoding: "?S".~nData: ["?S"]~nClass: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
 				[Encoding, Data, Class, Error, erlang:get_stacktrace()]),
+		{error, {Class, Error}} end.
+
+extract_links(Data) when is_binary(Data) ->
+	try	call_pool({thrift, java, extractLinks, [Data]})
+	catch Class:Error ->
+		?ERROR_LOG("Error occured when extractiong links from HTMLData.~nHTMLData: ["?S"]~nClass: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
+				[Data, Class, Error, erlang:get_stacktrace()]),
 		{error, {Class, Error}} end.
 
 seclore_initialize(SecloreAppPath, SecloreAddress, SeclorePort, SecloreAppName, SecloreHotFolderCabinetId, SecloreHotFolderCabinetPassphrase, SeclorePoolSize) ->

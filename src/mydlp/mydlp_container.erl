@@ -31,6 +31,7 @@
 -behaviour(gen_server).
 
 -include("mydlp.hrl").
+-include("mydlp_schema.hrl").
 
 %% API
 -export([start_link/0,
@@ -192,6 +193,9 @@ handle_call({aclq, ObjId, Timeout}, From, #state{object_tree=OT} = State) ->
 							discovery -> 
 								RuleIndex = get_discovery_rule_index(Obj),
 								{mydlp_acl:qe(Channel, DFFiles, RuleIndex), Obj};
+							remote_discovery -> 
+								RuleIndex = get_discovery_rule_index(Obj),
+								{mydlp_acl:qr(RuleIndex, DFFiles), Obj};
 							printer -> {mydlp_acl:qe(Channel, DFFiles), Obj};
 							inbound -> {mydlp_acl:qi(Channel, DFFiles), Obj};
 							removable -> {mydlp_acl:qe(Channel, DFFiles), Obj}
@@ -501,16 +505,20 @@ get_user(_Obj) -> get_ep_meta("user").
 
 -endif.
 
-log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
-	User = case get_channel(Obj) of
-		api -> get_api_user(Obj);
-		_Else -> get_user(Obj) end,
+log_req(#object{prop_dict=PD}=Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
+	{User, GroupId} = case get_channel(Obj) of
+				api -> {get_api_user(Obj), -1};
+				remote_discovery -> {ok, RId} = dict:find("group_id", PD),
+						{get_remote_user(Obj), RId};
+				discovery -> {ok, RId} = dict:find("group_id", PD),
+						{get_user(Obj), RId};
+				_Else -> {get_user(Obj), -1} end,
 	Channel = get_channel(Obj),
 	Time = erlang:universaltime(),
 	Destination = case get_destination(Obj) of
 		undefined -> nil;
 		Else -> Else end,
-	log_req1(Time, Channel, RuleId, Action, User, Destination, IType, File, Misc).
+	log_req1(Time, Channel, RuleId, Action, User, Destination, IType, File, Misc, GroupId).
 
 execute_custom_action(seclore, {HotFolderId, ActivityComments}, Obj) ->
 	case get_destination(Obj) of % Assuming this is a discovery or endpoint object with a filepath,
@@ -529,17 +537,40 @@ execute_custom_action(seclore, {HotFolderId, ActivityComments}, Obj) ->
 
 -ifdef(__MYDLP_ENDPOINT).
 
-log_req1(Time, Channel, RuleId, Action, User, Destination, IType, File, Misc) ->
+log_req1(Time, Channel, RuleId, Action, User, Destination, IType, File, Misc, GroupId) ->
 	case {Channel, Action, Misc, ?CFG(ignore_discover_max_size_exceeded)} of
 		{discovery, log, max_size_exceeded, true} -> ok;
-		_Else2 -> ?ACL_LOG(#log{time=Time, channel=Channel, rule_id=RuleId, action=Action, ip=nil, user=User, destination=Destination, itype_id=IType, file=File, misc=Misc}) end.
+		_Else2 -> ?ACL_LOG(#log{time=Time, channel=Channel, rule_id=RuleId, action=Action, ip=nil, user=User, destination=Destination, itype_id=IType, file=File, misc=Misc, group_id=GroupId}) end.
+
+get_remote_user(_) -> "undefined".
 
 -endif.
 
 -ifdef(__MYDLP_NETWORK).
 
-log_req1(Time, Channel, RuleId, Action, User, Destination, IType, File, Misc) ->
-	?ACL_LOG(#log{time=Time, channel=Channel, rule_id=RuleId, action=Action, ip=nil, user=User, destination=Destination, itype_id=IType, file=File, misc=Misc}).
+log_req1(Time, Channel, RuleId, Action, User, Destination, IType, File, Misc, GroupId) ->
+	?ACL_LOG(#log{time=Time, channel=Channel, rule_id=RuleId, action=Action, ip=nil, user=User, destination=Destination, itype_id=IType, file=File, misc=Misc, group_id=GroupId}).
+
+get_remote_user(#object{filepath=FP, prop_dict=PD}) ->
+	case dict:find("web_server_id", PD) of
+	{ok, WSId} -> WS = mydlp_mnesia:get_web_server(WSId),
+			WS#web_server.proto ++ "://" ++ WS#web_server.address;
+	_Else ->
+		case filename:split(FP) of %originally should be "/var/lib/mydlp/mounts"
+			["/", "home", "ozgen", "mounts", Id|_Rest] -> construct_source(list_to_integer(Id));
+			_ -> ?ERROR_LOG("Unknown remote discovery file", []), none
+		end
+	end.
+
+construct_source(Id) ->
+	case mydlp_mnesia:get_remote_storage_by_id(Id) of
+		{sshfs, {Address, _, Path, _, _}} -> "sshfs://" ++ binary_to_list(Address) ++ ":" ++binary_to_list(Path);
+		{ftpfs, {Address, Path, _, _}} -> "ftpfs://" ++ binary_to_list(Address) ++ binary_to_list(Path);
+		{cifs, {Address, Path, _, _}} -> "cifs://" ++ binary_to_list(Address) ++ "/" ++ binary_to_list(Path);
+		{dfs, {Address, Path, _, _}} -> "dfs://" ++ binary_to_list(Address) ++ "/" ++ binary_to_list(Path);
+		{nfs, {Address, Path}} -> "nfs://" ++ binary_to_list(Address) ++ "/" ++ binary_to_list(Path)
+	end.
+
 
 -endif.
 
@@ -554,6 +585,7 @@ get_channel(#object{prop_dict=PD} = Obj) ->
 	case dict:find("channel", PD) of
 		{ok, "discovery"} -> discovery;
 		{ok, "api"} -> api;
+		{ok, "remote_discovery"} -> remote_discovery;
 	error -> case dict:find("printerName", PD) of
 		{ok, _} -> printer;
 		error -> case is_inbound(Obj) of
@@ -573,6 +605,13 @@ get_discovery_rule_index(#object{prop_dict=PD}) ->
 		error -> none
 	end.
 
+	%case Ret of 
+	%	none -> case dict:find("web_server_id", PD) of
+	%		{ok, WebServerId} -> mydlp_mnesia:get_rule_id_by_web_server_id(WebServerId);
+	%		error -> none end;
+	%	R -> R
+	%end.
+
 get_type(#object{prop_dict=PD}) ->
 	case dict:find("type", PD) of
 		{ok, "usb_device"} -> usb_device;
@@ -589,6 +628,7 @@ get_destination1(#object{} = Obj) ->
 	case get_channel(Obj) of
 		discovery -> get_destination_file_path(Obj);
 		removable -> get_destination_file_path(Obj);
+		remote_discovery -> get_remote_destination_file_path(Obj);
 		printer -> get_printer_name(Obj);
 		_Else -> undefined end.
 
@@ -597,6 +637,16 @@ get_destination_file_path(#object{prop_dict=PD, filepath=FP}) ->
 		{ok, "true"} -> undefined;
 		_Else -> FP end.
 
+get_remote_destination_file_path(#object{filepath=FP, prop_dict=PD}) ->
+	case dict:find("page_path", PD) of
+		{ok, PP} -> PP;
+		_Else ->
+			case filename:split(FP) of %originally should be "/var/lib/mydlp/mounts"
+				["/", "home", "ozgen", "mounts", _Id|Rest] -> filename:join(Rest);
+				_ -> ?ERROR_LOG("Unknown remote discovery file", []), undefined
+			end
+	end.
+	
 get_ip_address(#object{prop_dict=PD}) ->
 	case dict:find("ip_address", PD) of
 		{ok, ClientIpS} -> mydlp_api:str_to_ip(ClientIpS);

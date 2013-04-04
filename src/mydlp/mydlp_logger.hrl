@@ -58,6 +58,12 @@
 -define(FAC_LOCAL6,     (22 bsl 3)). % reserved for local use
 -define(FAC_LOCAL7,     (23 bsl 3)). % reserved for local use
 
+-define(SUCCESS_MOUNT_KEY, "mount.successful").
+-define(UNSUCCESS_MOUNT_KEY, "mount.unsuccessful").
+-define(SUCCESS_UMOUNT_KEY, "umount.successful").
+-define(UNSUCCESS_UMOUNT_KEY, "umount.unsuccessful").
+
+
 -record(report, {name, facility, format, data}).
 
 -record(log, {
@@ -71,8 +77,19 @@
                 itype_id=undefined,
                 file=undefined,
                 misc=undefined,
-                payload=undefined
+                payload=undefined,
+		group_id=undefined
         }).
+
+-record(opr_log, {
+		time=undefined, 
+		channel=undefined,
+		rule_id=undefined,
+		message_key=undefined,
+		group_id=undefined,
+		report_id=undefined,
+		ip_address=undefined
+	}).
 
 -define(ACL_LOG(Log),
         ?ACL_LOG_P(Log#log{payload=none})).
@@ -84,9 +101,34 @@
         mydlp_logger:notify(Tag, "~P:~P " ++ Format, lists:append([ [I,32] || I <- ([?MODULE_STRING, ?LINE] ++ Args)]))
 	).
 
+-define(LOGGER_NOTIFY_0(Tag,Format,Args),
+        mydlp_logger:notify(Tag, Format, lists:append([ [I,32] || I <- (Args)]))
+	).
+
 -define(ERROR_LOG(Format, Args),
 	?LOGGER_NOTIFY(error, Format, Args)
         ).
+
+
+-define(OPR_LOG(Format, Args),
+	?LOGGER_NOTIFY_0({operational, general}, Format, Args)
+        ).
+
+-ifdef(__MYDLP_NETWORK).
+
+-define(DISCOVERY_OPR_LOG(OprLog),
+	?LOGGER_NOTIFY_0({operational, discovery}, OprLog, [])
+	).
+
+-endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
+-define(DISCOVERY_OPR_LOG(OprLog),
+	mydlp_item_push:p({endpoint_opr_log, discovery, OprLog})
+	).
+
+-endif.
 
 -define(BINARY_LOG(ItemName, Binary),
         FN = mydlp_api:ref_to_fn(?CFG(log_dir), "binlog", erlang:now()),
