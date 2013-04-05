@@ -56,7 +56,7 @@
 	mount_dict
 }).
 
--define(MOUNTH_PATH, "/home/ozgen/mounts/").
+-define(MOUNT_PATH, "/home/ozgen/mounts/").
 -define(SSH_COMMAND, "/usr/bin/sshfs").
 -define(FTP_COMMAND, "/usr/bin/curlftpfs").
 -define(SMB_COMMAND, "/usr/bin/smbmount").
@@ -226,7 +226,7 @@ discover_each_mount([{Id, RuleId, sshfs, {Address, Port, Path, Username, Passwor
 	PathS = binary_to_list(Path),
 	AddressS = binary_to_list(Address),
 	ConnectionString = UsernameS ++ "@" ++ AddressS ++ ":" ++ PathS, 
-	MountPath = filename:join(?MOUNTH_PATH, integer_to_list(Id)),
+	MountPath = filename:join(?MOUNT_PATH, integer_to_list(Id)),
 	Args = ["-p", PortS, ConnectionString, MountPath, "-o", "password_stdin"],
 	MountTuple = create_and_mount_path(MountPath, ?SSH_COMMAND, Args, [], Stdin, RuleId, GroupId),
 	Dict1 = add_mount_path_to_dict(MountTuple, Dict, GroupId),
@@ -241,7 +241,7 @@ discover_each_mount([{Id, RuleId, ftpfs, {Address, Path, Username, Password}}|Re
 			_ -> UsernameS ++ ":" ++ PasswordS
 		end,
 	AddressPath = UandP ++ "@" ++ AddressS ++ "/" ++ PathS,
-	MountPath = filename:join(?MOUNTH_PATH, integer_to_list(Id)),
+	MountPath = filename:join(?MOUNT_PATH, integer_to_list(Id)),
 	Args = ["-o", "ro,utf8", AddressPath, MountPath],
 	MountTuple = create_and_mount_path(MountPath, ?FTP_COMMAND, Args, [], none, RuleId, GroupId),
 	Dict1 = add_mount_path_to_dict(MountTuple, Dict, GroupId),
@@ -256,7 +256,7 @@ discover_each_mount([{Id, RuleId, nfs, {Address, Path}}|RemoteStorages], Dict, G
 	PathS = binary_to_list(Path),
 	AddressS = binary_to_list(Address),
 	AddressPath = AddressS ++ ":" ++ PathS,
-	MountPath = filename:join(?MOUNTH_PATH, integer_to_list(Id)),
+	MountPath = filename:join(?MOUNT_PATH, integer_to_list(Id)),
 	Args = ["-o", "ro,soft,intr,rsize=8192,wsize=8192", AddressPath, MountPath],
 	MountTuple = create_and_mount_path(MountPath, ?MOUNT_COMMAND, Args, [], none, RuleId, GroupId),
 	Dict1 = add_mount_path_to_dict(MountTuple, Dict, GroupId),
@@ -268,7 +268,7 @@ discover_windows_share(Id, RuleId, {WindowsShare, Path, Username, Password}, Dic
 	UsernameS = binary_to_list(Username),
 	PathS = binary_to_list(Path),
 	WindowsSharePath =  "//" ++ binary_to_list(WindowsShare) ++ "/" ++ PathS,
-	MountPath = filename:join(?MOUNTH_PATH, integer_to_list(Id)),
+	MountPath = filename:join(?MOUNT_PATH, integer_to_list(Id)),
 	Args = ["-o","ro", WindowsSharePath, MountPath],
 	MountTuple = case UsernameS of
 			[] -> create_and_mount_path(MountPath, ?SMB_COMMAND, Args, [], "\n", RuleId, GroupId);
@@ -281,13 +281,13 @@ discover_windows_share(Id, RuleId, {WindowsShare, Path, Username, Password}, Dic
 	add_mount_path_to_dict(MountTuple, Dict, GroupId).
 
 release_mounts() -> 
-	case file:list_dir(?MOUNTH_PATH) of
+	case file:list_dir(?MOUNT_PATH) of
 		{ok, FileList} -> release_mount(FileList);
-		{error, E} -> ?ERROR_LOG("Remote Discovery: Error Occured listing mount directory. MountPath: ["?S"]~n. Error: ["?S"]~n", [?MOUNTH_PATH, E])
+		{error, E} -> ?ERROR_LOG("Remote Discovery: Error Occured listing mount directory. MountPath: ["?S"]~n. Error: ["?S"]~n", [?MOUNT_PATH, E])
 	end.
 
 release_mount([File|Rest]) ->
-	FilePath = filename:join(?MOUNTH_PATH, File),
+	FilePath = filename:join(?MOUNT_PATH, File),
 	umount_path(FilePath, ?TRY_COUNT),
 	release_mount(Rest);
 release_mount([]) -> ok.

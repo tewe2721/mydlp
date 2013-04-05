@@ -50,7 +50,6 @@
 	receiveChunk/5,
 	requeueIncident/1,
 	registerUserAddress/4,
-	registerCommand/2,
 	saveLicenseKey/1,
 	getLicense/0,
 	apiQuery/3,
