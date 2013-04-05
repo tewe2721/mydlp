@@ -329,8 +329,6 @@ call_remote_storage_discovery(RuleId, Dict, IsOnDemand) ->
 	Resp = get_discovery_status(RuleId, Dict),
 	erlang:display({status, Resp}),
 	case Resp of
-		none ->
-			Dict;
 		{disc, GroupId} -> 
 			case IsOnDemand of
 				true -> Dict;
@@ -370,8 +368,6 @@ call_remote_storage_discovery(RuleId, Dict, IsOnDemand) ->
 call_ep_discovery(RuleId, Dict, IsOnDemand) -> 
 	Resp = get_discovery_status(RuleId, Dict),
 	case Resp of
-		none ->
-			Dict;
 		{disc, GroupId} -> 
 			case IsOnDemand of
 				true -> Dict;
@@ -649,7 +645,7 @@ start_at_exact_hour() -> % Remaining should be multiplied with 1000
 	erlang:display({exactHour, M, S}),
 	case M of 
 		0 -> timer:send_after(0, start_discovery_scheduling);
-		_ -> Remaining = (((59-M)*6)+S+10), %10 is for safity
+		_ -> Remaining = (((59-M)*6)+S+10) * 1000, %10 is for safity
 			timer:send_after(Remaining, start_discovery_scheduling)
 	end.
 
@@ -657,4 +653,4 @@ start_discovery_scheduling() ->
 	{_D, {H, _M, _S}} = erlang:localtime(),
 	Schedules = mydlp_mnesia:get_schedules_by_hour(H),
 	gen_server:cast(?MODULE, {manage_schedules, Schedules}),
-	timer:send_after(300000, start_discovery_scheduling).
+	timer:send_after(60*60*1000, start_discovery_scheduling).

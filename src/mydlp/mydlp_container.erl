@@ -557,7 +557,7 @@ get_remote_user(#object{filepath=FP, prop_dict=PD}) ->
 			WS#web_server.proto ++ "://" ++ WS#web_server.address;
 	_Else ->
 		case filename:split(FP) of %originally should be "/var/lib/mydlp/mounts"
-			["/", "home", "ozgen", "mounts", Id|_Rest] -> construct_source(list_to_integer(Id));
+			["/", "var", "lib", "mydlp", "mounts", Id|_Rest] -> construct_source(list_to_integer(Id));
 			_ -> ?ERROR_LOG("Unknown remote discovery file", []), none
 		end
 	end.
@@ -642,7 +642,7 @@ get_remote_destination_file_path(#object{filepath=FP, prop_dict=PD}) ->
 		{ok, PP} -> PP;
 		_Else ->
 			case filename:split(FP) of %originally should be "/var/lib/mydlp/mounts"
-				["/", "home", "ozgen", "mounts", _Id|Rest] -> filename:join(Rest);
+				["/", "var", "lib", "mydlp", "mounts", _Id|Rest] -> filename:join(Rest);
 				_ -> ?ERROR_LOG("Unknown remote discovery file", []), undefined
 			end
 	end.
