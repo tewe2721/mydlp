@@ -197,12 +197,6 @@ registerUserAddress(EndpointId, Ipaddress, Userh, Data) ->
 	mydlp_mnesia:save_user_address(ClientIp, UserHI, Username),
 	MetaDict.
 
-registerCommand(EndpointId, Command) ->
-	case Command of
-		<<"schedule_discovery">> -> mydlp_mnesia:save_endpoint_command(EndpointId, schedule_discovery);
-		<<"stop_discovery">> -> mydlp_mnesia:save_endpoint_command(EndpointId, stop_discovery);
-		_Else -> ?ERROR_LOG("Unknown command. Command: "?S, [Command]) end.
-
 saveLicenseKey(LicenseKey) ->
 	mydlp_license:save_license_key(LicenseKey),
 	Msg = mydlp_license:sync_result(),

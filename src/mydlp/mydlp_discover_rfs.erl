@@ -190,7 +190,7 @@ add_mount_path_to_dict({MountPath, RuleId}, Dict, GroupId) ->
 		{ok, {Paths, GId}} -> dict:store(RuleId, {[MountPath|Paths], GId}, Dict)
 	end.
 
-mount_path(MountPath, Command, Args, Envs, Stdin, RuleId, GroupId, 1) ->
+mount_path(MountPath, Command, Args, Envs, Stdin, RuleId, _GroupId, 1) ->
 	case mydlp_api:cmd_bool(?MOUNTPOINT_COMMAND, ["-q", MountPath]) of
 		true ->	{MountPath, RuleId};
 		false ->
