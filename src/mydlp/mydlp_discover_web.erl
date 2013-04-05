@@ -216,21 +216,24 @@ handle_info({http, {RequestId, Result}}, #state{head_requests=HeadT, get_request
 
 handle_info({is_finished, RuleId}, #state{timer_dict=TimerDict, group_id_dict=GroupDict, paused_queue=PausedQ, rule_age=RuleAge}=State) ->
 	erlang:display({"IS FINISHED", RuleId}),
-	{ok, {GroupId, _Status}} = dict:find(RuleId, GroupDict),
-	NowS = calendar:datetime_to_gregorian_seconds(calendar:universal_time()),
-	Age = gb_trees:get(RuleId, RuleAge),
-	case dict:find(RuleId, TimerDict) of
-		{ok, Timer} -> (catch timer:cancel(Timer));
-		_ -> ok end,
-	R = NowS - Age,
-	erlang:display({res, R}),
-	case ((NowS - Age) > 180) of
-		true -> GroupDict1 = dict:store(RuleId, {GroupId, stopped}, GroupDict),
-			TimerDict1 = dict:store(RuleId, none, TimerDict),
-			control_rule_status(RuleId, GroupId, PausedQ),
-			{noreply, State#state{group_id_dict=GroupDict1, timer_dict=TimerDict1}};
-		false -> {ok, Timer1} = timer:send_after(60000, {is_finished, RuleId}),
-			{noreply, State#state{timer_dict=dict:store(RuleId, Timer1, TimerDict)}}
+	case dict:find(RuleId, GroupDict) of
+		{ok, {GroupId, _Status}} ->
+			NowS = calendar:datetime_to_gregorian_seconds(calendar:universal_time()),
+			Age = gb_trees:get(RuleId, RuleAge),
+			case dict:find(RuleId, TimerDict) of
+				{ok, Timer} -> (catch timer:cancel(Timer));
+				_ -> ok end,
+			R = NowS - Age,
+			erlang:display({res, R}),
+			case ((NowS - Age) > 180) of
+				true -> GroupDict1 = dict:store(RuleId, {GroupId, stopped}, GroupDict),
+					TimerDict1 = dict:store(RuleId, none, TimerDict),
+					control_rule_status(RuleId, GroupId, PausedQ),
+					{noreply, State#state{group_id_dict=GroupDict1, timer_dict=TimerDict1}};
+				false -> {ok, Timer1} = timer:send_after(60000, {is_finished, RuleId}),
+					{noreply, State#state{timer_dict=dict:store(RuleId, Timer1, TimerDict)}}
+			end;
+		_ -> {noreply, State}
 	end;
 
 handle_info({async_reply, Reply, From}, State) ->

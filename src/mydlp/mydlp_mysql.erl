@@ -266,6 +266,7 @@ handle_call({save_fingerprints, DocumentId, FingerprintList}, From, State) ->
         {noreply, State};
 
 handle_call({populate_discovery_targets, RuleId}, _From, State) ->
+	erlang:display({return, psq(get_endpoint_alias)}),
 	{ok, Aliasses} =  psq(get_endpoint_alias),
 	IpsAndNames = get_identities(Aliasses),
 	lists:map(fun(I) -> mydlp_mnesia:update_ep_schedules(I, RuleId) end, IpsAndNames),
