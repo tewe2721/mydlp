@@ -54,8 +54,6 @@ service Mydlp_ui {
 
 	string apiQuery(1: string Ipaddress, 2: string Filename, 3: binary Data)
 
-	oneway void registerCommand(1: string EndpointId, 2: string Command)
-
 	oneway void startDiscoveryOnDemand(1: i32 RuleId)
 
 	oneway void stopDiscoveryOnDemand(1: i32 RuleId)

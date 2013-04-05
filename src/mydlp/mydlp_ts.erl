@@ -50,7 +50,6 @@
 	receiveChunk/5,
 	requeueIncident/1,
 	registerUserAddress/4,
-	registerCommand/2,
 	saveLicenseKey/1,
 	getLicense/0,
 	apiQuery/3,
@@ -196,12 +195,6 @@ registerUserAddress(EndpointId, Ipaddress, Userh, Data) ->
 	ClientIp = mydlp_api:str_to_ip(ClientIpS),
 	mydlp_mnesia:save_user_address(ClientIp, UserHI, Username),
 	MetaDict.
-
-registerCommand(EndpointId, Command) ->
-	case Command of
-		<<"schedule_discovery">> -> mydlp_mnesia:save_endpoint_command(EndpointId, schedule_discovery);
-		<<"stop_discovery">> -> mydlp_mnesia:save_endpoint_command(EndpointId, stop_discovery);
-		_Else -> ?ERROR_LOG("Unknown command. Command: "?S, [Command]) end.
 
 saveLicenseKey(LicenseKey) ->
 	mydlp_license:save_license_key(LicenseKey),

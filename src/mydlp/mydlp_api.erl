@@ -3084,6 +3084,8 @@ apply_cdbobj({{rule_tables, RuleTables}, {mc, MCModule}, {items, ItemDump}}=Poli
 	mydlp_container:schedule_confupdate(),
 	ok;
 apply_cdbobj({command, L}) when is_list(L) -> lists:foreach(fun(C) -> apply_cdbobj({command, C}) end, L);
+apply_cdbobj({command, {set_enc_key, EncKey}}) when is_binary(EncKey), size(EncKey) == 64 ->
+	?ASYNC0(fun() -> mydlp_sync:set_enc_key(EncKey), mydlp_container:schedule_confupdate() end), ok;
 apply_cdbobj({command, stop_discovery, [{ruleId, RuleId}, {groupId, GroupId}]}) ->
 	?ASYNC0(fun() -> mydlp_discover_fs:stop_discovery(RuleId, GroupId) end), ok;
 apply_cdbobj({command, start_discovery, [{ruleId, RuleId}, {groupId, GroupId}]}) ->
