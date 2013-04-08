@@ -116,7 +116,6 @@ handle_call(_Msg, _From, State) ->
 %	end;
 
 handle_cast({continue_discovering, RuleId}, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=GroupDict, timer_dict=TimerDict}=State) ->
-	erlang:display({"web_continue_discovering", queue:len(PQ)}),
 	case dict:find(RuleId, GroupDict) of
 		{ok, {GId, _S}} -> GroupDict1 = dict:store(RuleId, {GId, disc}, GroupDict),
 					{ok, Timer} = timer:send_after(60000, {is_finished, RuleId}),
@@ -142,7 +141,6 @@ handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=Gro
 		{{value, {WebServerId, ParentId, PagePath, RuleId, Depth}=Item}, Q1} ->
 			case is_paused_or_stopped_by_rule_id(RuleId, GroupDict) of
 			paused -> % rule is paused push the item paused_queue
-				erlang:display(paused_web_disc),
 				PQ1 = queue:in(Item, PQ),
 				consume(),
 				{noreply, State#state{discover_queue=Q1, paused_queue=PQ1}};
@@ -150,7 +148,6 @@ handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=Gro
 				consume(),
 				{noreply, State#state{discover_queue=Q1, paused_queue=PQ}};
 			_ ->
-				erlang:display({web_disc, PagePath}),
 				try 	case is_cached({WebServerId, PagePath, RuleId}) of
 						false -> case fetch_meta(WebServerId, PagePath) of
 							{ok, RequestId} ->
@@ -175,7 +172,6 @@ handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=Gro
 	end;
 
 handle_cast({update_rule_status, RuleId, Status}, #state{group_id_dict=GroupDict, timer_dict=TimerDict}=State) ->
-	erlang:display({"UPDATE RULE STATUS", Status}),
 	GroupDict1 = case dict:find(RuleId, GroupDict) of
 			{ok, {GroupId, _Status}} -> dict:store(RuleId, {GroupId, Status}, GroupDict);
 			_ -> GroupDict end,
@@ -215,7 +211,6 @@ handle_info({http, {RequestId, Result}}, #state{head_requests=HeadT, get_request
 	end;
 
 handle_info({is_finished, RuleId}, #state{timer_dict=TimerDict, group_id_dict=GroupDict, paused_queue=PausedQ, rule_age=RuleAge}=State) ->
-	erlang:display({"IS FINISHED", RuleId}),
 	case dict:find(RuleId, GroupDict) of
 		{ok, {GroupId, _Status}} ->
 			NowS = calendar:datetime_to_gregorian_seconds(calendar:universal_time()),
@@ -223,8 +218,6 @@ handle_info({is_finished, RuleId}, #state{timer_dict=TimerDict, group_id_dict=Gr
 			case dict:find(RuleId, TimerDict) of
 				{ok, Timer} -> (catch timer:cancel(Timer));
 				_ -> ok end,
-			R = NowS - Age,
-			erlang:display({res, R}),
 			case ((NowS - Age) > 180) of
 				true -> GroupDict1 = dict:store(RuleId, {GroupId, stopped}, GroupDict),
 					TimerDict1 = dict:store(RuleId, none, TimerDict),
@@ -276,28 +269,6 @@ is_paused_or_stopped_by_rule_id(RuleId, GroupDict) ->
 		_ -> none
 	end.
 
-%cancel_all_timers(TimerDict) ->
-%	lists:map(fun({RuleId, Timer}) -> case Timer of
-%						none -> ok;
-%						_ -> erlang:display({timer_canceled, RuleId}), timer:cancel(Timer) end end, dict:to_list(TimerDict)).
-
-%start_timer_for_each_rule(RuleId) -> 
-%	erlang:display({timer_created, RuleId}),
-%	Timer = case timer:send_after(60000, {is_finished, RuleId}) of
-%		{ok, TRef} -> TRef;
-%		{error, _} = Error -> ?ERROR_LOG("Can not create timer. Reason: "?S, [Error]), none end,
-%	{RuleId, Timer}.
-%	case dict:find(RuleId, TimerDict) of
-%		{ok, Timer} -> {RuleId, Timer};
-%		_ -> {RuleId, timer:send_after(60000, {is_finished, RuleId})}
-%	end.
-
-%mark_finished_rules(PausedQ, GroupDict) ->
-%	RuleStatus = dict:to_list(GroupDict),
-%	erlang:display(RuleStatus),
-%	DictList = lists:map(fun({RuleId, {GroupId, _Status}}) -> mark_each_finished_rule(RuleId, GroupId, PausedQ) end, RuleStatus),
-%	dict:from_list(DictList).
-
 control_rule_status(RuleId, GroupId, Q) ->
 	case queue:out(Q) of
 		{{value, {_, _, _, RuleIndex, _}}, Q1} ->
@@ -311,7 +282,6 @@ control_rule_status(RuleId, GroupId, Q) ->
 			{RuleId, {GroupId, stopped}}
 	end.
 push_opr_log(RuleId, GroupId, Message) ->
-	erlang:display("PUSH OPR LOG"),
 	Time = erlang:universaltime(),
 	OprLog = #opr_log{time=Time, channel=remote_discovery, rule_id=RuleId, message_key=Message, group_id=GroupId},
 	?DISCOVERY_OPR_LOG(OprLog).

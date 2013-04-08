@@ -151,7 +151,6 @@ handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
 
 handle_call({stop_discovery_by_rule_id, RuleId}, _From, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=GroupDict}=State) ->
-	erlang:display({stop_discovery, RuleId}),
 	case dict:find(RuleId, GroupDict) of
 		{ok, {GId, Status}} ->
 			Q1 = drop_items_by_rule_id(RuleId, Q),
@@ -252,7 +251,6 @@ handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=Gro
 	end;
 
 handle_cast({stop_discovery, RuleId, GroupId}, #state{group_id_dict=GroupDict}=State) ->
-	erlang:display({stop_discovery, RuleId}),
 	GroupDict1 = dict:store(RuleId, {GroupId, stopped}, GroupDict),	
 	{noreply, State#state{group_id_dict=GroupDict1}};
 
@@ -266,18 +264,15 @@ handle_cast({start_discovery, RuleId, GroupId}, #state{group_id_dict=GroupDict}=
 					catch _:_ -> binary_to_list(P) end  %% TODO: log this case
 				 end
 			, L) end,
-	erlang:display({pathList, PathList}),
 	filter_discover_cache(RuleId),
 	lists:map(fun(P) -> q(P, RuleId, GroupId) end, PathList),
 	{noreply, State#state{group_id_dict=GroupDict1, is_new=true}};
 
 handle_cast({pause_discovery, RuleId, GroupId}, #state{group_id_dict=GroupDict}=State) ->
-	erlang:display({pause_discovery, RuleId}),
 	GroupDict1 = dict:store(RuleId, {GroupId, paused}, GroupDict),
 	{noreply, State#state{group_id_dict=GroupDict1}};
 
 handle_cast({continue_discovery, RuleId, GroupId}, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=GroupDict}=State) ->
-	erlang:display({continue_discovery, RuleId}),
 	%reset_discover_cache(),
 	GroupDict1 = dict:store(RuleId, {GroupId, disc}, GroupDict),
 	{noreply, State#state{discover_queue=queue:join(Q, PQ), paused_queue=queue:new(), group_id_dict=GroupDict1}};
@@ -303,7 +298,6 @@ is_paused_or_stopped_by_rule_id(RuleId, GroupDict) ->
 
 mark_finished_rules(PausedQ, GroupDict) ->
 	RuleStatus = dict:to_list(GroupDict),
-	erlang:display(RuleStatus),
 	DictList = lists:map(fun({RuleId, {GroupId, _Status}}) -> mark_finished_each_rule(RuleId, GroupId, PausedQ) end, RuleStatus),
 	dict:from_list(DictList).
 

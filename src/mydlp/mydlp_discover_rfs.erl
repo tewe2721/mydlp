@@ -115,7 +115,6 @@ handle_cast({start_by_rule_id, RuleId, GroupId}, #state{mount_dict=Dict}=State) 
 	{noreply, State#state{mount_dict=Dict1}};
 
 handle_cast({continue_discovering, RuleId}, State) ->
-	erlang:display(rfs_continue_discovering),
 	mydlp_discover_fs:continue_paused_discovery(RuleId),
 	{noreply, State};	
 
@@ -127,13 +126,6 @@ handle_cast({consume, RemoteStorages, GroupId, RuleId}, #state{mount_dict=Dict}=
 			OprLog = #opr_log{time=Time, channel=remote_discovery, rule_id=RuleId, message_key=?RFS_DISC_FINISHED, group_id=GroupId},
 			?DISCOVERY_OPR_LOG(OprLog)
 	end,
-%	case MountPaths of
-%		[] -> Time = erlang:universaltime(),
-%			OprLog = #opr_log{time=Time, channel=remote_discovery, rule_id=RuleId, message_key=?RFS_DISC_FINISHED, group_id=GroupId},
-%			?DISCOVERY_OPR_LOG(OprLog);
-%		_ -> {ok, {MountPaths, GroupId}} = dict:find(RuleId, Dict1),
-%			mydlp_discover_fs:ql([{RuleId, MountPath, GroupId}|| MountPath <- MountPaths])
-%	end,
 	{noreply, State#state{mount_dict=Dict1}};
 
 handle_cast(finished, State) ->
