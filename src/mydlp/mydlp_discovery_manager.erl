@@ -136,44 +136,31 @@ handle_call(_Msg, _From, State) ->
 
 
 handle_cast({start_on_demand, RuleId}, #state{discovery_dict=Dict}=State) ->
-	erlang:display({bs, dict:to_list(Dict)}),
 	Dict2 = call_start_discovery_on_target(RuleId, Dict, true),
-	erlang:display({as, dict:to_list(Dict2)}),
 	{noreply, State#state{discovery_dict=Dict2}};
 
 handle_cast({pause_on_demand, RuleId}, #state{discovery_dict=Dict}=State) ->
-	erlang:display({bp, dict:to_list(Dict)}),
 	Dict2 = call_pause_discovery_on_target(RuleId, Dict, true),
-	erlang:display({ap, dict:to_list(Dict2)}),
 	{noreply, State#state{discovery_dict=Dict2}};
 
 handle_cast({stop_on_demand, RuleId}, #state{discovery_dict=Dict}=State) ->
-	erlang:display({bst, dict:to_list(Dict)}),
 	Dict2 = call_stop_discovery_on_target(RuleId, Dict, true),
-	erlang:display({ast, dict:to_list(Dict2)}),
 	{noreply, State#state{discovery_dict=Dict2}};
 
 handle_cast({manage_schedules, Schedules}, #state{discovery_dict=Dict}=State) ->
-	erlang:display({manage_schedules, Schedules}),
 	edit_dictionary(Schedules, Dict),
 	{noreply, State};
 
 handle_cast({start_discovery, RuleId}, #state{discovery_dict=Dict}=State) ->
-	erlang:display({bs1, dict:to_list(Dict)}),
 	Dict2 = call_start_discovery_on_target(RuleId, Dict, false),
-	erlang:display({as1, dict:to_list(Dict2)}),
 	{noreply, State#state{discovery_dict=Dict2}};
 
 handle_cast({stop_discovery, RuleId}, #state{discovery_dict=Dict}=State) ->
-	erlang:display({bst1, dict:to_list(Dict)}),
 	Dict2 = call_stop_discovery_on_target(RuleId, Dict, false),
-	erlang:display({ast1, dict:to_list(Dict2)}),
 	{noreply, State#state{discovery_dict=Dict2}};
 
 handle_cast({pause_discovery, RuleId}, #state{discovery_dict=Dict}=State) ->
-	erlang:display({bp, dict:to_list(Dict)}),
 	Dict2 = call_pause_discovery_on_target(RuleId, Dict, false),
-	erlang:display({ap, dict:to_list(Dict2)}),
 	{noreply, State#state{discovery_dict=Dict2}};
 
 handle_cast({continue_discovery, RuleId}, #state{discovery_dict=Dict}=State) ->
@@ -197,7 +184,7 @@ handle_cast({create_timer, RuleId}, #state{timer_dict=TimerDict}=State) ->
 	TimerDict1 = case mydlp_mnesia:get_rule_channel(RuleId) of
 			remote_discovery -> {ok, Timer} = timer:send_after(60000, {is_discovery_finished, RuleId}),
 					dict:store(RuleId, Timer, TimerDict);
-			discovery -> erlang:display({discovery_timer, ?EP_CONTROL_TIME}),{ok, Timer} = timer:send_after(?EP_CONTROL_TIME, {is_ep_discovery_finished, RuleId}),
+			discovery -> {ok, Timer} = timer:send_after(?EP_CONTROL_TIME, {is_ep_discovery_finished, RuleId}),
 					dict:store(RuleId, Timer, TimerDict)
 		end,
 	{noreply, State#state{timer_dict=TimerDict1}};
@@ -218,8 +205,6 @@ handle_info({async_reply, Reply, From}, State) ->
 	{noreply, State};
 
 handle_info({is_discovery_finished, RuleId}, #state{discovery_dict=DiscDict, timer_dict=TimerDict}=State) ->
-	erlang:display("TIMER IS ELAPSED"),
-	erlang:display(dict:to_list(TimerDict)),
 	case dict:find(RuleId, TimerDict) of
 		error -> {noreply, State};
 		{ok, Timer} ->
@@ -228,7 +213,6 @@ handle_info({is_discovery_finished, RuleId}, #state{discovery_dict=DiscDict, tim
 			%Reply = mydlp_discover_fs:is_discovery_finished(RuleId),
 			{ok, {_, GroupId}} = dict:find(RuleId, DiscDict),
 			Reply = mydlp_mysql:is_all_discovery_finished(GroupId),
-			erlang:display({is_finished_resp, Reply}),
 			case Reply of
 				true ->	 
 					TimerDict1 = dict:erase(RuleId, TimerDict),
@@ -246,7 +230,6 @@ handle_info({is_discovery_finished, RuleId}, #state{discovery_dict=DiscDict, tim
 					{noreply, State#state{timer_dict=TimerDict1}}
 			end
 			catch _Class:_Error ->
-				erlang:display("SOME EXCEPTION IS OCCURED"),
 				{ok, Timer2} = timer:send_after(60000, {is_discovery_finished, RuleId}),
 				TimerDict2 = dict:store(RuleId, Timer2, TimerDict),
 				{noreply, State#state{discovery_dict=DiscDict, timer_dict=TimerDict2}}
@@ -254,7 +237,6 @@ handle_info({is_discovery_finished, RuleId}, #state{discovery_dict=DiscDict, tim
 	end;
 
 handle_info({is_ep_discovery_finished, RuleId}, #state{discovery_dict=DiscDict, timer_dict=TimerDict}=State) ->
-	erlang:display("EP TIMER IS ELAPSED"),
 	case dict:find(RuleId, TimerDict) of
 		error -> {noreply, State};
 		{ok, Timer} ->
@@ -262,7 +244,6 @@ handle_info({is_ep_discovery_finished, RuleId}, #state{discovery_dict=DiscDict, 
 			cancel_timer(Timer),
 			{ok, {_, GroupId}} = dict:find(RuleId, DiscDict),
 			[Endpoints] = mydlp_mnesia:get_endpoints_by_rule_id(RuleId), 
-			erlang:display({endpoints, Endpoints}),
 			case mydlp_mysql:is_all_ep_discovery_finished(GroupId, Endpoints, ?EP_DISC_FINISHED) of
 				true -> TimerDict1 = dict:erase(RuleId, TimerDict),
 					update_report_as_finished(GroupId),
@@ -327,7 +308,6 @@ call_start_discovery_on_target(RuleId, Dict, IsOnDemand) ->
 
 call_remote_storage_discovery(RuleId, Dict, IsOnDemand) -> 
 	Resp = get_discovery_status(RuleId, Dict),
-	erlang:display({status, Resp}),
 	case Resp of
 		{disc, GroupId} -> 
 			case IsOnDemand of
@@ -562,7 +542,6 @@ generate_group_id(RuleId, Channel) ->
 	Time = erlang:universaltime(),
 	GroupId = integer_to_list(RuleId) ++ "_" ++ integer_to_list(calendar:datetime_to_gregorian_seconds(erlang:localtime())),
 	OrigRuleId = mydlp_mnesia:get_orig_id_by_rule_id(RuleId),
-	erlang:display({rule_id, RuleId}),
 	mydlp_mysql:push_discovery_report(Time, GroupId, OrigRuleId, ?REPORT_STATUS_DISC),
 	OprLog = #opr_log{time=Time, channel=Channel, rule_id=RuleId, message_key=?SUCCESS_MOUNT_KEY, group_id=GroupId},%TODO: message key should be revised.
 	?DISCOVERY_OPR_LOG(OprLog),
@@ -642,7 +621,6 @@ edit_discoveries([]) -> ok.
 
 start_at_exact_hour() -> % Remaining should be multiplied with 1000
 	{_D, {_H, M, S}} = erlang:localtime(),
-	erlang:display({exactHour, M, S}),
 	case M of 
 		0 -> timer:send_after(0, start_discovery_scheduling);
 		_ -> Remaining = (((59-M)*6)+S+10) * 1000, %10 is for safity

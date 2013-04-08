@@ -457,13 +457,6 @@ update_ep_schedules({EndpointId, Ip, Username}, TargetRuleId) ->
 	RuleIds = get_rule_ids(get_dfid(), AclQ#aclq{channel=discovery}),
 	aqc({update_ep_schedules, EndpointId, RuleIds, TargetRuleId}, nocache).
 
-%update_rfs_and_web_schedules(RuleId) ->
-%	WebServers = aqc({get_web_servers_id_by_rule_id, RuleId}, nocache),
-%	erlang:display({web, WebServers}),
-%	Rfs = aqc({get_remote_storages_id_by_rule_id, RuleId}, nocache),
-%	erlang:display({rfs, Rfs}),
-%	aqc({update_rfs_and_web_schedules, RuleId, WebServers, Rfs}, nocache).
-
 get_endpoints_by_rule_id(RuleId) -> aqc({get_endpoints_by_rule_id, RuleId}, nocache).
 
 -endif.
@@ -640,7 +633,6 @@ handle_result({get_rule_table, _Channel, RuleIndex}, {atomic, Result}) ->
 			UniqueRule = get_rule_with_id(RuleTables, RuleIndex),
 			%UniqueRule = lists:nth(RuleIndex+1, RuleTables),
 			{Req, IdAndDefaultAction, [UniqueRule]} end,
-	erlang:display(Res),
 	Res;
 
 handle_result({get_rule_table_destination, _Channel}, {atomic, Result}) -> 
@@ -1261,11 +1253,9 @@ handle_query({save_endpoint_command, EndpointId, Command}) ->
 handle_query({get_endpoint_commands, EndpointId}) ->
         Items = mnesia:match_object(#endpoint_command{id='_', endpoint_id=EndpointId, command='_', date='_', args='_'}),
 	Time=erlang:universaltime(),
-	erlang:display(get_endpoint_command),
 	lists:foreach(fun(#endpoint_command{command=Command, id=Id, args=Args}) -> 
-		erlang:display({command, Command}),
 		case Command of
-			{set_enc_key, _} -> erlang:display("set_enckey"), ok;
+			{set_enc_key, _} -> ok;
 			_ ->
 				[{ruleId, RuleId}, {groupId, GroupId}] = Args,
 				OprLog = #opr_log{time=Time, channel=discovery, rule_id=RuleId, message_key="command_sent", group_id=GroupId},

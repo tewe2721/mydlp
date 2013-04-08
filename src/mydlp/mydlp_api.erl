@@ -3044,7 +3044,6 @@ generate_client_policy(EndpointId, IpAddr, UserH, RevisionId) ->
 	CDBObj = {{rule_tables, RuleTables}, {mc, MCModule}, {items, ItemDump}},
 	CDBHash = erlang:phash2(CDBObj),
 	Commands = mydlp_mnesia:get_endpoint_commands(EndpointId),
-	erlang:display({commands, Commands}),
 	case {CDBHash, Commands} of
 		{RevisionId, []} -> <<"up-to-date">>;
 		{RevisionId, Commands} -> erlang:term_to_binary(Commands, [compressed]);
