@@ -87,13 +87,6 @@
 
 -endif.
 
-is_substring(_FileName, []) -> false;
-is_substring(FileName, [Head|Tail]) ->
-	case string:str(FileName, Head) of
-		1 -> true;
-		_ -> is_substring(FileName, Tail)
-	end.
-
 -ifdef(__PLATFORM_WINDOWS).
 
 -define(EXCEPTIONS_FILE, [
@@ -101,6 +94,12 @@ is_substring(FileName, [Head|Tail]) ->
 	"apache-tika-"
 ]).
 
+is_substring(_FileName, []) -> false;
+is_substring(FileName, [Head|Tail]) ->
+	case string:str(FileName, Head) of
+		1 -> true;
+		_ -> is_substring(FileName, Tail)
+	end.
 
 is_exceptional(FilePath) ->
 	FileName = filename:basename(FilePath, ""),
