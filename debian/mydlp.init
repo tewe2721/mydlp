@@ -75,7 +75,8 @@ is_mysql_alive() {
 is_tables_initialized() {
 	[ -n "$(echo 'show tables'|$MYSQLC mydlp|grep -e '^Rule$')" ] && \
 	[ -n "$(echo 'show tables'|$MYSQLC mydlp|grep -e '^Config$')" ] && \
-	[ -n "$(echo 'show tables'|$MYSQLC mydlp_log|grep -e '^IncidentLog$')" ]
+	[ -n "$(echo 'show tables'|$MYSQLC mydlp_log|grep -e '^IncidentLog$')" ] && \
+	[ -n "$(echo 'show tables'|$MYSQLC mydlp_report|grep -e '^DiscoveryReport$')" ]
 }
 
 wait_for_mysqld() {
@@ -179,6 +180,11 @@ check_mysql_db() {
 			echo " * Initializing MyDLP Log database..."
 			create_db mydlp_log
 			$MYSQLC mydlp_log < $SCHEMADIR/HEAD_mydlp_log.sql
+		fi
+		if [ -z "$(echo 'show databases'|$MYSQLC|grep -e '^mydlp_report$')" ]; then
+			echo " * Initializing MyDLP Report database..."
+			create_db mydlp_report
+			$MYSQLC mydlp_report < $SCHEMADIR/HEAD_mydlp_report.sql
 		fi
 	else
 		echo "Cannot find mysql-client!!!"
