@@ -22,7 +22,8 @@ mydlpschemadir = $(datadir)/mydlp/schema
 
 mydlpschema_DATA = \
 	HEAD_mydlp.sql \
-	HEAD_mydlp_log.sql
+	HEAD_mydlp_log.sql \
+	HEAD_mydlp_report.sql
 
 install-data-hook:
 	mkdir -p $(DESTDIR)$(mydlpschemadir) && \
