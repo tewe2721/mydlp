@@ -36,6 +36,10 @@
 			{seap, % Simple endpoint agent protocol
 				{acceptor, {9099, plain, seap} },
 		                 {workers, []} 
+			},
+			{iecp, % Inter endpoint comm protocol
+				{acceptor, {9100, plain, iecp} },
+		                 {workers, []} 
 			}
 	).
 

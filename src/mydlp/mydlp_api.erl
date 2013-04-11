@@ -3403,6 +3403,36 @@ generate_endpoint_key() ->
                                 Else2 -> ?ERROR_LOG("REGISTER: An error occured during HTTP req:Ret="?S, [Else2]), retry end;
                 Else -> ?ERROR_LOG("REGISTER: An error occured during HTTP req: Obj="?S"~n", [Else]), retry end.
 
+is_valid_token(Token) when is_list(Token) ->
+        Url = "https://" ++ ?CFG(management_server_address) ++ "/token?q=is_valid",
+	RawPayload = list_to_binary(Token),
+	Payload = mydlp_api:encrypt_payload(RawPayload),
+        case catch httpc:request(post, {Url, [], "application/octet-stream", Payload}, [], []) of
+                {ok, {{_HttpVer, Code, _Msg}, _Headers, Body}} ->
+                        case {Code, Body} of
+                                {200, Resp} -> case list_to_binary(Resp) of
+					<<>> ->	?ERROR_LOG("TOKEN: Empty response: Url="?S"~n", [Url]), error;
+                                	<<"error", _/binary>> -> error;
+                                	<<"invalid", _/binary>> -> delete_endpoint_key(), error;
+                                	<<"true", _/binary>> -> true;
+                                	<<"false", _/binary>> -> false end;
+                                Else2 -> ?ERROR_LOG("TOKEN: An error occured during HTTP req:Ret="?S, [Else2]), retry end;
+                Else -> ?ERROR_LOG("TOKEN: An error occured during HTTP req: Obj="?S"~n", [Else]), retry end.
+
+new_token() ->
+        Url = "https://" ++ ?CFG(management_server_address) ++ "/token?q=new",
+	Payload = mydlp_api:encrypt_payload(<<>>),
+        case catch httpc:request(post, {Url, [], "application/octet-stream", Payload}, [], []) of
+                {ok, {{_HttpVer, Code, _Msg}, _Headers, Body}} ->
+                        case {Code, Body} of
+                                {200, Resp} -> case list_to_binary(Resp) of
+					<<>> ->	?ERROR_LOG("TOKEN: Empty response: Url="?S"~n", [Url]), error;
+                                	<<"TOKEN: ", Token/binary>> -> Token;
+                                	<<"error", _/binary>> -> error;
+                                	<<"invalid", _/binary>> -> delete_endpoint_key(), error end;
+                                Else2 -> ?ERROR_LOG("TOKEN: An error occured during HTTP req:Ret="?S, [Else2]), retry end;
+                Else -> ?ERROR_LOG("TOKEN: An error occured during HTTP req: Obj="?S"~n", [Else]), retry end.
+
 -ifdef(__PLATFORM_LINUX).
 
 -define(ENDPOINTKEYFILE, "/var/lib/mydlp/endpoint_key").

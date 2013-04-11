@@ -18,7 +18,7 @@
 %%%    along with MyDLP.  If not, see <http://www.gnu.org/licenses/>.
 %%%--------------------------------------------------------------------------
 
--module(mydlp_seap_fsm).
+-module(mydlp_iecp_fsm).
 -author('kerem@mydlp.com').
 -behaviour(gen_fsm).
 -include("mydlp.hrl").
@@ -31,9 +31,9 @@
 
 %% FSM States
 -export([
-    'WAIT_FOR_SOCKET'/2,
-    'SEAP_REQ'/2,
-    'PUSH_DATA_RECV'/2
+	'WAIT_FOR_SOCKET'/2,
+	'IECP_REQ'/2,
+	'PUSH_DATA_RECV'/2
 ]).
 
 -record(state, {
@@ -80,140 +80,70 @@ init([]) ->
 'WAIT_FOR_SOCKET'({socket_ready, Socket, _CommType}, State) when is_port(Socket) ->
 	inet:setopts(Socket, [{active, once}, {nodelay, true}, {packet, line}, list]),
 	{ok, {IP, _Port}} = inet:peername(Socket),
-	{next_state, 'SEAP_REQ', State#state{socket=Socket, addr=IP}, ?CFG(fsm_timeout)};
+	{next_state, 'IECP_REQ', State#state{socket=Socket, addr=IP}, ?CFG(fsm_timeout)};
 'WAIT_FOR_SOCKET'(Other, State) ->
-	?DEBUG("SEAP FSM: 'WAIT_FOR_SOCKET'. Unexpected message: "?S, [Other]),
+	?DEBUG("IECP FSM: 'WAIT_FOR_SOCKET'. Unexpected message: "?S, [Other]),
 	%% Allow to receive async messages
 	{next_state, 'WAIT_FOR_SOCKET', State}.
 
 %% Notification event coming from client
-'SEAP_REQ'({data, "BEGIN" ++ _Else}, State) -> 
-	'BEGIN_RESP'(State);
-'SEAP_REQ'({data, "SETPROP" ++ Rest}, State) -> 
-	{ ObjId, Key, Value } = get_setprop_args(Rest),
-	'SETPROP_RESP'(State, ObjId, Key, Value);
-'SEAP_REQ'({data, "GETPROP" ++ Rest}, State) -> 
-	{ ObjId, Key } = get_getprop_args(Rest),
-	'GETPROP_RESP'(State, ObjId, Key);
-'SEAP_REQ'({data, "PUSHFILE" ++ Rest}, State) -> 
-	{ ObjId, FilePath } = get_getprop_args(Rest),
-	'PUSHFILE_RESP'(State, ObjId, FilePath);
-'SEAP_REQ'({data, "PUSHCHUNK" ++ Rest}, State) -> 
-	{ ObjId, ChunkPath } = get_getprop_args(Rest),
-	'PUSHCHUNK_RESP'(State, ObjId, ChunkPath);
-'SEAP_REQ'({data, "PUSH" ++ Rest}, #state{socket=Socket} = State) -> 
-	{ ObjId, RecvSize} = get_req_args(Rest),
-	inet:setopts(Socket, [{active, once}, {packet, 0}, binary]),
-	{next_state, 'PUSH_DATA_RECV', State#state{obj_id=ObjId, recv_size=RecvSize}, ?CFG(fsm_timeout)};
-'SEAP_REQ'({data, "END" ++ Rest}, State) -> 
-	{ ObjId } = get_req_args(Rest),
-	'END_RESP'(State, ObjId);
-'SEAP_REQ'({data, "ACLQ" ++ Rest}, State) -> 
-	{ ObjId } = get_req_args(Rest),
-	'ACLQ_RESP'(State, ObjId);
-'SEAP_REQ'({data, "DESTROY" ++ Rest}, State) -> 
-	{ ObjId } = get_req_args(Rest),
-	'DESTROY_RESP'(State, ObjId);
-'SEAP_REQ'({data, "CONFUPDATE" ++ Rest}, State) -> 
-	MetaDict = get_map_args(Rest),
-	'CONFUPDATE_RESP'(State, MetaDict);
-'SEAP_REQ'({data, "GETKEY" ++ _Rest}, State) -> 
-	'GETKEY_RESP'(State);
-'SEAP_REQ'({data, "HASKEY" ++ _Rest}, State) -> 
-	'HASKEY_RESP'(State);
-'SEAP_REQ'({data, "HELP" ++ _Rest}, State) -> 
+'IECP_REQ'({data, "TOKEN" ++ Rest}, State) -> 
+	{ Token } = get_req_str_arg(Rest),
+	'TOKEN_RESP'(State, Token);
+'IECP_REQ'({data, "PUSH" ++ _Rest}, #state{obj_id=undefined} = State) ->
+        send_err(State),
+        {next_state, 'IECP_REQ', State, ?CFG(fsm_timeout)};
+'IECP_REQ'({data, "PUSH" ++ Rest}, #state{socket=Socket} = State) ->
+        { RecvSize } = get_req_int_arg(Rest),
+        inet:setopts(Socket, [{active, once}, {packet, 0}, binary]),
+        {next_state, 'PUSH_DATA_RECV', State#state{recv_size=RecvSize}, ?CFG(fsm_timeout)};
+'IECP_REQ'({data, "END" ++ _Rest}, #state{obj_id=undefined} = State) ->
+        send_err(State),
+        {next_state, 'IECP_REQ', State, ?CFG(fsm_timeout)};
+'IECP_REQ'({data, "END" ++ _Rest}, State) -> 
+	'END_RESP'(State);
+'IECP_REQ'({data, "HELP" ++ _Rest}, State) -> 
 	'HELP_RESP'(State);
-'SEAP_REQ'({data, _Else}, State) -> 
+'IECP_REQ'({data, _Else}, State) -> 
 	'HELP_RESP'(State);
-'SEAP_REQ'(timeout, State) ->
+'IECP_REQ'(timeout, State) ->
 	?DEBUG(?S" Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
-'BEGIN_RESP'(State) ->
-	{ok, ObjId} = mydlp_container:new(),
-	send_ok(State, ObjId),
-	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
-
-'SETPROP_RESP'(State, ObjId, Key, Value) ->
-	ok = mydlp_container:setprop(ObjId, Key, Value),
-	send_ok(State),
-	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
-
-'GETPROP_RESP'(State, ObjId, Key) ->
-	{ok, Value} = mydlp_container:getprop(ObjId, Key),
-	send_ok(State, Value),
-	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
-
 'PUSH_RESP'(State, ObjId, ObjData) ->
-	ok = mydlp_container:push(ObjId, ObjData),
-	send_ok(State),
-	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
+        ok = mydlp_container:push(ObjId, ObjData),
+        send_ok(State),
+        {next_state, 'IECP_REQ', State, ?CFG(fsm_timeout)}.
 
-'PUSHFILE_RESP'(State, ObjId, FilePath) ->
-	ok = mydlp_container:pushfile(ObjId, FilePath),
-	send_ok(State),
-	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
+'TOKEN_RESP'(State, Token) ->
+	case catch mydlp_api:is_valid_token(Token) of
+		true -> send_ok(State),
+			{ok, ObjId} = mydlp_container:new(),
+			{next_state, 'IECP_REQ', State#state{obj_id=ObjId}, ?CFG(fsm_timeout)};
+		false -> send_err(State),
+			?ERROR_LOG("IECP: Token control has failed. Closing connection.", []),
+			{stop, normal, State};
+		Else -> send_err(State),
+			?ERROR_LOG("IECP: Error occurred at token control. Closing connection. Err: "?S , [Else]),
+			{stop, normal, State} end.
 
-'PUSHCHUNK_RESP'(State, ObjId, ChunkPath) ->
-	ok = mydlp_container:pushchunk(ObjId, ChunkPath),
-	send_ok(State),
-	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
-
-'END_RESP'(State, ObjId) ->
+'END_RESP'(#state{obj_id=ObjId} = State) ->
 	ok = mydlp_container:eof(ObjId),
+	ok = mydlp_scheduler:s({printout, ObjId}),
 	send_ok(State),
-	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
-
-'ACLQ_RESP'(State, ObjId) ->
-	{ok, Action} = mydlp_container:aclq(ObjId),
-	send_ok(State, Action),
-	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
-
-'DESTROY_RESP'(State, ObjId) ->
-	ok = mydlp_container:destroy(ObjId),
-	send_ok(State),
-	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
-
-'CONFUPDATE_RESP'(State, MetaDict) ->
-	mydlp_container:set_ep_meta_from_dict(MetaDict),
-	Reply = case mydlp_container:confupdate() of
-		true -> "yes";
-		false -> "no" end,
-	send_ok(State, Reply),
-	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
-
-'HASKEY_RESP'(State) ->
-	Reply = case ( catch mydlp_sync:get_enc_key() ) of
-		Key when is_binary(Key), size(Key) == 64 -> "yes";
-		_Else -> "no" end,
-	send_ok(State, Reply),
-	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
-
-'GETKEY_RESP'(State) ->
-	case ( catch mydlp_sync:get_enc_key() ) of
-		Key when is_binary(Key), size(Key) == 64 -> 
-			{ok, KeyPath} = mydlp_api:write_to_tmpfile(Key),
-			send_ok(State, KeyPath);
-		_Else -> send_err(State) end,
-	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
+	{stop, normal, State}.
 
 'HELP_RESP'(State) ->
 	Print = "\r\n" ++ "Commands:" ++ "\r\n" ++
-		"\t" ++ "BEGIN -> OK Id" ++ "\r\n" ++
-		"\t" ++ "SETPROP Id Key=Value-> OK" ++ "\r\n" ++
-		"\t" ++ "GETPROP Id Key-> OK Value" ++ "\r\n" ++
-		"\t" ++ "PUSH Id ChunkSize" ++ "\r\n" ++
+		"\t" ++ "TOKEN Token-> OK" ++ "\r\n" ++
+		"\t" ++ "PUSH ChunkSize" ++ "\r\n" ++
 		"\t\t" ++ "Chunk -> OK" ++ "\r\n" ++
-		"\t" ++ "PUSHFILE Id FilePath" ++ "\r\n" ++
-		"\t" ++ "PUSHCHUNK Id ChunkPath" ++ "\r\n" ++
-		"\t" ++ "END Id -> OK" ++ "\r\n" ++
-		"\t" ++ "ACLQ Id -> OK Action" ++ "\r\n" ++
-		"\t" ++ "DESTROY Id -> OK" ++ "\r\n" ++
+		"\t" ++ "END -> OK" ++ "\r\n" ++
 		"\t" ++ "HELP -> This screen" ++ "\r\n" ++
 		"Any other command prints this screen." ++ "\r\n" ++
 		"If an internal error occurs, server respond with ERR instead of OK." ++ "\r\n",
 	send_ok(State, Print),
-	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
+	{next_state, 'IECP_REQ', State, ?CFG(fsm_timeout)}.
 
 'PUSH_DATA_RECV'({data, Data}, #state{socket=Socket, obj_id=ObjId, recv_size=RecvSize, recv_data=RecvData} = State) -> 
 	DataSize = mydlp_api:binary_size(Data),
@@ -277,7 +207,7 @@ handle_info({tcp_closed, Socket}, _StateName, #state{socket=Socket, addr=_Addr} 
 	{stop, normal, StateData};
 
 handle_info(_Info, StateName, StateData) ->
-	% ?ERROR_LOG("SEAP: Unexpected message: "?S"~nStateName: "?S", StateData: "?S, [Info, StateName, StateData]),
+	% ?ERROR_LOG("IECP: Unexpected message: "?S"~nStateName: "?S", StateData: "?S, [Info, StateName, StateData]),
 	{next_state, StateName, StateData}.
 
 fsm_call(StateName, Args, StateData) -> 
@@ -286,7 +216,7 @@ fsm_call(StateName, Args, StateData) ->
 		?ERROR_LOG("Error occured on FSM ("?S") call ("?S"). Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
 				[?MODULE, StateName, Class, Error, erlang:get_stacktrace()]),
 		send_err(StateData),
-		{next_state, 'SEAP_REQ', StateData, ?CFG(fsm_timeout)} end.
+		{next_state, 'IECP_REQ', StateData, ?CFG(fsm_timeout)} end.
 
 %%-------------------------------------------------------------------------
 %% Func: terminate/3
@@ -308,63 +238,17 @@ terminate(_Reason, _StateName, #state{socket=Socket} = _State) ->
 code_change(_OldVsn, StateName, StateData, _Extra) ->
     {ok, StateName, StateData}.
 
-get_req_args(Rest) ->
+get_req_int_arg(Rest) ->
 	Rest1 = mydlp_api:rm_trailing_crlf(Rest),
 	case string:tokens(Rest1, " ") of
-		[ObjIdS] -> { list_to_integer(ObjIdS) };
-		[ObjIdS, ChunkSize] -> { list_to_integer(ObjIdS), list_to_integer(ChunkSize) };
-		_Else -> throw({error, {obj_id_not_found, Rest}}) end.
+		[I] -> { list_to_integer(I) };
+		_Else -> throw({error, {not_expected, Rest}}) end.
 
-%get_arg_str(Rest) ->
-%	Rest1 = mydlp_api:rm_trailing_crlf(Rest),
-%	ArgStr = string:strip(Rest1),
-%	{ArgStr}.
-
-get_setprop_args(Rest) ->
+get_req_str_arg(Rest) ->
 	Rest1 = mydlp_api:rm_trailing_crlf(Rest),
-	Rest2 = string:strip(Rest1),
-	{ObjIdS, KeyValuePairS} = case string:chr(Rest2, $\s) of
-		0 -> throw({no_space_to_tokenize, Rest2});
-		I -> OS = string:sub_string(Rest2, 1, I - 1),
-			KVS = string:sub_string(Rest2, I + 1),
-			{OS, KVS} end,
-	KeyValuePairS2 = string:strip(KeyValuePairS),
-	{Key, Value} = case string:chr(KeyValuePairS2, $=) of
-		0 -> throw({no_equal_sign_to_tokenize, KeyValuePairS2});
-		I2 -> KS = string:sub_string(KeyValuePairS2, 1, I2 - 1),
-			VS = string:sub_string(KeyValuePairS2, I2 + 1),
-			{KS, VS} end,
-	{list_to_integer(ObjIdS), Key, Value}.
-
-get_two_args(String) ->
-	Rest1 = mydlp_api:rm_trailing_crlf(String),
-	Rest2 = string:strip(Rest1),
-	{S1, S2} = case string:chr(Rest2, $\s) of
-		0 -> throw({no_space_to_tokenize, Rest2});
-		I -> OS = string:sub_string(Rest2, 1, I - 1),
-			KS = string:sub_string(Rest2, I + 1),
-			{OS, KS} end,
-	{S1, string:strip(S2)}.
-
-get_getprop_args(Rest) ->
-	{ObjIdS, Key} = get_two_args(Rest),
-	{list_to_integer(ObjIdS), Key}.
-
-get_map_args(Rest) -> 
-	Rest1 = mydlp_api:rm_trailing_crlf(Rest),
-	Tokens = string:tokens(Rest1, " "),
-	get_map_args(Tokens, dict:new()).
-
-get_map_args([Token|RestOfTokens], D) ->
-	{Key, QpEncodedValue} = case string:chr(Token, $=) of
-		0 -> throw({no_equal_sign_to_tokenize, Token});
-		I -> KS = string:sub_string(Token, 1, I - 1),
-			VS = string:sub_string(Token, I + 1),
-			{KS, VS} end,
-	D1 = dict:store(Key, QpEncodedValue, D),
-	get_map_args(RestOfTokens, D1);
-get_map_args([], D) -> D.
-	
+	case string:tokens(Rest1, " ") of
+		[S] -> { S };
+		_Else -> throw({error, {not_expected, Rest}}) end.
 
 send(#state{socket=Socket}, Data) -> gen_tcp:send(Socket, <<Data/binary, "\r\n">>).
 

@@ -628,14 +628,20 @@ get_destination1(#object{} = Obj) ->
 	case get_channel(Obj) of
 		discovery -> get_destination_file_path(Obj);
 		removable -> get_destination_file_path(Obj);
+		inbound -> get_destination_file_path(Obj);
 		remote_discovery -> get_remote_destination_file_path(Obj);
 		printer -> get_printer_name(Obj);
 		_Else -> undefined end.
 
 get_destination_file_path(#object{prop_dict=PD, filepath=FP}) ->
-	case dict:find("burn_after_reading", PD) of
-		{ok, "true"} -> undefined;
-		_Else -> FP end.
+	case dict:find("fullpath", PD) of
+		{ok, FullPath} -> qp_decode(FullPath);
+		_Else -> 
+			case dict:find("burn_after_reading", PD) of
+				{ok, "true"} -> undefined;
+				_Else2 -> FP 
+			end
+	end.
 
 get_remote_destination_file_path(#object{filepath=FP, prop_dict=PD}) ->
 	case dict:find("page_path", PD) of

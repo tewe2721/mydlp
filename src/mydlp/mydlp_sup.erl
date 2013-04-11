@@ -146,6 +146,21 @@ init([socket, seap]) ->
 			]
 		}
 	};
+init([socket, iecp]) ->
+	{ok,
+		{_SupFlags = {simple_one_for_one, ?CFG(supervisor_max_restart_count), ?CFG(supervisor_max_restart_time)},
+			[
+				% TCP Client
+			  {   undefined,								% Id	   = internal id
+				  {mydlp_iecp_fsm,start_link,[]},		% StartFun = {M, F, A}
+				  temporary,								% Restart  = permanent | transient | temporary
+				  ?CFG(supervisor_kill_timeout),							% Shutdown = brutal_kill | int() >= 0 | infinity
+				  worker,									% Type	 = worker | supervisor
+				  []										% Modules  = [Module] | dynamic
+			  }
+			]
+		}
+	};
 init([socket, FsmModule]) ->
 	{ok,
 		{_SupFlags = {simple_one_for_one, ?CFG(supervisor_max_restart_count), ?CFG(supervisor_max_restart_time)},
