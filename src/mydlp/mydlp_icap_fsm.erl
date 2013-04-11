@@ -485,7 +485,7 @@ drop_preview_bin(DataB)->
 
 	'REQ_OK'(State#state{files=Files}).
 
-% {Action, {{rule, Id}, {file, File}, {matcher, Func}, {misc, Misc}}}
+% {Action, {{rule, Id}, {file, File}, {matcher, Func}, {misc, Misc}, {matching_details, MatchingDetails}}}
 'REQ_OK'(#state{icap_request=#icap_request{method=options} } = State) -> 'REPLY_OK'(State);
 'REQ_OK'(#state{icap_mod_mode=respmod} = State) ->
 	DFFiles = df_to_files(State),
@@ -505,7 +505,6 @@ drop_preview_bin(DataB)->
 
 	AclQ = #aclq{channel=web, src_addr=CAddr, src_user_h=UserHash, destinations=DestList},
 	QRet = mydlp_acl:q(AclQ, DFFiles),
-
 	acl_ret(QRet, DFFiles, State).
 
 respmod_query(_State, Files) ->
@@ -540,7 +539,7 @@ acl_ret(QRet, DFFiles, State) ->
 
 'REPLY_OK'(State) -> reply(ok, State).
 
-'BLOCK_REQ'(block, State, {{rule, OrigRuleId}, _, _, _}) -> reply({block, OrigRuleId}, State).
+'BLOCK_REQ'(block, State, {{rule, OrigRuleId}, _, _, _, _}) -> reply({block, OrigRuleId}, State).
 
 send_continue(#state{socket=Socket} = State) ->
 	Reply = [?ICAP_RESP_LINE_100,
@@ -845,9 +844,10 @@ uri_to_fn(Uri) ->
 log_req(#state{icap_headers=#icap_headers{x_client_ip=Addr},
 		http_request=#http_request{path=Uri},
 		username=UserName}, Action,
-		{{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
+		{{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}, {matching_details, MatchingDetails}}) ->
+	erlang:display({fsm_detail, MatchingDetails}),
 	Time = erlang:universaltime(),
-	?ACL_LOG(#log{time=Time, channel=web, rule_id=RuleId, action=Action, ip=Addr, user=UserName, destination=Uri, itype_id=IType, file=File, misc=Misc}).
+	?ACL_LOG(#log{time=Time, channel=web, rule_id=RuleId, action=Action, ip=Addr, user=UserName, destination=Uri, itype_id=IType, file=File, misc=Misc, matching_details=MatchingDetails}).
 
 get_path(("/" ++ _Str) = Uri) -> Uri;
 get_path("icap://" ++ Str) ->

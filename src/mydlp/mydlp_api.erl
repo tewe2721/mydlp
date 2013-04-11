@@ -1815,7 +1815,7 @@ regex_filter_map(Fun, Data, [I|List], Acc) ->
 	{Index, Length} = I,
 	MatchString = binary:bin_to_list(Data, {Index, Length}),
 	case Fun(MatchString) of
-		true -> regex_filter_map(Fun, Data, List, [Index|Acc]);
+		true -> regex_filter_map(Fun, Data, List, [{Index, MatchString}|Acc]);
 		false -> regex_filter_map(Fun, Data, List, Acc) end.
 
 %%--------------------------------------------------------------------

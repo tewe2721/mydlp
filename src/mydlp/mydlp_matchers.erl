@@ -159,7 +159,7 @@ mc_match(MatcherId, Func, FuncOpts, #file{mc_table=MCTable, normal_text=NT}) ->
 				<<_:Head/binary, Phrase:L/binary, _/binary>> = NT,
 				PhraseS = unicode:characters_to_list(Phrase),
 				case apply(mydlp_matchers, Func, [FuncOpts, PhraseS]) of
-					true -> [I];
+					true -> [{I, PhraseS}];
 					false -> [] end
 			end, Matched);
 		false -> lists:map(fun({I, _CI, {_L, _ML}}) -> I end, Matched) end,

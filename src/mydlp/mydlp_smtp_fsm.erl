@@ -159,7 +159,7 @@ init([]) ->
 	Files = mydlp_api:mime_to_files(MIME),
 	'REQ_OK'(State#smtpd_fsm{files=Files}).
 
-% {Action, {{rule, Id}, {file, File}, {matcher, Func}, {misc, Misc}}}
+% {Action, {{rule, Id}, {file, File}, {matcher, Func}, {misc, Misc}, {matching_details, MatchingDetails}}}
 'REQ_OK'(#smtpd_fsm{files=Files, message_record=(#message{mail_from=MailFrom} = MessageR)} = State) ->
 	SrcDomainName = get_from_domainname(MessageR),
 	UserH = mydlp_api:hash_un(MailFrom),
@@ -405,20 +405,20 @@ get_dest_addresses(MessageR) ->
 		["bcc: <" ++ A#addr.username ++ "@" ++ A#addr.domainname ++ ">"|| A <- MessageR#message.bcc],
 	string:join(DestList, ", ").
 
-log_req(#smtpd_fsm{message_record=MessageR}, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}, none) ->
-	log_req(#smtpd_fsm{message_record=MessageR}, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}});
-log_req(#smtpd_fsm{message_record=MessageR}, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, _Misc}}, Message) ->
-	log_req(#smtpd_fsm{message_record=MessageR}, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Message}}).
+log_req(#smtpd_fsm{message_record=MessageR}, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}, {matching_details, MatchingDetails}}, none) ->
+	log_req(#smtpd_fsm{message_record=MessageR}, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}, {matching_details, MatchingDetails}});
+log_req(#smtpd_fsm{message_record=MessageR}, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, _Misc}, {matching_details, MatchingDetails}}, Message) ->
+	log_req(#smtpd_fsm{message_record=MessageR}, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Message}, {matching_details, MatchingDetails}}).
 
 
-log_req(#smtpd_fsm{message_record=MessageR}, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
+log_req(#smtpd_fsm{message_record=MessageR}, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}, {matching_details, MatchingDetails}}) ->
 	Src = get_from(MessageR),
 	Dest = {MessageR#message.rcpt_to, get_dest_addresses(MessageR)},
 	Time = erlang:universaltime(),
 	Payload = case Action of
 		quarantine -> MessageR;
 		_Else -> none end,
-        ?ACL_LOG_P(#log{time=Time, channel=mail, rule_id=RuleId, action=Action, ip=nil, user=Src, destination=Dest, itype_id=IType, file=File, misc=Misc, payload=Payload}).
+        ?ACL_LOG_P(#log{time=Time, channel=mail, rule_id=RuleId, action=Action, ip=nil, user=Src, destination=Dest, itype_id=IType, file=File, misc=Misc, payload=Payload, matching_details=MatchingDetails}).
 
 get_dest_domains(#message{rcpt_to=RcptTo, to=ToH, cc=CCH, bcc=BCCH})->
 	RcptToA = lists:map(fun(S) -> mime_util:dec_addr(S) end, RcptTo),

@@ -77,6 +77,11 @@
 		mc_table
         }).
 
+-record(matching_detail, {
+		pattern,
+		matcher_func
+	}).
+
 -record(aclq, {
 		channel :: 'web' | 'mail' | 'removable' | 'printer' | 'discovery' | 'remote_discovery',
 		src_domain=undefined,

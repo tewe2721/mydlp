@@ -48,6 +48,7 @@
 	get_denied_page/0,
 	insert_log_blueprint/5,
 	insert_log_data/6,
+	insert_log_detail/2,
 	insert_log_requeue/1,
 	delete_log_requeue/1,
 	repopulate_mnesia/0,
@@ -120,11 +121,14 @@ insert_log_blueprint(LogId, Filename, MimeType, Size, Hash) ->
 insert_log_data(LogId, Filename, MimeType, Size, Hash, Path) -> 
 	gen_server:cast(?MODULE, {insert_log_data, LogId, Filename, MimeType, Size, Hash, Path}).
 
+insert_log_detail(LogId, MatchingDetails) ->
+	gen_server:cast(?MODULE, {insert_log_detail, LogId, MatchingDetails}).
+
 save_fingerprints(DocumentId, FingerprintList) -> 
 	gen_server:call(?MODULE, {save_fingerprints, DocumentId, FingerprintList}, 60000).
 
 populate_discovery_targets(RuleId) ->
-	gen_server:call(?MODULE, {populate_discovery_targets, RuleId}, 60000).
+	gen_server:call(?MODULE, {populate_discovery_targets, RuleId}, 150000).
 
 requeued(LogId) -> 
 	gen_server:cast(?MODULE, {requeued, LogId}).
@@ -265,11 +269,15 @@ handle_call({save_fingerprints, DocumentId, FingerprintList}, From, State) ->
 		end, 60000),
         {noreply, State};
 
-handle_call({populate_discovery_targets, RuleId}, _From, State) ->
-	{ok, Aliasses} =  psq(get_endpoint_alias),
-	IpsAndNames = get_identities(Aliasses),
-	lists:map(fun(I) -> mydlp_mnesia:update_ep_schedules(I, RuleId) end, IpsAndNames),
-	{reply, ok, State};
+handle_call({populate_discovery_targets, RuleId}, From, State) ->
+	Worker = self(),
+	?ASYNC(fun() ->
+		{ok, Aliasses} =  psq(get_endpoint_alias),
+		IpsAndNames = get_identities(Aliasses),
+		lists:map(fun(I) -> mydlp_mnesia:update_ep_schedules(I, RuleId) end, IpsAndNames),
+		Worker ! {async_reply, ok, From}
+	end, 150000),
+	{noreply, State};
 
 handle_call(stop, _From,  State) ->
 	{stop, normalStop, State};
@@ -318,6 +326,14 @@ handle_cast({insert_log_data, LogId, Filename0, MimeType, Size, Hash, Path}, Sta
 		lpsq(insert_incident_file_data, [LogId, Filename, DataId], 30000)
 	end, 100000),
 	{noreply, State};
+
+handle_cast({insert_log_detail, LogId, MatchinDetails}, State) ->
+	?ASYNC(fun() ->
+			ltransaction(fun() ->
+				lists:foreach(fun(#matching_detail{pattern=Pattern, matcher_func=MatcherFunc}) -> psqt(insert_log_detail, [LogId, Pattern, MatcherFunc]) end, MatchinDetails) 
+			end, 60000)
+		end, 60000),
+        {noreply, State};
 
 handle_cast({insert_log_blueprint, LogId, Filename0, MimeType, Size, Hash}, State) ->
 	% Probably will create problems in multisite use.
@@ -514,6 +530,7 @@ init([]) ->
 		{insert_incident, <<"INSERT INTO IncidentLog (id, date, channel, ruleId, sourceIp, sourceUser, destination, informationTypeId, action, matcherMessage, groupId, visible) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)">>},
 		{insert_incident_file_data, <<"INSERT INTO IncidentLogFile (id, incidentLog_id, filename, content_id) VALUES (NULL, ?, ?, ?)">>},
 		{insert_incident_file_bp, <<"INSERT INTO IncidentLogFile (id, incidentLog_id, filename, blueprint_id) VALUES (NULL, ?, ?, ?)">>},
+		{insert_log_detail, <<"INSERT INTO MatchingDetail (id, incidentLog_id, matchingData, matcherFunc) VALUES (NULL, ?, ?, ?)">>},
 %		{insert_archive, <<"INSERT INTO log_archive (id, customer_id, rule_id, protocol, src_ip, src_user, destination, log_archive_file_id) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)">>},
 %		{new_archive_file_entry, <<"INSERT INTO log_archive_file (id) VALUES (NULL)">>},
 %		{update_archive_file, <<"UPDATE log_archive_file SET filename=?, log_archive_data_id=? WHERE id = ?">>},
@@ -704,6 +721,7 @@ populate_rule(OrigId, Channel, UserMessage, Action, FilterId) ->
 	{ok, SDN} = psq(source_domain_by_rule_id, [OrigId]),
 	populate_source_domains(SDN, RuleId),
 
+	%% TODO create below according to rule type
 	populate_remote_storages(OrigId, RuleId),
 
 	populate_discovery_schedule(OrigId, RuleId),

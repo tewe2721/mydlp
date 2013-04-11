@@ -455,7 +455,7 @@ update_ep_schedules({EndpointId, Ip, Username}, TargetRuleId) ->
 	ClientIp = mydlp_api:str_to_ip(binary_to_list(Ip)),
 	AclQ = #aclq{src_addr=ClientIp, src_user_h=SrcUserH},
 	RuleIds = get_rule_ids(get_dfid(), AclQ#aclq{channel=discovery}),
-	aqc({update_ep_schedules, EndpointId, RuleIds, TargetRuleId}, nocache).
+	aqc({update_ep_schedules, EndpointId, RuleIds, TargetRuleId}, nocache, dirty).
 
 get_endpoints_by_rule_id(RuleId) -> aqc({get_endpoints_by_rule_id, RuleId}, nocache).
 
@@ -1107,9 +1107,9 @@ handle_query({get_discovery_rule_ids, Ip, Username}) ->
 handle_query({update_ep_schedules, EndpointId, RuleIds, TargetRuleId}) -> 
 	case lists:member(TargetRuleId, RuleIds) of
 		true ->
-			[I] = mnesia:match_object(#discovery_targets{id='_', rule_id=TargetRuleId, orig_id='_', targets='_'}),
+			[I] = mnesia:match_object(#discovery_targets{id='_', channel='_', rule_id=TargetRuleId, orig_id='_', group_id='_', targets='_'}),
 			EpList = I#discovery_targets.targets,
-			case lists:member(EndpointId, EpList) of
+			case lists:member(EndpointId, EpList) of %% TODO: use gb_sets instead of b-in list
 				true -> ok;
 				false -> mnesia:dirty_write(I#discovery_targets{channel=discovery, targets=[EndpointId|EpList]})
 			end;

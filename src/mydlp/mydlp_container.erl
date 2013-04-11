@@ -483,12 +483,12 @@ acl_ret(QRet, Obj, DFFiles) ->
 					PrimAction
 	end.
 
-log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}, none) ->
-	log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}});
-log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}, Message) ->
+log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}, {matching_details, MatchingDetails}}, none) ->
+	log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}, {matching_details, MatchingDetails}});
+log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}, {matching_details, MatchingDetails}}, Message) ->
 	case Misc of	"" -> ok;
 			_Else -> ?ERROR_LOG("Misc was not empty. Misc: "?S, [Misc]) end,
-	log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Message}}).
+	log_req(Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Message}, {matching_details, MatchingDetails}}).
 
 -ifdef(__PLATFORM_LINUX).
 
@@ -505,7 +505,7 @@ get_user(_Obj) -> get_ep_meta("user").
 
 -endif.
 
-log_req(#object{prop_dict=PD}=Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
+log_req(#object{prop_dict=PD}=Obj, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}, {matching_details, MatchingDetails}}) ->
 	{User, GroupId} = case get_channel(Obj) of
 				api -> {get_api_user(Obj), -1};
 				remote_discovery -> {ok, RId} = dict:find("group_id", PD),
@@ -518,7 +518,7 @@ log_req(#object{prop_dict=PD}=Obj, Action, {{rule, RuleId}, {file, File}, {itype
 	Destination = case get_destination(Obj) of
 		undefined -> nil;
 		Else -> Else end,
-	log_req1(Time, Channel, RuleId, Action, User, Destination, IType, File, Misc, GroupId).
+	log_req1(Time, Channel, RuleId, Action, User, Destination, IType, File, Misc, GroupId, MatchingDetails).
 
 execute_custom_action(seclore, {HotFolderId, ActivityComments}, Obj) ->
 	case get_destination(Obj) of % Assuming this is a discovery or endpoint object with a filepath,
@@ -537,10 +537,10 @@ execute_custom_action(seclore, {HotFolderId, ActivityComments}, Obj) ->
 
 -ifdef(__MYDLP_ENDPOINT).
 
-log_req1(Time, Channel, RuleId, Action, User, Destination, IType, File, Misc, GroupId) ->
+log_req1(Time, Channel, RuleId, Action, User, Destination, IType, File, Misc, GroupId, MatchingDetails) ->
 	case {Channel, Action, Misc, ?CFG(ignore_discover_max_size_exceeded)} of
 		{discovery, log, max_size_exceeded, true} -> ok;
-		_Else2 -> ?ACL_LOG(#log{time=Time, channel=Channel, rule_id=RuleId, action=Action, ip=nil, user=User, destination=Destination, itype_id=IType, file=File, misc=Misc, group_id=GroupId}) end.
+		_Else2 -> ?ACL_LOG(#log{time=Time, channel=Channel, rule_id=RuleId, action=Action, ip=nil, user=User, destination=Destination, itype_id=IType, file=File, misc=Misc, group_id=GroupId, matching_details=MatchingDetails}) end.
 
 get_remote_user(_) -> "undefined".
 
@@ -548,8 +548,8 @@ get_remote_user(_) -> "undefined".
 
 -ifdef(__MYDLP_NETWORK).
 
-log_req1(Time, Channel, RuleId, Action, User, Destination, IType, File, Misc, GroupId) ->
-	?ACL_LOG(#log{time=Time, channel=Channel, rule_id=RuleId, action=Action, ip=nil, user=User, destination=Destination, itype_id=IType, file=File, misc=Misc, group_id=GroupId}).
+log_req1(Time, Channel, RuleId, Action, User, Destination, IType, File, Misc, GroupId, MatchingDetails) ->
+	?ACL_LOG(#log{time=Time, channel=Channel, rule_id=RuleId, action=Action, ip=nil, user=User, destination=Destination, itype_id=IType, file=File, misc=Misc, group_id=GroupId, matching_details=MatchingDetails}).
 
 get_remote_user(#object{filepath=FP, prop_dict=PD}) ->
 	case dict:find("web_server_id", PD) of
