@@ -3618,3 +3618,45 @@ cmd_bool(Command, Args, Envs, Stdin) when is_list(Args), is_list(Envs) ->
 
 -endif.
 
+-ifdef(__MYDLP_ENDPOINT).
+
+-define(IECP_SOCKET_OPTS, [binary, {packet, 0}, {reuseaddr, true}, {nodelay, true}, {keepalive, true}, {backlog, 30}, {active, false}])
+
+iecp_command(IpAddr, Command, ArgStr) ->
+	?ASYNC(fun() -> 
+		Token = case new_token() of
+			T when is_binary(T) -> T;
+			Err -> throw({error, {cannot_get_token, Err}}) end,
+
+		try 	Socket = gen_tcp:connect(IpAddr, 9100, ?IECP_SOCKET_OPTS),
+			gen_tcp:send(Socket, ["TOKEN ", Token, "\r\n"]),
+			case gen_tcp:recv(Socket, 0) of
+				{ok, <<"OK\r\n">>} -> ok;
+				Err2 -> throw({error, {not_ok_resp_for_token, Err2, Token}}) end,
+			case Command of
+				"print" -> iecp_print_command(Socket, ArgStr);
+				Else -> ?ERROR_LOG("Unknown IECP commmand. Ip: "?S" Command: "?S" ArgStr: "?S, [IpAddr, Command, ArgStr]) end
+		after	gen_tcp:close(Socket)
+		end
+	end, 300000), ok.
+
+
+iecp_print_command(Socket, ArgStr) ->
+	FileBin = case file:read_file(ArgStr) of
+		{ok, B} -> B;
+		Err -> throw({error, {cannot_open_file, Err, ArgStr}}) end,
+	Size = size(FileBin),
+	gen_tcp:send(Socket, ["PUSH ", integer_to_list(Size), "\r\n"]),
+	gen_tcp:send(Socket, FileBin),
+	case gen_tcp:recv(Socket, 0) of
+		{ok, <<"OK\r\n">>} -> ok;
+		Err2 -> throw({error, {not_ok_resp_for_push, Err2}}) end,
+	gen_tcp:send(Socket, ["END\r\n"]),
+	case gen_tcp:recv(Socket, 0) of
+		{ok, <<"OK\r\n">>} -> ok;
+		Err3 -> throw({error, {not_ok_resp_for_end, Err3}}) end,
+	ok.
+
+-endif.
+
+

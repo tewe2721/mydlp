@@ -121,6 +121,9 @@ init([]) ->
 	'GETKEY_RESP'(State);
 'SEAP_REQ'({data, "HASKEY" ++ _Rest}, State) -> 
 	'HASKEY_RESP'(State);
+'SEAP_REQ'({data, "IECP" ++ Rest}, State) -> 
+	{IpAddr, Command, ArgStr} = get_iecp_args(Rest),
+	'IECP_RESP'(State, IpAddr, Command, ArgStr);
 'SEAP_REQ'({data, "HELP" ++ _Rest}, State) -> 
 	'HELP_RESP'(State);
 'SEAP_REQ'({data, _Else}, State) -> 
@@ -195,6 +198,10 @@ init([]) ->
 			{ok, KeyPath} = mydlp_api:write_to_tmpfile(Key),
 			send_ok(State, KeyPath);
 		_Else -> send_err(State) end,
+	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
+
+'IECP_RESP'(State, IpAddr, Command, ArgStr) ->
+	mydlp_api:iecp_command(IpAddr, Command, ArgStr),
 	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
 
 'HELP_RESP'(State) ->
@@ -364,7 +371,22 @@ get_map_args([Token|RestOfTokens], D) ->
 	D1 = dict:store(Key, QpEncodedValue, D),
 	get_map_args(RestOfTokens, D1);
 get_map_args([], D) -> D.
-	
+
+get_iecp_args(String) ->
+	Rest1 = mydlp_api:rm_trailing_crlf(String),
+	Rest2 = string:strip(Rest1),
+	case string:chr(Rest2, $\s) of
+		0 -> throw({no_space_to_tokenize, Rest2});
+		I -> 	IpAddrS = string:sub_string(Rest2, 1, I - 1),
+			Rest3 = string:sub_string(Rest2, I + 1),
+			Rest4 = string:strip(Rest3),
+			{Command, ArgStr} = case string:chr(Rest4, $\s) of
+				0 -> throw({no_space_to_tokenize, Rest4});
+				I2 -> 	CS = string:sub_string(Rest4, 1, I2 - 1),
+					AS = string:sub_string(Rest2, I + 1),
+					{CS, string:strip(AS)} end,
+			IpAddr = mydlp_api:str_to_ip(IpAddrS),
+			{IpAddr, Command, ArgStr} end.
 
 send(#state{socket=Socket}, Data) -> gen_tcp:send(Socket, <<Data/binary, "\r\n">>).
 

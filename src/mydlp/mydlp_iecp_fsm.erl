@@ -127,9 +127,9 @@ init([]) ->
 			?ERROR_LOG("IECP: Error occurred at token control. Closing connection. Err: "?S , [Else]),
 			{stop, normal, State} end.
 
-'END_RESP'(#state{obj_id=ObjId} = State) ->
+'END_RESP'(#state{obj_id=ObjId, commmand=Command} = State) ->
 	ok = mydlp_container:eof(ObjId),
-	ok = mydlp_scheduler:s({printout, ObjId}),
+	ok = mydlp_scheduler:s({print, ObjId}),
 	send_ok(State),
 	{stop, normal, State}.
 
