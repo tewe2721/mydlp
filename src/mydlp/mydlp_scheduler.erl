@@ -82,7 +82,7 @@ handle_cast(consume_item, #state{item_queue=Q} = State) ->
                                                 "Stack trace: "?S"~n.Item: "?S"~nState: "?S"~n ",
                                                 [Class, Error, erlang:get_stacktrace(), Item, State]) end,
                                 %%% TODO: for some errors we many return original queue
-                        consume(),
+                        consume_item(),
                         {noreply, State#state{item_queue=Q1}};
                 {empty, _} ->
                         {noreply, State#state{consume_inprog=false}}
