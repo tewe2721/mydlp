@@ -42,7 +42,8 @@
 	addr,
 	obj_id,
 	recv_size,
-	recv_data=[]
+	recv_data=[],
+	trap_timer
 }).
 
 -define(BIN_OK, <<"OK">>).
@@ -123,10 +124,12 @@ init([]) ->
 'SEAP_REQ'({data, "HASKEY" ++ _Rest}, State) -> 
 	'HASKEY_RESP'(State);
 'SEAP_REQ'({data, "IECP" ++ Rest}, State) -> 
-	{IpAddr, Command, ArgStr} = get_iecp_args(Rest),
-	'IECP_RESP'(State, IpAddr, Command, ArgStr);
-'SEAP_REQ'({data, "TRAP" ++ Rest}, State) -> 
-	{next_state, 'TRAP_WAIT', State, 60000 + ?CFG(fsm_timeout)};
+	{IpAddr, FP, D} = get_iecp_args(Rest),
+	'IECP_RESP'(State, IpAddr, FP, D);
+'SEAP_REQ'({data, "TRAP" ++ _Rest}, State) -> 
+	mydlp_container:set_trap_pid(self()),
+	State1 = start_timer(State),
+	{next_state, 'TRAP_WAIT', State1, 60000 + ?CFG(fsm_timeout)};
 'SEAP_REQ'({data, "HELP" ++ _Rest}, State) -> 
 	'HELP_RESP'(State);
 'SEAP_REQ'({data, _Else}, State) -> 
@@ -203,8 +206,8 @@ init([]) ->
 		_Else -> send_err(State) end,
 	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
 
-'IECP_RESP'(State, IpAddr, Command, ArgStr) ->
-	mydlp_api:iecp_command(IpAddr, Command, ArgStr),
+'IECP_RESP'(State, IpAddr, FilePath, PropDict) ->
+	mydlp_api:iecp_command(IpAddr, FilePath, PropDict),
 	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
 
 'HELP_RESP'(State) ->
@@ -292,8 +295,19 @@ handle_info({tcp_closed, Socket}, _StateName, #state{socket=Socket, addr=_Addr} 
 	% ?ERROR_LOG(?S" Client "?S" disconnected.\n", [self(), Addr]),
 	{stop, normal, StateData};
 
-handle_info(_Info, StateName, StateData) ->
-	% ?ERROR_LOG("SEAP: Unexpected message: "?S"~nStateName: "?S", StateData: "?S, [Info, StateName, StateData]),
+handle_info(trap_timeout, 'TRAP_WAIT', State) -> 
+	mydlp_container:reset_trap_pid(),
+	send_ok("retrap"),
+	State1 = cancel_timer(State),
+	{next_state, 'SEAP_REQ', State1, ?CFG(fsm_timeout)};
+
+handle_info({trap_message, Message}, 'TRAP_WAIT', State) -> 
+	send_ok(Message),
+	State1 = start_timer(State),
+	{next_state, 'TRAP_WAIT', State1, 60000 + ?CFG(fsm_timeout)};
+
+handle_info(Info, StateName, StateData) ->
+	?ERROR_LOG("SEAP: Unexpected message: "?S"~nStateName: "?S", StateData: "?S, [Info, StateName, StateData]),
 	{next_state, StateName, StateData}.
 
 fsm_call(StateName, Args, StateData) -> 
@@ -366,6 +380,7 @@ get_getprop_args(Rest) ->
 	{ObjIdS, Key} = get_two_args(Rest),
 	{list_to_integer(ObjIdS), Key}.
 
+
 get_map_args(Rest) -> 
 	Rest1 = mydlp_api:rm_trailing_crlf(Rest),
 	Tokens = string:tokens(Rest1, " "),
@@ -389,13 +404,13 @@ get_iecp_args(String) ->
 		I -> 	IpAddrS = string:sub_string(Rest2, 1, I - 1),
 			Rest3 = string:sub_string(Rest2, I + 1),
 			Rest4 = string:strip(Rest3),
-			{Command, ArgStr} = case string:chr(Rest4, $\s) of
+			{FP, ArgStr} = case string:chr(Rest4, $\s) of
 				0 -> throw({no_space_to_tokenize, Rest4});
 				I2 -> 	CS = string:sub_string(Rest4, 1, I2 - 1),
 					AS = string:sub_string(Rest4, I2 + 1),
 					{CS, string:strip(AS)} end,
 			IpAddr = mydlp_api:str_to_ip(IpAddrS),
-			{IpAddr, Command, ArgStr} end.
+			{IpAddr, mydlp_api:qp_decode(FP), get_map_args(ArgStr)} end.
 
 send(#state{socket=Socket}, Data) -> gen_tcp:send(Socket, <<Data/binary, "\r\n">>).
 
@@ -407,4 +422,15 @@ send_ok(State, Arg) when is_binary(Arg) -> send(State, <<?BIN_OK/binary, " ", Ar
 send_ok(State, Arg) when is_integer(Arg) -> send_ok(State, integer_to_list(Arg));
 send_ok(State, Arg) when is_atom(Arg) -> send_ok(State, atom_to_list(Arg));
 send_ok(State, Arg) when is_list(Arg)-> send_ok(State, list_to_binary(Arg)).
+
+start_timer(State) ->
+	State1 = cancel_timer(State),
+	{ok, Timer} = timer:apply_after(60000, trap_timeout),
+	State1#state{trap_timer=Timer}.
+
+cancel_timer(#state{trap_timer=undefined} = State) -> State;
+cancel_timer(#state{trap_timer=TT} = State) -> 
+	timer:cancel(TT),
+	State#state{trap_timer=undefined}.
+	
 

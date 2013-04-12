@@ -129,8 +129,39 @@ code_change(_OldVsn, State, _Extra) ->
 
 %%%%%%%%%%%%%%%%% internal
 
-process(Item) ->
-	erlang:display(Item),
+process(ItemId) -> process(ItemId, 0).
+
+process(ItemId, I) when I > 15 -> ok;
+process(ItemId, TryCount) ->
+	TrapPid = mydlp_container:get_trap_pid(),
+	case TrapPid of
+		P when is_pid(P) -> case is_process_alive(P) of
+			true -> process_func(TrapPid, ItemId);
+			false -> timer:sleep(4000), process(ItemId, TryCount + 1) end;
+		_ -> timer:sleep(4000), process(ItemId, TryCount + 1) end.
+	
+
+process_func(TrapPid, ItemId) ->
+	PropDict = case mydlp_container:getpropdict(ItemId) of
+		{ok, PD} -> PD;
+		Err -> throw({error, {cannot_get_propdict, Err, ItemId}}) end,
+	Command = case dict:find("command", PropDict) of
+		{ok, V} -> V;
+		Err2 -> throw({error, {cannot_find_key_command, Err2, PropDict}}) end,
+	PropDict1 = dict:erase("command", PropDict),
+	PropDictStr = string:join([K ++ "=" ++ V || {K,V} <- dict:to_list(PropDict1)], " "),
+	
+	Data = case mydlp_container:getdata(ItemId) of
+		{ok, D} -> D;
+		Err3 -> throw({error, {cannot_get_data, Err3, ItemId}}) end,
+	{ok, TempFile} = mydlp_workdir:tempfile(),
+	case file:write_file(TempFile, Data) of
+		ok -> ok;
+		Err4 -> throw({error, {cannot_write_to_tmpfile, Err4, TempFile, Data}}) end,
+
+	TrapMessage = Command ++ " " ++ TempFile ++ " " ++ PropDictStr,
+	TrapPid ! {trap_message, TrapMessage},
+	
 	ok.
 
 

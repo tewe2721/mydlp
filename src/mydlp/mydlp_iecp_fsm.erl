@@ -90,6 +90,12 @@ init([]) ->
 'IECP_REQ'({data, "TOKEN" ++ Rest}, State) -> 
 	{ Token } = get_req_str_arg(Rest),
 	'TOKEN_RESP'(State, Token);
+'IECP_REQ'({data, "SETPROP" ++ _Rest}, #state{obj_id=undefined} = State) ->
+        send_err(State),
+        {next_state, 'IECP_REQ', State, ?CFG(fsm_timeout)};
+'IECP_REQ'({data, "SETPROP" ++ Rest}, State) ->
+        { Key, Value } = get_setprop_args(Rest),
+        'SETPROP_RESP'(State, Key, Value);
 'IECP_REQ'({data, "PUSH" ++ _Rest}, #state{obj_id=undefined} = State) ->
         send_err(State),
         {next_state, 'IECP_REQ', State, ?CFG(fsm_timeout)};
@@ -115,10 +121,14 @@ init([]) ->
         send_ok(State),
         {next_state, 'IECP_REQ', State, ?CFG(fsm_timeout)}.
 
-'TOKEN_RESP'(State, Token) ->
+'TOKEN_RESP'(#state{socket=Socket} = State, Token) ->
 	case catch mydlp_api:is_valid_token(Token) of
 		true -> send_ok(State),
 			{ok, ObjId} = mydlp_container:new(),
+			SrcAddr = case inet:peername(Socket) of
+				{ok, {{I1,I2,I3,I4}, _Port}} -> io_lib:format("~B.~B.~B.~B", [I1,I2,I3,I4]);
+				_Else -> "" end,
+			ok = mydlp_container:setprop(ObjId, "srcAddr", SrcAddr),
 			{next_state, 'IECP_REQ', State#state{obj_id=ObjId}, ?CFG(fsm_timeout)};
 		false -> send_err(State),
 			?ERROR_LOG("IECP: Token control has failed. Closing connection.", []),
@@ -127,9 +137,14 @@ init([]) ->
 			?ERROR_LOG("IECP: Error occurred at token control. Closing connection. Err: "?S , [Else]),
 			{stop, normal, State} end.
 
+'SETPROP_RESP'(#state{obj_id=ObjId} = State, Key, Value) ->
+	ok = mydlp_container:setprop(ObjId, Key, Value),
+	send_ok(State),
+	{next_state, 'IECP_REQ', State, ?CFG(fsm_timeout)}.
+
 'END_RESP'(#state{obj_id=ObjId} = State) ->
 	ok = mydlp_container:eof(ObjId),
-	ok = mydlp_scheduler:s({print, ObjId}),
+	ok = mydlp_scheduler:s(ObjId),
 	send_ok(State),
 	{stop, normal, State}.
 
@@ -249,6 +264,16 @@ get_req_str_arg(Rest) ->
 	case string:tokens(Rest1, " ") of
 		[S] -> { S };
 		_Else -> throw({error, {not_expected, Rest}}) end.
+
+get_setprop_args(Rest) ->
+        Rest1 = mydlp_api:rm_trailing_crlf(Rest),
+        Rest2 = string:strip(Rest1),
+        {Key, Value} = case string:chr(Rest2, $=) of
+                0 -> throw({no_equal_sign_to_tokenize, KeyValuePairS2});
+                I -> KS = string:sub_string(Rest2, 1, I - 1),
+                        VS = string:sub_string(Rest2, I + 1),
+                        {KS, VS} end,
+        {string:strip(Key), string:strip(Value)}.
 
 send(#state{socket=Socket}, Data) -> gen_tcp:send(Socket, <<Data/binary, "\r\n">>).
 

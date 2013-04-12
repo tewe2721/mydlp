@@ -3350,6 +3350,14 @@ aes_decrypt_binary(Key, Data) ->
 	Cipher = mydlp_api:binary_to_aes_cipher(Data),
 	mydlp_api:aes_decrypt(Key, Cipher).
 
+qp_decode(Str) when is_list(Str) -> qp_decode(list_to_binary(Str));
+qp_decode(Str) when is_binary(Str) ->
+        DBin = mydlp_api:quoted_to_raw(Str),
+        unicode:characters_to_list(DBin).
+        %DList = unicode:characters_to_list(DBin, {utf16, little}),
+        %DList = unicode:characters_to_list(DBin).
+        %filename:nativename(DList).
+
 -ifdef(__MYDLP_ENDPOINT).
 
 encrypt_payload(Data0) when is_binary(Data0) ->
@@ -3631,7 +3639,7 @@ cmd_bool(Command, Args, Envs, Stdin) when is_list(Args), is_list(Envs) ->
 
 -define(IECP_SOCKET_OPTS, [binary, {packet, 0}, {reuseaddr, true}, {nodelay, true}, {keepalive, true}, {active, false}]).
 
-iecp_command(IpAddr, Command, ArgStr) ->
+iecp_command(IpAddr, FilePath, PropDict) ->
 	?ASYNC(fun() -> 
 		Token = case new_token() of
 			T when is_binary(T) -> T;
@@ -3639,19 +3647,30 @@ iecp_command(IpAddr, Command, ArgStr) ->
 		Socket = case gen_tcp:connect(IpAddr, 9100, ?IECP_SOCKET_OPTS) of
 			{ok, S} -> S;
 			Err1 -> throw({error, {cannot_connect_to_addr, Err1, IpAddr}}) end,
-		try 	gen_tcp:send(Socket, ["TOKEN ", Token, "\r\n"]),
-			case gen_tcp:recv(Socket, 0) of
-				{ok, <<"OK\r\n">>} -> ok;
-				Err2 -> throw({error, {not_ok_resp_for_token, Err2, Token}}) end,
-			case Command of
-				"print" -> iecp_print_command(Socket, ArgStr);
-				_Else -> ?ERROR_LOG("Unknown IECP commmand. Ip: "?S" Command: "?S" ArgStr: "?S, [IpAddr, Command, ArgStr]) end
+		try 	iecp_command_init(Socket)
+			iecp_command_send_propdict(Socket, PropDict),
+			iecp_command_send_payload(Socket, FilePath),
+			iecp_command_end(Socket)
 		after	gen_tcp:close(Socket)
 		end
 	end, 300000), ok.
 
+iecp_command_init(Socket) ->
+	gen_tcp:send(Socket, ["TOKEN ", Token, "\r\n"]),
+	case gen_tcp:recv(Socket, 0) of
+		{ok, <<"OK\r\n">>} -> ok;
+		Err -> throw({error, {not_ok_resp_for_token, Err, Token}}) end.
 
-iecp_print_command(Socket, ArgStr) ->
+iecp_command_send_propdict(Socket, PropDict) ->
+	iecp_command_send_propdict1(Socket, dict:to_list(PropDict)).
+iecp_command_send_propdict1(Socket, [{Key, Value}|Rest]) ->
+	gen_tcp:send(Socket, ["SETPROP ", Key, "=", Value, "\r\n"]),
+	case gen_tcp:recv(Socket, 0) of
+		{ok, <<"OK\r\n">>} -> iecp_command_send_propdict1(Socket, Rest);
+		Err -> throw({error, {not_ok_resp_for_setprop, Err}}) end;
+iecp_command_send_propdict1(_Socket, []) -> ok.
+
+iecp_command_send_payload(Socket, FilePath) ->
 	FileBin = case file:read_file(ArgStr) of
 		{ok, B} -> B;
 		Err -> throw({error, {cannot_open_file, Err, ArgStr}}) end,
@@ -3660,11 +3679,13 @@ iecp_print_command(Socket, ArgStr) ->
 	gen_tcp:send(Socket, FileBin),
 	case gen_tcp:recv(Socket, 0) of
 		{ok, <<"OK\r\n">>} -> ok;
-		Err2 -> throw({error, {not_ok_resp_for_push, Err2}}) end,
+		Err2 -> throw({error, {not_ok_resp_for_push, Err2}}) end.
+
+iecp_command_end(Socket) ->
 	gen_tcp:send(Socket, ["END\r\n"]),
 	case gen_tcp:recv(Socket, 0) of
 		{ok, <<"OK\r\n">>} -> ok;
-		Err3 -> throw({error, {not_ok_resp_for_end, Err3}}) end,
+		Err -> throw({error, {not_ok_resp_for_end, Err}}) end,
 	ok.
 
 -endif.
