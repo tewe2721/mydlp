@@ -131,7 +131,7 @@ code_change(_OldVsn, State, _Extra) ->
 
 process(ItemId) -> process(ItemId, 0).
 
-process(ItemId, I) when I > 15 -> ok;
+process(_ItemId, I) when I > 15 -> ok;
 process(ItemId, TryCount) ->
 	TrapPid = mydlp_container:get_trap_pid(),
 	case TrapPid of

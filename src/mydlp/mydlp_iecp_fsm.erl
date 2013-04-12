@@ -269,7 +269,7 @@ get_setprop_args(Rest) ->
         Rest1 = mydlp_api:rm_trailing_crlf(Rest),
         Rest2 = string:strip(Rest1),
         {Key, Value} = case string:chr(Rest2, $=) of
-                0 -> throw({no_equal_sign_to_tokenize, KeyValuePairS2});
+                0 -> throw({no_equal_sign_to_tokenize, Rest2});
                 I -> KS = string:sub_string(Rest2, 1, I - 1),
                         VS = string:sub_string(Rest2, I + 1),
                         {KS, VS} end,

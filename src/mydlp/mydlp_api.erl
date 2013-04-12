@@ -3647,7 +3647,7 @@ iecp_command(IpAddr, FilePath, PropDict) ->
 		Socket = case gen_tcp:connect(IpAddr, 9100, ?IECP_SOCKET_OPTS) of
 			{ok, S} -> S;
 			Err1 -> throw({error, {cannot_connect_to_addr, Err1, IpAddr}}) end,
-		try 	iecp_command_init(Socket)
+		try 	iecp_command_init(Socket),
 			iecp_command_send_propdict(Socket, PropDict),
 			iecp_command_send_payload(Socket, FilePath),
 			iecp_command_end(Socket)
