@@ -73,7 +73,7 @@ init() ->
 	State = #state{acl_fd=AclFd, discovery_fd=DiscoveryFd, error_fd=ErrorFd, report_fd=ReportFd},
 	State1 = logrotate(State),
 	State2 = start_timer(State1),
-	{ok, State1}.
+	{ok, State2}.
 
 logrotate(#state{acl_fd=AclFd, discovery_fd=DiscoveryFd, error_fd=ErrorFd, report_fd=ReportFd} = State) ->
 	AclFd1 = case does_need_logrotate("acl") of
