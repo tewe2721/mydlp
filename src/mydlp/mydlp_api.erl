@@ -3414,8 +3414,12 @@ is_valid_token(Token) when is_list(Token) ->
 					<<>> ->	?ERROR_LOG("TOKEN: Empty response: Url="?S"~n", [Url]), error;
                                 	<<"error", _/binary>> -> error;
                                 	<<"invalid", _/binary>> -> delete_endpoint_key(), error;
-                                	<<"true", _/binary>> -> true;
-                                	<<"false", _/binary>> -> false end;
+					RespData when is_binary(RespData) ->
+						case mydlp_api:decrypt_payload(RespData) of
+							retry -> error;
+							<<"invalid", _/binary>> -> delete_endpoint_key(), error;
+							<<"true", _/binary>> -> true;
+							<<"false", _/binary>> -> false end end;
                                 Else2 -> ?ERROR_LOG("TOKEN: An error occured during HTTP req:Ret="?S, [Else2]), retry end;
                 Else -> ?ERROR_LOG("TOKEN: An error occured during HTTP req: Obj="?S"~n", [Else]), retry end.
 
@@ -3429,7 +3433,12 @@ new_token() ->
 					<<>> ->	?ERROR_LOG("TOKEN: Empty response: Url="?S"~n", [Url]), error;
                                 	<<"TOKEN: ", Token/binary>> -> Token;
                                 	<<"error", _/binary>> -> error;
-                                	<<"invalid", _/binary>> -> delete_endpoint_key(), error end;
+                                	<<"invalid", _/binary>> -> delete_endpoint_key(), error;
+					RespData when is_binary(RespData) ->
+						case mydlp_api:decrypt_payload(RespData) of
+							retry -> error;
+							<<"invalid", _/binary>> -> delete_endpoint_key(), error;
+							<<"TOKEN: ", Token/binary>> -> Token end end;
                                 Else2 -> ?ERROR_LOG("TOKEN: An error occured during HTTP req:Ret="?S, [Else2]), retry end;
                 Else -> ?ERROR_LOG("TOKEN: An error occured during HTTP req: Obj="?S"~n", [Else]), retry end.
 
