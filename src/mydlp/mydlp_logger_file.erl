@@ -218,10 +218,10 @@ start_timer(State) ->
         {ok, Timer} = timer:send_after(1200000, logrotate_timeout),
         State1#state{logrotate_timer=Timer}.
 
-%cancel_timer(#state{logrotate_timer=undefined} = State) -> State;
-%cancel_timer(#state{logrotate_timer=TT} = State) ->
-%        timer:cancel(TT),
-%        State#state{logrotate_timer=undefined}.
+cancel_timer(#state{logrotate_timer=undefined} = State) -> State;
+cancel_timer(#state{logrotate_timer=TT} = State) ->
+        timer:cancel(TT),
+        State#state{logrotate_timer=undefined}.
 
 -endif.
 
