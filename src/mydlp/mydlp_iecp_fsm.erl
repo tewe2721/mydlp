@@ -144,7 +144,7 @@ init([]) ->
 
 'END_RESP'(#state{obj_id=ObjId} = State) ->
 	ok = mydlp_container:eof(ObjId),
-	ok = mydlp_scheduler:s(ObjId),
+	ok = mydlp_trapper:s(ObjId),
 	send_ok(State),
 	{stop, normal, State}.
 

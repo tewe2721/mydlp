@@ -297,12 +297,12 @@ handle_info({tcp_closed, Socket}, _StateName, #state{socket=Socket, addr=_Addr} 
 
 handle_info(trap_timeout, 'TRAP_WAIT', State) -> 
 	mydlp_container:reset_trap_pid(),
-	send_ok("retrap"),
+	send_ok(State, "retrap"),
 	State1 = cancel_timer(State),
 	{next_state, 'SEAP_REQ', State1, ?CFG(fsm_timeout)};
 
 handle_info({trap_message, Message}, 'TRAP_WAIT', State) -> 
-	send_ok(Message),
+	send_ok(State, Message),
 	State1 = start_timer(State),
 	{next_state, 'TRAP_WAIT', State1, 60000 + ?CFG(fsm_timeout)};
 
@@ -383,6 +383,9 @@ get_getprop_args(Rest) ->
 
 get_map_args(Rest) -> 
 	Rest1 = mydlp_api:rm_trailing_crlf(Rest),
+	get_map_args1(Rest1).
+
+get_map_args1(Rest1) -> 
 	Tokens = string:tokens(Rest1, " "),
 	get_map_args(Tokens, dict:new()).
 
@@ -410,7 +413,7 @@ get_iecp_args(String) ->
 					AS = string:sub_string(Rest4, I2 + 1),
 					{CS, string:strip(AS)} end,
 			IpAddr = mydlp_api:str_to_ip(IpAddrS),
-			{IpAddr, mydlp_api:qp_decode(FP), get_map_args(ArgStr)} end.
+			{IpAddr, mydlp_api:qp_decode(FP), get_map_args1(ArgStr)} end.
 
 send(#state{socket=Socket}, Data) -> gen_tcp:send(Socket, <<Data/binary, "\r\n">>).
 
@@ -425,7 +428,7 @@ send_ok(State, Arg) when is_list(Arg)-> send_ok(State, list_to_binary(Arg)).
 
 start_timer(State) ->
 	State1 = cancel_timer(State),
-	{ok, Timer} = timer:apply_after(60000, trap_timeout),
+	{ok, Timer} = timer:send_after(60000, trap_timeout),
 	State1#state{trap_timer=Timer}.
 
 cancel_timer(#state{trap_timer=undefined} = State) -> State;

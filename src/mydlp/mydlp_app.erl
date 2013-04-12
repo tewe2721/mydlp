@@ -55,7 +55,7 @@
 			{mydlp_item_push, start_link,[]},
 			{mydlp_spool, start_link,[]},
 			{mydlp_discover_fs, start_link,[]},
-			{mydlp_scheduler, start_link,[]}
+			{mydlp_trapper, start_link,[]}
 		]
 	).
 

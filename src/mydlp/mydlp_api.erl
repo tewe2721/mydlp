@@ -3647,7 +3647,7 @@ iecp_command(IpAddr, FilePath, PropDict) ->
 		Socket = case gen_tcp:connect(IpAddr, 9100, ?IECP_SOCKET_OPTS) of
 			{ok, S} -> S;
 			Err1 -> throw({error, {cannot_connect_to_addr, Err1, IpAddr}}) end,
-		try 	iecp_command_init(Socket),
+		try 	iecp_command_init(Socket, Token),
 			iecp_command_send_propdict(Socket, PropDict),
 			iecp_command_send_payload(Socket, FilePath),
 			iecp_command_end(Socket)
@@ -3655,7 +3655,7 @@ iecp_command(IpAddr, FilePath, PropDict) ->
 		end
 	end, 300000), ok.
 
-iecp_command_init(Socket) ->
+iecp_command_init(Socket, Token) ->
 	gen_tcp:send(Socket, ["TOKEN ", Token, "\r\n"]),
 	case gen_tcp:recv(Socket, 0) of
 		{ok, <<"OK\r\n">>} -> ok;
@@ -3671,9 +3671,9 @@ iecp_command_send_propdict1(Socket, [{Key, Value}|Rest]) ->
 iecp_command_send_propdict1(_Socket, []) -> ok.
 
 iecp_command_send_payload(Socket, FilePath) ->
-	FileBin = case file:read_file(ArgStr) of
+	FileBin = case file:read_file(FilePath) of
 		{ok, B} -> B;
-		Err -> throw({error, {cannot_open_file, Err, ArgStr}}) end,
+		Err -> throw({error, {cannot_open_file, Err, FilePath}}) end,
 	Size = size(FileBin),
 	gen_tcp:send(Socket, ["PUSH ", integer_to_list(Size), "\r\n"]),
 	gen_tcp:send(Socket, FileBin),

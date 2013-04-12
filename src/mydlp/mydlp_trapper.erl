@@ -27,7 +27,7 @@
 
 -ifdef(__MYDLP_ENDPOINT).
 
--module(mydlp_scheduler).
+-module(mydlp_trapper).
 -author("kerem@mydlp.com").
 -behaviour(gen_server).
 
