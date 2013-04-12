@@ -69,11 +69,9 @@ init() ->
 	{ok, DiscoveryFd} = fopen(LogDir ++ "/discovery.log"),
 	{ok, ErrorFd} = fopen(LogDir ++ "/error.log"),
 	{ok, ReportFd} = fopen(LogDir ++ "/report.log"),
-	% TODO: close this file handle at terminate
 	State = #state{acl_fd=AclFd, discovery_fd=DiscoveryFd, error_fd=ErrorFd, report_fd=ReportFd},
-	State1 = logrotate(State),
-	State2 = start_timer(State1),
-	{ok, State2}.
+	timer:send_after(150000, logrotate_timeout),
+	{ok, State}.
 
 logrotate(#state{acl_fd=AclFd, discovery_fd=DiscoveryFd, error_fd=ErrorFd, report_fd=ReportFd} = State) ->
 	AclFd1 = case does_need_logrotate("acl") of
@@ -215,7 +213,7 @@ logrotate_logfile(FD, LogFileStr) ->
 
 start_timer(State) ->
         State1 = cancel_timer(State),
-        {ok, Timer} = timer:send_after(1200000, logrotate_timeout),
+        {ok, Timer} = timer:send_after(900000, logrotate_timeout),
         State1#state{logrotate_timer=Timer}.
 
 cancel_timer(#state{logrotate_timer=undefined} = State) -> State;
