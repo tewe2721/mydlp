@@ -162,7 +162,11 @@ mc_match(MatcherId, Func, FuncOpts, #file{mc_table=MCTable, normal_text=NT}) ->
 					true -> [{I, PhraseS}];
 					false -> [] end
 			end, Matched);
-		false -> lists:map(fun({I, _CI, {_L, _ML}}) -> I end, Matched) end,
+		false -> lists:map(fun({I, CI, {L, _ML}}) ->
+				Head = size(NT) + CI - L,
+				<<_:Head/binary, Phrase:L/binary, _/binary>> = NT,
+				PhraseS = unicode:characters_to_list(Phrase), 
+				{I, PhraseS} end, Matched) end,
 	MI = lists:flatten(MatchedIndex),
 	{length(MI), MI}.
 

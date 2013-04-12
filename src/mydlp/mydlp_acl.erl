@@ -371,7 +371,7 @@ execute_ifeatures(CTX, Distance, IFeatures, File) ->
 		%%%% TODO: Check for PAnyRet whether contains error
 		case {PAllRet, UseDistance} of
 			{false, _} -> neg;
-			{{ok, Results}, false} -> MatchingDetails = generate_matching_details(Results),
+			{{ok, Results}, false} -> erlang:display({distance_false, Results}),MatchingDetails = generate_matching_details(Results),
 						{pos, MatchingDetails};
 			{{ok, Results}, true } -> case is_distance_satisfied(Results, Distance) of
 							{pos, MatchingDetails} -> {pos, MatchingDetails};
@@ -382,9 +382,11 @@ execute_ifeatures(CTX, Distance, IFeatures, File) ->
 generate_matching_details(Results) -> generate_matching_details(Results, []).
 
 generate_matching_details([], Acc) -> Acc;
-generate_matching_details([{pos, _Threshold, {_Score, IndexWithPatterns}, MFunc}|Tail], Acc) ->
+generate_matching_details([{pos, _Threshold, {_Score, IndexWithPatterns}, MFunc}=Head|Tail], Acc) when is_list(IndexWithPatterns) ->
+	erlang:display({head, Head}),
 	Acc1 = lists:map(fun({_IV, Pattern}) -> #matching_detail{pattern=Pattern, matcher_func=MFunc} end, IndexWithPatterns),
-	generate_matching_details(Tail, [Acc1|Acc]).
+	generate_matching_details(Tail, lists:append(Acc, Acc1));
+generate_matching_details(_, Acc) -> Acc.
 
 %% Controls information feature is applicable for distance property.
 is_distance_applicable(Func) ->
