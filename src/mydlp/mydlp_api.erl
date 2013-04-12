@@ -1556,7 +1556,11 @@ acl_msg_logger(#log{time=Time, channel=Channel, rule_id=RuleId, action=Action, i
 	Format = lists:flatten([FormatHead, SrcF, SUserF, DestF, ActF, FilesF, MiscF]),
 	Args = lists:append([ArgsHead, SrcA, SUserA, DestA, ActA, FilesA, MiscA]),
 
-	mydlp_logger:notify(acl_msg, Format, Args).
+	NotifyType = case Channel of
+		discovery -> discovery_msg;
+		remote_discovery -> discovery_msg;
+		_Else -> acl_msg end,
+	mydlp_logger:notify(NotifyType, Format, Args).
 	
 files_to_str(Files) -> files_to_str(Files, []).
 
