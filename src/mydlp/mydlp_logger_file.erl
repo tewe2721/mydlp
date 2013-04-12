@@ -71,7 +71,8 @@ init() ->
 	{ok, ReportFd} = fopen(LogDir ++ "/report.log"),
 	% TODO: close this file handle at terminate
 	State = #state{acl_fd=AclFd, discovery_fd=DiscoveryFd, error_fd=ErrorFd, report_fd=ReportFd},
-	State1 = start_timer(State),
+	State1 = logrotate(State),
+	State2 = start_timer(State1),
 	{ok, State1}.
 
 logrotate(#state{acl_fd=AclFd, discovery_fd=DiscoveryFd, error_fd=ErrorFd, report_fd=ReportFd} = State) ->
