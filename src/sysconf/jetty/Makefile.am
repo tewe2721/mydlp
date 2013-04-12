@@ -24,4 +24,5 @@ jettysysconf_DATA = \
 	jetty-ajp.xml \
 	jetty.xml \
 	jetty.conf \
-	jetty.default
+	jetty.default \
+	webdefault.xml
