@@ -208,6 +208,7 @@ init([]) ->
 
 'IECP_RESP'(State, IpAddr, FilePath, PropDict) ->
 	mydlp_api:iecp_command(IpAddr, FilePath, PropDict),
+	send_ok(State),
 	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
 
 'HELP_RESP'(State) ->
