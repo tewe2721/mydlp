@@ -3629,7 +3629,7 @@ cmd_bool(Command, Args, Envs, Stdin) when is_list(Args), is_list(Envs) ->
 
 -ifdef(__MYDLP_ENDPOINT).
 
--define(IECP_SOCKET_OPTS, [binary, {packet, 0}, {reuseaddr, true}, {nodelay, true}, {keepalive, true}, {backlog, 30}, {active, false}]).
+-define(IECP_SOCKET_OPTS, [binary, {packet, 0}, {reuseaddr, true}, {nodelay, true}, {keepalive, true}, {active, false}]).
 
 iecp_command(IpAddr, Command, ArgStr) ->
 	?ASYNC(fun() -> 

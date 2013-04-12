@@ -33,7 +33,8 @@
 -export([
     'WAIT_FOR_SOCKET'/2,
     'SEAP_REQ'/2,
-    'PUSH_DATA_RECV'/2
+    'PUSH_DATA_RECV'/2,
+    'TRAP_WAIT'/2
 ]).
 
 -record(state, {
@@ -124,6 +125,8 @@ init([]) ->
 'SEAP_REQ'({data, "IECP" ++ Rest}, State) -> 
 	{IpAddr, Command, ArgStr} = get_iecp_args(Rest),
 	'IECP_RESP'(State, IpAddr, Command, ArgStr);
+'SEAP_REQ'({data, "TRAP" ++ Rest}, State) -> 
+	{next_state, 'TRAP_WAIT', State, 60000 + ?CFG(fsm_timeout)};
 'SEAP_REQ'({data, "HELP" ++ _Rest}, State) -> 
 	'HELP_RESP'(State);
 'SEAP_REQ'({data, _Else}, State) -> 
@@ -238,6 +241,12 @@ init([]) ->
 			{next_state, 'PUSH_DATA_RECV', State#state{recv_size=NewSize, recv_data=RecvData1}, ?CFG(fsm_timeout)};
 		_Else -> throw({error, {unexpected_binary_size, DataSize}}) end;
 'PUSH_DATA_RECV'(timeout, State) ->
+	?DEBUG(?S" Client connection timeout - closing.\n", [self()]),
+	{stop, normal, State}.
+
+'TRAP_WAIT'({data, _Data}, State) -> 
+	{next_state, 'TRAP_WAIT', State, 60000 + ?CFG(fsm_timeout)};
+'TRAP_WAIT'(timeout, State) ->
 	?DEBUG(?S" Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
@@ -383,7 +392,7 @@ get_iecp_args(String) ->
 			{Command, ArgStr} = case string:chr(Rest4, $\s) of
 				0 -> throw({no_space_to_tokenize, Rest4});
 				I2 -> 	CS = string:sub_string(Rest4, 1, I2 - 1),
-					AS = string:sub_string(Rest2, I + 1),
+					AS = string:sub_string(Rest4, I2 + 1),
 					{CS, string:strip(AS)} end,
 			IpAddr = mydlp_api:str_to_ip(IpAddrS),
 			{IpAddr, Command, ArgStr} end.

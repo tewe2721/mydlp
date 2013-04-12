@@ -155,7 +155,7 @@ init([]) ->
 		0 -> 	RecvData1 = [Data|RecvData],
 			ObjData = list_to_binary(lists:reverse(RecvData1)),
 			inet:setopts(Socket, [{active, once}, {packet, line}, list]),
-			'PUSH_RESP'(State#state{obj_id=undefined, recv_size=undefined, recv_data=[]}, ObjId, ObjData);
+			'PUSH_RESP'(State#state{recv_size=undefined, recv_data=[]}, ObjId, ObjData);
 		NewSize when NewSize > 0 ->
 			RecvData1 = [Data|RecvData],
 			{next_state, 'PUSH_DATA_RECV', State#state{recv_size=NewSize, recv_data=RecvData1}, ?CFG(fsm_timeout)};
