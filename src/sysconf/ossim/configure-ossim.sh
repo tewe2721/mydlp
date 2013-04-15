@@ -1,16 +1,24 @@
 #!/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+DOWNLOAD_BASE=https://raw.github.com/mydlp/mydlp/master/src/sysconf/ossim
 SETUP_CFG=/etc/ossim/ossim_setup.conf
 
-[ -e mydlp.cfg ] || ( wget https://raw.github.com/mydlp/mydlp/master/src/sysconf/ossim/mydlp.cfg )
+for f in mydlp.cfg rsyslog/mydlp.conf logrotate/mydlp mysql/mydlp.sql
+do
+	if [ ! -e $f ]; then
+		mkdir -p $(dirname $f) 
+		wget -O $f "$DOWNLOAD_BASE/$f"
+		if [ ! -e $f ]; then
+			echo "Can not get $f . Exiting !"
+			exit 1
+		fi
+	fi
+done
+
 cp -a mydlp.cfg /etc/ossim/agent/plugins/
-
-[ -e rsyslog/mydlp.conf ] || ( mkdir -p rsyslog ; cd rsyslog ; wget https://raw.github.com/mydlp/mydlp/master/src/sysconf/ossim/rsyslog/mydlp.conf )
 cp -a rsyslog/mydlp.conf /etc/rsyslog.d/
-
-[ -e logrotate/mydlp ] || ( mkdir -p logrotate ; cd logrotate ; wget https://raw.github.com/mydlp/mydlp/master/src/sysconf/ossim/logrotate/mydlp )
 cp -a logrotate/mydlp /etc/logrotate.d/
-
-[ -e mysql/mydlp.sql ] || ( mkdir -p mysql ; cd mysql ; wget https://raw.github.com/mydlp/mydlp/master/src/sysconf/ossim/mysql/mydlp.sql )
 cp -a mysql/mydlp.sql /usr/share/doc/ossim-mysql/contrib/plugins/
 
 if [ -n "$(grep -e '^detectors=' $SETUP_CFG)" ]; then
