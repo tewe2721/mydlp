@@ -135,7 +135,7 @@ acl_exec2(none, _Files) -> pass;
 acl_exec2({Req, {_Id, DefaultAction}, Rules}, Files) ->
 	case { DefaultAction, acl_exec3(Req, Rules, Files) } of
 		{DefaultAction, return} -> DefaultAction;
-		{_DefaultAction, Action} -> erlang:display({action, Action}), Action end.
+		{_DefaultAction, Action} -> Action end.
 
 acl_exec3(_Req, [], _Files) -> return;
 acl_exec3(_Req, _AllRules, []) -> return;
@@ -349,8 +349,7 @@ execute_itype_pf(CTX, {ITypeOrigId, DataFormats, Distance, IFeatures},
 execute_itype_pf1(CTX, ITypeOrigId, Distance, IFeatures, File) ->
 	case execute_ifeatures(CTX, Distance, IFeatures, File) of
 		neg -> neg;
-		{pos, MatchingDetails} -> erlang:display({details, MatchingDetails}) ,
-					{pos, {file, File}, {itype, ITypeOrigId}, {misc, ""}, {matching_details, MatchingDetails}};
+		{pos, MatchingDetails} -> {pos, {file, File}, {itype, ITypeOrigId}, {misc, ""}, {matching_details, MatchingDetails}};
 		{error, {file, File}, {misc, Misc}} ->
 				{error, {file, File}, {itype, ITypeOrigId}, {misc, Misc}};
 		E -> E end.
@@ -371,7 +370,7 @@ execute_ifeatures(CTX, Distance, IFeatures, File) ->
 		%%%% TODO: Check for PAnyRet whether contains error
 		case {PAllRet, UseDistance} of
 			{false, _} -> neg;
-			{{ok, Results}, false} -> erlang:display({distance_false, Results}),MatchingDetails = generate_matching_details(Results),
+			{{ok, Results}, false} -> MatchingDetails = generate_matching_details(Results),
 						{pos, MatchingDetails};
 			{{ok, Results}, true } -> case is_distance_satisfied(Results, Distance) of
 							{pos, MatchingDetails} -> {pos, MatchingDetails};
@@ -382,8 +381,7 @@ execute_ifeatures(CTX, Distance, IFeatures, File) ->
 generate_matching_details(Results) -> generate_matching_details(Results, []).
 
 generate_matching_details([], Acc) -> Acc;
-generate_matching_details([{pos, _Threshold, {_Score, IndexWithPatterns}, MFunc}=Head|Tail], Acc) when is_list(IndexWithPatterns) ->
-	erlang:display({head, Head}),
+generate_matching_details([{pos, _Threshold, {_Score, IndexWithPatterns}, MFunc}|Tail], Acc) when is_list(IndexWithPatterns) ->
 	Acc1 = lists:map(fun({_IV, Pattern}) -> #matching_detail{pattern=Pattern, matcher_func=MFunc} end, IndexWithPatterns),
 	generate_matching_details(Tail, lists:append(Acc, Acc1));
 generate_matching_details(_, Acc) -> Acc.
@@ -418,9 +416,7 @@ is_in_valid_distance(ListOfIndexes, DistanceList, ListOfThresholds, Distance) ->
 	[_H1,{IndexValue, Pattern, MFunc, T}|TailOfDistanceList] = DistanceList,
 	EarlyNeg = (length(DistanceList) < SumOfThresholds),
 	case EarlyNeg of 
-		true -> erlang:display(DistanceList),
-			{TailOfIndexList, NewDistanceList} = find_in_distance(ListOfIndexes, Distance, IndexValue),
-			erlang:display(NewDistanceList),
+		true ->	{TailOfIndexList, NewDistanceList} = find_in_distance(ListOfIndexes, Distance, IndexValue),
 			is_in_valid_distance(TailOfIndexList, [{IndexValue, Pattern, MFunc, T}]++TailOfDistanceList++NewDistanceList, ListOfThresholds, Distance);
 		false -> case is_all_thresholds_satisfied(DistanceList, ListOfThresholds) of
 				{true, MatchingDetails} -> {pos, MatchingDetails};
