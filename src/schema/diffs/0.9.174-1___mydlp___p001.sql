@@ -1,4 +1,4 @@
-ALTER TABLE Rule ADD COLUMN notificationEnabled TINYINT(1) NULL DEFAULT NULL COMMENT '';
+ALTER TABLE Rule ADD COLUMN notificationEnabled bit(1) NULL DEFAULT NULL COMMENT '';
 CREATE TABLE EmailNotificationItem (
     id INT(11) NOT NULL,
     PRIMARY KEY (id)

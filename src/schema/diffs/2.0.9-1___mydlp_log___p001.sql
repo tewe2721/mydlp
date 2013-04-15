@@ -9,7 +9,7 @@ CREATE TABLE OperationLog (
     ruleId BIGINT(20) NULL DEFAULT NULL,
     severity TINYINT(4) NOT NULL,
     source VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL,
-    visible TINYINT(1) NOT NULL,
+    visible bit(1) NOT NULL,
     INDEX visibleIndex (visible),
     INDEX dateIndex (`date`),
     PRIMARY KEY (id)
