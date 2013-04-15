@@ -43,9 +43,13 @@
 	set_ep_meta/2,
 	set_ep_meta_from_dict/1,
 	unset_ep_meta/1,
+	get_trap_pid/0,
+	set_trap_pid/1,
+	reset_trap_pid/0,
 	new/0,
 	setprop/3,
 	getprop/2,
+	getpropdict/1,
 	push/2,
 	pushfile/2,
 	pushchunk/2,
@@ -78,6 +82,7 @@
 -record(state, {
 	confupdate=true,
 	ep_meta,  % defined keys are: user , version
+	trap_pid,
 	object_tree
 	}).
 
@@ -111,6 +116,8 @@ setprop(ObjId, Key, Value) -> gen_server:cast(?MODULE, {setprop, ObjId, Key, Val
 
 getprop(ObjId, Key) -> gen_server:call(?MODULE, {getprop, ObjId, Key}).
 
+getpropdict(ObjId) -> gen_server:call(?MODULE, {getpropdict, ObjId}).
+
 push(ObjId, DataChunk) -> gen_server:cast(?MODULE, {push, ObjId, DataChunk}).
 
 pushfile(ObjId, FilePath) -> gen_server:cast(?MODULE, {pushfile, ObjId, FilePath}).
@@ -122,6 +129,11 @@ eof(ObjId) -> gen_server:cast(?MODULE, {eof, ObjId}).
 getdata(ObjId) -> gen_server:call(?MODULE, {getdata, ObjId}).
 
 obj_size(ObjId) -> gen_server:call(?MODULE, {obj_size, ObjId}).
+
+get_trap_pid() -> gen_server:call(?MODULE, get_trap_pid).
+
+set_trap_pid(Pid) -> gen_server:cast(?MODULE, {set_trap_pid, Pid}).
+reset_trap_pid() -> set_trap_pid(undefined).
 
 aclq_timeout(Size) -> 
 	CalcSizeF = ?ACLQ_TIMEOUT_MIN + ( Size * ?ACLQ_TIMEOUT_CONST ),
@@ -153,6 +165,9 @@ handle_call(confupdate, _From, #state{confupdate=ConfUpdate} = State) ->
 handle_call(get_ep_meta_dict, _From, #state{ep_meta=D} = State) ->
 	{reply, D, State};
 
+handle_call(get_trap_pid, _From, #state{trap_pid=TP} = State) ->
+	{reply, TP, State};
+
 handle_call({get_ep_meta, Key}, _From, #state{ep_meta=D} = State) ->
 	Reply = case dict:find(Key, D) of
 		{ok, Value} -> Value;
@@ -173,6 +188,12 @@ handle_call({getprop, ObjId, Key}, _From, #state{object_tree=OT} = State) ->
 				case dict:find(Key, PD) of
 					{ok, Value} -> {ok, Value};
 					error -> {error, not_in_prop_dict} end;
+		none -> {error, not_in_object_tree} end,
+	{reply, Reply, State};
+
+handle_call({getpropdict, ObjId}, _From, #state{object_tree=OT} = State) ->
+	Reply = case gb_trees:lookup(ObjId, OT) of
+		{value, #object{prop_dict=PD}} -> {ok, PD};
 		none -> {error, not_in_object_tree} end,
 	{reply, Reply, State};
 
@@ -275,6 +296,9 @@ handle_cast({set_ep_meta, Key, Value}, #state{ep_meta=D} = State) ->
 handle_cast({set_ep_meta_from_dict, MetaDict}, #state{ep_meta=D} = State) ->
 	D1 = set_meta_dict(MetaDict, D),
 	{noreply, State#state{ep_meta=D1}};
+
+handle_cast({set_trap_pid, TP}, State) ->
+	{noreply, State#state{trap_pid=TP}};
 
 handle_cast({unset_ep_meta, Key}, #state{ep_meta=D} = State) ->
 	D1 = dict:erase(Key, D),
@@ -628,14 +652,20 @@ get_destination1(#object{} = Obj) ->
 	case get_channel(Obj) of
 		discovery -> get_destination_file_path(Obj);
 		removable -> get_destination_file_path(Obj);
+		inbound -> get_destination_file_path(Obj);
 		remote_discovery -> get_remote_destination_file_path(Obj);
 		printer -> get_printer_name(Obj);
 		_Else -> undefined end.
 
 get_destination_file_path(#object{prop_dict=PD, filepath=FP}) ->
-	case dict:find("burn_after_reading", PD) of
-		{ok, "true"} -> undefined;
-		_Else -> FP end.
+	case dict:find("fullpath", PD) of
+		{ok, FullPath} -> qp_decode(FullPath);
+		_Else -> 
+			case dict:find("burn_after_reading", PD) of
+				{ok, "true"} -> undefined;
+				_Else2 -> FP 
+			end
+	end.
 
 get_remote_destination_file_path(#object{filepath=FP, prop_dict=PD}) ->
 	case dict:find("page_path", PD) of
@@ -717,13 +747,7 @@ cleanup1(OT, MinObjId, [ObjId| Rest]) when ObjId < MinObjId ->
 	cleanup1(OT1, MinObjId, Rest);
 cleanup1(OT, _MinObjId, _ObjIds) -> OT.
 
-qp_decode(Str) when is_list(Str) -> qp_decode(list_to_binary(Str));
-qp_decode(Str) when is_binary(Str) ->
-	DBin = mydlp_api:quoted_to_raw(Str),
-	unicode:characters_to_list(DBin).
-	%DList = unicode:characters_to_list(DBin, {utf16, little}),
-	%DList = unicode:characters_to_list(DBin).
-	%filename:nativename(DList).
+qp_decode(Str) -> mydlp_api:qp_decode(Str).
 
 dict_store(Key, Value0, Dict) ->
 	Value = qp_decode(Value0),

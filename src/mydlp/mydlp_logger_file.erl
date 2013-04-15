@@ -47,8 +47,10 @@
 
 -record(state, {
 	acl_fd,
+	discovery_fd,
 	error_fd,
-	report_fd
+	report_fd,
+	logrotate_timer
 }).
 
 %%%----------------------------------------------------------------------
@@ -64,10 +66,27 @@ init(_) -> init().
 init() ->
 	LogDir = ?CFG(log_dir),
 	{ok, AclFd} = fopen(LogDir ++ "/acl.log"),
+	{ok, DiscoveryFd} = fopen(LogDir ++ "/discovery.log"),
 	{ok, ErrorFd} = fopen(LogDir ++ "/error.log"),
 	{ok, ReportFd} = fopen(LogDir ++ "/report.log"),
-	% TODO: close this file handle at terminate
-	{ok, #state{acl_fd=AclFd, error_fd=ErrorFd, report_fd=ReportFd}}.
+	State = #state{acl_fd=AclFd, discovery_fd=DiscoveryFd, error_fd=ErrorFd, report_fd=ReportFd},
+	timer:send_after(150000, logrotate_timeout),
+	{ok, State}.
+
+logrotate(#state{acl_fd=AclFd, discovery_fd=DiscoveryFd, error_fd=ErrorFd, report_fd=ReportFd} = State) ->
+	AclFd1 = case does_need_logrotate("acl") of
+		true -> logrotate_logfile(AclFd, "acl");
+		false -> AclFd end,
+	DiscoveryFd1 = case does_need_logrotate("discovery") of
+		true -> logrotate_logfile(DiscoveryFd, "discovery");
+		false -> DiscoveryFd end,
+	ErrorFd1 = case does_need_logrotate("error") of
+		true -> logrotate_logfile(ErrorFd, "error");
+		false -> ErrorFd end,
+	ReportFd1 = case does_need_logrotate("report") of
+		true -> logrotate_logfile(ReportFd, "report");
+		false -> ReportFd end,
+	State#state{acl_fd=AclFd1, discovery_fd=DiscoveryFd1, error_fd=ErrorFd1, report_fd=ReportFd1}.
 
 %%----------------------------------------------------------------------
 %% Func: handle_event/2
@@ -96,6 +115,7 @@ handle_event({EventLevel, _, {_FromPid, Fmt, Data}}, State) ->
                         {operational, general} -> ?_OPR_LOG_HANDLE(general, {key, Message});
 			error -> filelog_err(State, Message);
 			acl_msg -> filelog_acl(State, Message);
+			discovery_msg -> filelog_discovery(State, Message);
 			_Else -> ok
 		end
 	catch Class:Error ->
@@ -126,6 +146,10 @@ handle_call(_Request, State) ->
 %%          {swap_handler, Args1, State1, Mod2, Args2} |
 %%          remove_handler                              
 %%----------------------------------------------------------------------
+handle_info(logrotate_timeout, State) ->
+	State1 = logrotate(State),
+	State2 = start_timer(State1),
+	{ok, State2};
 handle_info(Info, State) ->
 	try	filelog_err(State, io_lib:format ("Info [~p]", [Info]))
 	catch Class:Error ->
@@ -164,6 +188,9 @@ filelog(Fd, Message) ->
 filelog_acl(#state{acl_fd=AclFd}, Message) ->
 	filelog(AclFd, Message).
 
+filelog_discovery(#state{discovery_fd=DiscoveryFd}, Message) ->
+	filelog(DiscoveryFd, Message).
+
 filelog_err(#state{error_fd=ErrorFd}, Message) ->
 	filelog(ErrorFd, Message).
 
@@ -171,6 +198,28 @@ filelog_report(#state{report_fd=ReportFd}, Message) ->
 	filelog(ReportFd, Message).
 	
 fopen(Filename) -> file:open(Filename, [append, raw]).
+
+does_need_logrotate(LogFileStr) ->
+	LogFN = ?CFG(log_dir) ++ "/" ++ LogFileStr ++ ".log",
+	FileSize = filelib:file_size(LogFN),
+	( FileSize > ( ?CFG(log_limit) ) ).
+
+logrotate_logfile(FD, LogFileStr) ->
+	LogFN = ?CFG(log_dir) ++ "/" ++ LogFileStr ++ ".log",
+	file:close(FD),
+	file:rename(LogFN, LogFN ++ ".0"),
+	{ok, NewFD} = fopen(LogFN),
+	NewFD.
+
+start_timer(State) ->
+        State1 = cancel_timer(State),
+        {ok, Timer} = timer:send_after(900000, logrotate_timeout),
+        State1#state{logrotate_timer=Timer}.
+
+cancel_timer(#state{logrotate_timer=undefined} = State) -> State;
+cancel_timer(#state{logrotate_timer=TT} = State) ->
+        timer:cancel(TT),
+        State#state{logrotate_timer=undefined}.
 
 -endif.
 

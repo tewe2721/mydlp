@@ -1556,7 +1556,11 @@ acl_msg_logger(#log{time=Time, channel=Channel, rule_id=RuleId, action=Action, i
 	Format = lists:flatten([FormatHead, SrcF, SUserF, DestF, ActF, FilesF, MiscF]),
 	Args = lists:append([ArgsHead, SrcA, SUserA, DestA, ActA, FilesA, MiscA]),
 
-	mydlp_logger:notify(acl_msg, Format, Args).
+	NotifyType = case Channel of
+		discovery -> discovery_msg;
+		remote_discovery -> discovery_msg;
+		_Else -> acl_msg end,
+	mydlp_logger:notify(NotifyType, Format, Args).
 	
 files_to_str(Files) -> files_to_str(Files, []).
 
@@ -3350,6 +3354,14 @@ aes_decrypt_binary(Key, Data) ->
 	Cipher = mydlp_api:binary_to_aes_cipher(Data),
 	mydlp_api:aes_decrypt(Key, Cipher).
 
+qp_decode(Str) when is_list(Str) -> qp_decode(list_to_binary(Str));
+qp_decode(Str) when is_binary(Str) ->
+        DBin = mydlp_api:quoted_to_raw(Str),
+        unicode:characters_to_list(DBin).
+        %DList = unicode:characters_to_list(DBin, {utf16, little}),
+        %DList = unicode:characters_to_list(DBin).
+        %filename:nativename(DList).
+
 -ifdef(__MYDLP_ENDPOINT).
 
 encrypt_payload(Data0) when is_binary(Data0) ->
@@ -3402,6 +3414,45 @@ generate_endpoint_key() ->
                                 	<<"EPKEY_", _/binary>> = EpKey -> ?ERROR_LOG("REGISTER: Successfully registered.", []), EpKey end;
                                 Else2 -> ?ERROR_LOG("REGISTER: An error occured during HTTP req:Ret="?S, [Else2]), retry end;
                 Else -> ?ERROR_LOG("REGISTER: An error occured during HTTP req: Obj="?S"~n", [Else]), retry end.
+
+is_valid_token(Token) when is_list(Token) ->
+        Url = "https://" ++ ?CFG(management_server_address) ++ "/token?q=is_valid",
+	RawPayload = list_to_binary(Token),
+	Payload = mydlp_api:encrypt_payload(RawPayload),
+        case catch httpc:request(post, {Url, [], "application/octet-stream", Payload}, [], []) of
+                {ok, {{_HttpVer, Code, _Msg}, _Headers, Body}} ->
+                        case {Code, Body} of
+                                {200, Resp} -> case list_to_binary(Resp) of
+					<<>> ->	?ERROR_LOG("TOKEN: Empty response: Url="?S"~n", [Url]), error;
+                                	<<"error", _/binary>> -> error;
+                                	<<"invalid", _/binary>> -> delete_endpoint_key(), error;
+					RespData when is_binary(RespData) ->
+						case mydlp_api:decrypt_payload(RespData) of
+							retry -> error;
+							<<"invalid", _/binary>> -> delete_endpoint_key(), error;
+							<<"true", _/binary>> -> true;
+							<<"false", _/binary>> -> false end end;
+                                Else2 -> ?ERROR_LOG("TOKEN: An error occured during HTTP req:Ret="?S, [Else2]), retry end;
+                Else -> ?ERROR_LOG("TOKEN: An error occured during HTTP req: Obj="?S"~n", [Else]), retry end.
+
+new_token() ->
+        Url = "https://" ++ ?CFG(management_server_address) ++ "/token?q=new",
+	Payload = mydlp_api:encrypt_payload(<<>>),
+        case catch httpc:request(post, {Url, [], "application/octet-stream", Payload}, [], []) of
+                {ok, {{_HttpVer, Code, _Msg}, _Headers, Body}} ->
+                        case {Code, Body} of
+                                {200, Resp} -> case list_to_binary(Resp) of
+					<<>> ->	?ERROR_LOG("TOKEN: Empty response: Url="?S"~n", [Url]), error;
+                                	<<"TOKEN: ", Token/binary>> -> Token;
+                                	<<"error", _/binary>> -> error;
+                                	<<"invalid", _/binary>> -> delete_endpoint_key(), error;
+					RespData when is_binary(RespData) ->
+						case mydlp_api:decrypt_payload(RespData) of
+							retry -> error;
+							<<"invalid", _/binary>> -> delete_endpoint_key(), error;
+							<<"TOKEN: ", Token/binary>> -> Token end end;
+                                Else2 -> ?ERROR_LOG("TOKEN: An error occured during HTTP req:Ret="?S, [Else2]), retry end;
+                Else -> ?ERROR_LOG("TOKEN: An error occured during HTTP req: Obj="?S"~n", [Else]), retry end.
 
 -ifdef(__PLATFORM_LINUX).
 
@@ -3587,4 +3638,60 @@ cmd_bool(Command, Args, Envs, Stdin) when is_list(Args), is_list(Envs) ->
 -endif.
 
 -endif.
+
+-ifdef(__MYDLP_ENDPOINT).
+
+-define(IECP_SOCKET_OPTS, [binary, {packet, 0}, {reuseaddr, true}, {nodelay, true}, {keepalive, true}, {active, false}]).
+
+iecp_command(IpAddr, FilePath, PropDict) ->
+	?ASYNC(fun() -> 
+		Token = case new_token() of
+			T when is_binary(T) -> T;
+			Err -> throw({error, {cannot_get_token, Err}}) end,
+		Socket = case gen_tcp:connect(IpAddr, 9100, ?IECP_SOCKET_OPTS) of
+			{ok, S} -> S;
+			Err1 -> throw({error, {cannot_connect_to_addr, Err1, IpAddr}}) end,
+		try 	iecp_command_init(Socket, Token),
+			iecp_command_send_propdict(Socket, PropDict),
+			iecp_command_send_payload(Socket, FilePath),
+			iecp_command_end(Socket)
+		after	gen_tcp:close(Socket)
+		end
+	end, 300000), ok.
+
+iecp_command_init(Socket, Token) ->
+	gen_tcp:send(Socket, ["TOKEN ", Token, "\r\n"]),
+	case gen_tcp:recv(Socket, 0) of
+		{ok, <<"OK\r\n">>} -> ok;
+		Err -> throw({error, {not_ok_resp_for_token, Err, Token}}) end.
+
+iecp_command_send_propdict(Socket, PropDict) ->
+	iecp_command_send_propdict1(Socket, dict:to_list(PropDict)).
+iecp_command_send_propdict1(Socket, [{Key, Value}|Rest]) ->
+	gen_tcp:send(Socket, ["SETPROP ", Key, "=", Value, "\r\n"]),
+	case gen_tcp:recv(Socket, 0) of
+		{ok, <<"OK\r\n">>} -> iecp_command_send_propdict1(Socket, Rest);
+		Err -> throw({error, {not_ok_resp_for_setprop, Err}}) end;
+iecp_command_send_propdict1(_Socket, []) -> ok.
+
+iecp_command_send_payload(Socket, FilePath) ->
+	FileBin = case file:read_file(FilePath) of
+		{ok, B} -> B;
+		Err -> throw({error, {cannot_open_file, Err, FilePath}}) end,
+	Size = size(FileBin),
+	gen_tcp:send(Socket, ["PUSH ", integer_to_list(Size), "\r\n"]),
+	gen_tcp:send(Socket, FileBin),
+	case gen_tcp:recv(Socket, 0) of
+		{ok, <<"OK\r\n">>} -> ok;
+		Err2 -> throw({error, {not_ok_resp_for_push, Err2}}) end.
+
+iecp_command_end(Socket) ->
+	gen_tcp:send(Socket, ["END\r\n"]),
+	case gen_tcp:recv(Socket, 0) of
+		{ok, <<"OK\r\n">>} -> ok;
+		Err -> throw({error, {not_ok_resp_for_end, Err}}) end,
+	ok.
+
+-endif.
+
 

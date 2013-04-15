@@ -140,6 +140,7 @@ handle_event({EventLevel, _, {_FromPid, Fmt, Data}}, State) ->
 			warning_msg -> syslog_syswarn(State, Message);
 			info_msg -> syslog_debug(State, Message);
 			acl_msg -> syslog_acl(State, Message);
+			discovery_msg -> syslog_acl(State, Message);
 			smtp_msg -> syslog_smtp(State, Message);
 			Else -> syslog_err(State, io_lib:format("Unexpected event level: ~w ~nMessage: ~s~n", [Else, Message]))
 		end

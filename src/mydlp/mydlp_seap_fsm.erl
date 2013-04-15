@@ -33,7 +33,8 @@
 -export([
     'WAIT_FOR_SOCKET'/2,
     'SEAP_REQ'/2,
-    'PUSH_DATA_RECV'/2
+    'PUSH_DATA_RECV'/2,
+    'TRAP_WAIT'/2
 ]).
 
 -record(state, {
@@ -41,7 +42,8 @@
 	addr,
 	obj_id,
 	recv_size,
-	recv_data=[]
+	recv_data=[],
+	trap_timer
 }).
 
 -define(BIN_OK, <<"OK">>).
@@ -82,7 +84,7 @@ init([]) ->
 	{ok, {IP, _Port}} = inet:peername(Socket),
 	{next_state, 'SEAP_REQ', State#state{socket=Socket, addr=IP}, ?CFG(fsm_timeout)};
 'WAIT_FOR_SOCKET'(Other, State) ->
-	?DEBUG("ICAP FSM: 'WAIT_FOR_SOCKET'. Unexpected message: "?S, [Other]),
+	?DEBUG("SEAP FSM: 'WAIT_FOR_SOCKET'. Unexpected message: "?S, [Other]),
 	%% Allow to receive async messages
 	{next_state, 'WAIT_FOR_SOCKET', State}.
 
@@ -121,6 +123,13 @@ init([]) ->
 	'GETKEY_RESP'(State);
 'SEAP_REQ'({data, "HASKEY" ++ _Rest}, State) -> 
 	'HASKEY_RESP'(State);
+'SEAP_REQ'({data, "IECP" ++ Rest}, State) -> 
+	{IpAddr, FP, D} = get_iecp_args(Rest),
+	'IECP_RESP'(State, IpAddr, FP, D);
+'SEAP_REQ'({data, "TRAP" ++ _Rest}, State) -> 
+	mydlp_container:set_trap_pid(self()),
+	State1 = start_timer(State),
+	{next_state, 'TRAP_WAIT', State1, 60000 + ?CFG(fsm_timeout)};
 'SEAP_REQ'({data, "HELP" ++ _Rest}, State) -> 
 	'HELP_RESP'(State);
 'SEAP_REQ'({data, _Else}, State) -> 
@@ -197,6 +206,11 @@ init([]) ->
 		_Else -> send_err(State) end,
 	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
 
+'IECP_RESP'(State, IpAddr, FilePath, PropDict) ->
+	mydlp_api:iecp_command(IpAddr, FilePath, PropDict),
+	send_ok(State),
+	{next_state, 'SEAP_REQ', State, ?CFG(fsm_timeout)}.
+
 'HELP_RESP'(State) ->
 	Print = "\r\n" ++ "Commands:" ++ "\r\n" ++
 		"\t" ++ "BEGIN -> OK Id" ++ "\r\n" ++
@@ -231,6 +245,12 @@ init([]) ->
 			{next_state, 'PUSH_DATA_RECV', State#state{recv_size=NewSize, recv_data=RecvData1}, ?CFG(fsm_timeout)};
 		_Else -> throw({error, {unexpected_binary_size, DataSize}}) end;
 'PUSH_DATA_RECV'(timeout, State) ->
+	?DEBUG(?S" Client connection timeout - closing.\n", [self()]),
+	{stop, normal, State}.
+
+'TRAP_WAIT'({data, _Data}, State) -> 
+	{next_state, 'TRAP_WAIT', State, 60000 + ?CFG(fsm_timeout)};
+'TRAP_WAIT'(timeout, State) ->
 	?DEBUG(?S" Client connection timeout - closing.\n", [self()]),
 	{stop, normal, State}.
 
@@ -276,8 +296,19 @@ handle_info({tcp_closed, Socket}, _StateName, #state{socket=Socket, addr=_Addr} 
 	% ?ERROR_LOG(?S" Client "?S" disconnected.\n", [self(), Addr]),
 	{stop, normal, StateData};
 
-handle_info(_Info, StateName, StateData) ->
-	% ?ERROR_LOG("SEAP: Unexpected message: "?S"~nStateName: "?S", StateData: "?S, [Info, StateName, StateData]),
+handle_info(trap_timeout, 'TRAP_WAIT', State) -> 
+	mydlp_container:reset_trap_pid(),
+	send_ok(State, "retrap"),
+	State1 = cancel_timer(State),
+	{next_state, 'SEAP_REQ', State1, ?CFG(fsm_timeout)};
+
+handle_info({trap_message, Message}, 'TRAP_WAIT', State) -> 
+	send_ok(State, Message),
+	State1 = start_timer(State),
+	{next_state, 'TRAP_WAIT', State1, 60000 + ?CFG(fsm_timeout)};
+
+handle_info(Info, StateName, StateData) ->
+	?ERROR_LOG("SEAP: Unexpected message: "?S"~nStateName: "?S", StateData: "?S, [Info, StateName, StateData]),
 	{next_state, StateName, StateData}.
 
 fsm_call(StateName, Args, StateData) -> 
@@ -350,8 +381,12 @@ get_getprop_args(Rest) ->
 	{ObjIdS, Key} = get_two_args(Rest),
 	{list_to_integer(ObjIdS), Key}.
 
+
 get_map_args(Rest) -> 
 	Rest1 = mydlp_api:rm_trailing_crlf(Rest),
+	get_map_args1(Rest1).
+
+get_map_args1(Rest1) -> 
 	Tokens = string:tokens(Rest1, " "),
 	get_map_args(Tokens, dict:new()).
 
@@ -364,7 +399,22 @@ get_map_args([Token|RestOfTokens], D) ->
 	D1 = dict:store(Key, QpEncodedValue, D),
 	get_map_args(RestOfTokens, D1);
 get_map_args([], D) -> D.
-	
+
+get_iecp_args(String) ->
+	Rest1 = mydlp_api:rm_trailing_crlf(String),
+	Rest2 = string:strip(Rest1),
+	case string:chr(Rest2, $\s) of
+		0 -> throw({no_space_to_tokenize, Rest2});
+		I -> 	IpAddrS = string:sub_string(Rest2, 1, I - 1),
+			Rest3 = string:sub_string(Rest2, I + 1),
+			Rest4 = string:strip(Rest3),
+			{FP, ArgStr} = case string:chr(Rest4, $\s) of
+				0 -> throw({no_space_to_tokenize, Rest4});
+				I2 -> 	CS = string:sub_string(Rest4, 1, I2 - 1),
+					AS = string:sub_string(Rest4, I2 + 1),
+					{CS, string:strip(AS)} end,
+			IpAddr = mydlp_api:str_to_ip(IpAddrS),
+			{IpAddr, mydlp_api:qp_decode(FP), get_map_args1(ArgStr)} end.
 
 send(#state{socket=Socket}, Data) -> gen_tcp:send(Socket, <<Data/binary, "\r\n">>).
 
@@ -376,4 +426,15 @@ send_ok(State, Arg) when is_binary(Arg) -> send(State, <<?BIN_OK/binary, " ", Ar
 send_ok(State, Arg) when is_integer(Arg) -> send_ok(State, integer_to_list(Arg));
 send_ok(State, Arg) when is_atom(Arg) -> send_ok(State, atom_to_list(Arg));
 send_ok(State, Arg) when is_list(Arg)-> send_ok(State, list_to_binary(Arg)).
+
+start_timer(State) ->
+	State1 = cancel_timer(State),
+	{ok, Timer} = timer:send_after(60000, trap_timeout),
+	State1#state{trap_timer=Timer}.
+
+cancel_timer(#state{trap_timer=undefined} = State) -> State;
+cancel_timer(#state{trap_timer=TT} = State) -> 
+	timer:cancel(TT),
+	State#state{trap_timer=undefined}.
+	
 

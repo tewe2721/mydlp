@@ -105,6 +105,7 @@ configure_jetty() {
 	/bin/cp -f /usr/share/mydlp/sysconf/jetty/jetty.conf /etc/jetty/jetty.conf
 	/bin/cp -f /usr/share/mydlp/sysconf/jetty/jetty-ajp.xml /etc/jetty/jetty-ajp.xml
 	/bin/cp -f /usr/share/mydlp/sysconf/jetty/jetty.xml /etc/jetty/jetty.xml
+	/bin/cp -f /usr/share/mydlp/sysconf/jetty/webdefault.xml /etc/jetty/webdefault.xml
 }
 
 install_webapp() {
@@ -188,6 +189,9 @@ case "$1" in
 			configure_jetty
 			chown_solr_data
 			configure_tomcat
+		fi
+		if $DPKGBIN --compare-versions "$2" le "2.0.14-1"; then
+			configure_jetty
 		fi
 		restart_rsyslog
 	else

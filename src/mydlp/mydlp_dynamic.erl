@@ -280,6 +280,7 @@ load_src(Src) ->
 	{log_limit, integer, "10485760"},
 	{usb_serial_access_control, boolean, "false"},
 	{seclore_fs_endpoint_pool_size, integer, "2"},
+	{printer_prefix, string, "MyDLP"},
 	{thrift_endpoint_pool_size, integer, "3"},
 	{endpoint_spool_soft_limit, integer, "52428800"},
 	{endpoint_spool_hard_limit, integer, "78643200"}
@@ -319,6 +320,7 @@ load_src(Src) ->
 	maximum_object_size,
 	usb_serial_access_control,
 	print_monitor,
+	printer_prefix,
 	log_level,
 	log_limit,
 	prtscr_block,

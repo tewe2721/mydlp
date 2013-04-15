@@ -36,6 +36,10 @@
 			{seap, % Simple endpoint agent protocol
 				{acceptor, {9099, plain, seap} },
 		                 {workers, []} 
+			},
+			{iecp, % Inter endpoint comm protocol
+				{acceptor, {9100, plain, iecp} },
+		                 {workers, []} 
 			}
 	).
 
@@ -50,7 +54,8 @@
 			{mydlp_sync, start_link,[]},
 			{mydlp_item_push, start_link,[]},
 			{mydlp_spool, start_link,[]},
-			{mydlp_discover_fs, start_link,[]}
+			{mydlp_discover_fs, start_link,[]},
+			{mydlp_trapper, start_link,[]}
 		]
 	).
 

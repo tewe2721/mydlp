@@ -73,7 +73,7 @@ init([Port, CommType, SocketSup]) ->
 			{keepalive, true}, {backlog, 30}, {active, false}],
 	
 	{Backend, NOpts} = get_bops(CommType),
-	FOpts = get_fops(),
+	FOpts = get_fops(Port),
 	Opts1 = Opts ++ NOpts ++ FOpts,
 
 	case Backend:listen(Port, Opts1) of
@@ -104,17 +104,9 @@ get_bops(plain) -> {gen_tcp, []}.
 
 -endif.
 
--ifdef(__MYDLP_NETWORK).
+get_fops(9099) -> [{ip, {127,0,0,1}}];  %% SEAP
+get_fops(_) -> [].
 
-get_fops() -> [].
-
--endif.
-
--ifdef(__MYDLP_ENDPOINT).
-
-get_fops() -> [{ip, {127,0,0,1}}].
-
--endif.
 
 %%-------------------------------------------------------------------------
 %% @spec (Request, From, State) -> {reply, Reply, State}		  |
