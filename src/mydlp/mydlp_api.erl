@@ -816,35 +816,39 @@ is_valid_taiwan_nid(DNIStr0) ->
 		_ -> false
 	end.
 
-is_valid_taiwan_nid1([$a|Rest]) -> is_valid_taiwan_nid2("10" ++ Rest);
-is_valid_taiwan_nid1([$b|Rest]) -> is_valid_taiwan_nid2("11" ++ Rest);
-is_valid_taiwan_nid1([$c|Rest]) -> is_valid_taiwan_nid2("12" ++ Rest);
-is_valid_taiwan_nid1([$d|Rest]) -> is_valid_taiwan_nid2("13" ++ Rest);
-is_valid_taiwan_nid1([$e|Rest]) -> is_valid_taiwan_nid2("14" ++ Rest);
-is_valid_taiwan_nid1([$f|Rest]) -> is_valid_taiwan_nid2("15" ++ Rest);
-is_valid_taiwan_nid1([$g|Rest]) -> is_valid_taiwan_nid2("16" ++ Rest);
-is_valid_taiwan_nid1([$h|Rest]) -> is_valid_taiwan_nid2("17" ++ Rest);
-is_valid_taiwan_nid1([$i|Rest]) -> is_valid_taiwan_nid2("34" ++ Rest);
-is_valid_taiwan_nid1([$j|Rest]) -> is_valid_taiwan_nid2("18" ++ Rest);
-is_valid_taiwan_nid1([$k|Rest]) -> is_valid_taiwan_nid2("19" ++ Rest);
-is_valid_taiwan_nid1([$l|Rest]) -> is_valid_taiwan_nid2("20" ++ Rest);
-is_valid_taiwan_nid1([$m|Rest]) -> is_valid_taiwan_nid2("21" ++ Rest);
-is_valid_taiwan_nid1([$n|Rest]) -> is_valid_taiwan_nid2("22" ++ Rest);
-is_valid_taiwan_nid1([$o|Rest]) -> is_valid_taiwan_nid2("35" ++ Rest);
-is_valid_taiwan_nid1([$p|Rest]) -> is_valid_taiwan_nid2("23" ++ Rest);
-is_valid_taiwan_nid1([$q|Rest]) -> is_valid_taiwan_nid2("24" ++ Rest);
-is_valid_taiwan_nid1([$r|Rest]) -> is_valid_taiwan_nid2("25" ++ Rest);
-is_valid_taiwan_nid1([$s|Rest]) -> is_valid_taiwan_nid2("26" ++ Rest);
-is_valid_taiwan_nid1([$t|Rest]) -> is_valid_taiwan_nid2("27" ++ Rest);
-is_valid_taiwan_nid1([$u|Rest]) -> is_valid_taiwan_nid2("28" ++ Rest);
-is_valid_taiwan_nid1([$v|Rest]) -> is_valid_taiwan_nid2("29" ++ Rest);
-is_valid_taiwan_nid1([$w|Rest]) -> is_valid_taiwan_nid2("32" ++ Rest);
-is_valid_taiwan_nid1([$x|Rest]) -> is_valid_taiwan_nid2("30" ++ Rest);
-is_valid_taiwan_nid1([$y|Rest]) -> is_valid_taiwan_nid2("31" ++ Rest);
-is_valid_taiwan_nid1([$z|Rest]) -> is_valid_taiwan_nid2("33" ++ Rest);
+is_valid_taiwan_nid1([_,$1|_] = Str) -> is_valid_taiwan_nid2(Str);
+is_valid_taiwan_nid1([_,$2|_] = Str) -> is_valid_taiwan_nid2(Str);
 is_valid_taiwan_nid1(_Else) -> false.
 
-is_valid_taiwan_nid2(Str)->
+is_valid_taiwan_nid2([$a|Rest]) -> is_valid_taiwan_nid3("10" ++ Rest);
+is_valid_taiwan_nid2([$b|Rest]) -> is_valid_taiwan_nid3("11" ++ Rest);
+is_valid_taiwan_nid2([$c|Rest]) -> is_valid_taiwan_nid3("12" ++ Rest);
+is_valid_taiwan_nid2([$d|Rest]) -> is_valid_taiwan_nid3("13" ++ Rest);
+is_valid_taiwan_nid2([$e|Rest]) -> is_valid_taiwan_nid3("14" ++ Rest);
+is_valid_taiwan_nid2([$f|Rest]) -> is_valid_taiwan_nid3("15" ++ Rest);
+is_valid_taiwan_nid2([$g|Rest]) -> is_valid_taiwan_nid3("16" ++ Rest);
+is_valid_taiwan_nid2([$h|Rest]) -> is_valid_taiwan_nid3("17" ++ Rest);
+is_valid_taiwan_nid2([$i|Rest]) -> is_valid_taiwan_nid3("34" ++ Rest);
+is_valid_taiwan_nid2([$j|Rest]) -> is_valid_taiwan_nid3("18" ++ Rest);
+is_valid_taiwan_nid2([$k|Rest]) -> is_valid_taiwan_nid3("19" ++ Rest);
+is_valid_taiwan_nid2([$l|Rest]) -> is_valid_taiwan_nid3("20" ++ Rest);
+is_valid_taiwan_nid2([$m|Rest]) -> is_valid_taiwan_nid3("21" ++ Rest);
+is_valid_taiwan_nid2([$n|Rest]) -> is_valid_taiwan_nid3("22" ++ Rest);
+is_valid_taiwan_nid2([$o|Rest]) -> is_valid_taiwan_nid3("35" ++ Rest);
+is_valid_taiwan_nid2([$p|Rest]) -> is_valid_taiwan_nid3("23" ++ Rest);
+is_valid_taiwan_nid2([$q|Rest]) -> is_valid_taiwan_nid3("24" ++ Rest);
+is_valid_taiwan_nid2([$r|Rest]) -> is_valid_taiwan_nid3("25" ++ Rest);
+is_valid_taiwan_nid2([$s|Rest]) -> is_valid_taiwan_nid3("26" ++ Rest);
+is_valid_taiwan_nid2([$t|Rest]) -> is_valid_taiwan_nid3("27" ++ Rest);
+is_valid_taiwan_nid2([$u|Rest]) -> is_valid_taiwan_nid3("28" ++ Rest);
+is_valid_taiwan_nid2([$v|Rest]) -> is_valid_taiwan_nid3("29" ++ Rest);
+is_valid_taiwan_nid2([$w|Rest]) -> is_valid_taiwan_nid3("32" ++ Rest);
+is_valid_taiwan_nid2([$x|Rest]) -> is_valid_taiwan_nid3("30" ++ Rest);
+is_valid_taiwan_nid2([$y|Rest]) -> is_valid_taiwan_nid3("31" ++ Rest);
+is_valid_taiwan_nid2([$z|Rest]) -> is_valid_taiwan_nid3("33" ++ Rest);
+is_valid_taiwan_nid2(_Else) -> false.
+
+is_valid_taiwan_nid3(Str)->
 	[I1,I2,I3,I4,I5,I6,I7,I8,I9,I10,I11] = lists:map(fun(I) -> I - $0 end, Str),
 	Sum = I1*1 + I2*9 + I3*8 + I4*7 + I5*6 + I6*5 + I7*4 + I8*3 + I9*2 + I10*1 + I11*1,
 	0 == (Sum rem 10).
