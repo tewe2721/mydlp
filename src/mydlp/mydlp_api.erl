@@ -805,6 +805,51 @@ is_valid_nino1([_, _ |Rest]) ->
 		_Else -> false end.
 
 %%--------------------------------------------------------------------
+%% @doc Checks whether string is a valid National ID Number of Taiwan. 
+%% @end
+%%----------------------------------------------------------------------
+is_valid_taiwan_nid(DNIStr0) ->
+	DNIStr = string:to_lower(DNIStr0),
+	Clean = remove_chars(DNIStr, ?WS),
+	case length(Clean) of
+		10 -> is_valid_taiwan_nid1(Clean);
+		_ -> false
+	end.
+
+is_valid_taiwan_nid1([$a|Rest]) -> is_valid_taiwan_nid2("10" ++ Rest);
+is_valid_taiwan_nid1([$b|Rest]) -> is_valid_taiwan_nid2("11" ++ Rest);
+is_valid_taiwan_nid1([$c|Rest]) -> is_valid_taiwan_nid2("12" ++ Rest);
+is_valid_taiwan_nid1([$d|Rest]) -> is_valid_taiwan_nid2("13" ++ Rest);
+is_valid_taiwan_nid1([$e|Rest]) -> is_valid_taiwan_nid2("14" ++ Rest);
+is_valid_taiwan_nid1([$f|Rest]) -> is_valid_taiwan_nid2("15" ++ Rest);
+is_valid_taiwan_nid1([$g|Rest]) -> is_valid_taiwan_nid2("16" ++ Rest);
+is_valid_taiwan_nid1([$h|Rest]) -> is_valid_taiwan_nid2("17" ++ Rest);
+is_valid_taiwan_nid1([$i|Rest]) -> is_valid_taiwan_nid2("34" ++ Rest);
+is_valid_taiwan_nid1([$j|Rest]) -> is_valid_taiwan_nid2("18" ++ Rest);
+is_valid_taiwan_nid1([$k|Rest]) -> is_valid_taiwan_nid2("19" ++ Rest);
+is_valid_taiwan_nid1([$l|Rest]) -> is_valid_taiwan_nid2("20" ++ Rest);
+is_valid_taiwan_nid1([$m|Rest]) -> is_valid_taiwan_nid2("21" ++ Rest);
+is_valid_taiwan_nid1([$n|Rest]) -> is_valid_taiwan_nid2("22" ++ Rest);
+is_valid_taiwan_nid1([$o|Rest]) -> is_valid_taiwan_nid2("35" ++ Rest);
+is_valid_taiwan_nid1([$p|Rest]) -> is_valid_taiwan_nid2("23" ++ Rest);
+is_valid_taiwan_nid1([$q|Rest]) -> is_valid_taiwan_nid2("24" ++ Rest);
+is_valid_taiwan_nid1([$r|Rest]) -> is_valid_taiwan_nid2("25" ++ Rest);
+is_valid_taiwan_nid1([$s|Rest]) -> is_valid_taiwan_nid2("26" ++ Rest);
+is_valid_taiwan_nid1([$t|Rest]) -> is_valid_taiwan_nid2("27" ++ Rest);
+is_valid_taiwan_nid1([$u|Rest]) -> is_valid_taiwan_nid2("28" ++ Rest);
+is_valid_taiwan_nid1([$v|Rest]) -> is_valid_taiwan_nid2("29" ++ Rest);
+is_valid_taiwan_nid1([$w|Rest]) -> is_valid_taiwan_nid2("32" ++ Rest);
+is_valid_taiwan_nid1([$x|Rest]) -> is_valid_taiwan_nid2("30" ++ Rest);
+is_valid_taiwan_nid1([$y|Rest]) -> is_valid_taiwan_nid2("31" ++ Rest);
+is_valid_taiwan_nid1([$z|Rest]) -> is_valid_taiwan_nid2("33" ++ Rest);
+is_valid_taiwan_nid1(_Else) -> false.
+
+is_valid_taiwan_nid2(Str)->
+	[I1,I2,I3,I4,I5,I6,I7,I8,I9,I10,I11] = lists:map(fun(I) -> I - $0 end, Str),
+	Sum = I1*1 + I2*9 + I3*8 + I4*7 + I5*6 + I6*5 + I7*4 + I8*3 + I9*2 + I10*1 + I11*1,
+	0 == (Sum rem 10).
+
+%%--------------------------------------------------------------------
 %% @doc Checks whether string is a valid Spain DNI. 
 %% @end
 %%----------------------------------------------------------------------

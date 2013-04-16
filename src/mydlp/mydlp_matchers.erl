@@ -103,6 +103,9 @@
 	said_match/0,
 	said_match/1,
 	said_match/2,
+	taiwan_nid_match/0,
+	taiwan_nid_match/1,
+	taiwan_nid_match/2,
 	e_file_match/0,
 	e_file_match/1,
 	e_file_match/2,
@@ -593,6 +596,18 @@ said_match({pd_patterns, "wide"}) ->
 	?P({[{numeric, 13}], join_ws}).
 
 said_match(_Conf, Phrase) -> mydlp_api:is_valid_said(Phrase).
+
+taiwan_nid_match() -> {normalized, {distance, true}, {pd, true}, {kw, false}}.
+
+taiwan_nid_match({conf, _Conf}) -> none;
+
+taiwan_nid_match({pd_patterns, "narrow"}) -> ?P({[{alpha, 1}, {numeric, 9}], encap_ws});
+taiwan_nid_match({pd_patterns, "normal"}) -> ?P({[{alpha, 1}, {numeric, 9}], encap_ws});
+taiwan_nid_match({pd_patterns, "wide"}) ->
+	?P({[{alpha, 1}, {numeric, 9}], none}) ++
+	?P({[{alpha, 1}, {numeric, 9}], join_ws}).
+
+taiwan_nid_match(_Conf, Phrase) -> mydlp_api:is_valid_taiwan_nid(Phrase).
 
 -define(CFILE_MINSIZE, 128).
 

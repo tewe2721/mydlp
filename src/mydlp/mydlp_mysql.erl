@@ -1149,6 +1149,10 @@ populate_match(_Id, <<"said">>) ->
 	Func = said_match,
 	new_match(Func);
 
+populate_match(_Id, <<"taiwan_nid">>) ->
+	Func = taiwan_nid_match,
+	new_match(Func);
+
 populate_match(_Id, <<"pan">>) ->
 	Func = pan_match,
 	new_match(Func);
