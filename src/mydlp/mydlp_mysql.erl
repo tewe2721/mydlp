@@ -273,8 +273,11 @@ handle_call({populate_discovery_targets, RuleId}, From, State) ->
 	Worker = self(),
 	?ASYNC(fun() ->
 		{ok, Aliasses} =  psq(get_endpoint_alias),
-		IpsAndNames = get_identities(Aliasses),
-		lists:map(fun(I) -> mydlp_mnesia:update_ep_schedules(I, RuleId) end, IpsAndNames),
+		case Aliasses of
+			[] -> ok;
+			_ ->
+				IpsAndNames = get_identities(Aliasses),
+				lists:map(fun(I) -> mydlp_mnesia:update_ep_schedules(I, RuleId) end, IpsAndNames) end,
 		Worker ! {async_reply, ok, From}
 	end, 149000),
 	{noreply, State};
@@ -629,8 +632,9 @@ psqt(PreparedKey, Params) ->
 get_identities(Rows) -> get_identities(Rows, []).
 
 get_identities([[Alias, EndpointId]|Rows], Acc) ->
-	{ok, [[Ip,Username]]} = lpsq(get_ip_and_username, [Alias], 30000),
-	get_identities(Rows, [{EndpointId, Ip, Username}|Acc]);
+	case lpsq(get_ip_and_username, [Alias], 30000) of
+		{ok, [[Ip,Username]]} -> get_identities(Rows, [{EndpointId, Ip, Username}|Acc]);
+		_ -> ?ERROR_LOG("Unknown Endpoint Alias: ["?S"]", [Alias]), get_identities(Rows, Acc) end;
 get_identities([], Acc) -> Acc.
 
 populate_site(FilterId) ->
@@ -861,6 +865,7 @@ populate_remote_nfs([[Address, Path]|Rows], RuleId) ->
 populate_remote_nfs([], _RuleId) -> ok.
 
 convert_day_intervals_to_list([_|Rest]) ->
+	erlang:display(Rest),
 	L = lists:map(fun(I) -> binary_to_list(I) end, Rest),
 	lists:flatten(L).
 
