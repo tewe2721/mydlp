@@ -211,6 +211,13 @@
 	last_modified
 }).
 
+-record(dd_file_entry, {
+	id,
+	filepath,
+	file_entry_id,
+	dd_id_list=[]
+}).
+
 -record(usb_device, {
 	id,
 	filter_id,

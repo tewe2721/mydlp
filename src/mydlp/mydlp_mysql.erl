@@ -57,6 +57,8 @@
 	get_progress/0,
 	is_all_ep_discovery_finished/3,
 	is_all_discovery_finished/1,
+	insert_file_entry/3,
+	insert_dd_file_entry/2,
 	stop/0]).
 
 %% gen_server callbacks
@@ -149,6 +151,10 @@ get_denied_page() -> gen_server:call(?MODULE, get_denied_page).
 set_progress(Progress) -> gen_server:cast(?MODULE, {set_progress, Progress}).
 
 get_progress() -> gen_server:call(?MODULE, get_progress).
+
+insert_file_entry(Filename, Md5Hash, Date) -> gen_server:cast(?MODULE, {insert_file_entry, Filename, Md5Hash, Date}).
+
+insert_dd_file_entry(FileEntryId, DDId) -> gen_server:cast(?MODULE, {insert_dd_file_entry,FileEntryId, DDId}).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -282,6 +288,18 @@ handle_call({populate_discovery_targets, RuleId}, From, State) ->
 	end, 149000),
 	{noreply, State};
 
+handle_call({insert_file_entry, Filename, Md5Hash, Date}, From, State) ->
+	Worker = self(),
+	?ASYNC(fun() ->
+			{atomic, ILId} = transaction(fun() ->
+					psqt(insert_file_entry, 
+						[Filename, Md5Hash, Date]), 
+					last_insert_id_t() end, 30000),
+			Reply = ILId,	
+                        Worker ! {async_reply, Reply, From}
+		end, 30000),
+	{noreply, State};
+
 handle_call(stop, _From,  State) ->
 	{stop, normalStop, State};
 
@@ -384,6 +402,12 @@ handle_cast({compile_customer, FilterId}, State) ->
 
 handle_cast({set_progress, Progress}, State) ->
 	{noreply, State#state{compile_progress=Progress}};
+
+handle_cast({insert_dd_file_entry, FileEntryId, DDId}, State) ->
+	?ASYNC(fun() ->
+			transaction(fun() -> psqt(insert_dd_file_entry, [FileEntryId, DDId]) end, 60000) 
+		end, 60000),	
+	{noreply, State};
 
 handle_cast(_Msg, State) ->
 	{noreply, State}.
@@ -563,7 +587,9 @@ init([]) ->
 		{get_remote_nfs, <<"SELECT r.id, r.address, r.path FROM RemoteStorageNFS AS r, DocumentDatabaseRemoteStorage as d WHERE d.id=? and d.remoteStorage_id=r.id">>},
 		{get_remote_dfs, <<"SELECT r.id, r.windowsShare, r.password, r.path, r.username FROM RemoteStorageDFS AS r, DocumentDatabaseRemoteStorage AS d WHERE d.id=? and d.remoteStorage_id=r.id">>},
 		{get_remote_cifs, <<"SELECT r.id, r.windowsShare, r.password, r.path, r.username FROM RemoteStorageCIFS AS r, DocumentDatabaseRemoteStorage AS d WHERE d.id=? and d.remoteStorage_id=r.id">>},
-		{get_exclude_files, <<"SELECT e.excludeFileName FROM DocumentDatabaseRemoteStorage AS d, DocumentDatabaseExcludeFile AS e WHERE d.id=? AND d.id=e.documentDatabaseRemoteStorage_id">>}
+		{get_exclude_files, <<"SELECT e.excludeFileName FROM DocumentDatabaseRemoteStorage AS d, DocumentDatabaseExcludeFile AS e WHERE d.id=? AND d.id=e.documentDatabaseRemoteStorage_id">>},
+		{insert_file_entry, <<"INSERT INTO DocumentDatabaseFileEntry (id, filename, md5Hash, createdDate) VALUES (NULL, ?, ?, ?)">>},
+		{insert_dd_file_entry, <<"INSERT INTO DocumentDatabase_DocumentDatabaseFileEntry (fileEntries_id, DocumentDatabase_id) VALUES(?, ?)">>}
 
 	]],
 

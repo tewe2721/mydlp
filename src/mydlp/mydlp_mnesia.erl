@@ -124,7 +124,9 @@
 	update_ep_schedules/2,
 	%update_rfs_and_web_schedules/1,
 	get_endpoints_by_rule_id/1,
-	get_remote_document_databases/0
+	get_remote_document_databases/0,
+	add_dd_file_entry/1,
+	get_dd_file_entry/1
 	]).
 
 -endif.
@@ -235,6 +237,8 @@
 	{fs_entry, ordered_set, 
 		fun() -> mnesia:add_table_index(fs_entry, parent_id),
 			 mnesia:add_table_index(fs_entry, entry_id) end},
+	{dd_file_entry, ordered_set,
+		fun() -> mnesia:add_table_index(dd_file_entry, filepath) end},
 	{mime_type, ordered_set, 
 		fun() -> mnesia:add_table_index(mime_type, mime) end},
 	{regex, ordered_set, 
@@ -254,6 +258,7 @@ get_record_fields_common(Record) ->
 		unique_ids -> record_info(fields, unique_ids);
 		config -> record_info(fields, config);
 		fs_entry -> record_info(fields, fs_entry);
+		dd_file_entry -> record_info(fields, dd_file_entry);
 		usb_device -> record_info(fields, usb_device);
 		file_hash -> record_info(fields, file_hash);
 		file_fingerprint -> record_info(fields, file_fingerprint);
@@ -464,6 +469,12 @@ get_endpoints_by_rule_id(RuleId) -> aqc({get_endpoints_by_rule_id, RuleId}, noca
 
 get_remote_document_databases() -> aqc(get_remote_document_databases, nocache).
 
+add_dd_file_entry(#dd_file_entry{filepath=FilePath}=Record) ->
+	aqc({remove_redundant_dd_file_entries, FilePath}, nocache),
+	write(Record).
+
+get_dd_file_entry(FilePath) -> aqc({get_dd_file_entry, FilePath}, nocache).
+
 -endif.
 
 -ifdef(__MYDLP_ENDPOINT).
@@ -493,6 +504,7 @@ del_fs_entries_by_rule_id(RuleId) -> aqc({del_fs_entries_by_rule_id, RuleId}, no
 fs_entry_list_dir(EntryId) -> aqc({fs_entry_list_dir, EntryId}, nocache).
 
 add_fs_entry(Record) when is_tuple(Record) -> write(Record, nocache).
+
 
 dump_tables(Tables) when is_list(Tables) -> aqc({dump_tables, Tables}, cache);
 dump_tables(Table) -> dump_tables([Table]).
@@ -531,6 +543,8 @@ truncate_nondata() -> gen_server:call(?MODULE, truncate_nondata, 15000).
 mnesia_dir_cleanup() -> gen_server:cast(?MODULE, mnesia_dir_cleanup).
 
 flush_cache() -> cache_clean0().
+
+
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -619,6 +633,13 @@ handle_result({web_entry_list_links, _EntryId}, {atomic, Result}) ->
 
 handle_result({del_web_entries_by_rule_id, RuleId}, {atomic, Result}) ->
 	remove_reduntant_web_entries(Result, RuleId);
+
+handle_result({get_dd_file_entry, FilePath}, {atomic, Result}) ->
+	case Result of
+		[] -> none;
+		[DDFileEntry] -> DDFileEntry;
+		R -> ?ERROR_LOG("Unexpected dd file entry result: ["?S"]", R)
+	end;
 
 handle_result(Query, Result) -> handle_result_common(Query, Result).
 
@@ -1133,10 +1154,25 @@ handle_query({get_endpoints_by_rule_id, RuleId}) ->
 	?QLCE(Q);
 
 handle_query(get_remote_document_databases) ->
-	Q = ?QLCQ([{R#remote_storage_dd.document_id, R#remote_storage_dd.details, R#remote_storage_dd.rs_id} ||
+	Q = ?QLCQ([{R#remote_storage_dd.document_id, R#remote_storage_dd.details, R#remote_storage_dd.rs_id, R#remote_storage_dd.exclude_files} ||
 		R <- mnesia:table(remote_storage_dd)
 	]),
 	?QLCE(Q);
+
+handle_query({get_dd_file_entry, FilePath}) ->
+	Q = ?QLCQ([D ||
+		D <-  mnesia:table(dd_file_entry),
+		D#dd_file_entry.filepath == FilePath
+	]),
+	?QLCE(Q);
+
+handle_query({remove_redundant_dd_file_entries, FilePath}) ->
+	Q = ?QLCQ([D#dd_file_entry.id ||	
+		D <- mnesia:table(dd_file_entry),
+		D#dd_file_entry.filepath == FilePath
+		]),
+	Ids = ?QLCE(Q),
+	lists:foreach(fun(I) -> mnesia:delete({dd_file_entry, I}) end, Ids);
 	
 handle_query({get_matchers, RuleIDs}) ->
 	ML = lists:map(fun(RId) ->

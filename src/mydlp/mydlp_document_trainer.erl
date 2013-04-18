@@ -32,6 +32,7 @@
 -include("mydlp.hrl").
 -include("mydlp_schema.hrl").
 
+-include_lib("kernel/include/file.hrl").
 
 %% API
 -export([start_link/0,
@@ -50,6 +51,8 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -record(state, {
+	queue,
+	in_prog=false
 }).
 
 -define(MOUNT_PATH, "/var/lib/mydlp/ddmounts").
@@ -61,8 +64,10 @@
 -define(UMOUNT_COMMAND, "/bin/umount").
 -define(TRY_COUNT, 5).
 
-%%%%%%%%%%%%%  API
 
+q(MountPath, ExcludeFiles, DDId) -> gen_server:cast(?MODULE, {q, MountPath, ExcludeFiles, DDId}).
+
+consume() -> gen_server:cast(?MODULE, consume).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -75,6 +80,30 @@ handle_call(_Msg, _From, State) ->
 handle_cast({handle_remotes, RDDs}, State) ->
 	mount_and_generate_fingerprints(RDDs),
 	{noreply, State};
+
+handle_cast({q, MountPath, ExcludeFiles, DDId}, #state{queue=Q, in_prog=false}=State) ->
+	Q1 = queue:in(Q, {MountPath, ExcludeFiles, DDId}),
+	consume(),
+	{noreply, State#state{queue=Q1, in_prog=true}};	
+
+handle_cast({q, MountPath, ExcludeFiles, DDId}, #state{queue=Q, in_prog=true}=State) ->
+	Q1 = queue:in(Q, {MountPath, ExcludeFiles, DDId}),
+	{noreply, State#state{queue=Q1}};
+
+handle_cast(consume, #state{queue=Q}=State) ->
+	case queue:out(Q) of
+		{value, {FilePath, ExcludeFiles, DDId}, Q1} ->
+			case filename:split(FilePath) of
+				["/", "var", "lib", "mydlp", "ddmounts", _Id, Filename|_Rest] -> 
+					case lists:member(Filename, ExcludeFiles) of
+						false -> generate_fingerprints(FilePath, DDId);
+						true -> ok end;
+				_ -> ?ERROR_LOG("Unknown file in document training: ["?S"]", [FilePath]) end,
+			consume(),
+			{noreply, State#state{queue=Q1}};
+		{empty, Q1} ->
+			{noreply, State#state{queue=Q1}}
+	end;
 
 handle_cast(_Msg, State) ->
 	{noreply, State}.
@@ -103,8 +132,9 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
+	reset_discover_cache(),
 	timer:send_after(6000, startup),
-	{ok, #state{}}.
+	{ok, #state{queue=queue:new(), in_prog=false}}.
 
 terminate(_Reason, _State) ->
 	ok.
@@ -116,21 +146,21 @@ code_change(_OldVsn, State, _Extra) ->
 
 mount_path(MountPath, Command, Args, Envs, Stdin, 1) ->
 	case mydlp_api:cmd_bool(?MOUNTPOINT_COMMAND, ["-q", MountPath]) of
-		true ->	ok;
+		true ->	MountPath;
 		false ->
 			case mydlp_api:cmd(Command, Args, Envs, Stdin) of
-				ok -> ok;
-				E -> ?ERROR_LOG("Remote Discovery: Error Occcured on mount: "
+				ok -> MountPath;
+				E -> ?ERROR_LOG("Document Trainer: Error Occcured on mount: "
                                                 "FilePath: "?S"~nError: "?S"~n ", [MountPath, E]),
 					none end
 	end;
 						
 mount_path(MountPath, Command, Args, Envs, Stdin, TryCount) ->
 	case mydlp_api:cmd_bool(?MOUNTPOINT_COMMAND, ["-q", MountPath]) of
-		true -> ok;
+		true -> MountPath;
 		false ->
 			case mydlp_api:cmd(Command, Args, Envs, Stdin) of
-				ok ->ok;
+				ok -> MountPath;
 				_ -> timer:sleep(500),
 					mount_path(MountPath, Command, Args, Envs, Stdin, TryCount-1) end
 	end.
@@ -198,8 +228,96 @@ handle_windows_share([WindowsShare, Password, Path, Username], Id) ->
 			end
 	end.
 
-mount_and_generate_fingerprints([{DDId, RemoteStorage, RSId}|Rest]) ->
-	handle_each_mount(RemoteStorage, RSId),
+generate_fingerprints_file(#fs_entry{file_id=FP}, DDId) ->
+	ok.
+
+generate_fingerprints_dir(#fs_entry{file_id=FP, entry_id=EId}, DDId) ->
+	CList = case file:list_dir(FP) of
+		{ok, LD} -> LD;
+		{error, _} -> [] end,
+	OList = mydlp_mnesia:fs_entry_list_dir(EId),
+	MList = lists:umerge([CList, OList]),
+	[ q(filename:absname(FN, FP), [], DDId) || FN <- MList ],
+	ok.
+
+generate_fingerprints_dir_dir(#fs_entry{file_id=FP, entry_id=EId}, DDId) ->
+	OList = mydlp_mnesia:fs_entry_list_dir(EId),
+	[ q(filename:absname(FN, FP), [], DDId) || FN <- OList ],
+	ok.
+
+generate_fingerprints(FilePath, DDId) ->
+	case is_cached({FilePath, DDId}) of
+		true -> ok;
+		false -> generate_fingerprints1(FilePath, DDId) end.
+
+generate_fingerprints1(FilePath, DDId) ->
+	case filelib:is_regular(FilePath) of
+		true -> E = fs_entry(FilePath),
+			case is_changed(E) of
+				true -> generate_fingerprints_file(FilePath, DDId);
+				false -> 
+					case mydlp_mnesia:get_dd_file_entry(FilePath) of 
+						none -> generate_fingerprints_file(FilePath, DDId);  
+						#dd_file_entry{dd_id_list=DDList} = DDFileEntry ->
+							case lists:member(DDId, DDList) of
+								true -> ok;
+								_ -> add_dd_to_file_entry(DDFileEntry, DDId)
+							end
+					end
+			 end;
+	false -> case filelib:is_dir(FilePath) of
+		true -> E = fs_entry(FilePath),
+			case is_changed(E) of
+				true -> generate_fingerprints_dir(E, DDId);
+				false -> generate_fingerprints_dir_dir(E, DDId) end;
+	false -> ?ERROR_LOG("DISCOVER: File or directory does not exists. Filename: "?S, [FilePath]),
+		mydlp_mnesia:del_fs_entry(FilePath) end end, % Means file does not exists
+	ok.
+
+add_dd_to_file_entry(#dd_file_entry{dd_id_list=DDList, file_entry_id=FileEntryId}=Entry, DDId) ->
+	NewList = [DDId|DDList],
+	mydlp_mnesia:add_dd_file_entry(Entry#dd_file_entry{dd_id_list=NewList}),
+	mydlp_mysql:insert_dd_file_entry(FileEntryId, DDId).
+
+meta(FilePath) ->
+	{ok, FileInfo} = file:read_file_info(FilePath),
+	{FileInfo#file_info.mtime, FileInfo#file_info.size}.
+
+is_changed(#fs_entry{file_id=FilePath, file_size=FSize, last_modified=LMod} = E) ->
+	{MTime, CSize} = meta(FilePath),
+	case ( (LMod /= MTime) or (CSize /= FSize) ) of
+		true -> mydlp_mnesia:add_fs_entry(E#fs_entry{file_size=CSize, last_modified=MTime}), % update mnesia entry
+			true;
+		false -> false end.
+
+fs_entry(FilePath) ->
+	case mydlp_mnesia:get_fs_entry(FilePath) of
+		none -> 
+			Id = mydlp_mnesia:get_unique_id(fs_entry),
+			E = #fs_entry{entry_id=Id, file_id=FilePath},
+			mydlp_mnesia:add_fs_entry(E),
+			E;
+		#fs_entry{} = F -> F 
+	end.
+
+is_cached(Element) ->
+	CS = get(cache),
+	case gb_sets:is_element(Element, CS) of
+		true -> true;
+		false -> CS1 = gb_sets:add(Element, CS),
+			put(cache, CS1),
+			false end.
+
+reset_discover_cache() ->
+	put(cache, gb_sets:new()), ok.
+
+mount_and_generate_fingerprints([{DDId, RemoteStorage, RSId, ExcludeFiles}|Rest]) ->
+	MountPath = case RemoteStorage of
+		none -> none;
+		_ -> handle_each_mount(RemoteStorage, RSId) end,
+	case MountPath of 
+		none -> ok;
+		_ -> q(MountPath, ExcludeFiles, DDId) end,
 	mount_and_generate_fingerprints(Rest);
 mount_and_generate_fingerprints([]) -> ok.
 
