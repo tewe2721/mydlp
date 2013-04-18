@@ -331,10 +331,9 @@ handle_cast({insert_log_data, LogId, Filename0, MimeType, Size, Hash, Path}, Sta
 	{noreply, State};
 
 handle_cast({insert_log_detail, LogId, MatchingDetails}, State) ->
-	erlang:display({mysql_insert, MatchingDetails}),
 	?ASYNC(fun() ->
 			ltransaction(fun() ->
-				lists:foreach(fun(#matching_detail{pattern=Pattern, matcher_func=MatcherFunc}) -> erlang:display({insert, LogId, Pattern, MatcherFunc}),psqt(insert_log_detail, [LogId, Pattern, MatcherFunc]) end, MatchingDetails) 
+				lists:foreach(fun(#matching_detail{pattern=Pattern, matcher_func=MatcherFunc}) -> psqt(insert_log_detail, [LogId, Pattern, MatcherFunc]) end, MatchingDetails) 
 			end, 60000)
 		end, 60000),
         {noreply, State};
@@ -557,7 +556,14 @@ init([]) ->
 		{get_ip_and_username, <<"SELECT ipAddress, username FROM EndpointStatus where endpointAlias=?">>},
 		{get_alias_with_ip, <<"SELECT endpointAlias FROM EndpointStatus where ipAddress=?">>},
 		{get_opr_with_group_id_and_ep, <<"SELECT o.id FROM OperationLog AS o WHERE groupId=? AND source=? AND messageKey=?">>},
-		{get_opr_with_group_id_and_status, <<"SELECT o.id FROM OperationLog AS o WHERE groupId=? AND messageKey=?">>}
+		{get_opr_with_group_id_and_status, <<"SELECT o.id FROM OperationLog AS o WHERE groupId=? AND messageKey=?">>},
+		{get_remote_document_databases, <<"SELECT * FROM DocumentDatabase_DocumentDatabaseRemoteStorage">>},
+		{get_remote_sshfs, <<"SELECT r.id, r.address, r.password, r.path, r.port, r.username FROM RemoteStorageSSHFS AS r, DocumentDatabaseRemoteStorage AS d WHERE d.id=? and d.remoteStorage_id=r.id">>},
+		{get_remote_ftpfs, <<"SELECT r.id, r.address, r.password, r.path, r.username FROM RemoteStorageFTPFS AS r, DocumentDatabaseRemoteStorage AS d WHERE d.id=? and d.remoteStorage_id=r.id">>},
+		{get_remote_nfs, <<"SELECT r.id, r.address, r.path FROM RemoteStorageNFS AS r, DocumentDatabaseRemoteStorage as d WHERE d.id=? and d.remoteStorage_id=r.id">>},
+		{get_remote_dfs, <<"SELECT r.id, r.windowsShare, r.password, r.path, r.username FROM RemoteStorageDFS AS r, DocumentDatabaseRemoteStorage AS d WHERE d.id=? and d.remoteStorage_id=r.id">>},
+		{get_remote_cifs, <<"SELECT r.id, r.windowsShare, r.password, r.path, r.username FROM RemoteStorageCIFS AS r, DocumentDatabaseRemoteStorage AS d WHERE d.id=? and d.remoteStorage_id=r.id">>},
+		{get_exclude_files, <<"SELECT e.excludeFileName FROM DocumentDatabaseRemoteStorage AS d, DocumentDatabaseExcludeFile AS e WHERE d.id=? AND d.id=e.documentDatabaseRemoteStorage_id">>}
 
 	]],
 
@@ -648,6 +654,8 @@ populate_site(FilterId) ->
 	% This will create problems in multi-site
 	{ok, CQ} = psq(configs),
 	populate_configs(CQ, FilterId),
+
+	populate_remote_document_database(),
 
 	%TODO: should add for multi-site
 	%{ok, SQ} = psq(customer_by_id, [FilterId]),
@@ -865,7 +873,6 @@ populate_remote_nfs([[Address, Path]|Rows], RuleId) ->
 populate_remote_nfs([], _RuleId) -> ok.
 
 convert_day_intervals_to_list([_|Rest]) ->
-	erlang:display(Rest),
 	L = lists:map(fun(I) -> binary_to_list(I) end, Rest),
 	lists:flatten(L).
 
@@ -939,6 +946,40 @@ populate_users_ad_u([[OrigId]| Rows], RuleId) ->
 	lists:foreach(fun({Username}) -> new_user(Username, RuleId) end, Usernames),
 	populate_users_ad_u(Rows, RuleId);
 populate_users_ad_u([], _RuleId) -> ok.
+
+populate_remote_document_database() ->
+	{ok, RDD} = psq(get_remote_document_databases),
+	populate_each_remote_dd(RDD).
+
+populate_each_remote_dd([[DDId, DDRSId]|Rest]) ->
+	RS = get_remote_storage_with_type(DDRSId),
+	Id = mydlp_mnesia:get_unique_id(remote_storage_dd),
+	erlang:display(RS),
+	I = case RS of
+		none -> #remote_storage_dd{id=Id, document_id=DDId, details=none, rs_id=none, exclude_files=none};
+		{Type, D, RSId} -> {ok, EF} = psq(get_exclude_files, [DDRSId]),
+				#remote_storage_dd{id=Id, document_id=DDId, details={Type, D}, rs_id=RSId, exclude_files=lists:flatten(EF)}
+	end,
+	mydlp_mnesia_write(I),
+	populate_each_remote_dd(Rest);
+populate_each_remote_dd([]) -> ok.
+	
+get_remote_storage_with_type(DDRSId) ->
+	case psq(get_remote_sshfs, [DDRSId]) of
+		{ok, [[Id|R]]} -> {sshfs, R, Id};
+		_ ->
+	case psq(get_remote_ftpfs, [DDRSId]) of
+		{ok, [[Id1|R1]]} -> {ftpfs, R1, Id1};
+		_ ->
+	case psq(get_remote_nfs, [DDRSId]) of
+		{ok, [[Id2|R2]]} -> {nfs, R2, Id2};
+		_ ->
+	case psq(get_remote_dfs, [DDRSId]) of
+		{ok, [[Id3|R3]]} -> {dfs, R3, Id3};
+		_ ->
+	case psq(get_remote_cifs, [DDRSId]) of
+		{ok, [[Id4|R4]]} -> {cifs, R4, Id4};
+		_ ->none end end end end end.
 
 get_usernames(OrigId) ->
 	Users = get_users(OrigId),

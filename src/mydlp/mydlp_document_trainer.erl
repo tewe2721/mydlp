@@ -35,7 +35,8 @@
 
 %% API
 -export([start_link/0,
-	stop/0,
+	start_fingerprinting/0,
+	stop/0
 	]).
 
 %% gen_server callbacks
@@ -49,9 +50,16 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -record(state, {
-	discovery_dict,
-	timer_dict
 }).
+
+-define(MOUNT_PATH, "/var/lib/mydlp/ddmounts").
+-define(SSH_COMMAND, "/usr/bin/sshfs").
+-define(FTP_COMMAND, "/usr/bin/curlftpfs").
+-define(SMB_COMMAND, "/usr/bin/smbmount").
+-define(MOUNT_COMMAND, "/bin/mount").
+-define(MOUNTPOINT_COMMAND, "/bin/mountpoint").
+-define(UMOUNT_COMMAND, "/bin/umount").
+-define(TRY_COUNT, 5).
 
 %%%%%%%%%%%%%  API
 
@@ -64,11 +72,19 @@ handle_call(stop, _From, State) ->
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
+handle_cast({handle_remotes, RDDs}, State) ->
+	mount_and_generate_fingerprints(RDDs),
+	{noreply, State};
+
 handle_cast(_Msg, State) ->
 	{noreply, State}.
 
 handle_info(startup, State) ->
-	generate_fingerprints(),
+	start_fingerprinting(),
+	{noreply, State};
+
+handle_info(control_remote_storages, State) ->
+	start_fingerprinting(),
 	{noreply, State};
 
 handle_info(_Info, State) ->
@@ -88,7 +104,7 @@ stop() ->
 
 init([]) ->
 	timer:send_after(6000, startup),
-	{ok, #state{discovery_dict=dict:new(), timer_dict=dict:new()}}.
+	{ok, #state{}}.
 
 terminate(_Reason, _State) ->
 	ok.
@@ -98,11 +114,97 @@ code_change(_OldVsn, State, _Extra) ->
 
 %%%%%%%%%%%%%%%%% internal
 
-generate_fingerprints() ->
-	RDDWithDocumentId = mydlp_mnesia:get_remote_document_databases(),
+mount_path(MountPath, Command, Args, Envs, Stdin, 1) ->
+	case mydlp_api:cmd_bool(?MOUNTPOINT_COMMAND, ["-q", MountPath]) of
+		true ->	ok;
+		false ->
+			case mydlp_api:cmd(Command, Args, Envs, Stdin) of
+				ok -> ok;
+				E -> ?ERROR_LOG("Remote Discovery: Error Occcured on mount: "
+                                                "FilePath: "?S"~nError: "?S"~n ", [MountPath, E]),
+					none end
+	end;
+						
+mount_path(MountPath, Command, Args, Envs, Stdin, TryCount) ->
+	case mydlp_api:cmd_bool(?MOUNTPOINT_COMMAND, ["-q", MountPath]) of
+		true -> ok;
+		false ->
+			case mydlp_api:cmd(Command, Args, Envs, Stdin) of
+				ok ->ok;
+				_ -> timer:sleep(500),
+					mount_path(MountPath, Command, Args, Envs, Stdin, TryCount-1) end
+	end.
+						
 
-start_discovery_scheduling() ->
-	{_D, {H, _M, _S}} = erlang:localtime(),
-	Schedules = mydlp_mnesia:get_schedules_by_hour(H),
-	gen_server:cast(?MODULE, {manage_schedules, Schedules}),
-	timer:send_after(60*60*1000, start_discovery_scheduling).
+create_and_mount_path(MountPath, Command, Args, Envs, Stdin) ->
+	case filelib:is_dir(MountPath) of 
+		true -> ok;
+		false -> file:make_dir(MountPath)
+	end, 
+	mount_path(MountPath, Command, Args, Envs, Stdin, ?TRY_COUNT).
+
+handle_each_mount({sshfs, [Address, Password, Path, Port, Username]}, Id) ->
+	PortS = integer_to_list(Port),
+	Stdin = binary_to_list(Password) ++ "\n",
+	UsernameS = binary_to_list(Username),
+	PathS = binary_to_list(Path),
+	AddressS = binary_to_list(Address),
+	ConnectionString = UsernameS ++ "@" ++ AddressS ++ ":" ++ PathS, 
+	MountPath = filename:join(?MOUNT_PATH, integer_to_list(Id)),
+	Args = ["-p", PortS, ConnectionString, MountPath, "-o", "password_stdin"],
+	create_and_mount_path(MountPath, ?SSH_COMMAND, Args, [], Stdin);
+
+handle_each_mount({ftpfs, [Address, Password, Path, Username]}, Id) ->
+	PasswordS = binary_to_list(Password),
+	UsernameS = binary_to_list(Username),
+	PathS = binary_to_list(Path),
+	AddressS = binary_to_list(Address),
+	UandP = case UsernameS of 
+			[] -> "anonymous:anonymous";
+			_ -> UsernameS ++ ":" ++ PasswordS
+		end,
+	AddressPath = UandP ++ "@" ++ AddressS ++ "/" ++ PathS,
+	MountPath = filename:join(?MOUNT_PATH, integer_to_list(Id)),
+	Args = ["-o", "ro,utf8", AddressPath, MountPath],
+	create_and_mount_path(MountPath, ?FTP_COMMAND, Args, [], none);
+
+handle_each_mount({cifs, Details}, Id) ->
+	handle_windows_share(Details, Id);
+
+handle_each_mount({dfs, Details}, Id) ->
+	handle_windows_share(Details, Id);
+
+handle_each_mount({nfs, [Address, Path]}, Id) ->
+	PathS = binary_to_list(Path),
+	AddressS = binary_to_list(Address),
+	AddressPath = AddressS ++ ":" ++ PathS,
+	MountPath = filename:join(?MOUNT_PATH, integer_to_list(Id)),
+	Args = ["-o", "ro,soft,intr,rsize=8192,wsize=8192", AddressPath, MountPath],
+	create_and_mount_path(MountPath, ?MOUNT_COMMAND, Args, [], none).
+
+handle_windows_share([WindowsShare, Password, Path, Username], Id) ->
+	PasswordS = binary_to_list(Password),
+	UsernameS = binary_to_list(Username),
+	PathS = binary_to_list(Path),
+	WindowsSharePath =  "//" ++ binary_to_list(WindowsShare) ++ "/" ++ PathS,
+	MountPath = filename:join(?MOUNT_PATH, integer_to_list(Id)),
+	Args = ["-o","ro", WindowsSharePath, MountPath],
+	case UsernameS of
+		[] -> create_and_mount_path(MountPath, ?SMB_COMMAND, Args, [], "\n");
+		_ ->
+			case PasswordS of
+				[] -> create_and_mount_path(MountPath, ?SMB_COMMAND, Args, [{"USER", UsernameS}], "\n");
+				_ -> create_and_mount_path(MountPath, ?SMB_COMMAND, Args, [{"USER", UsernameS}, {"PASSWD", PasswordS}], none)
+			end
+	end.
+
+mount_and_generate_fingerprints([{DDId, RemoteStorage, RSId}|Rest]) ->
+	handle_each_mount(RemoteStorage, RSId),
+	mount_and_generate_fingerprints(Rest);
+mount_and_generate_fingerprints([]) -> ok.
+
+start_fingerprinting() ->
+	RDDs = mydlp_mnesia:get_remote_document_databases(),
+	erlang:display(RDDs),
+	gen_server:cast(?MODULE, {handle_remotes, RDDs}),
+	timer:send_after(60*60*1000, control_remote_storages).

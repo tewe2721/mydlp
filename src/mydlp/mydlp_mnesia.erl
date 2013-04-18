@@ -123,7 +123,8 @@
 	get_discovery_rule_ids/2,
 	update_ep_schedules/2,
 	%update_rfs_and_web_schedules/1,
-	get_endpoints_by_rule_id/1
+	get_endpoints_by_rule_id/1,
+	get_remote_document_databases/0
 	]).
 
 -endif.
@@ -193,6 +194,7 @@
 	notification, 
 	notification_queue,
 	remote_storage,
+	remote_storage_dd,
 	discovery_schedule,
 	discovery_targets,
 	waiting_schedules,
@@ -270,6 +272,7 @@ get_record_fields_functional(Record) ->
 		ipr -> record_info(fields, ipr);
 		dest -> record_info(fields, dest);
 		remote_storage -> record_info(fields, remote_storage);
+		remote_storage_dd -> record_info(fields, remote_storage_dd);
 		discovery_schedule -> record_info(fields, discovery_schedule);
 		discovery_targets -> record_info(fields, discovery_targets);
 		waiting_schedules -> record_info(fields, waiting_schedules);
@@ -458,6 +461,8 @@ update_ep_schedules({EndpointId, Ip, Username}, TargetRuleId) ->
 	aqc({update_ep_schedules, EndpointId, RuleIds, TargetRuleId}, nocache, dirty).
 
 get_endpoints_by_rule_id(RuleId) -> aqc({get_endpoints_by_rule_id, RuleId}, nocache).
+
+get_remote_document_databases() -> aqc(get_remote_document_databases, nocache).
 
 -endif.
 
@@ -1126,6 +1131,12 @@ handle_query({get_endpoints_by_rule_id, RuleId}) ->
 		D#discovery_targets.rule_id == RuleId
 	]),
 	?QLCE(Q);
+
+handle_query(get_remote_document_databases) ->
+	Q = ?QLCQ([{R#remote_storage_dd.document_id, R#remote_storage_dd.details, R#remote_storage_dd.rs_id} ||
+		R <- mnesia:table(remote_storage_dd)
+	]),
+	?QLCE(Q);
 	
 handle_query({get_matchers, RuleIDs}) ->
 	ML = lists:map(fun(RId) ->
@@ -1190,6 +1201,11 @@ handle_query({remove_site, FI}) ->
 		]),
 	FSIs = ?QLCE(Q9),
 
+	Q10 = ?QLCQ([R#remote_storage_dd.id ||	
+		R <- mnesia:table(remote_storage_dd)
+		]),
+	RDDs = ?QLCE(Q10),
+
 	case RQ4 of
 		[] -> ok;
 		[SDI] -> mnesia:delete({site_desc, SDI}) end,
@@ -1198,7 +1214,8 @@ handle_query({remove_site, FI}) ->
 	lists:foreach(fun(T) -> mnesia:delete({mc_module, T}) end, MCTs),
 	lists:foreach(fun(Id) -> mnesia:delete({config, Id}) end, CIs),
 	lists:foreach(fun(Id) -> mnesia:delete({fs_entry, Id}) end, FSIs),
-	lists:foreach(fun(Id) -> mnesia:delete({usb_device, Id}) end, UDIs);
+	lists:foreach(fun(Id) -> mnesia:delete({usb_device, Id}) end, UDIs),
+	lists:foreach(fun(Id) -> mnesia:delete({remote_storage_dd, Id}) end, RDDs);
 
 handle_query({save_user_address, IpAddress, UserHash, UserName}) ->
 	{MegaSecs, Secs, _MicroSecs} = erlang:now(),

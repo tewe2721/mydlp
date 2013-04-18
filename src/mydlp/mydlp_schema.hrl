@@ -79,6 +79,14 @@
 	details
 }).
 
+-record(remote_storage_dd, {
+	id,
+	document_id,
+	rs_id, %Remote Storage Id
+	details,
+	exclude_files
+}).
+
 -record(discovery_schedule, {
 	id,
 	rule_id,
