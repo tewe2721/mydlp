@@ -152,7 +152,9 @@ set_progress(Progress) -> gen_server:cast(?MODULE, {set_progress, Progress}).
 
 get_progress() -> gen_server:call(?MODULE, get_progress).
 
-insert_file_entry(Filename, Md5Hash, Date) -> gen_server:cast(?MODULE, {insert_file_entry, Filename, Md5Hash, Date}).
+insert_file_entry(Filename, Md5Hash, Date) -> 
+	DId = gen_server:call(?MODULE, insert_document),
+	gen_server:call(?MODULE, {insert_file_entry, DId, Filename, Md5Hash, Date}).
 
 insert_dd_file_entry(FileEntryId, DDId) -> gen_server:cast(?MODULE, {insert_dd_file_entry,FileEntryId, DDId}).
 
@@ -288,15 +290,25 @@ handle_call({populate_discovery_targets, RuleId}, From, State) ->
 	end, 149000),
 	{noreply, State};
 
-handle_call({insert_file_entry, Filename, Md5Hash, Date}, From, State) ->
+handle_call(insert_document, From, State) ->
 	Worker = self(),
 	?ASYNC(fun() ->
 			{atomic, ILId} = transaction(fun() ->
-					psqt(insert_file_entry, 
-						[Filename, Md5Hash, Date]), 
+					psqt(insert_document), 
 					last_insert_id_t() end, 30000),
 			Reply = ILId,	
                         Worker ! {async_reply, Reply, From}
+		end, 30000),
+	{noreply, State};
+
+handle_call({insert_file_entry, Id, Filename, Md5Hash, Date}, From, State) ->
+	Worker = self(),
+	?ASYNC(fun() ->
+			transaction(fun() ->
+				psqt(insert_file_entry, 
+					[Id, Filename, Md5Hash, Date])
+				end, 30000),
+                        Worker ! {async_reply, Id, From}
 		end, 30000),
 	{noreply, State};
 
@@ -588,7 +600,8 @@ init([]) ->
 		{get_remote_dfs, <<"SELECT r.id, r.windowsShare, r.password, r.path, r.username FROM RemoteStorageDFS AS r, DocumentDatabaseRemoteStorage AS d WHERE d.id=? and d.remoteStorage_id=r.id">>},
 		{get_remote_cifs, <<"SELECT r.id, r.windowsShare, r.password, r.path, r.username FROM RemoteStorageCIFS AS r, DocumentDatabaseRemoteStorage AS d WHERE d.id=? and d.remoteStorage_id=r.id">>},
 		{get_exclude_files, <<"SELECT e.excludeFileName FROM DocumentDatabaseRemoteStorage AS d, DocumentDatabaseExcludeFile AS e WHERE d.id=? AND d.id=e.documentDatabaseRemoteStorage_id">>},
-		{insert_file_entry, <<"INSERT INTO DocumentDatabaseFileEntry (id, filename, md5Hash, createdDate) VALUES (NULL, ?, ?, ?)">>},
+		{insert_file_entry, <<"INSERT INTO DocumentDatabaseFileEntry (id, filename, md5Hash, createdDate) VALUES (?, ?, ?, ?)">>},
+		{insert_document, <<"INSERT INTO Document (id) VALUES (NULL)">>},
 		{insert_dd_file_entry, <<"INSERT INTO DocumentDatabase_DocumentDatabaseFileEntry (fileEntries_id, DocumentDatabase_id) VALUES(?, ?)">>}
 
 	]],

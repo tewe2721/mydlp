@@ -82,38 +82,36 @@ handle_cast({handle_remotes, RDDs}, State) ->
 	{noreply, State};
 
 handle_cast({q, MountPath, ExcludeFiles, DDId}, #state{queue=Q, in_prog=false}=State) ->
-	Q1 = queue:in(Q, {MountPath, ExcludeFiles, DDId}),
+	Q1 = queue:in({MountPath, ExcludeFiles, DDId}, Q),
 	consume(),
 	{noreply, State#state{queue=Q1, in_prog=true}};	
 
 handle_cast({q, MountPath, ExcludeFiles, DDId}, #state{queue=Q, in_prog=true}=State) ->
-	Q1 = queue:in(Q, {MountPath, ExcludeFiles, DDId}),
+	Q1 = queue:in({MountPath, ExcludeFiles, DDId}, Q),
 	{noreply, State#state{queue=Q1}};
 
 handle_cast(consume, #state{queue=Q}=State) ->
 	case queue:out(Q) of
-		{value, {FilePath, ExcludeFiles, DDId}, Q1} ->
-			case filename:split(FilePath) of
-				["/", "var", "lib", "mydlp", "ddmounts", _Id, Filename|_Rest] -> 
-					case lists:member(Filename, ExcludeFiles) of
-						false -> generate_fingerprints(FilePath, DDId);
-						true -> ok end;
-				_ -> ?ERROR_LOG("Unknown file in document training: ["?S"]", [FilePath]) end,
+		{{value, {FilePath, ExcludeFiles, DDId}}, Q1} ->
+			Filename = filename:basename(FilePath),
+			case lists:member(Filename, ExcludeFiles) of
+				false -> generate_fingerprints(FilePath, DDId);
+				true -> ok end,
 			consume(),
 			{noreply, State#state{queue=Q1}};
 		{empty, Q1} ->
-			{noreply, State#state{queue=Q1}}
+			{noreply, State#state{queue=Q1, in_prog=false}}
 	end;
 
 handle_cast(_Msg, State) ->
 	{noreply, State}.
 
 handle_info(startup, State) ->
-	start_fingerprinting(),
+	%start_fingerprinting(),
 	{noreply, State};
 
 handle_info(control_remote_storages, State) ->
-	start_fingerprinting(),
+	%start_fingerprinting(),
 	{noreply, State};
 
 handle_info(_Info, State) ->
@@ -133,6 +131,7 @@ stop() ->
 
 init([]) ->
 	reset_discover_cache(),
+	release_mounts(),
 	timer:send_after(6000, startup),
 	{ok, #state{queue=queue:new(), in_prog=false}}.
 
@@ -229,6 +228,30 @@ handle_windows_share([WindowsShare, Password, Path, Username], Id) ->
 	end.
 
 generate_fingerprints_file(#fs_entry{file_id=FP}, DDId) ->
+	try
+		Filename = filename:basename(FP),
+		CreatedDate = erlang:universaltime(),
+		{ok, Bin} = file:read_file(FP),
+		File = ?BF_C(#file{filename=Filename}, Bin),
+		Md5Hash = File#file.md5_hash,
+		FileId = mydlp_mysql:insert_file_entry(Filename, Md5Hash, CreatedDate),
+		Text = mydlp_api:concat_texts(File),
+		FList = mydlp_pdm:fingerprint(Text),
+		mydlp_api:clean_files(File),
+		FList1 = lists:usort(FList),
+		mydlp_mysql:save_fingerprints(FileId, FList1),
+		
+		DDFileEntry =case mydlp_mnesia:get_dd_file_entry(FP) of
+				none ->	Id = mydlp_mnesia:get_unique_id(dd_file_entry),
+					#dd_file_entry{id=Id, filepath=FP, dd_id_list=[]};
+				R -> R end,
+		add_dd_to_file_entry(DDFileEntry#dd_file_entry{file_entry_id=FileId}, DDId)
+
+	catch Class:Error ->
+		?ERROR_LOG("Document Trainer: Error occured while reading file. Class: ["?S"]. Error: ["?S"]. ~n"
+				"Stack trace: "?S"~n FilePath: ["?S"].~n", 
+				[Class, Error, erlang:get_stacktrace(), FP])
+	end,
 	ok.
 
 generate_fingerprints_dir(#fs_entry{file_id=FP, entry_id=EId}, DDId) ->
@@ -254,15 +277,11 @@ generate_fingerprints1(FilePath, DDId) ->
 	case filelib:is_regular(FilePath) of
 		true -> E = fs_entry(FilePath),
 			case is_changed(E) of
-				true -> generate_fingerprints_file(FilePath, DDId);
+				true -> generate_fingerprints_file(E, DDId);
 				false -> 
 					case mydlp_mnesia:get_dd_file_entry(FilePath) of 
-						none -> generate_fingerprints_file(FilePath, DDId);  
-						#dd_file_entry{dd_id_list=DDList} = DDFileEntry ->
-							case lists:member(DDId, DDList) of
-								true -> ok;
-								_ -> add_dd_to_file_entry(DDFileEntry, DDId)
-							end
+						none -> generate_fingerprints_file(E, DDId);  
+						#dd_file_entry{} = DDFileEntry -> add_dd_to_file_entry(DDFileEntry, DDId)
 					end
 			 end;
 	false -> case filelib:is_dir(FilePath) of
@@ -275,7 +294,9 @@ generate_fingerprints1(FilePath, DDId) ->
 	ok.
 
 add_dd_to_file_entry(#dd_file_entry{dd_id_list=DDList, file_entry_id=FileEntryId}=Entry, DDId) ->
-	NewList = [DDId|DDList],
+	NewList = case lists:member(DDId, DDList) of
+		true -> DDList;
+		false -> [DDId|DDList] end,
 	mydlp_mnesia:add_dd_file_entry(Entry#dd_file_entry{dd_id_list=NewList}),
 	mydlp_mysql:insert_dd_file_entry(FileEntryId, DDId).
 
@@ -326,3 +347,35 @@ start_fingerprinting() ->
 	erlang:display(RDDs),
 	gen_server:cast(?MODULE, {handle_remotes, RDDs}),
 	timer:send_after(60*60*1000, control_remote_storages).
+
+release_mounts() -> 
+	case file:list_dir(?MOUNT_PATH) of
+		{ok, FileList} -> release_mount(FileList);
+		{error, E} -> ?ERROR_LOG("Document Discovery: Error Occured listing mount directory. MountPath: ["?S"]~n. Error: ["?S"]~n", [?MOUNT_PATH, E])
+	end.
+
+release_mount([File|Rest]) ->
+	FilePath = filename:join(?MOUNT_PATH, File),
+	umount_path(FilePath, ?TRY_COUNT),
+	release_mount(Rest);
+release_mount([]) -> ok.
+
+umount_path(FilePath, TryCount) ->
+	case mydlp_api:cmd_bool(?MOUNTPOINT_COMMAND, ["-q", FilePath]) of %Checks whether File path is a mountpoint or not.
+		false -> file:del_dir(FilePath);
+		true ->	
+			case mydlp_api:cmd(?UMOUNT_COMMAND, [FilePath]) of
+				ok -> 
+					case file:del_dir(FilePath) of
+						ok -> ok;
+						ER -> ?ERROR_LOG("Remote Discovery: Error Occured rm directory. MountPath: ["?S"]~n. Error: ["?S"]~n", [FilePath, ER]),
+							 error 
+					end;
+				E ->
+					case TryCount of
+						1 -> ?ERROR_LOG("Remote Discovery: Error Occured umount directory. MountPath: ["?S"]~n. Error: ["?S"]~n", [FilePath, E]) ;
+						_ -> timer:sleep(1000),
+							umount_path(FilePath, TryCount-1)
+					end
+			end
+	end.
