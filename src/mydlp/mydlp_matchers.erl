@@ -136,6 +136,9 @@
 	china_icn_match/0,
 	china_icn_match/1,
 	china_icn_match/2,
+	chinese_name_match/0,
+	chinese_name_match/1,
+	chinese_name_match/2,
 	cc_edate_match/0,
 	cc_edate_match/1,
 	cc_edate_match/2,
@@ -428,6 +431,27 @@ china_icn_match({pd_patterns, "wide"}) ->
 	?P({[{numeric, 17}, {alpha, 1}], join_ws}).
 
 china_icn_match(_Conf, Phrase) -> mydlp_api:is_valid_china_icn(Phrase).
+
+chinese_name_match() -> {normalized, {distance, true}, {pd, true}, {kw, false}}.
+
+chinese_name_match({conf, _Conf}) -> none;
+
+chinese_name_match({pd_patterns, "narrow"}) -> 
+	?P({[{chinese, 1}], encap_ws}) ++
+	?P({[{chinese, 2}], encap_ws}) ++
+	?P({[{chinese, 3}], encap_ws});
+chinese_name_match({pd_patterns, "normal"}) ->
+	?P({[{chinese, 1}], encap_ws}) ++
+	?P({[{chinese, 2}], encap_ws}) ++
+	?P({[{chinese, 3}], encap_ws});
+chinese_name_match({pd_patterns, "wide"}) ->
+	?P({[{chinese, 1}], encap_ws}) ++
+	?P({[{chinese, 2}], encap_ws}) ++
+	?P({[{chinese, 2}], join_ws}) ++
+	?P({[{chinese, 3}], encap_ws}) ++
+	?P({[{chinese, 3}], join_ws}).
+
+chinese_name_match(_Conf, _Phrase) -> true.
 
 cc_edate_match() -> {normalized, {distance, true}, {pd, true}, {kw, false}}.
 

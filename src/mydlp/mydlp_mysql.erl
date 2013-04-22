@@ -1169,6 +1169,10 @@ populate_match(_Id, <<"china_icn">>) ->
 	Func = china_icn_match,
 	new_match(Func);
 
+populate_match(_Id, <<"chinese_name">>) ->
+	Func = chinese_name_match,
+	new_match(Func);
+
 populate_match(_Id, <<"cc_edate">>) ->
 	Func = cc_edate_match,
 	new_match(Func);

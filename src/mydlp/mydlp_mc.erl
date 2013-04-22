@@ -490,6 +490,16 @@ mc_gen_source_s([[$N, NextState]|Rest], State, false = IsAccept, Acc) -> %% Numb
 	SB = "mc_fsm(" ++ p(NextState) ++ ", R, I+1, A);",
 	SLine = list_to_binary(SD ++ SB ++ [10]),
 	mc_gen_source_s(Rest, State, IsAccept, [SLine|Acc]);
+mc_gen_source_s([[$C, NextState]|Rest], State, {ok, MC} = IsAccept, Acc) -> %% Chinese word handle
+	SD = "mc_fsm(" ++ p(State) ++ ", <<C/utf8, R/binary>>, I, A) when C >= 13312, C =< 40959 ->",
+	SB = "mc_fsm(" ++ p(NextState) ++ ", R, I+1, [{I, -1-size(R), " ++ p(MC) ++ "}|A]);", %% for predefined we do nested matchings
+	SLine = list_to_binary(SD ++ SB ++ [10]),
+	mc_gen_source_s(Rest, State, IsAccept, [SLine|Acc]);
+mc_gen_source_s([[$C, NextState]|Rest], State, false = IsAccept, Acc) -> %% Chinese word handle
+	SD = "mc_fsm(" ++ p(State) ++ ", <<C/utf8, R/binary>>, I, A) when C >= 13312, C =< 40959 ->",
+	SB = "mc_fsm(" ++ p(NextState) ++ ", R, I+1, A);",
+	SLine = list_to_binary(SD ++ SB ++ [10]),
+	mc_gen_source_s(Rest, State, IsAccept, [SLine|Acc]);
 mc_gen_source_s([[Char, NextState]|Rest], State, {ok, MC} = IsAccept, Acc) ->
 	SD = "mc_fsm(" ++ p(State) ++ ", <<" ++ p(Char) ++ "/utf8, R/binary>>, I, A) ->",
 	SB = "mc_fsm(" ++ p(NextState) ++ ", R, I+1, [{I, -1-size(R), " ++ p(MC) ++ "}|A]);", %% for predefined we do nested matchings

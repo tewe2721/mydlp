@@ -980,6 +980,7 @@ generate_pattern2({Group, {Min, Max}}, Acc) ->
 	lists:append(Acc2, Acc1);
 generate_pattern2({alpha, L}, Acc) -> add_character_all_patterns("A", L, Acc);
 generate_pattern2({numeric, L}, Acc) -> add_character_all_patterns("N", L, Acc);
+generate_pattern2({chinese, L}, Acc) -> add_character_all_patterns("C", L, Acc);
 generate_pattern2(ws, Acc) ->  add_character_all_patterns(" ", 1, Acc).
 
 generate_cartesian_patterns({Group, {Min, Max = Min}}, OldPatterns, Acc)->
