@@ -51,6 +51,6 @@ mydlpresources_DATA = \
 	cities_china.txt \
 	cities_taiwan.txt \
 	cities_hongkong.txt
-	region_china.txt \
-	region_taiwan.txt \
-	region_hongkong.txt
+	regions_china.txt \
+	regions_taiwan.txt \
+	regions_hongkong.txt
