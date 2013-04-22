@@ -47,8 +47,10 @@ mydlpresources_DATA = \
 	sensitive_drugs.txt \
 	surnames.txt \
 	strategic_business_documents.txt \
-	chinese_names.txt \
-	chinese_surnames.txt \
+	chinese_lastnames.txt \
 	cities_china.txt \
-	cities_taiwan.txt
-
+	cities_taiwan.txt \
+	cities_hongkong.txt
+	region_china.txt \
+	region_taiwan.txt \
+	region_hongkong.txt
