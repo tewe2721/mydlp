@@ -634,7 +634,7 @@ handle_result({web_entry_list_links, _EntryId}, {atomic, Result}) ->
 handle_result({del_web_entries_by_rule_id, RuleId}, {atomic, Result}) ->
 	remove_reduntant_web_entries(Result, RuleId);
 
-handle_result({get_dd_file_entry, FilePath}, {atomic, Result}) ->
+handle_result({get_dd_file_entry, _FilePath}, {atomic, Result}) ->
 	case Result of
 		[] -> none;
 		[DDFileEntry] -> DDFileEntry;
