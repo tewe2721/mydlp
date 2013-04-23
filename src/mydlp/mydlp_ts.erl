@@ -55,7 +55,8 @@
 	apiQuery/3,
 	startDiscoveryOnDemand/1,
 	stopDiscoveryOnDemand/1,
-	pauseDiscoveryOnDemand/1
+	pauseDiscoveryOnDemand/1,
+	getRemoteStorageDir/1
 	]).
 
 %%%%% EXTERNAL INTERFACE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -147,8 +148,8 @@ generateFingerprintsFunc(DocumentId, Filename, Data) ->
 	Text = mydlp_api:concat_texts(F),
 	FList = mydlp_pdm:fingerprint(Text),
 	mydlp_api:clean_files(F),
-	lists:usort(FList),
-	mydlp_mysql:save_fingerprints(DocumentId, FList),
+	FList1 = lists:usort(FList),
+	mydlp_mysql:save_fingerprints(DocumentId, FList1),
 	ok.
 
 requeueIncident(Incidentid) ->
@@ -208,6 +209,8 @@ startDiscoveryOnDemand(RuleId) -> mydlp_discovery_manager:start_on_demand_discov
 stopDiscoveryOnDemand(RuleId) -> mydlp_discovery_manager:stop_discovery_on_demand(RuleId).
 
 pauseDiscoveryOnDemand(RuleId) -> mydlp_discovery_manager:pause_discovery_on_demand(RuleId).
+
+getRemoteStorageDir(RSId) ->  mydlp_document_trainer:get_remote_storage_dir(RSId).
 
 -endif.
 

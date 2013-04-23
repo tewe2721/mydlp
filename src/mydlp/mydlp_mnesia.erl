@@ -123,7 +123,10 @@
 	get_discovery_rule_ids/2,
 	update_ep_schedules/2,
 	%update_rfs_and_web_schedules/1,
-	get_endpoints_by_rule_id/1
+	get_endpoints_by_rule_id/1,
+	get_remote_document_databases/0,
+	add_dd_file_entry/1,
+	get_dd_file_entry/1
 	]).
 
 -endif.
@@ -193,6 +196,7 @@
 	notification, 
 	notification_queue,
 	remote_storage,
+	remote_storage_dd,
 	discovery_schedule,
 	discovery_targets,
 	waiting_schedules,
@@ -233,6 +237,8 @@
 	{fs_entry, ordered_set, 
 		fun() -> mnesia:add_table_index(fs_entry, parent_id),
 			 mnesia:add_table_index(fs_entry, entry_id) end},
+	{dd_file_entry, ordered_set,
+		fun() -> mnesia:add_table_index(dd_file_entry, filepath) end},
 	{mime_type, ordered_set, 
 		fun() -> mnesia:add_table_index(mime_type, mime) end},
 	{regex, ordered_set, 
@@ -252,6 +258,7 @@ get_record_fields_common(Record) ->
 		unique_ids -> record_info(fields, unique_ids);
 		config -> record_info(fields, config);
 		fs_entry -> record_info(fields, fs_entry);
+		dd_file_entry -> record_info(fields, dd_file_entry);
 		usb_device -> record_info(fields, usb_device);
 		file_hash -> record_info(fields, file_hash);
 		file_fingerprint -> record_info(fields, file_fingerprint);
@@ -270,6 +277,7 @@ get_record_fields_functional(Record) ->
 		ipr -> record_info(fields, ipr);
 		dest -> record_info(fields, dest);
 		remote_storage -> record_info(fields, remote_storage);
+		remote_storage_dd -> record_info(fields, remote_storage_dd);
 		discovery_schedule -> record_info(fields, discovery_schedule);
 		discovery_targets -> record_info(fields, discovery_targets);
 		waiting_schedules -> record_info(fields, waiting_schedules);
@@ -459,6 +467,14 @@ update_ep_schedules({EndpointId, Ip, Username}, TargetRuleId) ->
 
 get_endpoints_by_rule_id(RuleId) -> aqc({get_endpoints_by_rule_id, RuleId}, nocache).
 
+get_remote_document_databases() -> aqc(get_remote_document_databases, nocache).
+
+add_dd_file_entry(#dd_file_entry{filepath=FilePath}=Record) ->
+	aqc({remove_redundant_dd_file_entries, FilePath}, nocache),
+	write(Record).
+
+get_dd_file_entry(FilePath) -> aqc({get_dd_file_entry, FilePath}, nocache).
+
 -endif.
 
 -ifdef(__MYDLP_ENDPOINT).
@@ -488,6 +504,7 @@ del_fs_entries_by_rule_id(RuleId) -> aqc({del_fs_entries_by_rule_id, RuleId}, no
 fs_entry_list_dir(EntryId) -> aqc({fs_entry_list_dir, EntryId}, nocache).
 
 add_fs_entry(Record) when is_tuple(Record) -> write(Record, nocache).
+
 
 dump_tables(Tables) when is_list(Tables) -> aqc({dump_tables, Tables}, cache);
 dump_tables(Table) -> dump_tables([Table]).
@@ -526,6 +543,8 @@ truncate_nondata() -> gen_server:call(?MODULE, truncate_nondata, 15000).
 mnesia_dir_cleanup() -> gen_server:cast(?MODULE, mnesia_dir_cleanup).
 
 flush_cache() -> cache_clean0().
+
+
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -614,6 +633,13 @@ handle_result({web_entry_list_links, _EntryId}, {atomic, Result}) ->
 
 handle_result({del_web_entries_by_rule_id, RuleId}, {atomic, Result}) ->
 	remove_reduntant_web_entries(Result, RuleId);
+
+handle_result({get_dd_file_entry, _FilePath}, {atomic, Result}) ->
+	case Result of
+		[] -> none;
+		[DDFileEntry] -> DDFileEntry;
+		R -> ?ERROR_LOG("Unexpected dd file entry result: ["?S"]", R)
+	end;
 
 handle_result(Query, Result) -> handle_result_common(Query, Result).
 
@@ -1126,6 +1152,27 @@ handle_query({get_endpoints_by_rule_id, RuleId}) ->
 		D#discovery_targets.rule_id == RuleId
 	]),
 	?QLCE(Q);
+
+handle_query(get_remote_document_databases) ->
+	Q = ?QLCQ([{R#remote_storage_dd.document_id, R#remote_storage_dd.details, R#remote_storage_dd.rs_id, R#remote_storage_dd.exclude_files} ||
+		R <- mnesia:table(remote_storage_dd)
+	]),
+	?QLCE(Q);
+
+handle_query({get_dd_file_entry, FilePath}) ->
+	Q = ?QLCQ([D ||
+		D <-  mnesia:table(dd_file_entry),
+		D#dd_file_entry.filepath == FilePath
+	]),
+	?QLCE(Q);
+
+handle_query({remove_redundant_dd_file_entries, FilePath}) ->
+	Q = ?QLCQ([D#dd_file_entry.id ||	
+		D <- mnesia:table(dd_file_entry),
+		D#dd_file_entry.filepath == FilePath
+		]),
+	Ids = ?QLCE(Q),
+	lists:foreach(fun(I) -> mnesia:delete({dd_file_entry, I}) end, Ids);
 	
 handle_query({get_matchers, RuleIDs}) ->
 	ML = lists:map(fun(RId) ->
@@ -1190,6 +1237,11 @@ handle_query({remove_site, FI}) ->
 		]),
 	FSIs = ?QLCE(Q9),
 
+	Q10 = ?QLCQ([R#remote_storage_dd.id ||	
+		R <- mnesia:table(remote_storage_dd)
+		]),
+	RDDs = ?QLCE(Q10),
+
 	case RQ4 of
 		[] -> ok;
 		[SDI] -> mnesia:delete({site_desc, SDI}) end,
@@ -1198,7 +1250,8 @@ handle_query({remove_site, FI}) ->
 	lists:foreach(fun(T) -> mnesia:delete({mc_module, T}) end, MCTs),
 	lists:foreach(fun(Id) -> mnesia:delete({config, Id}) end, CIs),
 	lists:foreach(fun(Id) -> mnesia:delete({fs_entry, Id}) end, FSIs),
-	lists:foreach(fun(Id) -> mnesia:delete({usb_device, Id}) end, UDIs);
+	lists:foreach(fun(Id) -> mnesia:delete({usb_device, Id}) end, UDIs),
+	lists:foreach(fun(Id) -> mnesia:delete({remote_storage_dd, Id}) end, RDDs);
 
 handle_query({save_user_address, IpAddress, UserHash, UserName}) ->
 	{MegaSecs, Secs, _MicroSecs} = erlang:now(),

@@ -79,6 +79,14 @@
 	details
 }).
 
+-record(remote_storage_dd, {
+	id,
+	document_id,
+	rs_id, %Remote Storage Id
+	details,
+	exclude_files
+}).
+
 -record(discovery_schedule, {
 	id,
 	rule_id,
@@ -201,6 +209,13 @@
 	parent_id,
 	file_size,
 	last_modified
+}).
+
+-record(dd_file_entry, {
+	id,
+	filepath,
+	file_entry_id,
+	dd_id_list=[]
 }).
 
 -record(usb_device, {

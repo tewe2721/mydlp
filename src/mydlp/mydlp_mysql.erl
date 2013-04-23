@@ -57,6 +57,9 @@
 	get_progress/0,
 	is_all_ep_discovery_finished/3,
 	is_all_discovery_finished/1,
+	insert_file_entry/3,
+	insert_dd_file_entry/2,
+	get_remote_storage_by_id/1,
 	stop/0]).
 
 %% gen_server callbacks
@@ -149,6 +152,14 @@ get_denied_page() -> gen_server:call(?MODULE, get_denied_page).
 set_progress(Progress) -> gen_server:cast(?MODULE, {set_progress, Progress}).
 
 get_progress() -> gen_server:call(?MODULE, get_progress).
+
+insert_file_entry(Filename, Md5Hash, Date) -> 
+	DId = gen_server:call(?MODULE, insert_document),
+	gen_server:call(?MODULE, {insert_file_entry, DId, Filename, Md5Hash, Date}).
+
+insert_dd_file_entry(FileEntryId, DDId) -> gen_server:cast(?MODULE, {insert_dd_file_entry,FileEntryId, DDId}).
+
+get_remote_storage_by_id(RSId) -> gen_server:call(?MODULE, {get_remote_storage_by_id, RSId}).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -273,10 +284,52 @@ handle_call({populate_discovery_targets, RuleId}, From, State) ->
 	Worker = self(),
 	?ASYNC(fun() ->
 		{ok, Aliasses} =  psq(get_endpoint_alias),
-		IpsAndNames = get_identities(Aliasses),
-		lists:map(fun(I) -> mydlp_mnesia:update_ep_schedules(I, RuleId) end, IpsAndNames),
+		case Aliasses of
+			[] -> ok;
+			_ ->
+				IpsAndNames = get_identities(Aliasses),
+				lists:map(fun(I) -> mydlp_mnesia:update_ep_schedules(I, RuleId) end, IpsAndNames) end,
 		Worker ! {async_reply, ok, From}
 	end, 149000),
+	{noreply, State};
+
+handle_call({get_remote_storage_by_id, RSId}, _From, State) ->
+	case psq(remote_sshfs_dir, [RSId]) of
+		{ok, [R|_]} -> {reply, {sshfs, R}, State};
+		_ ->
+	case psq(remote_ftpfs_dir, [RSId]) of
+		{ok, [R1|_]} -> {reply, {ftpfs, R1}, State};
+		_ ->
+	case psq(remote_nfs_dir, [RSId]) of
+		{ok, [R2|_]} -> {reply, {nfs, R2}, State};
+		_ ->
+	case psq(remote_dfs_dir, [RSId]) of
+		{ok, [R3|_]} -> {reply, {dfs, R3}, State};
+		_ ->
+	case psq(remote_cifs_dir, [RSId]) of
+		{ok, [R4|_]} -> {reply, {cfs, R4}, State};
+		_ ->{reply, none, State} end end end end end;
+
+handle_call(insert_document, From, State) ->
+	Worker = self(),
+	?ASYNC(fun() ->
+			{atomic, ILId} = transaction(fun() ->
+					psqt(insert_document), 
+					last_insert_id_t() end, 30000),
+			Reply = ILId,	
+                        Worker ! {async_reply, Reply, From}
+		end, 30000),
+	{noreply, State};
+
+handle_call({insert_file_entry, Id, Filename, Md5Hash, Date}, From, State) ->
+	Worker = self(),
+	?ASYNC(fun() ->
+			transaction(fun() ->
+				psqt(insert_file_entry, 
+					[Id, Filename, Md5Hash, Date])
+				end, 30000),
+                        Worker ! {async_reply, Id, From}
+		end, 30000),
 	{noreply, State};
 
 handle_call(stop, _From,  State) ->
@@ -382,6 +435,12 @@ handle_cast({compile_customer, FilterId}, State) ->
 
 handle_cast({set_progress, Progress}, State) ->
 	{noreply, State#state{compile_progress=Progress}};
+
+handle_cast({insert_dd_file_entry, FileEntryId, DDId}, State) ->
+	?ASYNC(fun() ->
+			transaction(fun() -> psqt(insert_dd_file_entry, [FileEntryId, DDId]) end, 60000) 
+		end, 60000),	
+	{noreply, State};
 
 handle_cast(_Msg, State) ->
 	{noreply, State}.
@@ -495,6 +554,11 @@ init([]) ->
 		{remote_cifs, <<"SELECT r.windowsShare, r.path, r.username, r.password FROM RemoteStorageCIFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
 		{remote_dfs, <<"SELECT r.windowsShare, r.path, r.username, r.password FROM RemoteStorageDFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
 		{remote_nfs, <<"SELECT r.address, r.path FROM RemoteStorageNFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
+		{remote_sshfs_dir, <<"SELECT r.address, r.password, r.path, r.port, r.username FROM RemoteStorageSSHFS r WHERE r.id=?">>},
+		{remote_ftpfs_dir, <<"SELECT r.address, r.password, r.path, r.username FROM RemoteStorageFTPFS r WHERE r.id=?">>},
+		{remote_cifs_dir, <<"SELECT r.windowsShare, r.password, r.path, r.username FROM RemoteStorageCIFS r WHERE r.id=?">>},
+		{remote_dfs_dir, <<"SELECT r.windowsShare, r.password, r.path, r.username FROM RemoteStorageDFS r WHERE r.id=?">>},
+		{remote_nfs_dir, <<"SELECT r.address, r.path FROM RemoteStorageNFS r WHERE r.id=?">>},
 		{web_servers, <<"SELECT r.proto, r.address, r.port, r.digDepth, r.startPath FROM WebServer r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
 		{app_name_by_rule_id, <<"SELECT a.destinationString FROM ApplicationName AS a, RuleItem AS ri WHERE ri.rule_id=? AND a.id=ri.item_id">>},
 		{email_notification_by_rule_id, <<"SELECT a.email FROM AuthUser AS a, NotificationItem AS ni, EmailNotificationItem AS eni, Rule r WHERE ni.rule_id=? AND ni.id=eni.id AND ni.authUser_id=a.id AND r.id=? AND r.notificationEnabled=1">>},
@@ -554,7 +618,17 @@ init([]) ->
 		{get_ip_and_username, <<"SELECT ipAddress, username FROM EndpointStatus where endpointAlias=?">>},
 		{get_alias_with_ip, <<"SELECT endpointAlias FROM EndpointStatus where ipAddress=?">>},
 		{get_opr_with_group_id_and_ep, <<"SELECT o.id FROM OperationLog AS o WHERE groupId=? AND source=? AND messageKey=?">>},
-		{get_opr_with_group_id_and_status, <<"SELECT o.id FROM OperationLog AS o WHERE groupId=? AND messageKey=?">>}
+		{get_opr_with_group_id_and_status, <<"SELECT o.id FROM OperationLog AS o WHERE groupId=? AND messageKey=?">>},
+		{get_remote_document_databases, <<"SELECT * FROM DocumentDatabase_DocumentDatabaseRemoteStorage">>},
+		{get_remote_sshfs, <<"SELECT r.id, r.address, r.password, r.path, r.port, r.username FROM RemoteStorageSSHFS AS r, DocumentDatabaseRemoteStorage AS d WHERE d.id=? and d.remoteStorage_id=r.id">>},
+		{get_remote_ftpfs, <<"SELECT r.id, r.address, r.password, r.path, r.username FROM RemoteStorageFTPFS AS r, DocumentDatabaseRemoteStorage AS d WHERE d.id=? and d.remoteStorage_id=r.id">>},
+		{get_remote_nfs, <<"SELECT r.id, r.address, r.path FROM RemoteStorageNFS AS r, DocumentDatabaseRemoteStorage as d WHERE d.id=? and d.remoteStorage_id=r.id">>},
+		{get_remote_dfs, <<"SELECT r.id, r.windowsShare, r.password, r.path, r.username FROM RemoteStorageDFS AS r, DocumentDatabaseRemoteStorage AS d WHERE d.id=? and d.remoteStorage_id=r.id">>},
+		{get_remote_cifs, <<"SELECT r.id, r.windowsShare, r.password, r.path, r.username FROM RemoteStorageCIFS AS r, DocumentDatabaseRemoteStorage AS d WHERE d.id=? and d.remoteStorage_id=r.id">>},
+		{get_exclude_files, <<"SELECT e.excludeFileName FROM DocumentDatabaseRemoteStorage AS d, DocumentDatabaseExcludeFile AS e WHERE d.id=? AND d.id=e.documentDatabaseRemoteStorage_id">>},
+		{insert_file_entry, <<"INSERT INTO DocumentDatabaseFileEntry (id, filename, md5Hash, createdDate) VALUES (?, ?, ?, ?)">>},
+		{insert_document, <<"INSERT INTO Document (id) VALUES (NULL)">>},
+		{insert_dd_file_entry, <<"INSERT INTO DocumentDatabase_DocumentDatabaseFileEntry (fileEntries_id, DocumentDatabase_id) VALUES(?, ?)">>}
 
 	]],
 
@@ -629,8 +703,9 @@ psqt(PreparedKey, Params) ->
 get_identities(Rows) -> get_identities(Rows, []).
 
 get_identities([[Alias, EndpointId]|Rows], Acc) ->
-	{ok, [[Ip,Username]]} = lpsq(get_ip_and_username, [Alias], 30000),
-	get_identities(Rows, [{EndpointId, Ip, Username}|Acc]);
+	case lpsq(get_ip_and_username, [Alias], 30000) of
+		{ok, [[Ip,Username]]} -> get_identities(Rows, [{EndpointId, Ip, Username}|Acc]);
+		_ -> ?ERROR_LOG("Unknown Endpoint Alias: ["?S"]", [Alias]), get_identities(Rows, Acc) end;
 get_identities([], Acc) -> Acc.
 
 populate_site(FilterId) ->
@@ -644,6 +719,8 @@ populate_site(FilterId) ->
 	% This will create problems in multi-site
 	{ok, CQ} = psq(configs),
 	populate_configs(CQ, FilterId),
+
+	populate_remote_document_database(),
 
 	%TODO: should add for multi-site
 	%{ok, SQ} = psq(customer_by_id, [FilterId]),
@@ -934,6 +1011,40 @@ populate_users_ad_u([[OrigId]| Rows], RuleId) ->
 	lists:foreach(fun({Username}) -> new_user(Username, RuleId) end, Usernames),
 	populate_users_ad_u(Rows, RuleId);
 populate_users_ad_u([], _RuleId) -> ok.
+
+populate_remote_document_database() ->
+	{ok, RDD} = psq(get_remote_document_databases),
+	populate_each_remote_dd(RDD).
+
+populate_each_remote_dd([[DDId, DDRSId]|Rest]) ->
+	RS = get_remote_storage_with_type(DDRSId),
+	Id = mydlp_mnesia:get_unique_id(remote_storage_dd),
+	erlang:display(RS),
+	I = case RS of
+		none -> #remote_storage_dd{id=Id, document_id=DDId, details=none, rs_id=none, exclude_files=none};
+		{Type, D, RSId} -> {ok, EF} = psq(get_exclude_files, [DDRSId]),
+				#remote_storage_dd{id=Id, document_id=DDId, details={Type, D}, rs_id=RSId, exclude_files=lists:flatten(EF)}
+	end,
+	mydlp_mnesia_write(I),
+	populate_each_remote_dd(Rest);
+populate_each_remote_dd([]) -> ok.
+	
+get_remote_storage_with_type(DDRSId) ->
+	case psq(get_remote_sshfs, [DDRSId]) of
+		{ok, [[Id|R]]} -> {sshfs, R, Id};
+		_ ->
+	case psq(get_remote_ftpfs, [DDRSId]) of
+		{ok, [[Id1|R1]]} -> {ftpfs, R1, Id1};
+		_ ->
+	case psq(get_remote_nfs, [DDRSId]) of
+		{ok, [[Id2|R2]]} -> {nfs, R2, Id2};
+		_ ->
+	case psq(get_remote_dfs, [DDRSId]) of
+		{ok, [[Id3|R3]]} -> {dfs, R3, Id3};
+		_ ->
+	case psq(get_remote_cifs, [DDRSId]) of
+		{ok, [[Id4|R4]]} -> {cifs, R4, Id4};
+		_ ->none end end end end end.
 
 get_usernames(OrigId) ->
 	Users = get_users(OrigId),
