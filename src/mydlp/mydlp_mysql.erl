@@ -59,6 +59,7 @@
 	is_all_discovery_finished/1,
 	insert_file_entry/3,
 	insert_dd_file_entry/2,
+	get_remote_storage_by_id/1,
 	stop/0]).
 
 %% gen_server callbacks
@@ -157,6 +158,8 @@ insert_file_entry(Filename, Md5Hash, Date) ->
 	gen_server:call(?MODULE, {insert_file_entry, DId, Filename, Md5Hash, Date}).
 
 insert_dd_file_entry(FileEntryId, DDId) -> gen_server:cast(?MODULE, {insert_dd_file_entry,FileEntryId, DDId}).
+
+get_remote_storage_by_id(RSId) -> gen_server:call(?MODULE, {get_remote_storage_by_id, RSId}).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -289,6 +292,23 @@ handle_call({populate_discovery_targets, RuleId}, From, State) ->
 		Worker ! {async_reply, ok, From}
 	end, 149000),
 	{noreply, State};
+
+handle_call({get_remote_storage_by_id, RSId}, _From, State) ->
+	case psq(remote_sshfs_dir, [RSId]) of
+		{ok, [R|_]} -> {reply, {sshfs, R}, State};
+		_ ->
+	case psq(remote_ftpfs_dir, [RSId]) of
+		{ok, [R1|_]} -> {reply, {ftpfs, R1}, State};
+		_ ->
+	case psq(remote_nfs_dir, [RSId]) of
+		{ok, [R2|_]} -> {reply, {nfs, R2}, State};
+		_ ->
+	case psq(remote_dfs_dir, [RSId]) of
+		{ok, [R3|_]} -> {reply, {dfs, R3}, State};
+		_ ->
+	case psq(remote_cifs_dir, [RSId]) of
+		{ok, [R4|_]} -> {reply, {cfs, R4}, State};
+		_ ->{reply, none, State} end end end end end;
 
 handle_call(insert_document, From, State) ->
 	Worker = self(),
@@ -533,6 +553,11 @@ init([]) ->
 		{remote_cifs, <<"SELECT r.windowsShare, r.path, r.username, r.password FROM RemoteStorageCIFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
 		{remote_dfs, <<"SELECT r.windowsShare, r.path, r.username, r.password FROM RemoteStorageDFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
 		{remote_nfs, <<"SELECT r.address, r.path FROM RemoteStorageNFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
+		{remote_sshfs_dir, <<"SELECT r.address, r.password, r.path, r.port, r.username FROM RemoteStorageSSHFS r WHERE r.id=?">>},
+		{remote_ftpfs_dir, <<"SELECT r.address, r.password, r.path, r.username FROM RemoteStorageFTPFS r WHERE r.id=?">>},
+		{remote_cifs_dir, <<"SELECT r.windowsShare, r.password, r.path, r.username FROM RemoteStorageCIFS r WHERE r.id=?">>},
+		{remote_dfs_dir, <<"SELECT r.windowsShare, r.password, r.path, r.username FROM RemoteStorageDFS r WHERE r.id=?">>},
+		{remote_nfs_dir, <<"SELECT r.address, r.path FROM RemoteStorageNFS r WHERE r.id=?">>},
 		{web_servers, <<"SELECT r.proto, r.address, r.port, r.digDepth, r.startPath FROM WebServer r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
 		{app_name_by_rule_id, <<"SELECT a.destinationString FROM ApplicationName AS a, RuleItem AS ri WHERE ri.rule_id=? AND a.id=ri.item_id">>},
 		{email_notification_by_rule_id, <<"SELECT a.email FROM AuthUser AS a, NotificationItem AS ni, EmailNotificationItem AS eni, Rule r WHERE ni.rule_id=? AND ni.id=eni.id AND ni.authUser_id=a.id AND r.id=? AND r.notificationEnabled=1">>},

@@ -37,6 +37,7 @@
 %% API
 -export([start_link/0,
 	start_fingerprinting/0,
+	get_remote_storage_dir/1,
 	stop/0
 	]).
 
@@ -69,10 +70,23 @@ q(MountPath, ExcludeFiles, DDId) -> gen_server:cast(?MODULE, {q, MountPath, Excl
 
 consume() -> gen_server:cast(?MODULE, consume).
 
+get_remote_storage_dir(RSId) -> gen_server:call(?MODULE, {get_remote_storage_dir, RSId}).
+
 %%%%%%%%%%%%%% gen_server handles
 
 handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
+
+handle_call({get_remote_storage_dir, RSId}, _From, State) ->
+	RemoteStorage = mydlp_mysql:get_remote_storage_by_id(RSId),
+	MountPath = handle_each_mount(RemoteStorage, integer_to_list(RSId)++"_dir"),
+	case MountPath of
+		none -> {reply, [none], State};
+		_ -> case file:list_dir(MountPath) of
+			{ok, FileList} -> {reply, FileList, State};
+			{error, E} -> ?ERROR_LOG("Document Discovery: Error Occured listing directory. MountPath: ["?S"]~n. Error: ["?S"]~n", [MountPath, E]),
+					{reply, [none], State} end
+	end;
 
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
@@ -93,13 +107,13 @@ handle_cast({q, MountPath, ExcludeFiles, DDId}, #state{queue=Q, in_prog=true}=St
 handle_cast(consume, #state{queue=Q}=State) ->
 	case queue:out(Q) of
 		{{value, {FilePath, ExcludeFiles, DDId}}, Q1} ->
-			Filename = filename:basename(FilePath),
-			case lists:member(Filename, ExcludeFiles) of
-				false -> generate_fingerprints(FilePath, DDId);
+			case lists:member(FilePath, ExcludeFiles) of
+				false -> generate_fingerprints(FilePath, DDId, ExcludeFiles);
 				true -> ok end,
 			consume(),
 			{noreply, State#state{queue=Q1}};
 		{empty, Q1} ->
+			reset_discover_cache(),
 			{noreply, State#state{queue=Q1, in_prog=false}}
 	end;
 
@@ -179,7 +193,7 @@ handle_each_mount({sshfs, [Address, Password, Path, Port, Username]}, Id) ->
 	PathS = binary_to_list(Path),
 	AddressS = binary_to_list(Address),
 	ConnectionString = UsernameS ++ "@" ++ AddressS ++ ":" ++ PathS, 
-	MountPath = filename:join(?MOUNT_PATH, integer_to_list(Id)),
+	MountPath = get_mount_path(Id),
 	Args = ["-p", PortS, ConnectionString, MountPath, "-o", "password_stdin"],
 	create_and_mount_path(MountPath, ?SSH_COMMAND, Args, [], Stdin);
 
@@ -193,7 +207,7 @@ handle_each_mount({ftpfs, [Address, Password, Path, Username]}, Id) ->
 			_ -> UsernameS ++ ":" ++ PasswordS
 		end,
 	AddressPath = UandP ++ "@" ++ AddressS ++ "/" ++ PathS,
-	MountPath = filename:join(?MOUNT_PATH, integer_to_list(Id)),
+	MountPath = get_mount_path(Id),
 	Args = ["-o", "ro,utf8", AddressPath, MountPath],
 	create_and_mount_path(MountPath, ?FTP_COMMAND, Args, [], none);
 
@@ -207,7 +221,7 @@ handle_each_mount({nfs, [Address, Path]}, Id) ->
 	PathS = binary_to_list(Path),
 	AddressS = binary_to_list(Address),
 	AddressPath = AddressS ++ ":" ++ PathS,
-	MountPath = filename:join(?MOUNT_PATH, integer_to_list(Id)),
+	MountPath = get_mount_path(Id),
 	Args = ["-o", "ro,soft,intr,rsize=8192,wsize=8192", AddressPath, MountPath],
 	create_and_mount_path(MountPath, ?MOUNT_COMMAND, Args, [], none).
 
@@ -216,7 +230,7 @@ handle_windows_share([WindowsShare, Password, Path, Username], Id) ->
 	UsernameS = binary_to_list(Username),
 	PathS = binary_to_list(Path),
 	WindowsSharePath =  "//" ++ binary_to_list(WindowsShare) ++ "/" ++ PathS,
-	MountPath = filename:join(?MOUNT_PATH, integer_to_list(Id)),
+	MountPath = get_mount_path(Id),
 	Args = ["-o","ro", WindowsSharePath, MountPath],
 	case UsernameS of
 		[] -> create_and_mount_path(MountPath, ?SMB_COMMAND, Args, [], "\n");
@@ -226,6 +240,11 @@ handle_windows_share([WindowsShare, Password, Path, Username], Id) ->
 				_ -> create_and_mount_path(MountPath, ?SMB_COMMAND, Args, [{"USER", UsernameS}, {"PASSWD", PasswordS}], none)
 			end
 	end.
+
+get_mount_path(Id) ->
+	case is_integer(Id) of
+		true -> filename:join(?MOUNT_PATH, integer_to_list(Id));
+		false -> filename:join(?MOUNT_PATH, Id) end.
 
 generate_fingerprints_file(#fs_entry{file_id=FP}, DDId) ->
 	try
@@ -254,26 +273,26 @@ generate_fingerprints_file(#fs_entry{file_id=FP}, DDId) ->
 	end,
 	ok.
 
-generate_fingerprints_dir(#fs_entry{file_id=FP, entry_id=EId}, DDId) ->
+generate_fingerprints_dir(#fs_entry{file_id=FP, entry_id=EId}, DDId, ExcludeFiles) ->
 	CList = case file:list_dir(FP) of
 		{ok, LD} -> LD;
 		{error, _} -> [] end,
 	OList = mydlp_mnesia:fs_entry_list_dir(EId),
 	MList = lists:umerge([CList, OList]),
-	[ q(filename:absname(FN, FP), [], DDId) || FN <- MList ],
+	[ q(filename:absname(FN, FP), ExcludeFiles, DDId) || FN <- MList ],
 	ok.
 
-generate_fingerprints_dir_dir(#fs_entry{file_id=FP, entry_id=EId}, DDId) ->
+generate_fingerprints_dir_dir(#fs_entry{file_id=FP, entry_id=EId}, DDId, ExcludeFiles) ->
 	OList = mydlp_mnesia:fs_entry_list_dir(EId),
-	[ q(filename:absname(FN, FP), [], DDId) || FN <- OList ],
+	[ q(filename:absname(FN, FP), ExcludeFiles, DDId) || FN <- OList ],
 	ok.
 
-generate_fingerprints(FilePath, DDId) ->
+generate_fingerprints(FilePath, DDId, ExcludeFiles) ->
 	case is_cached({FilePath, DDId}) of
 		true -> ok;
-		false -> generate_fingerprints1(FilePath, DDId) end.
+		false -> generate_fingerprints1(FilePath, DDId, ExcludeFiles) end.
 
-generate_fingerprints1(FilePath, DDId) ->
+generate_fingerprints1(FilePath, DDId, ExcludeFiles) ->
 	case filelib:is_regular(FilePath) of
 		true -> E = fs_entry(FilePath),
 			case is_changed(E) of
@@ -287,8 +306,8 @@ generate_fingerprints1(FilePath, DDId) ->
 	false -> case filelib:is_dir(FilePath) of
 		true -> E = fs_entry(FilePath),
 			case is_changed(E) of
-				true -> generate_fingerprints_dir(E, DDId);
-				false -> generate_fingerprints_dir_dir(E, DDId) end;
+				true -> generate_fingerprints_dir(E, DDId, ExcludeFiles);
+				false -> generate_fingerprints_dir_dir(E, DDId, ExcludeFiles) end;
 	false -> ?ERROR_LOG("DISCOVER: File or directory does not exists. Filename: "?S, [FilePath]),
 		mydlp_mnesia:del_fs_entry(FilePath) end end, % Means file does not exists
 	ok.
@@ -338,13 +357,12 @@ mount_and_generate_fingerprints([{DDId, RemoteStorage, RSId, ExcludeFiles}|Rest]
 		_ -> handle_each_mount(RemoteStorage, RSId) end,
 	case MountPath of 
 		none -> ok;
-		_ -> q(MountPath, ExcludeFiles, DDId) end,
+		_ -> q(MountPath, lists:map(fun(I) -> filename:join(MountPath, binary_to_list(I)) end, ExcludeFiles), DDId) end,
 	mount_and_generate_fingerprints(Rest);
 mount_and_generate_fingerprints([]) -> ok.
 
 start_fingerprinting() ->
 	RDDs = mydlp_mnesia:get_remote_document_databases(),
-	erlang:display(RDDs),
 	gen_server:cast(?MODULE, {handle_remotes, RDDs}),
 	timer:send_after(60*60*1000, control_remote_storages).
 

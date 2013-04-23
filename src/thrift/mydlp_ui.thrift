@@ -59,4 +59,6 @@ service Mydlp_ui {
 	oneway void stopDiscoveryOnDemand(1: i32 RuleId)
 
 	oneway void pauseDiscoveryOnDemand(1: i32 RuleId)
+
+	list<string> getRemoteStorageDir(1: i32 RSId)
 }

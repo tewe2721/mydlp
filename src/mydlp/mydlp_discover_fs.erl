@@ -489,6 +489,7 @@ set_discover_inprog() ->
 	mydlp_sync:sync_now().
 
 unset_discover_inprog() ->
+	reset_discover_cache(),
 	mydlp_container:set_ep_meta("discover_inprog", "no"),
 	mydlp_sync:sync_now().
 
