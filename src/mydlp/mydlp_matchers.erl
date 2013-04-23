@@ -441,14 +441,14 @@ chinese_name_match({pd_patterns, "narrow"}) ->
 	?P({[{chinese, 2}], encap_ws}) ++
 	?P({[{chinese, 3}], encap_ws});
 chinese_name_match({pd_patterns, "normal"}) ->
-	?P({[{chinese, 1}], encap_ws}) ++
-	?P({[{chinese, 2}], encap_ws}) ++
-	?P({[{chinese, 3}], encap_ws});
+	?P({[{chinese, 1}], none}) ++
+	?P({[{chinese, 2}], none}) ++
+	?P({[{chinese, 3}], none});
 chinese_name_match({pd_patterns, "wide"}) ->
-	?P({[{chinese, 1}], encap_ws}) ++
-	?P({[{chinese, 2}], encap_ws}) ++
+	?P({[{chinese, 1}], none}) ++
+	?P({[{chinese, 2}], none}) ++
 	?P({[{chinese, 2}], join_ws}) ++
-	?P({[{chinese, 3}], encap_ws}) ++
+	?P({[{chinese, 3}], none}) ++
 	?P({[{chinese, 3}], join_ws}).
 
 chinese_name_match(_Conf, _Phrase) -> true.

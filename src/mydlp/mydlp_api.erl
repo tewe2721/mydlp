@@ -226,7 +226,6 @@ get_text(#file{filename=Filename} = File) ->
 			Text = case FNBin of
 				<<>> -> ContentText;
 				_Else -> <<" ", FNBin/binary, " ", "\n", ContentText/binary>> end,
-			io:format("D: ~ts~n", [Text] ),
 			{ok, Text};
 		Else -> Else end.
 
