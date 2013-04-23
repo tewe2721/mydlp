@@ -328,10 +328,10 @@ handle_cast({insert_log_data, LogId, Filename0, MimeType, Size, Hash, Path}, Sta
 	{noreply, State};
 
 handle_cast({insert_log_detail, LogId, MatchingDetails}, State) ->
-	erlang:display({mysql_insert, MatchingDetails}),
 	?ASYNC(fun() ->
 			ltransaction(fun() ->
-				lists:foreach(fun(#matching_detail{pattern=Pattern, matcher_func=MatcherFunc}) -> erlang:display({insert, LogId, Pattern, MatcherFunc}),psqt(insert_log_detail, [LogId, Pattern, MatcherFunc]) end, MatchingDetails) 
+				lists:foreach(fun(#matching_detail{pattern=Pattern, matcher_func=MatcherFunc}) -> 
+						psqt(insert_log_detail, [LogId, Pattern, MatcherFunc]) end, MatchingDetails) 
 			end, 60000)
 		end, 60000),
         {noreply, State};

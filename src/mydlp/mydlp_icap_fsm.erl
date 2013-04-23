@@ -845,7 +845,6 @@ log_req(#state{icap_headers=#icap_headers{x_client_ip=Addr},
 		http_request=#http_request{path=Uri},
 		username=UserName}, Action,
 		{{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}, {matching_details, MatchingDetails}}) ->
-	erlang:display({fsm_detail, MatchingDetails}),
 	Time = erlang:universaltime(),
 	?ACL_LOG(#log{time=Time, channel=web, rule_id=RuleId, action=Action, ip=Addr, user=UserName, destination=Uri, itype_id=IType, file=File, misc=Misc, matching_details=MatchingDetails}).
 

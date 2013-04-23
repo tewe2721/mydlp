@@ -162,7 +162,7 @@ mc_match(MatcherId, Func, FuncOpts, #file{mc_table=MCTable, normal_text=NT}) ->
 	MatchedIndex = case mc_is_apply(Func) of
 		true -> lists:map(fun({I, CI, {L, _ML}}) ->
 				Head = size(NT) + CI - L,
-				<<_:Head/binary, Phrase:L/binary, _/binary>> = NT,
+				<<_:Head/binary, Phrase:L/binary, _Rest/binary>> = NT,
 				PhraseS = unicode:characters_to_list(Phrase),
 				case apply(mydlp_matchers, Func, [FuncOpts, PhraseS]) of
 					true -> [{I, PhraseS}];
@@ -170,8 +170,8 @@ mc_match(MatcherId, Func, FuncOpts, #file{mc_table=MCTable, normal_text=NT}) ->
 			end, Matched);
 		false -> lists:map(fun({I, CI, {L, _ML}}) ->
 				Head = size(NT) + CI - L,
-				<<_:Head/binary, Phrase:L/binary, _/binary>> = NT,
-				PhraseS = unicode:characters_to_list(Phrase), 
+				<<_:Head/binary, Phrase:L/binary, _Rest/binary>> = NT,
+				PhraseS = unicode:characters_to_list(Phrase),
 				{I, PhraseS} end, Matched) end,
 	MI = lists:flatten(MatchedIndex),
 	{length(MI), MI}.

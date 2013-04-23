@@ -249,10 +249,9 @@ process_log_files(LogId, true = IsLogData, [File|Files]) ->
 	end,
 
 	process_log_files(LogId, IsLogData, Files);
-process_log_files(_LogId, _IsLogData, []) ->erlang:display("PROCESS MATCHING DETAILS EMPTY"), ok.
+process_log_files(_LogId, _IsLogData, []) -> ok.
 
 process_matching_details(LogId, MatchingDetails) ->
-	erlang:display("PROCESS MATCHING DETAILS"),
 	mydlp_mysql:insert_log_detail(LogId, MatchingDetails).
 
 -endif.
