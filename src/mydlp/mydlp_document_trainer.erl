@@ -79,14 +79,17 @@ handle_call(stop, _From, State) ->
 
 handle_call({get_remote_storage_dir, RSId}, _From, State) ->
 	RemoteStorage = mydlp_mysql:get_remote_storage_by_id(RSId),
-	MountPath = handle_each_mount(RemoteStorage, integer_to_list(RSId)++"_dir"),
-	case MountPath of
+	Filename = integer_to_list(RSId) ++ "_dir",
+	MountPath = handle_each_mount(RemoteStorage, Filename),
+	DirList = case MountPath of
 		none -> {reply, [none], State};
 		_ -> case file:list_dir(MountPath) of
 			{ok, FileList} -> {reply, FileList, State};
 			{error, E} -> ?ERROR_LOG("Document Discovery: Error Occured listing directory. MountPath: ["?S"]~n. Error: ["?S"]~n", [MountPath, E]),
-					{reply, [none], State} end
-	end;
+					{reply, [], State} end
+	end,
+	release_mount([Filename]),
+	DirList;
 
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
@@ -114,6 +117,7 @@ handle_cast(consume, #state{queue=Q}=State) ->
 			{noreply, State#state{queue=Q1}};
 		{empty, Q1} ->
 			reset_discover_cache(),
+			release_mounts(),
 			{noreply, State#state{queue=Q1, in_prog=false}}
 	end;
 
@@ -121,11 +125,11 @@ handle_cast(_Msg, State) ->
 	{noreply, State}.
 
 handle_info(startup, State) ->
-	%start_fingerprinting(),
+	start_fingerprinting(),
 	{noreply, State};
 
 handle_info(control_remote_storages, State) ->
-	%start_fingerprinting(),
+	start_fingerprinting(),
 	{noreply, State};
 
 handle_info(_Info, State) ->

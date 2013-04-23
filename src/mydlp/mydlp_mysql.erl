@@ -1019,7 +1019,6 @@ populate_remote_document_database() ->
 populate_each_remote_dd([[DDId, DDRSId]|Rest]) ->
 	RS = get_remote_storage_with_type(DDRSId),
 	Id = mydlp_mnesia:get_unique_id(remote_storage_dd),
-	erlang:display(RS),
 	I = case RS of
 		none -> #remote_storage_dd{id=Id, document_id=DDId, details=none, rs_id=none, exclude_files=none};
 		{Type, D, RSId} -> {ok, EF} = psq(get_exclude_files, [DDRSId]),
