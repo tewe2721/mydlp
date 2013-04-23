@@ -165,14 +165,13 @@ mc_match(MatcherId, Func, FuncOpts, #file{mc_table=MCTable, normal_text=NT}) ->
 				<<_:Head/binary, Phrase:L/binary, _Rest/binary>> = NT,
 				PhraseS = unicode:characters_to_list(Phrase),
 				case apply(mydlp_matchers, Func, [FuncOpts, PhraseS]) of
-					true -> [{I, PhraseS}];
+					true -> [{I, Phrase}];
 					false -> [] end
 			end, Matched);
 		false -> lists:map(fun({I, CI, {L, _ML}}) ->
 				Head = size(NT) + CI - L,
 				<<_:Head/binary, Phrase:L/binary, _Rest/binary>> = NT,
-				PhraseS = unicode:characters_to_list(Phrase),
-				{I, PhraseS} end, Matched) end,
+				{I, Phrase} end, Matched) end,
 	MI = lists:flatten(MatchedIndex),
 	{length(MI), MI}.
 
@@ -200,12 +199,18 @@ cc_match({pd_patterns, "normal"}) ->
 	?P({[{numeric, 4}, ws, {numeric, 4}, ws, {numeric, 4}, ws, {numeric, 4}], encap_ws}) ++
 	?P({[{numeric, 4}, ws, {numeric, 6}, ws, {numeric, 5}], encap_ws}) ++
 	?P({[{numeric, 4}, ws, {numeric, 6}, ws, {numeric, 4}], encap_ws}) ++
+	?P({[{numeric, 4}, {special, "-"}, {numeric, 4}, {special, "-"}, {numeric, 4}, {special, "-"}, {numeric, 4}], encap_ws}) ++
+	?P({[{numeric, 4}, {special, "-"}, {numeric, 6}, {special, "-"}, {numeric, 5}], encap_ws}) ++
+	?P({[{numeric, 4}, {special, "-"}, {numeric, 6}, {special, "-"}, {numeric, 4}], encap_ws}) ++
 	?P({[{numeric, {13,16}}], encap_ws});
 
 cc_match({pd_patterns, "wide"}) -> 
 	?P({[{numeric, 4}, ws, {numeric, 4}, ws, {numeric, 4}, ws, {numeric, 4}], join_ws}) ++
 	?P({[{numeric, 4}, ws, {numeric, 6}, ws, {numeric, 5}], join_ws}) ++
 	?P({[{numeric, 4}, ws, {numeric, 6}, ws, {numeric, 4}], join_ws}) ++
+	?P({[{numeric, 4}, {special, "-"}, {numeric, 4}, {special, "-"}, {numeric, 4}, {special, "-"}, {numeric, 4}], encap_ws}) ++
+	?P({[{numeric, 4}, {special, "-"}, {numeric, 6}, {special, "-"}, {numeric, 5}], encap_ws}) ++
+	?P({[{numeric, 4}, {special, "-"}, {numeric, 6}, {special, "-"}, {numeric, 4}], encap_ws}) ++
 	?P({[{numeric, {13,16}}], join_ws}) ++
 	?P({[{numeric, 4}, ws, {numeric, 4}, ws, {numeric, 4}, ws, {numeric, 4}], none}) ++
 	?P({[{numeric, 4}, ws, {numeric, 6}, ws, {numeric, 5}], none}) ++
