@@ -125,6 +125,7 @@
 	%update_rfs_and_web_schedules/1,
 	get_endpoints_by_rule_id/1,
 	get_remote_document_databases/0,
+	get_remote_document_databases_by_id/1,
 	add_dd_file_entry/1,
 	get_dd_file_entry/1
 	]).
@@ -468,6 +469,8 @@ update_ep_schedules({EndpointId, Ip, Username}, TargetRuleId) ->
 get_endpoints_by_rule_id(RuleId) -> aqc({get_endpoints_by_rule_id, RuleId}, nocache).
 
 get_remote_document_databases() -> aqc(get_remote_document_databases, nocache).
+
+get_remote_document_databases_by_id(DDId) -> aqc({get_remote_document_databases_by_id, DDId}, nocache).
 
 add_dd_file_entry(#dd_file_entry{filepath=FilePath}=Record) ->
 	aqc({remove_redundant_dd_file_entries, FilePath}, nocache),
@@ -1156,6 +1159,13 @@ handle_query({get_endpoints_by_rule_id, RuleId}) ->
 handle_query(get_remote_document_databases) ->
 	Q = ?QLCQ([{R#remote_storage_dd.document_id, R#remote_storage_dd.details, R#remote_storage_dd.rs_id, R#remote_storage_dd.exclude_files} ||
 		R <- mnesia:table(remote_storage_dd)
+	]),
+	?QLCE(Q);
+
+handle_query({get_remote_document_databases_by_id, DDId}) ->
+	Q = ?QLCQ([{R#remote_storage_dd.document_id, R#remote_storage_dd.details, R#remote_storage_dd.rs_id, R#remote_storage_dd.exclude_files} ||
+		R <- mnesia:table(remote_storage_dd),
+		R#remote_storage_dd.document_id == DDId
 	]),
 	?QLCE(Q);
 
