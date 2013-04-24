@@ -698,13 +698,16 @@ md5_match(HGI, File) ->
 		true -> 1;
 		false -> 0 end.
 
-pdm_match() -> {text, {distance, false}, {pd, false}, {kw, false}}.
+pdm_match() -> {text, {distance, true}, {pd, false}, {kw, false}}.
 
 pdm_match({conf, [FGI]}) -> FGI.
 
 pdm_match(FGI, File) ->
 	FList = mydlp_pdm:fingerprint(File#file.text),
-	mydlp_mnesia:pdm_of_gid(FList, FGI).
+	{Count, RelIndexList} = mydlp_mnesia:pdm_of_gid(FList, FGI),
+	Size = byte_size(File#file.text),
+	IPList = lists:map(fun(RelativeIndex) -> {Size + RelativeIndex, undefined} end, RelIndexList), %% TODO: this can be moved to mnesia query
+	{Count, IPList}.
 
 scode_match() -> {text, {distance, false}, {pd, false}, {kw, false}}.
 

@@ -47,30 +47,31 @@ fingerprint(Bin, CharCount, KG, Window, _WM, _WMLife = 0, _WMCount, PrevousWMCou
 	fingerprint(Bin, CharCount, KG, Window, NewWM, LastIndex, Count, PrevousWMCount, Fingerprints);
 fingerprint(Bin, CharCount, KG, Window, WM, WMLife, WMCount, PrevousWMCount, Fingerprints) when length(Window) == ?WINDOWSIZE ->
 	PreviousWM = case Fingerprints of
-		[] -> none;
+		[] -> #kgram{hash=nomatch}; %% Workaround to gurantee there will be no match after
 		[PWM|_] -> PWM end,
 	
-	Fingerprints1 = case PreviousWM == WM of
+	Fingerprints1 = case PreviousWM#kgram.hash == WM#kgram.hash of
 		true -> case WMCount > PrevousWMCount of
 			true -> [WM|Fingerprints];
 			false -> Fingerprints end;
 		false -> [WM| Fingerprints] end,
 
 	[P|NewWindow] = Window,
-	WMCount1 = case P of
-		WM -> WMCount - 1;
+	WMCount1 = case P#kgram.hash of
+		PH when PH == WM#kgram.hash -> WMCount - 1;
 		_Else -> WMCount end,
 	fingerprint(Bin, CharCount, KG, NewWindow, WM, WMLife-1, WMCount1, WMCount, Fingerprints1);
 
 fingerprint(Bin, CharCount = ?KGRAMSIZE, KG, Window, WM, WMLife, WMCount, PrevousWMCount, Fingerprints) ->
 	<<_/utf8, NextKG/binary>> = KG,
 	Hash = hash(KG),
+	Index = -byte_size(Bin),
 	{WM1, WMLife1, WMCount1} = case Hash of
-		H when WM == none -> {H, length(Window) + 1, 1}; % TODO: refine this
-		H when H > WM -> {WM, WMLife, WMCount};
-		WM -> {WM, length(Window), WMCount + 1};
-		H when H < WM -> {H, length(Window), 1} end,
-	fingerprint(Bin, CharCount - 1, NextKG, Window ++ [Hash], WM1, WMLife1, WMCount1, PrevousWMCount, Fingerprints);
+		H when WM == none -> {#kgram{hash=H, index=Index}, length(Window) + 1, 1}; % TODO: refine this
+		H when H > WM#kgram.hash -> {WM, WMLife, WMCount};
+		H when H == WM#kgram.hash -> {WM, length(Window), WMCount + 1};
+		H when H < WM#kgram.hash -> {#kgram{hash=H, index=Index}, length(Window), 1} end,
+	fingerprint(Bin, CharCount - 1, NextKG, Window ++ [#kgram{hash=Hash, index=Index}], WM1, WMLife1, WMCount1, PrevousWMCount, Fingerprints);
 
 fingerprint(<<>>, _CharCount, _KG, [], _WM, _WMLife, _WMCount, _PrevousWMCount, []) -> [];
 fingerprint(<<>>, _CharCount, _KG, Window, _WM, _WMLife, _WMCount, _PrevousWMCount, []) -> [lists:min(Window)];
