@@ -393,7 +393,11 @@ handle_cast({insert_log_detail, LogId, MatchingDetails}, State) ->
 	?ASYNC(fun() ->
 			ltransaction(fun() ->
 				lists:foreach(fun(#matching_detail{pattern=Pattern, matcher_func=MatcherFunc}) -> 
-						psqt(insert_log_detail, [LogId, Pattern, MatcherFunc]) end, MatchingDetails) 
+						PatternB = case Pattern of
+							P when is_binary(P) -> P;
+							P when is_list(P) ->  unicode:characters_to_binary(P) end,
+						psqt(insert_log_detail, [LogId, PatternB, MatcherFunc]) 
+					end, MatchingDetails) 
 			end, 60000)
 		end, 60000),
         {noreply, State};
