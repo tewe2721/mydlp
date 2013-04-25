@@ -97,9 +97,8 @@ handle_call(_Msg, _From, State) ->
 
 handle_cast({handle_remotes, RDDs, DDId}, #state{document_ids=Ids}=State) ->
 	case lists:member(DDId, Ids) of
-		true -> erlang:display(ok), {noreply, State};
-		false -> erlang:display(start),
-			mount_and_generate_fingerprints(RDDs),
+		true -> {noreply, State};
+		false ->mount_and_generate_fingerprints(RDDs),
 			mydlp_mysql:update_document_fingerprinting_status([DDId], true),
 			{noreply, State#state{document_ids=[DDId|Ids]}} end;
 
