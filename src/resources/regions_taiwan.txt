@@ -1,7 +1,30 @@
+Changhua
+Chiayi
+Hsinchu
+Hualien
+Kaohsiung
+Keelung
+Kinmen
+Lienchiang
+Miaoli
+Nanhai Islands
+Nantou
+New Taipei
+Penghu
+Pingtung
+Taichung
+Tainan
+Taipei
+Taitung
+Taoyuan
+Yilan
+Yunlin
 南投
+南海島
 台中
 台北
 台南
+台東
 嘉義
 基隆
 宜蘭
@@ -17,5 +40,7 @@
 臺東
 花蓮
 苗栗
+連江
+金門
 雲林
 高雄

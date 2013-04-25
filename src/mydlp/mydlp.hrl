@@ -78,6 +78,7 @@
         }).
 
 -record(matching_detail, {
+		index,
 		pattern,
 		matcher_func
 	}).
@@ -90,5 +91,11 @@
 		destinations=[],
 		has_hidden_destinations=false
         }).
+
+-record(kgram, {
+		hash,
+		index
+	}).
+
 
 -endif.

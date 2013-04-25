@@ -3279,6 +3279,27 @@ remove_html_tags(<<C/integer, Rest/binary>>, LatestTag, TagStack, Acc) ->
 	C1 = string:to_lower(C),
 	remove_html_tags(Rest, <<LatestTag/binary, C1/integer>>, TagStack, Acc).
 
+
+ensure_unicode(Bin) -> ensure_unicode(Bin, byte_size(Bin), 0, 0, 2).
+
+ensure_unicode(_Bin, _BinSize, _LeftI, _RightI, Limit) when Limit > 16 ->
+	<<"can_not_convert_to_unicode">>;
+ensure_unicode(Bin, BinSize, LeftI, _RightI, Limit) when LeftI >= Limit ->
+	ensure_unicode(Bin, BinSize, Limit, Limit, Limit*2);
+ensure_unicode(Bin, BinSize, LeftI, RightI, Limit) when RightI >= Limit ->
+	ensure_unicode(Bin, BinSize, LeftI + 1, 0, Limit);
+ensure_unicode(Bin, BinSize, LeftI, RightI, Limit) when BinSize =< RightI + LeftI ->
+	ensure_unicode(Bin, BinSize, LeftI + 1, 0, Limit);
+ensure_unicode(Bin, BinSize, LeftI, RightI, Limit) ->
+	PSize = case BinSize - LeftI - RightI of
+		S when S > 0 -> S;
+		_ -> 0 end,
+	<<_:LeftI/binary, Phrase:PSize/binary, _/binary>> = Bin,
+	case unicode:characters_to_list(Phrase) of
+		R when is_list(R) -> Phrase;
+		_ -> ensure_unicode(Bin, BinSize, LeftI, RightI + 1, Limit) end.
+	
+
 -include_lib("eunit/include/eunit.hrl").
 
 escape_regex_test_() -> [

@@ -149,7 +149,7 @@ generateFingerprintsFunc(DocumentId, Filename, Data) ->
 	Text = mydlp_api:concat_texts(F),
 	FList = mydlp_pdm:fingerprint(Text),
 	mydlp_api:clean_files(F),
-	FList1 = lists:usort(FList),
+	FList1 = lists:usort(lists:map(fun(#kgram{hash=Hash}) -> Hash end, FList)),
 	mydlp_mysql:save_fingerprints(DocumentId, FList1),
 	ok.
 

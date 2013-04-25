@@ -712,7 +712,7 @@ handle_result_common({is_hash_of_gid, Hash, _GroupId}, {atomic, Set}) ->
 	gb_sets:is_member(Hash, Set);
 
 handle_result_common({pdm_of_gid, Fingerprints, _GroupId}, {atomic, Set}) -> 
-	pdm_hit_count(Fingerprints, Set, 0);
+	pdm_hit_count(Fingerprints, Set, 0, []);
 
 % TODO: instead of case statements, refining function definitions will make queries faster.
 handle_result_common({get_fid, _SIpAddr}, {atomic, Result}) -> 
@@ -2077,11 +2077,11 @@ tab_names1([{Tab,_}|Tabs], Returns) -> tab_names1(Tabs, [Tab|Returns]);
 tab_names1([Tab|Tabs], Returns) when is_atom(Tab) ->  tab_names1(Tabs, [Tab|Returns]);
 tab_names1([], Returns) -> lists:reverse(Returns).
 
-pdm_hit_count([Fingerprint|Rest], Set, Acc) ->
-	case gb_sets:is_member(Fingerprint, Set) of
-		false -> pdm_hit_count(Rest, Set, Acc);
-		true -> pdm_hit_count(Rest, Set, Acc + 1) end;
-pdm_hit_count([], _Set, Acc) -> Acc.
+pdm_hit_count([Fingerprint|Rest], Set, Count, Acc) ->
+	case gb_sets:is_member(Fingerprint#kgram.hash, Set) of
+		false -> pdm_hit_count(Rest, Set, Count, Acc);
+		true -> pdm_hit_count(Rest, Set, Count + 1, [Fingerprint#kgram.index|Acc]) end;
+pdm_hit_count([], _Set, Count, Acc) -> {Count, Acc}.
 
 remove_reduntant_fs_entries([#fs_entry{file_id={_, RuleId1}}=Item|Rest], RuleId) ->
 	case RuleId1 of	

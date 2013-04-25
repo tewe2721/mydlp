@@ -370,19 +370,80 @@ execute_ifeatures(CTX, Distance, IFeatures, File) ->
 		%%%% TODO: Check for PAnyRet whether contains error
 		case {PAllRet, UseDistance} of
 			{false, _} -> neg;
-			{{ok, Results}, false} -> MatchingDetails = generate_matching_details(Results),
+			{{ok, Results}, false} -> MatchingDetails0 = generate_matching_details(Results),
+						MatchingDetails = pp_matching_details(MatchingDetails0, File, UseDistance),
 						{pos, MatchingDetails};
-			{{ok, Results}, true } -> case is_distance_satisfied(Results, Distance) of
-							{pos, MatchingDetails} -> {pos, MatchingDetails};
+			{{ok, Results}, true } -> 
+						case is_distance_satisfied(Results, Distance) of
+							{pos, MatchingDetails0} -> 
+								MatchingDetails = pp_matching_details(MatchingDetails0, File, UseDistance),
+								{pos, MatchingDetails};
+							neg -> neg;
 							false -> neg
 						end end
 	catch _:{timeout, _F, _T} -> {error, {file, File}, {misc, timeout}} end.
+
+pp_matching_details(MatchingDetails, File, true = _UseDistance) -> 
+	case lists:all(fun(#matching_detail{matcher_func=Func}) -> Func == pdm_match end, MatchingDetails) of
+		true ->	group_pdm_mds(MatchingDetails, File);
+		false -> MatchingDetails end;
+pp_matching_details(MatchingDetails, File, false = _UseDistance) -> 
+	generate_phrase_for_pdm_mds(MatchingDetails, File).
+
+group_pdm_mds(MatchingDetails, File) -> group_pdm_mds(MatchingDetails, File, undefined, undefined).
+
+group_pdm_mds([#matching_detail{index=Idx}|Rest], File, MinI, MaxI) ->
+	MinI1 = case {Idx, MinI} of
+		{I, undefined} -> I;
+		{I, M} when I < M -> I;
+		{_, M} -> M end,
+	MaxI1 = case {Idx, MaxI} of
+		{I2, undefined} -> I2;
+		{I2, M2} when I2 > M2 -> I2;
+		{_, M2} -> M2 end,
+	group_pdm_mds(Rest, File, MinI1, MaxI1);
+group_pdm_mds([], File, MinI0, MaxI0) ->
+	TextSize = byte_size(File#file.text),
+	MinI = case MinI0 - 50 of
+		M when M > 0 -> M;
+		_ -> 0 end,
+	MaxI = case MaxI0 + 50 of
+		M2 when M2 < TextSize -> M2;
+		_ -> TextSize end,
+	BinLength = case MaxI - MinI of
+		L when L > 0 -> L;
+		_ -> 0 end,
+	<<_:MinI/binary, Phrase:BinLength/binary, _/binary>> = File#file.text,
+	Phrase1 = mydlp_api:ensure_unicode(Phrase),
+	[#matching_detail{index=MinI, pattern=Phrase1, matcher_func=pdm_match}].
+
+generate_phrase_for_pdm_mds(MatchingDetails, File) -> generate_phrase_for_pdm_mds(MatchingDetails, File, []).
+
+generate_phrase_for_pdm_mds([#matching_detail{index=I, matcher_func=pdm_match} = MD|Rest], File, Acc) ->
+	TextSize = byte_size(File#file.text),
+	MinI = case I - 50 of
+		M when M > 0 -> M;
+		_ -> 0 end,
+	MaxI = case I + 50 of
+		M2 when M2 < TextSize -> M2;
+		_ -> TextSize end,
+	BinLength = case MaxI - MinI of
+		L when L > 0 -> L;
+		_ -> 0 end,
+	<<_:MinI/binary, Phrase:BinLength/binary, _/binary>> = File#file.text,
+	Phrase1 = mydlp_api:ensure_unicode(Phrase),
+	NewMD = MD#matching_detail{pattern=Phrase1},
+	generate_phrase_for_pdm_mds(Rest, File, [NewMD|Acc]);
+generate_phrase_for_pdm_mds([MD|Rest], File, Acc) ->
+	generate_phrase_for_pdm_mds(Rest, File, [MD|Acc]);
+generate_phrase_for_pdm_mds([], _File, Acc) -> lists:reverse(Acc).
+	
 
 generate_matching_details(Results) -> generate_matching_details(Results, []).
 
 generate_matching_details([], Acc) -> Acc;
 generate_matching_details([{pos, _Threshold, {_Score, IndexWithPatterns}, MFunc}|Tail], Acc) when is_list(IndexWithPatterns) ->
-	Acc1 = lists:map(fun({_IV, Pattern}) -> #matching_detail{pattern=Pattern, matcher_func=MFunc} end, IndexWithPatterns),
+	Acc1 = lists:map(fun({I, Pattern}) -> #matching_detail{index=I, pattern=Pattern, matcher_func=MFunc} end, IndexWithPatterns),
 	generate_matching_details(Tail, lists:append(Acc, Acc1));
 generate_matching_details(_, Acc) -> Acc.
 
@@ -391,37 +452,31 @@ is_distance_applicable(Func) ->
 	{_, {distance, IsDistance}, {pd, _}, {kw, _}} = apply(mydlp_matchers, Func, []), IsDistance.
 
 is_distance_satisfied(Results, Distance) ->
-	[ListOfIndexesWithPatterns, ListOfThresholds] = regulate_results(Results),
+	[ListOfIndexesWithPatterns, ListOfThresholdReqs] = regulate_results(Results),
 	%time to distance control
 	[{I, _Pattern, _MFunc, _T}|_Tail] = ListOfIndexesWithPatterns,
 	{TailOfIndexList, SubList} = find_in_distance(ListOfIndexesWithPatterns, Distance, I),
-	is_in_valid_distance(TailOfIndexList, SubList, ListOfThresholds, Distance).
+	is_in_valid_distance(TailOfIndexList, SubList, ListOfThresholdReqs, Distance).
 
 %% Controls whether fetching indexes are in a suitable distance or not. In addition; iterates all indexes.
-is_in_valid_distance([], DistanceList,  ListOfThresholds, _Distance) -> 
-	case is_all_thresholds_satisfied(DistanceList, ListOfThresholds) of
+is_in_valid_distance([], DistanceList,  ListOfThresholdReqs, _Distance) -> 
+	case is_all_thresholds_satisfied(DistanceList, ListOfThresholdReqs) of
 		{true, MatchingDetails} -> {pos, MatchingDetails};
 		false -> neg
 	end;
 
-is_in_valid_distance([{IV, Pattern, MFunc ,T}|Tail], [E], ListOfThresholds, Distance) ->
-	case is_all_thresholds_satisfied([E], ListOfThresholds) of
-		{true, MatchingDetails} -> {pos, MatchingDetails};
-		false -> {NewIndexList, NewDistanceList} = find_in_distance([{IV, Pattern, MFunc, T}|Tail], Distance, IV),
-			 is_in_valid_distance(NewIndexList, NewDistanceList, ListOfThresholds, Distance)
-	end;
 
-is_in_valid_distance(ListOfIndexes, DistanceList, ListOfThresholds, Distance) ->
-	SumOfThresholds = lists:sum(ListOfThresholds),
-	[_H1,{IndexValue, Pattern, MFunc, T}|TailOfDistanceList] = DistanceList,
+is_in_valid_distance(ListOfIndexes, DistanceList, ListOfThresholdReqs, Distance) ->
+	SumOfThresholds = lists:sum(ListOfThresholdReqs),
+	[_H1,{IndexValue, _Pattern, _MFunc, _T}|_] = DistanceList,
 	EarlyNeg = (length(DistanceList) < SumOfThresholds),
 	case EarlyNeg of 
 		true ->	{TailOfIndexList, NewDistanceList} = find_in_distance(ListOfIndexes, Distance, IndexValue),
-			is_in_valid_distance(TailOfIndexList, [{IndexValue, Pattern, MFunc, T}]++TailOfDistanceList++NewDistanceList, ListOfThresholds, Distance);
-		false -> case is_all_thresholds_satisfied(DistanceList, ListOfThresholds) of
+			is_in_valid_distance(TailOfIndexList, NewDistanceList, ListOfThresholdReqs, Distance);
+		false -> case is_all_thresholds_satisfied(DistanceList, ListOfThresholdReqs) of
 				{true, MatchingDetails} -> {pos, MatchingDetails};
 				false -> {TailOfIndexList, NewDistanceList} = find_in_distance(ListOfIndexes, Distance, IndexValue),
-					is_in_valid_distance(TailOfIndexList, [{IndexValue, Pattern,MFunc, T}]++TailOfDistanceList++NewDistanceList, ListOfThresholds, Distance)
+					is_in_valid_distance(TailOfIndexList, NewDistanceList, ListOfThresholdReqs, Distance)
 			 end
 	end.
 
@@ -433,9 +488,9 @@ is_all_thresholds_satisfied([], Acc, PatternAcc) ->
 		true -> {true, PatternAcc};
 		false -> false
 	end;
-is_all_thresholds_satisfied([{_Index, Pattern, MFunc, T}|Tail], ThresholdList, PatternAcc) ->
+is_all_thresholds_satisfied([{Index, Pattern, MFunc, T}|Tail], ThresholdList, PatternAcc) ->
 	Acc1 = lists:sublist(ThresholdList, T-1) ++ [lists:nth(T, ThresholdList) - 1] ++ lists:nthtail(T, ThresholdList),
-	PatternAcc1 = [#matching_detail{pattern=Pattern, matcher_func=MFunc}|PatternAcc],
+	PatternAcc1 = [#matching_detail{index=Index, pattern=Pattern, matcher_func=MFunc}|PatternAcc],
 	is_all_thresholds_satisfied(Tail, Acc1, PatternAcc1).
 
 %% Returns remaining index list and the list which is in predefined distance.
@@ -443,11 +498,11 @@ find_in_distance(Results, Distance, IndexValue) -> find_in_distance(Results, Dis
 
 find_in_distance([], _Distance, _IndexValue, Acc) -> {[],lists:reverse(Acc)};
 
-find_in_distance([{IV, Pattern, MFunc, T}|Tail], Distance, IndexValue, Acc) ->
+find_in_distance([{IV, _Pattern, _MFunc, _T} = Head|Tail] = RestOfResults, Distance, IndexValue, Acc) ->
 	case (IV =< (IndexValue+Distance)) of
-		true -> find_in_distance(Tail, Distance, IndexValue, [{IV, Pattern, MFunc, T}|Acc]);
-		false -> {[{IV, Pattern, MFunc, T}|Tail], lists:reverse(Acc)}
-	end.
+		true -> find_in_distance(Tail, Distance, IndexValue, [Head|Acc]);
+		false -> [_SelectedHead|SelectedTail] = Selected = lists:reverse(Acc), %% Dropping First Item
+			{SelectedTail ++ RestOfResults, Selected} end.
 
 %% Puts flags to the index list, which index comes from which information feature.
 regulate_results(Results) -> regulate_results(Results, 1, [], []).
