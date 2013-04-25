@@ -36,7 +36,7 @@
 
 %% API
 -export([start_link/0,
-	start_fingerprinting/0,
+	start_fingerprinting/1,
 	get_remote_storage_dir/1,
 	stop/0
 	]).
@@ -53,6 +53,7 @@
 
 -record(state, {
 	queue,
+	document_ids,
 	in_prog=false
 }).
 
@@ -94,9 +95,12 @@ handle_call({get_remote_storage_dir, RSId}, _From, State) ->
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-handle_cast({handle_remotes, RDDs}, State) ->
+handle_cast({handle_remotes, RDDs, DDId}, #state{document_ids=Ids}=State) ->
+	Ids1 = case lists:member(DDId, Ids) of
+			true -> Ids;
+			false -> [DDId|Ids] end,
 	mount_and_generate_fingerprints(RDDs),
-	{noreply, State};
+	{noreply, State#state{document_ids=Ids1}};
 
 handle_cast({q, MountPath, ExcludeFiles, DDId}, #state{queue=Q, in_prog=false}=State) ->
 	Q1 = queue:in({MountPath, ExcludeFiles, DDId}, Q),
@@ -107,7 +111,7 @@ handle_cast({q, MountPath, ExcludeFiles, DDId}, #state{queue=Q, in_prog=true}=St
 	Q1 = queue:in({MountPath, ExcludeFiles, DDId}, Q),
 	{noreply, State#state{queue=Q1}};
 
-handle_cast(consume, #state{queue=Q}=State) ->
+handle_cast(consume, #state{queue=Q, document_ids=Ids}=State) ->
 	case queue:out(Q) of
 		{{value, {FilePath, ExcludeFiles, DDId}}, Q1} ->
 			case lists:member(FilePath, ExcludeFiles) of
@@ -118,18 +122,19 @@ handle_cast(consume, #state{queue=Q}=State) ->
 		{empty, Q1} ->
 			reset_discover_cache(),
 			release_mounts(),
-			{noreply, State#state{queue=Q1, in_prog=false}}
+			mark_fingerprinting_as_finished(Ids),
+			{noreply, State#state{queue=Q1, in_prog=false, document_ids=[]}}
 	end;
 
 handle_cast(_Msg, State) ->
 	{noreply, State}.
 
 handle_info(startup, State) ->
-	start_fingerprinting(),
+	%start_fingerprinting(),
 	{noreply, State};
 
 handle_info(control_remote_storages, State) ->
-	start_fingerprinting(),
+	%start_fingerprinting(),
 	{noreply, State};
 
 handle_info(_Info, State) ->
@@ -151,7 +156,7 @@ init([]) ->
 	reset_discover_cache(),
 	release_mounts(),
 	timer:send_after(6000, startup),
-	{ok, #state{queue=queue:new(), in_prog=false}}.
+	{ok, #state{queue=queue:new(), in_prog=false, document_ids=[]}}.
 
 terminate(_Reason, _State) ->
 	ok.
@@ -316,6 +321,9 @@ generate_fingerprints1(FilePath, DDId, ExcludeFiles) ->
 		mydlp_mnesia:del_fs_entry(FilePath) end end, % Means file does not exists
 	ok.
 
+mark_fingerprinting_as_finished(DocumentIds) ->
+	mydlp_mysql:update_document_fingerprinting_as_finished(DocumentIds).
+
 add_dd_to_file_entry(#dd_file_entry{dd_id_list=DDList, file_entry_id=FileEntryId}=Entry, DDId) ->
 	NewList = case lists:member(DDId, DDList) of
 		true -> DDList;
@@ -365,10 +373,14 @@ mount_and_generate_fingerprints([{DDId, RemoteStorage, RSId, ExcludeFiles}|Rest]
 	mount_and_generate_fingerprints(Rest);
 mount_and_generate_fingerprints([]) -> ok.
 
-start_fingerprinting() ->
-	RDDs = mydlp_mnesia:get_remote_document_databases(),
-	gen_server:cast(?MODULE, {handle_remotes, RDDs}),
-	timer:send_after(60*60*1000, control_remote_storages).
+%start_fingerprinting() ->
+%	RDDs = mydlp_mnesia:get_remote_document_databases(),
+%	gen_server:cast(?MODULE, {handle_remotes, RDDs}),
+%	timer:send_after(60*60*1000, control_remote_storages).
+
+start_fingerprinting(DDId) ->
+	RDDs = mydlp_mnesia:get_remote_document_databases_by_id(DDId),
+	gen_server:cast(?MODULE, {handle_remotes, RDDs, DDId}).
 
 release_mounts() -> 
 	case file:list_dir(?MOUNT_PATH) of

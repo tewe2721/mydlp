@@ -61,4 +61,6 @@ service Mydlp_ui {
 	oneway void pauseDiscoveryOnDemand(1: i32 RuleId)
 
 	list<string> getRemoteStorageDir(1: i32 RSId)
+
+	oneway void startFingerprinting(1: i32 DDId)
 }
