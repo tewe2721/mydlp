@@ -9,3 +9,5 @@
 /var/lib/mydlp/revision/
 /var/lib/mydlp/solr/
 /var/lib/mydlp/internal/seclore/
+/var/lib/mydlp/mounts/
+/var/lib/mydlp/ddmounts/
