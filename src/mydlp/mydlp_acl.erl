@@ -452,37 +452,31 @@ is_distance_applicable(Func) ->
 	{_, {distance, IsDistance}, {pd, _}, {kw, _}} = apply(mydlp_matchers, Func, []), IsDistance.
 
 is_distance_satisfied(Results, Distance) ->
-	[ListOfIndexesWithPatterns, ListOfThresholds] = regulate_results(Results),
+	[ListOfIndexesWithPatterns, ListOfThresholdReqs] = regulate_results(Results),
 	%time to distance control
 	[{I, _Pattern, _MFunc, _T}|_Tail] = ListOfIndexesWithPatterns,
 	{TailOfIndexList, SubList} = find_in_distance(ListOfIndexesWithPatterns, Distance, I),
-	is_in_valid_distance(TailOfIndexList, SubList, ListOfThresholds, Distance).
+	is_in_valid_distance(TailOfIndexList, SubList, ListOfThresholdReqs, Distance).
 
 %% Controls whether fetching indexes are in a suitable distance or not. In addition; iterates all indexes.
-is_in_valid_distance([], DistanceList,  ListOfThresholds, _Distance) -> 
-	case is_all_thresholds_satisfied(DistanceList, ListOfThresholds) of
+is_in_valid_distance([], DistanceList,  ListOfThresholdReqs, _Distance) -> 
+	case is_all_thresholds_satisfied(DistanceList, ListOfThresholdReqs) of
 		{true, MatchingDetails} -> {pos, MatchingDetails};
 		false -> neg
 	end;
 
-is_in_valid_distance([{IV, Pattern, MFunc ,T}|Tail], [E], ListOfThresholds, Distance) ->
-	case is_all_thresholds_satisfied([E], ListOfThresholds) of
-		{true, MatchingDetails} -> {pos, MatchingDetails};
-		false -> {NewIndexList, NewDistanceList} = find_in_distance([{IV, Pattern, MFunc, T}|Tail], Distance, IV),
-			 is_in_valid_distance(NewIndexList, NewDistanceList, ListOfThresholds, Distance)
-	end;
 
-is_in_valid_distance(ListOfIndexes, DistanceList, ListOfThresholds, Distance) ->
-	SumOfThresholds = lists:sum(ListOfThresholds),
-	[_H1,{IndexValue, Pattern, MFunc, T}|TailOfDistanceList] = DistanceList,
+is_in_valid_distance(ListOfIndexes, DistanceList, ListOfThresholdReqs, Distance) ->
+	SumOfThresholds = lists:sum(ListOfThresholdReqs),
+	[_H1,{IndexValue, _Pattern, _MFunc, _T}|_] = DistanceList,
 	EarlyNeg = (length(DistanceList) < SumOfThresholds),
 	case EarlyNeg of 
 		true ->	{TailOfIndexList, NewDistanceList} = find_in_distance(ListOfIndexes, Distance, IndexValue),
-			is_in_valid_distance(TailOfIndexList, [{IndexValue, Pattern, MFunc, T}]++TailOfDistanceList++NewDistanceList, ListOfThresholds, Distance);
-		false -> case is_all_thresholds_satisfied(DistanceList, ListOfThresholds) of
+			is_in_valid_distance(TailOfIndexList, NewDistanceList, ListOfThresholdReqs, Distance);
+		false -> case is_all_thresholds_satisfied(DistanceList, ListOfThresholdReqs) of
 				{true, MatchingDetails} -> {pos, MatchingDetails};
 				false -> {TailOfIndexList, NewDistanceList} = find_in_distance(ListOfIndexes, Distance, IndexValue),
-					is_in_valid_distance(TailOfIndexList, [{IndexValue, Pattern,MFunc, T}]++TailOfDistanceList++NewDistanceList, ListOfThresholds, Distance)
+					is_in_valid_distance(TailOfIndexList, NewDistanceList, ListOfThresholdReqs, Distance)
 			 end
 	end.
 
@@ -504,11 +498,11 @@ find_in_distance(Results, Distance, IndexValue) -> find_in_distance(Results, Dis
 
 find_in_distance([], _Distance, _IndexValue, Acc) -> {[],lists:reverse(Acc)};
 
-find_in_distance([{IV, Pattern, MFunc, T}|Tail], Distance, IndexValue, Acc) ->
+find_in_distance([{IV, _Pattern, _MFunc, _T} = Head|Tail] = RestOfResults, Distance, IndexValue, Acc) ->
 	case (IV =< (IndexValue+Distance)) of
-		true -> find_in_distance(Tail, Distance, IndexValue, [{IV, Pattern, MFunc, T}|Acc]);
-		false -> {[{IV, Pattern, MFunc, T}|Tail], lists:reverse(Acc)}
-	end.
+		true -> find_in_distance(Tail, Distance, IndexValue, [Head|Acc]);
+		false -> [_SelectedHead|SelectedTail] = Selected = lists:reverse(Acc), %% Dropping First Item
+			{SelectedTail ++ RestOfResults, Selected} end.
 
 %% Puts flags to the index list, which index comes from which information feature.
 regulate_results(Results) -> regulate_results(Results, 1, [], []).

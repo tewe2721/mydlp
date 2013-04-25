@@ -39,6 +39,7 @@
 	is_match_bin/2,
 	score_suite/2,
 	match_count/2,
+	match_iplist/2,
 %	clean/1,
 %	clean/0,
 	stop/0]).
@@ -71,6 +72,8 @@ score_suite(BInKey, Data) -> async_re_call({score_suite, BInKey}, Data).
 
 match_count(GIs, Data) -> async_re_call({match_count, GIs}, Data).
 
+match_iplist(GIs, Data) -> async_re_call({match_iplist, GIs}, Data).
+
 %clean() -> gen_server:cast(?MODULE, {clean}).
 %clean(GroupId) -> gen_server:cast(?MODULE, {clean, GroupId}).
 
@@ -97,6 +100,9 @@ handle_call(_Msg, _From, State) ->
 
 handle_re({match_count, GIs}, Data, _State) ->
 	count_all(GIs, Data);
+
+handle_re({match_iplist, GIs}, Data, _State) ->
+	count_all_ip(GIs, Data);
 
 handle_re({mbin, BInKey}, Data, #state{builtin_tree=BT}) ->
 	RE = gb_trees:get(BInKey, BT),
@@ -300,22 +306,35 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 
-count_all(GIs, Data) ->
+count_all(GIs, Data) ->count_all_0(GIs, Data, count).
+count_all_ip(GIs, Data) ->count_all_0(GIs, Data, iplist).
+
+count_all_0(GIs, Data, Func) ->
 	Regexes = lists:flatten([ mydlp_mnesia:get_regexes(GI) || GI <- GIs ] ),
-	RRMap = mydlp_api:pmap(fun(R) -> count_expr(R, Data) end, Regexes),
+	RRMap = mydlp_api:pmap(fun(R) -> count_exp0(Func, R, Data) end, Regexes),
 	IndexList = lists:flatten(RRMap),
 	IndexList1 = lists:usort(IndexList),
 	{length(IndexList1), IndexList1}.
 
--define(CNT_RE_OPTS, [global, {capture, all, index}]).
+-define(CNT_RE_OPTS, [global, {capture, first, index}]).
 
-count_expr(RE, Data) ->
-	%case re:run(Data, RE, ?CNT_RE_OPTS) of
-	%	nomatch -> 0;
-	%	{match, Captured} -> length(Captured) end.
+count_exp0(count, Re, Data) -> count_expr(Re, Data);
+count_exp0(iplist, Re, Data) -> count_expr_ip(Re, Data).
+
+count_expr_ip(RE, Data) ->
 	case re:run(Data, RE, ?CNT_RE_OPTS) of
 		nomatch -> [];
-		{match, Captured} -> [I || [{I,_}|_] <- Captured] end.
+		{match, Captured} -> 
+			lists:map(fun([{H,L}]) ->
+				<<_Head:H/binary, Phrase:L/binary, _/binary>> = Data,
+				{H, Phrase}
+			end, Captured) end.
+
+count_expr(RE, Data) ->
+	case re:run(Data, RE, ?CNT_RE_OPTS) of
+		nomatch -> [];
+		{match, Captured} -> 
+			lists:map(fun([{H,_L}]) -> H end, Captured) end.
 
 insert_all([{Key, Val}|Rest], Tree) -> insert_all(Rest, gb_trees:enter(Key, Val, Tree));
 insert_all([], Tree) -> Tree.

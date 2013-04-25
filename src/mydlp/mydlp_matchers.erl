@@ -180,7 +180,7 @@ regex_match() -> {normalized, {distance, true}, {pd, false}, {kw, false}}.
 regex_match({conf, RGIs}) -> RGIs.
 
 regex_match(RGIs, File) ->
-	mydlp_regex:match_count(RGIs, File#file.text).
+	mydlp_regex:match_iplist(RGIs, File#file.text).
 
 keyword_match({conf, _Conf}) -> none.
 
