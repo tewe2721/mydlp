@@ -193,6 +193,7 @@ handle_cast(_Msg, State) ->
 	{noreply, State}.
 
 handle_info(startup, State) ->
+	finish_running_reports(),
 	start_at_exact_hour(),
 	{noreply, State};
 
@@ -618,6 +619,9 @@ edit_discoveries([{RuleId, {?DISC, _}}|R]) ->
 	edit_discoveries(R);
 edit_discoveries([_|R]) -> edit_discoveries(R);
 edit_discoveries([]) -> ok.
+
+finish_running_reports() ->
+	mydlp_mysql:mark_as_finish_all_reports().
 
 start_at_exact_hour() -> % Remaining should be multiplied with 1000
 	{_D, {_H, M, S}} = erlang:localtime(),

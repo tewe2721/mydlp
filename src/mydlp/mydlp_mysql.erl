@@ -43,6 +43,7 @@
 	push_discovery_report/4,
 	update_report_status/2,
 	update_report_as_finished/1,
+	mark_as_finish_all_reports/0,
 	requeued/1,
 	is_multisite/0,
 	get_denied_page/0,
@@ -106,6 +107,9 @@ update_report_status(GroupId, NewStatus) ->
 
 update_report_as_finished(GroupId) ->
 	gen_server:cast(?MODULE, {update_report_as_finished, GroupId}).
+
+mark_as_finish_all_reports() ->
+	gen_server:cast(?MODULE, mark_as_finish_all_reports).
 
 is_all_ep_discovery_finished(GroupId, Endpoints, Status) ->
 	gen_server:call(?MODULE, {is_all_ep_discovery_finished, GroupId, Endpoints, Status}, 60000).
@@ -351,6 +355,13 @@ handle_cast({update_report_as_finished, GroupId}, State) ->
 	Time = erlang:universaltime(),
 	?ASYNC0(fun() ->
 		rpsq(update_report_as_finished, ["stopped", Time, GroupId], 60000)
+	end),
+	{noreply, State};
+
+handle_cast(mark_as_finish_all_reports, State) ->
+	Time = erlang:universaltime(),
+	?ASYNC0(fun() ->
+		rpsq(mark_as_finish_all_reports, [Time], 60000)
 	end),
 	{noreply, State};
 
@@ -629,6 +640,7 @@ init([]) ->
 		{insert_discovery_report, <<"INSERT INTO DiscoveryReport (id, startDate, finishDate, groupId, ruleId, status) VALUES (NULL, ?, NULL, ?, ?, ?)">>},
 		{update_report_status, <<"UPDATE DiscoveryReport SET status=? WHERE groupId = ?">>},
 		{update_report_as_finished, <<"UPDATE DiscoveryReport SET status=?, finishDate=? WHERE groupId = ?">>},
+		{mark_as_finish_all_reports, <<"UPDATE DiscoveryReport SET status=\"stopped\", finishDate=? WHERE status != \"finished\" AND status != \"stopped\"">>},
 		{update_document_fingerprinting_status, <<"UPDATE DocumentDatabase SET currentlyFingerprinting=? WHERE id=?">>},
 		{get_endpoint_alias, <<"SELECT endpointAlias, endpointId FROM Endpoint">>},
 		{get_id_with_endpoint_alias, <<"SELECT endpointId FROM Endpoint where endpointAlias=?">>},
