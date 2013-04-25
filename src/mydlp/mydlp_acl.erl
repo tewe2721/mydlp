@@ -373,10 +373,12 @@ execute_ifeatures(CTX, Distance, IFeatures, File) ->
 			{{ok, Results}, false} -> MatchingDetails0 = generate_matching_details(Results),
 						MatchingDetails = pp_matching_details(MatchingDetails0, File, UseDistance),
 						{pos, MatchingDetails};
-			{{ok, Results}, true } -> case is_distance_satisfied(Results, Distance) of
+			{{ok, Results}, true } -> 
+						case is_distance_satisfied(Results, Distance) of
 							{pos, MatchingDetails0} -> 
 								MatchingDetails = pp_matching_details(MatchingDetails0, File, UseDistance),
 								{pos, MatchingDetails};
+							neg -> neg;
 							false -> neg
 						end end
 	catch _:{timeout, _F, _T} -> {error, {file, File}, {misc, timeout}} end.
