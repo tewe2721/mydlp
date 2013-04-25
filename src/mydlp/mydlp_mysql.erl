@@ -60,7 +60,7 @@
 	insert_file_entry/3,
 	insert_dd_file_entry/2,
 	get_remote_storage_by_id/1,
-	update_document_fingerprinting_as_finished/1,
+	update_document_fingerprinting_status/2,
 	stop/0]).
 
 %% gen_server callbacks
@@ -162,7 +162,7 @@ insert_dd_file_entry(FileEntryId, DDId) -> gen_server:cast(?MODULE, {insert_dd_f
 
 get_remote_storage_by_id(RSId) -> gen_server:call(?MODULE, {get_remote_storage_by_id, RSId}).
 
-update_document_fingerprinting_as_finished(DDIds) -> gen_server:cast(?MODULE, {update_document_fingerprinting_as_finished, DDIds}).
+update_document_fingerprinting_status(DDIds, Status) -> gen_server:cast(?MODULE, {update_document_fingerprinting_status, DDIds, Status}).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -354,9 +354,12 @@ handle_cast({update_report_as_finished, GroupId}, State) ->
 	end),
 	{noreply, State};
 
-handle_cast({update_document_fingerprinting_as_finished, DDIds}, State) ->
+handle_cast({update_document_fingerprinting_status, DDIds, Status}, State) ->
+	Value = case Status of
+			true -> 1;
+			false -> 0 end,
 	?ASYNC0(fun() ->
-		lists:foreach(fun(I) -> psq(update_document_fingerprinting_as_finished, [I], 60000) end, DDIds)
+		lists:foreach(fun(I) -> psq(update_document_fingerprinting_status, [Value, I], 60000) end, DDIds)
 	end),
 	{noreply, State};
 
@@ -626,7 +629,7 @@ init([]) ->
 		{insert_discovery_report, <<"INSERT INTO DiscoveryReport (id, startDate, finishDate, groupId, ruleId, status) VALUES (NULL, ?, NULL, ?, ?, ?)">>},
 		{update_report_status, <<"UPDATE DiscoveryReport SET status=? WHERE groupId = ?">>},
 		{update_report_as_finished, <<"UPDATE DiscoveryReport SET status=?, finishDate=? WHERE groupId = ?">>},
-		{update_document_fingerprinting_as_finished, <<"UPDATE DocumentDatabase SET currentlyFingerprinting=0 WHERE id = ?">>},
+		{update_document_fingerprinting_status, <<"UPDATE DocumentDatabase SET currentlyFingerprinting=? WHERE id=?">>},
 		{get_endpoint_alias, <<"SELECT endpointAlias, endpointId FROM Endpoint">>},
 		{get_id_with_endpoint_alias, <<"SELECT endpointId FROM Endpoint where endpointAlias=?">>},
 		{get_ip_and_username, <<"SELECT ipAddress, username FROM EndpointStatus where endpointAlias=?">>},

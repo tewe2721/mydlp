@@ -96,11 +96,12 @@ handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
 handle_cast({handle_remotes, RDDs, DDId}, #state{document_ids=Ids}=State) ->
-	Ids1 = case lists:member(DDId, Ids) of
-			true -> Ids;
-			false -> [DDId|Ids] end,
-	mount_and_generate_fingerprints(RDDs),
-	{noreply, State#state{document_ids=Ids1}};
+	case lists:member(DDId, Ids) of
+		true -> erlang:display(ok), {noreply, State};
+		false -> erlang:display(start),
+			mount_and_generate_fingerprints(RDDs),
+			mydlp_mysql:update_document_fingerprinting_status([DDId], true),
+			{noreply, State#state{document_ids=[DDId|Ids]}} end;
 
 handle_cast({q, MountPath, ExcludeFiles, DDId}, #state{queue=Q, in_prog=false}=State) ->
 	Q1 = queue:in({MountPath, ExcludeFiles, DDId}, Q),
@@ -322,7 +323,7 @@ generate_fingerprints1(FilePath, DDId, ExcludeFiles) ->
 	ok.
 
 mark_fingerprinting_as_finished(DocumentIds) ->
-	mydlp_mysql:update_document_fingerprinting_as_finished(DocumentIds).
+	mydlp_mysql:update_document_fingerprinting_status(DocumentIds, false).
 
 add_dd_to_file_entry(#dd_file_entry{dd_id_list=DDList, file_entry_id=FileEntryId}=Entry, DDId) ->
 	NewList = case lists:member(DDId, DDList) of
