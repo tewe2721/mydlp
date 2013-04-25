@@ -48,6 +48,7 @@ mydlpresources_DATA = \
 	surnames.txt \
 	strategic_business_documents.txt \
 	chinese_address_terms.txt \
+	chinese_common_names.txt \
 	chinese_lastnames.txt \
 	taiwanese_lastnames.txt \
 	cities_china.txt \
