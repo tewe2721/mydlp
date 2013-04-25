@@ -133,12 +133,21 @@ process_item({IpAddress, [Item|Rest]}) ->
 	process_item({IpAddress, Item}),
 	process_item({IpAddress, Rest});
 process_item({IpAddress, {endpoint_log, LogTerm} }) -> 
-	#log{file=Files} = LogTerm,
-	Files1 = [ mydlp_api:reconstruct_cr(F) || F <- Files ], % To clean invalid cachrefs
-	?ACL_LOG(LogTerm#log{ip=IpAddress, file=Files1});
+	case LogTerm of
+		#log{file=Files} ->
+			Files1 = [ mydlp_api:reconstruct_cr(F) || F <- Files ], % To clean invalid cachrefs
+			?ACL_LOG(LogTerm#log{ip=IpAddress, file=Files1});
+		{log, Time, Channel, RuleId, Action, Ip, User, Destination, ITypeId, Files, Misc, Payload} -> % for 2.0.7 compatibility
+			LogTerm1 = #log{time=Time, channel=Channel, rule_id=RuleId, action=Action, 
+					user=User, ip=Ip, destination=Destination, itype_id=ITypeId,
+					file=Files, misc=Misc, payload=Payload},
+			process_item({IpAddress, {endpoint_log, LogTerm1}});
+		_Else -> ?ERROR_LOG("RECEIVE: Unexpected enpdoint_log item: ?S", [LogTerm]) end;
 process_item({IpAddress, {endpoint_opr_log, Context, Term}}) -> 
 	mydlp_mysql:push_opr_log(Context, {ep_opr_log, Term#opr_log{ip_address=IpAddress}});
-process_item(_Item) -> ok. % TODO log unkown item.
+process_item(Item) -> 
+	?ERROR_LOG("RECEIVE: Unexpected item: ?S", [Item]),
+	ok. % TODO log unkown item.
 
 -endif.
 

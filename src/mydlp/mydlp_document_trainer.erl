@@ -153,6 +153,7 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
+        filelib:ensure_dir(?MOUNT_PATH),
 	reset_discover_cache(),
 	release_mounts(),
 	timer:send_after(6000, startup),
