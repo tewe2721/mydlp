@@ -266,7 +266,7 @@ generate_fingerprints_file(#fs_entry{file_id=FP}, DDId) ->
 		Text = mydlp_api:concat_texts(File),
 		FList = mydlp_pdm:fingerprint(Text),
 		mydlp_api:clean_files(File),
-		FList1 = lists:usort(FList),
+		FList1 = lists:usort(lists:map(fun(#kgram{hash=Hash}) -> Hash end, FList)),
 		mydlp_mysql:save_fingerprints(FileId, FList1),
 		
 		DDFileEntry =case mydlp_mnesia:get_dd_file_entry(FP) of
