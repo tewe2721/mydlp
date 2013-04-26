@@ -76,7 +76,7 @@ get_remote_storage_dir(RSId) -> gen_server:call(?MODULE, {get_remote_storage_dir
 
 start_fingerprinting(DDId) -> gen_server:cast(?MODULE, {start_fingerprinting, DDId}).
 
-test_connection(RSDict) -> gen_server:call(?MODULE, {test_connection, RSDict}).
+test_connection(RSDict) -> gen_server:call(?MODULE, {test_connection, RSDict}, 5*60*1000).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -98,9 +98,8 @@ handle_call({get_remote_storage_dir, RSId}, _From, State) ->
 	DirList;
 
 handle_call({test_connection, RSDict}, _From, State) ->
-	erlang:display(dict:to_list(RSDict)),
-	Reply = case dict:find("type", RSDict) of
-			{ok, Type} -> handle_test_connection(list_to_atom(Type), RSDict);
+	Reply = case dict:find(<<"type">>, RSDict) of
+			{ok, Type} -> handle_test_connection(list_to_atom(binary_to_list(Type)), RSDict);
 			_ -> "Fail"
 		end,
 	{reply, Reply, State};
@@ -192,7 +191,7 @@ mount_path(MountPath, Command, Args, Envs, Stdin, 1) ->
 				ok -> MountPath;
 				E -> ?ERROR_LOG("Document Trainer: Error Occcured on mount: "
                                                 "FilePath: "?S"~nError: "?S"~n ", [MountPath, E]),
-					none end
+					{none, E} end
 	end;
 						
 mount_path(MountPath, Command, Args, Envs, Stdin, TryCount) ->
@@ -423,12 +422,12 @@ mount_and_generate_fingerprints([{DDId, RemoteStorage, RSId, ExcludeFiles}|Rest]
 mount_and_generate_fingerprints([]) -> ok.
 
 handle_test_connection(sshfs, Dict) ->
-	{ok, Address} = dict:find("address", Dict),
-	{ok, Port} = dict:find("port", Dict),
-	{ok, Path} = dict:find("path", Dict),
-	{ok, Username} = dict:find("username", Dict),
-	{ok, Password} = dict:find("password", Dict),
-	case handle_each_mount({sshfs, [Address, Password, Path, Port, Username]}, ?TEST_MOUNT_DIR) of
+	{ok, Address} = dict:find(<<"address">>, Dict),
+	{ok, Port} = dict:find(<<"port">>, Dict),
+	{ok, Path} = dict:find(<<"path">>, Dict),
+	{ok, Username} = dict:find(<<"username">>, Dict),
+	{ok, Password} = dict:find(<<"password">>, Dict),
+	case handle_each_mount({sshfs, [Address, Password, Path, binary_to_list(Port), Username]}, ?TEST_MOUNT_DIR) of
 		{none, E} -> E;
 		_ -> release_mount([?TEST_MOUNT_DIR]),"OK" end;
 handle_test_connection(ftpfs, Dict) ->
