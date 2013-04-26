@@ -239,6 +239,7 @@ get_text1(#file{mime_type=MimeType, filename=Filename, data=Data}) ->
 		audio-> {error, audio};
 		video-> {error, video};
 		image-> {error, image};
+		encrypted-> {error, encrypted};
 		_ -> 	try 	case mydlp_tc:get_text(Filename, MimeType, Data) of
 					{error, E} -> {error, E};
 					Text -> {ok, Text} end
@@ -2388,6 +2389,17 @@ mime_category(<<"image/",_/binary>>) -> image;
 mime_category(<<"audio/",_/binary>>) -> audio;
 mime_category(<<"video/",_/binary>>) -> video;
 mime_category(<<"text/",_/binary>>) -> text;
+mime_category(<<"application/pgp-encrypted">>) -> encrypted;
+mime_category(<<"application/pgp-keys">>) -> encrypted;
+mime_category(<<"application/pgp-signature">>) -> encrypted;
+mime_category(<<"application/pkcs10">>) -> encrypted;
+mime_category(<<"application/pkcs7-mime">>) -> encrypted;
+mime_category(<<"application/pkcs7-signature">>) -> encrypted;
+mime_category(<<"application/pkix-cert">>) -> encrypted;
+mime_category(<<"application/pkix-crl">>) -> encrypted;
+mime_category(<<"application/pkix-pkipath">>) -> encrypted;
+mime_category(<<"application/pkixcmp">>) -> encrypted;
+mime_category(<<"application/x-x509-ca-cert">>) -> encrypted;
 mime_category(_Else) -> unsupported_type.
 
 %%-------------------------------------------------------------------------

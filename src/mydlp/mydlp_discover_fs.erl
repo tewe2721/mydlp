@@ -477,7 +477,7 @@ discover1(ParentId, FilePath, RuleIndex, GroupDict) ->
 			case is_changed(E) of
 				true -> discover_dir(E, GroupDict);
 				false -> discover_dir_dir(E, GroupDict) end;
-	false -> ?ERROR_LOG("DISCOVER: File or directory does not exists. Filename: "?S, [FilePath]),
+	false -> %?ERROR_LOG("DISCOVER: File or directory does not exists. Filename: "?S, [FilePath]), % creates too much log entry
 		mydlp_mnesia:del_fs_entry(FilePath) end end, % Means file does not exists
 	ok.
 

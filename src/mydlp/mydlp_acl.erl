@@ -620,6 +620,7 @@ pl_text_f(#file{text=undefined} = File, Opts) ->
 		{error, audio} -> File;
 		{error, video} -> File;
 		{error, image} -> File;
+		{error, encrypted} -> File#file{is_encrypted=true};
 		_Else -> File#file{is_encrypted=true}
 	end,
 	File2 = case {File1#file.text, Opts} of
