@@ -100,7 +100,7 @@ handle_call({get_remote_storage_dir, RSId}, _From, State) ->
 handle_call({test_connection, RSDict}, _From, State) ->
 	Reply = case dict:find(<<"type">>, RSDict) of
 			{ok, Type} -> handle_test_connection(list_to_atom(binary_to_list(Type)), RSDict);
-			_ -> "Fail"
+			_ -> "Unknown Remote Storage Type"
 		end,
 	{reply, Reply, State};
 
@@ -421,6 +421,17 @@ mount_and_generate_fingerprints([{DDId, RemoteStorage, RSId, ExcludeFiles}|Rest]
 	mount_and_generate_fingerprints(Rest);
 mount_and_generate_fingerprints([]) -> ok.
 
+pretiffy_error(Error) ->
+	case Error of
+		{error, {retcode, I, BinaryError}} when is_integer(I) -> 
+			"Retcode: " ++ integer_to_list(I) ++ " Message: " ++ binary_to_list(BinaryError);
+		{error, I} when is_binary(I)->  
+			"Message: " ++ binary_to_list(I);
+		{error, I} when is_list(I)->  
+			"Message: " ++ I;
+		_ -> "Unknown Error Type"
+	end.
+
 handle_test_connection(sshfs, Dict) ->
 	{ok, Address} = dict:find(<<"address">>, Dict),
 	{ok, Port} = dict:find(<<"port">>, Dict),
@@ -428,7 +439,7 @@ handle_test_connection(sshfs, Dict) ->
 	{ok, Username} = dict:find(<<"username">>, Dict),
 	{ok, Password} = dict:find(<<"password">>, Dict),
 	case handle_each_mount({sshfs, [Address, Password, Path, binary_to_list(Port), Username]}, ?TEST_MOUNT_DIR) of
-		{none, E} -> E;
+		{none, E} -> pretiffy_error(E);
 		_ -> release_mount([?TEST_MOUNT_DIR]),"OK" end;
 handle_test_connection(ftpfs, Dict) ->
 	{ok, Address} = dict:find("address", Dict),
@@ -436,7 +447,7 @@ handle_test_connection(ftpfs, Dict) ->
 	{ok, Username} = dict:find("username", Dict),
 	{ok, Password} = dict:find("password", Dict),
 	case handle_each_mount({ftpfs, [Address, Password, Path, Username]}, ?TEST_MOUNT_DIR) of
-		{none, E} -> E;
+		{none, E} -> pretiffy_error(E);
 		_ -> release_mount([?TEST_MOUNT_DIR]),"OK" end;
 handle_test_connection(cifs, Dict) ->
 	{ok, Address} = dict:find("address", Dict),
@@ -444,7 +455,7 @@ handle_test_connection(cifs, Dict) ->
 	{ok, Username} = dict:find("username", Dict),
 	{ok, Password} = dict:find("password", Dict),
 	case handle_each_mount({cifs, [Address, Password, Path, Username]}, ?TEST_MOUNT_DIR) of
-		{none, E} -> E;
+		{none, E} -> pretiffy_error(E);
 		_ -> release_mount([?TEST_MOUNT_DIR]),"OK" end;
 handle_test_connection(dfs, Dict) ->
 	{ok, Address} = dict:find("address", Dict),
@@ -452,13 +463,13 @@ handle_test_connection(dfs, Dict) ->
 	{ok, Username} = dict:find("username", Dict),
 	{ok, Password} = dict:find("password", Dict),
 	case handle_each_mount({dfs, [Address, Password, Path, Username]}, ?TEST_MOUNT_DIR) of
-		{none, E} -> E;
+		{none, E} -> pretiffy_error(E);
 		_ -> release_mount([?TEST_MOUNT_DIR]), "OK" end;
 handle_test_connection(nfs, Dict) ->
 	{ok, Address} = dict:find("address", Dict),
 	{ok, Path} = dict:find("path", Dict),
 	case handle_each_mount({nfs, [Address, Path]}, ?TEST_MOUNT_DIR) of
-		{none, E} -> E;
+		{none, E} -> pretiffy_error(E);
 		_ -> release_mount([?TEST_MOUNT_DIR]),"OK" end.
 
 handle_start_fingerprinting(DDId) ->
