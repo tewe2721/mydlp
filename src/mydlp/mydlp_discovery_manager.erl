@@ -114,19 +114,19 @@ get_group_id(RuleId) -> gen_server:call(?MODULE, {get_group_id, RuleId}).
 handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
 
-handle_call({get_group_id, RuleId}, _From, #state{discovery_dict=Dict}=State) ->
-	Reply = case dict:find(RuleId, Dict) of
-			{ok, {_, GroupId}} -> GroupId;
+handle_call({get_group_id, RuleId}, _From, State) ->
+	Reply = case mydlp_mnesia:get_discovery_status(RuleId) of
+			{_, GroupId} -> GroupId;
 			_ -> -1
 		end,
 	{reply, Reply, State};
 
 handle_call({is_paused_or_stopped, RuleId}, _From, #state{discovery_dict=Dict}=State) ->
-	Reply = case dict:find(RuleId, Dict) of
-			{ok, {?SYSTEM_PAUSED, _}} -> paused;
-			{ok, {?USER_PAUSED, _}} -> paused;
-			{ok, {?SYSTEM_STOPPED, _}} -> stopped;
-			{ok, {?USER_STOPPED, _}} -> stopped;
+	Reply = case mydlp_mnesia:get_discovery_status(RuleId) of
+			{?SYSTEM_PAUSED, _} -> paused;
+			{?USER_PAUSED, _} -> paused;
+			{?SYSTEM_STOPPED, _} -> stopped;
+			{?USER_STOPPED, _} -> stopped;
 			_ -> none
 		end,
 	{reply, Reply, State};
