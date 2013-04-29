@@ -114,19 +114,19 @@ get_group_id(RuleId) -> gen_server:call(?MODULE, {get_group_id, RuleId}).
 handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
 
-handle_call({get_group_id, RuleId}, _From, #state{discovery_dict=Dict}=State) ->
-	Reply = case dict:find(RuleId, Dict) of
-			{ok, {_, GroupId}} -> GroupId;
+handle_call({get_group_id, RuleId}, _From, State) ->
+	Reply = case mydlp_mnesia:get_discovery_status(RuleId) of
+			{_, GroupId} -> GroupId;
 			_ -> -1
 		end,
 	{reply, Reply, State};
 
-handle_call({is_paused_or_stopped, RuleId}, _From, #state{discovery_dict=Dict}=State) ->
-	Reply = case dict:find(RuleId, Dict) of
-			{ok, {?SYSTEM_PAUSED, _}} -> paused;
-			{ok, {?USER_PAUSED, _}} -> paused;
-			{ok, {?SYSTEM_STOPPED, _}} -> stopped;
-			{ok, {?USER_STOPPED, _}} -> stopped;
+handle_call({is_paused_or_stopped, RuleId}, _From, State) ->
+	Reply = case mydlp_mnesia:get_discovery_status(RuleId) of
+			{?SYSTEM_PAUSED, _} -> paused;
+			{?USER_PAUSED, _} -> paused;
+			{?SYSTEM_STOPPED, _} -> stopped;
+			{?USER_STOPPED, _} -> stopped;
 			_ -> none
 		end,
 	{reply, Reply, State};
@@ -308,7 +308,7 @@ call_start_discovery_on_target(RuleId, Dict, IsOnDemand) ->
 	end.
 
 call_remote_storage_discovery(RuleId, Dict, IsOnDemand) -> 
-	Resp = get_discovery_status(RuleId, Dict),
+	Resp = get_discovery_status(RuleId),
 	case Resp of
 		{disc, GroupId} -> 
 			case IsOnDemand of
@@ -583,15 +583,18 @@ break_ep_discovery(RuleId, GroupId, Dict) ->
 	call_start_discovery_on_ep(RuleId, GId, Dict, false).
 
 get_discovery_status(RuleId, Dict) ->
-	case dict:find(RuleId, Dict) of
-		{ok, {?DISC, GroupId}} -> {disc, GroupId};
-		{ok, {?ON_DEMAND_DISC, GroupId}} -> {user_disc, GroupId};
-		{ok, {?SYSTEM_PAUSED, GroupId}} -> {paused, GroupId};
-		{ok, {?USER_PAUSED, GroupId}} -> {user_paused, GroupId};
+	case mydlp_mnesia:get_discovery_status(RuleId) of
+		{?DISC, GroupId} -> {disc, GroupId};
+		{?ON_DEMAND_DISC, GroupId} -> {user_disc, GroupId};
+		{?SYSTEM_PAUSED, GroupId} -> {paused, GroupId};
+		{?USER_PAUSED, GroupId} -> {user_paused, GroupId};
 		{ok, _} -> stop;
 		_ -> none
 	end.
 
+update_discovery_status(RuleId, Status, GroupId) ->
+	mydlp_mneisa:update_discovery_report(RuleId, Status, GroupId).
+	
 edit_dictionary([RuleId|Rest], Dict) ->
 	case mydlp_mnesia:get_availabilty_by_rule_id(RuleId) of
 		true -> start_discovery(RuleId); 

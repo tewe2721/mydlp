@@ -110,6 +110,13 @@
 	targets=[]
 }).
 
+-record(discovery_status, {
+	id,
+	rule_id,
+	group_id,
+	status
+}).
+
 -record(m_user, {
 	id,
 	rule_id,
