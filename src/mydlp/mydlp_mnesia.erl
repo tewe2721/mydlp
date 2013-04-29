@@ -194,6 +194,7 @@
 	discovery_schedule,
 	discovery_targets,
 	waiting_schedules,
+	discovery_status,
 	{m_user, ordered_set, 
 		fun() -> mnesia:add_table_index(m_user, un_hash) end},
 	{source_domain, ordered_set, 
@@ -275,6 +276,7 @@ get_record_fields_functional(Record) ->
 		discovery_schedule -> record_info(fields, discovery_schedule);
 		discovery_targets -> record_info(fields, discovery_targets);
 		waiting_schedules -> record_info(fields, waiting_schedules);
+		discovery_status -> record_info(fields, discovery_status);
 		notification -> record_info(fields, notification);
 		notification_queue -> record_info(fields, notification_queue);
 		source_domain -> record_info(fields, source_domain);
