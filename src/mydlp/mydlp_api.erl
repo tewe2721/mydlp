@@ -2924,14 +2924,14 @@ empty_aclr(Files) -> empty_aclr(Files, "").
 %% @end
 %%-------------------------------------------------------------------------
 
-empty_aclr(Files, Misc) -> {{rule, -1}, {file, Files}, {itype, -1}, {misc, Misc}}.
+empty_aclr(Files, Misc) -> empty_aclr(-1, Files, Misc).
 
 %%-------------------------------------------------------------------------
 %% @doc Creates an empty acl result tuple with given rule id,  files and itype id
 %% @end
 %%-------------------------------------------------------------------------
 
-empty_aclr(RuleId, Files, Misc) -> {{rule, RuleId}, {file, Files}, {itype, -1}, {misc, Misc}}.
+empty_aclr(RuleId, Files, Misc) -> {{rule, RuleId}, {file, Files}, {itype, -1}, {misc, Misc}, {matching_details, []}}.
 
 
 %%-------------------------------------------------------------------------

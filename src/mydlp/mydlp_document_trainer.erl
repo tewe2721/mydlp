@@ -38,6 +38,7 @@
 -export([start_link/0,
 	start_fingerprinting/1,
 	get_remote_storage_dir/1,
+	test_connection/1,
 	stop/0
 	]).
 
@@ -65,13 +66,17 @@
 -define(MOUNTPOINT_COMMAND, "/bin/mountpoint").
 -define(UMOUNT_COMMAND, "/bin/umount").
 -define(TRY_COUNT, 5).
-
+-define(TEST_MOUNT_DIR, "test_mount").
 
 q(MountPath, ExcludeFiles, DDId) -> gen_server:cast(?MODULE, {q, MountPath, ExcludeFiles, DDId}).
 
 consume() -> gen_server:cast(?MODULE, consume).
 
 get_remote_storage_dir(RSId) -> gen_server:call(?MODULE, {get_remote_storage_dir, RSId}).
+
+start_fingerprinting(DDId) -> gen_server:cast(?MODULE, {start_fingerprinting, DDId}).
+
+test_connection(RSDict) -> gen_server:call(?MODULE, {test_connection, RSDict}, 5*60*1000).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -83,7 +88,7 @@ handle_call({get_remote_storage_dir, RSId}, _From, State) ->
 	Filename = integer_to_list(RSId) ++ "_dir",
 	MountPath = handle_each_mount(RemoteStorage, Filename),
 	DirList = case MountPath of
-		none -> {reply, [none], State};
+		{none, _} -> {reply, [none], State};
 		_ -> case file:list_dir(MountPath) of
 			{ok, FileList} -> {reply, FileList, State};
 			{error, E} -> ?ERROR_LOG("Document Discovery: Error Occured listing directory. MountPath: ["?S"]~n. Error: ["?S"]~n", [MountPath, E]),
@@ -91,6 +96,13 @@ handle_call({get_remote_storage_dir, RSId}, _From, State) ->
 	end,
 	release_mount([Filename]),
 	DirList;
+
+handle_call({test_connection, RSDict}, _From, State) ->
+	Reply = case dict:find(<<"type">>, RSDict) of
+			{ok, Type} -> handle_test_connection(list_to_atom(binary_to_list(Type)), RSDict);
+			_ -> "Unknown Remote Storage Type"
+		end,
+	{reply, Reply, State};
 
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
@@ -101,6 +113,10 @@ handle_cast({handle_remotes, RDDs, DDId}, #state{document_ids=Ids}=State) ->
 		false ->mount_and_generate_fingerprints(RDDs),
 			mydlp_mysql:update_document_fingerprinting_status([DDId], true),
 			{noreply, State#state{document_ids=[DDId|Ids]}} end;
+
+handle_cast({start_fingerprinting, DDId}, State) ->
+	handle_start_fingerprinting(DDId),
+	{noreply, State};
 
 handle_cast({q, MountPath, ExcludeFiles, DDId}, #state{queue=Q, in_prog=false}=State) ->
 	Q1 = queue:in({MountPath, ExcludeFiles, DDId}, Q),
@@ -175,7 +191,7 @@ mount_path(MountPath, Command, Args, Envs, Stdin, 1) ->
 				ok -> MountPath;
 				E -> ?ERROR_LOG("Document Trainer: Error Occcured on mount: "
                                                 "FilePath: "?S"~nError: "?S"~n ", [MountPath, E]),
-					none end
+					{none, E} end
 	end;
 						
 mount_path(MountPath, Command, Args, Envs, Stdin, TryCount) ->
@@ -197,21 +213,39 @@ create_and_mount_path(MountPath, Command, Args, Envs, Stdin) ->
 	mount_path(MountPath, Command, Args, Envs, Stdin, ?TRY_COUNT).
 
 handle_each_mount({sshfs, [Address, Password, Path, Port, Username]}, Id) ->
-	PortS = integer_to_list(Port),
-	Stdin = binary_to_list(Password) ++ "\n",
-	UsernameS = binary_to_list(Username),
-	PathS = binary_to_list(Path),
-	AddressS = binary_to_list(Address),
+	PortS = case is_list(Port) of
+			false -> integer_to_list(Port);
+			true -> Port end,
+	Stdin = case is_binary(Password) of 
+			true -> binary_to_list(Password) ++ "\n";
+			false -> Password ++ "\n" end,
+	UsernameS = case is_binary(Username) of
+			true -> binary_to_list(Username);
+			false -> Username end,
+	PathS = case is_binary(Path) of
+			true -> binary_to_list(Path);
+			false -> Path end,
+	AddressS = case is_binary(Address) of 
+			true -> binary_to_list(Address);
+			false -> Address end,
 	ConnectionString = UsernameS ++ "@" ++ AddressS ++ ":" ++ PathS, 
 	MountPath = get_mount_path(Id),
 	Args = ["-p", PortS, ConnectionString, MountPath, "-o", "password_stdin"],
 	create_and_mount_path(MountPath, ?SSH_COMMAND, Args, [], Stdin);
 
 handle_each_mount({ftpfs, [Address, Password, Path, Username]}, Id) ->
-	PasswordS = binary_to_list(Password),
-	UsernameS = binary_to_list(Username),
-	PathS = binary_to_list(Path),
-	AddressS = binary_to_list(Address),
+	PasswordS = case is_binary(Password) of
+			true -> binary_to_list(Password);
+			false -> Password end,
+	UsernameS = case is_binary(Username) of 
+			true -> binary_to_list(Username);
+			false -> Username end,
+	PathS = case is_binary(Path) of 
+			true -> binary_to_list(Path);
+			false -> Path end,
+	AddressS = case is_binary(Address) of 
+			true -> binary_to_list(Address);
+			false -> Address end,
 	UandP = case UsernameS of 
 			[] -> "anonymous:anonymous";
 			_ -> UsernameS ++ ":" ++ PasswordS
@@ -228,18 +262,31 @@ handle_each_mount({dfs, Details}, Id) ->
 	handle_windows_share(Details, Id);
 
 handle_each_mount({nfs, [Address, Path]}, Id) ->
-	PathS = binary_to_list(Path),
-	AddressS = binary_to_list(Address),
+	PathS = case is_binary(Path) of 
+			true -> binary_to_list(Path);
+			false -> Path end,
+	AddressS = case is_binary(Address) of
+			true -> binary_to_list(Address);
+			false -> Address end,
 	AddressPath = AddressS ++ ":" ++ PathS,
 	MountPath = get_mount_path(Id),
 	Args = ["-o", "ro,soft,intr,rsize=8192,wsize=8192", AddressPath, MountPath],
 	create_and_mount_path(MountPath, ?MOUNT_COMMAND, Args, [], none).
 
 handle_windows_share([WindowsShare, Password, Path, Username], Id) ->
-	PasswordS = binary_to_list(Password),
-	UsernameS = binary_to_list(Username),
-	PathS = binary_to_list(Path),
-	WindowsSharePath =  "//" ++ binary_to_list(WindowsShare) ++ "/" ++ PathS,
+	PasswordS =  case is_binary(Password) of
+			true -> binary_to_list(Password);
+			false -> Password end,
+	UsernameS = case is_binary(Username) of 
+			true -> binary_to_list(Username);
+			false -> Username end,
+	PathS = case is_binary(Path) of
+			true -> binary_to_list(Path);
+			false -> Path end,
+	WindowsShareS = case is_binary(WindowsShare) of
+			true -> binary_to_list(WindowsShare);
+			false -> WindowsShare end,
+	WindowsSharePath =  "//" ++ WindowsShareS ++ "/" ++ PathS,
 	MountPath = get_mount_path(Id),
 	Args = ["-o","ro", WindowsSharePath, MountPath],
 	case UsernameS of
@@ -369,17 +416,63 @@ mount_and_generate_fingerprints([{DDId, RemoteStorage, RSId, ExcludeFiles}|Rest]
 		none -> none;
 		_ -> handle_each_mount(RemoteStorage, RSId) end,
 	case MountPath of 
-		none -> ok;
+		{none, _} -> ok;
 		_ -> q(MountPath, lists:map(fun(I) -> filename:join(MountPath, binary_to_list(I)) end, ExcludeFiles), DDId) end,
 	mount_and_generate_fingerprints(Rest);
 mount_and_generate_fingerprints([]) -> ok.
 
-%start_fingerprinting() ->
-%	RDDs = mydlp_mnesia:get_remote_document_databases(),
-%	gen_server:cast(?MODULE, {handle_remotes, RDDs}),
-%	timer:send_after(60*60*1000, control_remote_storages).
+pretiffy_error(Error) ->
+	case Error of
+		{error, {retcode, I, BinaryError}} when is_integer(I) -> 
+			"Retcode: " ++ integer_to_list(I) ++ " Message: " ++ binary_to_list(BinaryError);
+		{error, I} when is_binary(I)->  
+			"Message: " ++ binary_to_list(I);
+		{error, I} when is_list(I)->  
+			"Message: " ++ I;
+		_ -> "Unknown Error Type"
+	end.
 
-start_fingerprinting(DDId) ->
+handle_test_connection(sshfs, Dict) ->
+	{ok, Address} = dict:find(<<"address">>, Dict),
+	{ok, Port} = dict:find(<<"port">>, Dict),
+	{ok, Path} = dict:find(<<"path">>, Dict),
+	{ok, Username} = dict:find(<<"username">>, Dict),
+	{ok, Password} = dict:find(<<"password">>, Dict),
+	case handle_each_mount({sshfs, [Address, Password, Path, binary_to_list(Port), Username]}, ?TEST_MOUNT_DIR) of
+		{none, E} -> pretiffy_error(E);
+		_ -> release_mount([?TEST_MOUNT_DIR]),"OK" end;
+handle_test_connection(ftpfs, Dict) ->
+	{ok, Address} = dict:find("address", Dict),
+	{ok, Path} = dict:find("path", Dict),
+	{ok, Username} = dict:find("username", Dict),
+	{ok, Password} = dict:find("password", Dict),
+	case handle_each_mount({ftpfs, [Address, Password, Path, Username]}, ?TEST_MOUNT_DIR) of
+		{none, E} -> pretiffy_error(E);
+		_ -> release_mount([?TEST_MOUNT_DIR]),"OK" end;
+handle_test_connection(cifs, Dict) ->
+	{ok, Address} = dict:find("address", Dict),
+	{ok, Path} = dict:find("path", Dict),
+	{ok, Username} = dict:find("username", Dict),
+	{ok, Password} = dict:find("password", Dict),
+	case handle_each_mount({cifs, [Address, Password, Path, Username]}, ?TEST_MOUNT_DIR) of
+		{none, E} -> pretiffy_error(E);
+		_ -> release_mount([?TEST_MOUNT_DIR]),"OK" end;
+handle_test_connection(dfs, Dict) ->
+	{ok, Address} = dict:find("address", Dict),
+	{ok, Path} = dict:find("path", Dict),
+	{ok, Username} = dict:find("username", Dict),
+	{ok, Password} = dict:find("password", Dict),
+	case handle_each_mount({dfs, [Address, Password, Path, Username]}, ?TEST_MOUNT_DIR) of
+		{none, E} -> pretiffy_error(E);
+		_ -> release_mount([?TEST_MOUNT_DIR]), "OK" end;
+handle_test_connection(nfs, Dict) ->
+	{ok, Address} = dict:find("address", Dict),
+	{ok, Path} = dict:find("path", Dict),
+	case handle_each_mount({nfs, [Address, Path]}, ?TEST_MOUNT_DIR) of
+		{none, E} -> pretiffy_error(E);
+		_ -> release_mount([?TEST_MOUNT_DIR]),"OK" end.
+
+handle_start_fingerprinting(DDId) ->
 	RDDs = mydlp_mnesia:get_remote_document_databases_by_id(DDId),
 	gen_server:cast(?MODULE, {handle_remotes, RDDs, DDId}).
 
