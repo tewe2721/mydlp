@@ -57,7 +57,8 @@
 	stopDiscoveryOnDemand/1,
 	pauseDiscoveryOnDemand/1,
 	getRemoteStorageDir/1,
-	startFingerprinting/1
+	startFingerprinting/1,
+	testConnection/1
 	]).
 
 %%%%% EXTERNAL INTERFACE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -214,6 +215,8 @@ pauseDiscoveryOnDemand(RuleId) -> mydlp_discovery_manager:pause_discovery_on_dem
 getRemoteStorageDir(RSId) ->  mydlp_document_trainer:get_remote_storage_dir(RSId).
 
 startFingerprinting(DDId) -> mydlp_document_trainer:start_fingerprinting(DDId).
+
+testConnection(RSDict) -> mydlp_document_trainer:test_connection(RSDict).
 
 -endif.
 
