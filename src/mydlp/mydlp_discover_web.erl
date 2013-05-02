@@ -55,7 +55,6 @@
 	rule_age,
 	discover_queue,
 	paused_queue,
-	group_id_dict,
 	discover_inprog=false,
 	timer_dict
 }).
@@ -83,13 +82,13 @@ update_rule_status(RuleId, Status) -> gen_server:cast(?MODULE, {update_rule_stat
 handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
 
-handle_call({stop_discovery, RuleId}, _From, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=GroupDict}=State) ->
+handle_call({stop_discovery, RuleId}, _From, #state{discover_queue=Q, paused_queue=PQ}=State) ->
 	NewQ = drop_items_by_rule_id(RuleId, Q),
 	NewPQ = drop_items_by_rule_id(RuleId, PQ),
 	%GetT = gb_tree:empty(),
 	%HeadT = gb_tree:empty(),
-	case dict:find(RuleId, GroupDict) of
-		{ok, {GId, Status}} -> 
+	case get_discovery_status(RuleId) of
+		{Status, GId} -> 
 			push_opr_log(RuleId, GId, ?DISCOVERY_FINISHED),
 			case Status of
 				disc -> mydlp_mnesia:del_web_entries_by_rule_id(RuleId);
@@ -97,9 +96,8 @@ handle_call({stop_discovery, RuleId}, _From, #state{discover_queue=Q, paused_que
 			end;
 		_ -> ?ERROR_LOG("mydlp_discover web: Unknown Rule Id: ["?S"]", [RuleId])
 	end,
-	GroupDict1 = dict:erase(RuleId, GroupDict),
 	filter_discover_cache(RuleId),
-	{reply, ok, State#state{discover_queue=NewQ, paused_queue=NewPQ, group_id_dict=GroupDict1}};
+	{reply, ok, State#state{discover_queue=NewQ, paused_queue=NewPQ}};
 
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
@@ -115,13 +113,13 @@ handle_call(_Msg, _From, State) ->
 %		_ -> {noreply, State};
 %	end;
 
-handle_cast({continue_discovering, RuleId}, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=GroupDict, timer_dict=TimerDict}=State) ->
-	case dict:find(RuleId, GroupDict) of
-		{ok, {GId, _S}} -> GroupDict1 = dict:store(RuleId, {GId, disc}, GroupDict),
-					{ok, Timer} = timer:send_after(60000, {is_finished, RuleId}),
-					TimerDict1 = dict:store(RuleId, Timer, TimerDict),
-					consume(),
-					{noreply, State#state{discover_queue=queue:join(Q, PQ), paused_queue=queue:new(), group_id_dict=GroupDict1, timer_dict=TimerDict1}};
+handle_cast({continue_discovering, RuleId}, #state{discover_queue=Q, paused_queue=PQ, timer_dict=TimerDict}=State) ->
+	case get_discovery_status(RuleId) of
+		{_, _GId} ->
+			{ok, Timer} = timer:send_after(60000, {is_finished, RuleId}),
+			TimerDict1 = dict:store(RuleId, Timer, TimerDict),
+			consume(),
+			{noreply, State#state{discover_queue=queue:join(Q, PQ), paused_queue=queue:new(), timer_dict=TimerDict1}};
 		_ -> ?ERROR_LOG("Unknown Rule id: "?S"", [RuleId]),
 			{noreply, State}
 	end;
@@ -136,10 +134,10 @@ handle_cast({q, WebServerId, ParentId, PagePath, RuleId, Depth}, #state{discover
 	Q1 = queue:in({WebServerId, ParentId, PagePath, RuleId, Depth}, Q),
 	{noreply,State#state{discover_queue=Q1}};
 
-handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=GroupDict, head_requests=HeadT} = State) ->
+handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, head_requests=HeadT} = State) ->
 	case queue:out(Q) of
 		{{value, {WebServerId, ParentId, PagePath, RuleId, Depth}=Item}, Q1} ->
-			case is_paused_or_stopped_by_rule_id(RuleId, GroupDict) of
+			case is_paused_or_stopped_by_rule_id(RuleId) of
 			paused -> % rule is paused push the item paused_queue
 				PQ1 = queue:in(Item, PQ),
 				consume(),
@@ -171,27 +169,24 @@ handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=Gro
 			{noreply, State#state{discover_inprog=false}}
 	end;
 
-handle_cast({update_rule_status, RuleId, Status}, #state{group_id_dict=GroupDict, timer_dict=TimerDict}=State) ->
-	GroupDict1 = case dict:find(RuleId, GroupDict) of
-			{ok, {GroupId, _Status}} -> dict:store(RuleId, {GroupId, Status}, GroupDict);
-			_ -> GroupDict end,
+handle_cast({update_rule_status, RuleId, _Status}, #state{timer_dict=TimerDict}=State) ->
 	TimerDict1 = case dict:find(RuleId, TimerDict) of
 			{ok, Timer} -> timer:cancel(Timer),
 					dict:store(RuleId, none, TimerDict);
 			_ -> TimerDict end,
-	{noreply, State#state{group_id_dict=GroupDict1, timer_dict=TimerDict1}};
+	{noreply, State#state{timer_dict=TimerDict1}};
 
-handle_cast({start_by_rule_id, RuleId, GroupId}, #state{group_id_dict=GroupDict, timer_dict=TimerDict}=State) ->
+handle_cast({start_by_rule_id, RuleId, GroupId}, #state{timer_dict=TimerDict}=State) ->
 	filter_discover_cache(RuleId),
 	WebServers = mydlp_mnesia:get_web_servers_by_rule_id(RuleId),
 	case WebServers of
 		[] -> push_opr_log(RuleId, GroupId, ?DISCOVERY_FINISHED),
 			{noreply, State};
-		_ -> GroupDict1 = dict:store(RuleId, {GroupId, disc}, GroupDict),
+		_ -> 
 			{ok, Timer} = timer:send_after(60000, {is_finished, RuleId}),
 			TimerDict1 = dict:store(RuleId, Timer, TimerDict),
 			lists:map(fun(W) -> q(W#web_server.id, W#web_server.start_path, W#web_server.rule_id) end, WebServers),
-			{noreply, State#state{group_id_dict=GroupDict1, timer_dict=TimerDict1}}
+			{noreply, State#state{timer_dict=TimerDict1}}
 	end;
 
 handle_cast(_Msg, State) ->
@@ -210,19 +205,19 @@ handle_info({http, {RequestId, Result}}, #state{head_requests=HeadT, get_request
 		{noreply, State}
 	end;
 
-handle_info({is_finished, RuleId}, #state{timer_dict=TimerDict, group_id_dict=GroupDict, paused_queue=PausedQ, rule_age=RuleAge}=State) ->
-	case dict:find(RuleId, GroupDict) of
-		{ok, {GroupId, _Status}} ->
+handle_info({is_finished, RuleId}, #state{timer_dict=TimerDict, paused_queue=PausedQ, rule_age=RuleAge}=State) ->
+	case get_discovery_status(RuleId) of
+		{_, GroupId} ->
 			NowS = calendar:datetime_to_gregorian_seconds(calendar:universal_time()),
 			Age = gb_trees:get(RuleId, RuleAge),
 			case dict:find(RuleId, TimerDict) of
 				{ok, Timer} -> (catch timer:cancel(Timer));
 				_ -> ok end,
 			case ((NowS - Age) > 180) of
-				true -> GroupDict1 = dict:store(RuleId, {GroupId, stopped}, GroupDict),
+				true -> 
 					TimerDict1 = dict:store(RuleId, none, TimerDict),
 					control_rule_status(RuleId, GroupId, PausedQ),
-					{noreply, State#state{group_id_dict=GroupDict1, timer_dict=TimerDict1}};
+					{noreply, State#state{timer_dict=TimerDict1}};
 				false -> {ok, Timer1} = timer:send_after(60000, {is_finished, RuleId}),
 					{noreply, State#state{timer_dict=dict:store(RuleId, Timer1, TimerDict)}}
 			end;
@@ -252,7 +247,7 @@ stop() ->
 init([]) ->
 	reset_discover_cache(),
 	inets:start(),
-	{ok, #state{discover_queue=queue:new(), paused_queue=queue:new(), group_id_dict=dict:new(),
+	{ok, #state{discover_queue=queue:new(), paused_queue=queue:new(),
 			head_requests=gb_trees:empty(), get_requests=gb_trees:empty(), rule_age=gb_trees:empty(), timer_dict=dict:new()}}.
 
 terminate(_Reason, _State) ->
@@ -263,9 +258,15 @@ code_change(_OldVsn, State, _Extra) ->
 
 %%%%%%%%%%%%%%%%% internal
 
-is_paused_or_stopped_by_rule_id(RuleId, GroupDict) ->
-	case dict:find(RuleId, GroupDict) of
-		{ok, {_GroupId, Status}} -> Status;
+get_discovery_status(RuleId) ->
+	mydlp_mnesia:get_discovery_status(RuleId).
+
+is_paused_or_stopped_by_rule_id(RuleId) ->
+	case get_discovery_status(RuleId) of
+		{system_paused, _} -> paused;
+		{user_paused, _} -> paused;
+		{system_stopped, _} -> stopped;
+		{user_stopped, _} -> stopped;
 		_ -> none
 	end.
 
@@ -273,13 +274,11 @@ control_rule_status(RuleId, GroupId, Q) ->
 	case queue:out(Q) of
 		{{value, {_, _, _, RuleIndex, _}}, Q1} ->
 			case RuleIndex of
-				RuleId -> push_opr_log(RuleId, GroupId, ?DISCOVERY_PAUSED),
-					{RuleId, {GroupId, paused}};
+				RuleId -> push_opr_log(RuleId, GroupId, ?DISCOVERY_PAUSED);
 				_ -> control_rule_status(RuleId, GroupId, Q1)
 			end;
 		{empty, _Q2} ->
-			push_opr_log(RuleId, GroupId, ?DISCOVERY_FINISHED),
-			{RuleId, {GroupId, stopped}}
+			push_opr_log(RuleId, GroupId, ?DISCOVERY_FINISHED)
 	end.
 push_opr_log(RuleId, GroupId, Message) ->
 	Time = erlang:universaltime(),

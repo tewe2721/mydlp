@@ -71,7 +71,6 @@
 -define(FINISHED, finished).
 -define(REMOTE_DISCOVERY, mydlp_discover_rfs).
 -define(WEB_DISCOVERY, mydlp_discover_web).
--define(EP_DISCOVERY, hede).
 -define(TRY_COUNT, 5).
 
 -define(REPORT_STATUS_DISC, "running").
@@ -135,37 +134,37 @@ handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
 
-handle_cast({start_on_demand, RuleId}, #state{discovery_dict=Dict}=State) ->
-	Dict2 = call_start_discovery_on_target(RuleId, Dict, true),
-	{noreply, State#state{discovery_dict=Dict2}};
-
-handle_cast({pause_on_demand, RuleId}, #state{discovery_dict=Dict}=State) ->
-	Dict2 = call_pause_discovery_on_target(RuleId, Dict, true),
-	{noreply, State#state{discovery_dict=Dict2}};
-
-handle_cast({stop_on_demand, RuleId}, #state{discovery_dict=Dict}=State) ->
-	Dict2 = call_stop_discovery_on_target(RuleId, Dict, true),
-	{noreply, State#state{discovery_dict=Dict2}};
-
-handle_cast({manage_schedules, Schedules}, #state{discovery_dict=Dict}=State) ->
-	edit_dictionary(Schedules, Dict),
+handle_cast({start_on_demand, RuleId}, State) ->
+	call_start_discovery_on_target(RuleId, true),
 	{noreply, State};
 
-handle_cast({start_discovery, RuleId}, #state{discovery_dict=Dict}=State) ->
-	Dict2 = call_start_discovery_on_target(RuleId, Dict, false),
-	{noreply, State#state{discovery_dict=Dict2}};
+handle_cast({pause_on_demand, RuleId}, State) ->
+	call_pause_discovery_on_target(RuleId, true),
+	{noreply, State};
 
-handle_cast({stop_discovery, RuleId}, #state{discovery_dict=Dict}=State) ->
-	Dict2 = call_stop_discovery_on_target(RuleId, Dict, false),
-	{noreply, State#state{discovery_dict=Dict2}};
+handle_cast({stop_on_demand, RuleId}, State) ->
+	call_stop_discovery_on_target(RuleId, true),
+	{noreply, State};
 
-handle_cast({pause_discovery, RuleId}, #state{discovery_dict=Dict}=State) ->
-	Dict2 = call_pause_discovery_on_target(RuleId, Dict, false),
-	{noreply, State#state{discovery_dict=Dict2}};
+handle_cast({manage_schedules, Schedules}, State) ->
+	edit_dictionary(Schedules),
+	{noreply, State};
 
-handle_cast({continue_discovery, RuleId}, #state{discovery_dict=Dict}=State) ->
-	Dict2 = call_continue_discovery_on_target(RuleId, Dict),
-	{noreply, State#state{discovery_dict=Dict2}};
+handle_cast({start_discovery, RuleId}, State) ->
+	call_start_discovery_on_target(RuleId, false),
+	{noreply, State};
+
+handle_cast({stop_discovery, RuleId}, State) ->
+	call_stop_discovery_on_target(RuleId, false),
+	{noreply, State};
+
+handle_cast({pause_discovery, RuleId}, State) ->
+	call_pause_discovery_on_target(RuleId, false),
+	{noreply, State};
+
+handle_cast({continue_discovery, RuleId}, State) ->
+	call_continue_discovery_on_target(RuleId),
+	{noreply, State};
 
 handle_cast({cancel_timer, RuleId}, #state{timer_dict=TimerDict}=State) ->
 	case dict:find(RuleId, TimerDict) of
@@ -189,11 +188,21 @@ handle_cast({create_timer, RuleId}, #state{timer_dict=TimerDict}=State) ->
 		end,
 	{noreply, State#state{timer_dict=TimerDict1}};
 
+handle_cast({start_timers, DiscoveryList}, State) ->
+	TimerList = lists:map(fun({RuleId, _, _}) -> 
+					{ok, T} = case mydlp_mnesia:get_rule_channel(RuleId) of
+							remote_discovery -> timer:send_after(60000, {is_discovery_finished, RuleId});
+							discovery -> timer:send_after(?EP_CONTROL_TIME, {is_ep_discovery_finished, RuleId}) end,
+							{RuleId, T} end, DiscoveryList),
+	TimerDict = dict:from_list(TimerList),
+	{noreply, State#state{timer_dict=TimerDict}};
+
 handle_cast(_Msg, State) ->
 	{noreply, State}.
 
 handle_info(startup, State) ->
-	finish_running_reports(),
+	start_timers(),
+	%finish_running_reports(),
 	start_at_exact_hour(),
 	{noreply, State};
 
@@ -205,26 +214,25 @@ handle_info({async_reply, Reply, From}, State) ->
 	gen_server:reply(From, Reply),
 	{noreply, State};
 
-handle_info({is_discovery_finished, RuleId}, #state{discovery_dict=DiscDict, timer_dict=TimerDict}=State) ->
+handle_info({is_discovery_finished, RuleId}, #state{timer_dict=TimerDict}=State) ->
 	case dict:find(RuleId, TimerDict) of
 		error -> {noreply, State};
 		{ok, Timer} ->
 			try
 			cancel_timer(Timer),
 			%Reply = mydlp_discover_fs:is_discovery_finished(RuleId),
-			{ok, {_, GroupId}} = dict:find(RuleId, DiscDict),
+			{_, GroupId} = get_discovery_status(RuleId),
 			Reply = mydlp_mysql:is_all_discovery_finished(GroupId),
 			case Reply of
 				true ->	 
 					TimerDict1 = dict:erase(RuleId, TimerDict),
-					{ok, {_, GroupId}} = dict:find(RuleId, DiscDict),
 					mydlp_discover_rfs:release_mount_by_rule_id(RuleId),
 					update_report_as_finished(GroupId),
-					DiscDict1 = case mydlp_mnesia:get_waiting_schedule_by_rule_id(RuleId) of
-							none ->	dict:erase(RuleId, DiscDict);
-							GId -> call_start_discovery_by_rule_id(RuleId, GId, DiscDict, false)
-						end,
-					{noreply, State#state{discovery_dict=DiscDict1, timer_dict=TimerDict1}};
+					case mydlp_mnesia:get_waiting_schedule_by_rule_id(RuleId) of
+						none ->	remove_discovery_status(RuleId);
+						GId -> call_start_discovery_by_rule_id(RuleId, GId, false)
+					end,
+					{noreply, State#state{timer_dict=TimerDict1}};
 				false -> 
 					{ok, Timer1} = timer:send_after(60000, {is_discovery_finished, RuleId}),
 					TimerDict1 = dict:store(RuleId, Timer1, TimerDict),
@@ -233,26 +241,26 @@ handle_info({is_discovery_finished, RuleId}, #state{discovery_dict=DiscDict, tim
 			catch _Class:_Error ->
 				{ok, Timer2} = timer:send_after(60000, {is_discovery_finished, RuleId}),
 				TimerDict2 = dict:store(RuleId, Timer2, TimerDict),
-				{noreply, State#state{discovery_dict=DiscDict, timer_dict=TimerDict2}}
+				{noreply, State#state{timer_dict=TimerDict2}}
 			end
 	end;
 
-handle_info({is_ep_discovery_finished, RuleId}, #state{discovery_dict=DiscDict, timer_dict=TimerDict}=State) ->
+handle_info({is_ep_discovery_finished, RuleId}, #state{timer_dict=TimerDict}=State) ->
 	case dict:find(RuleId, TimerDict) of
 		error -> {noreply, State};
 		{ok, Timer} ->
 			try
 			cancel_timer(Timer),
-			{ok, {_, GroupId}} = dict:find(RuleId, DiscDict),
+			{_, GroupId} = get_discovery_status(RuleId),
 			[Endpoints] = mydlp_mnesia:get_endpoints_by_rule_id(RuleId), 
 			case mydlp_mysql:is_all_ep_discovery_finished(GroupId, Endpoints, ?EP_DISC_FINISHED) of
 				true -> TimerDict1 = dict:erase(RuleId, TimerDict),
 					update_report_as_finished(GroupId),
-					DiscDict1 = case mydlp_mnesia:get_waiting_schedule_by_rule_id(RuleId) of
-							none -> dict:erase(RuleId, DiscDict);
-							GId -> call_start_discovery_on_ep(RuleId, GId, DiscDict, false)
-						end,
-					{noreply, State#state{discovery_dict=DiscDict1, timer_dict=TimerDict1}};
+					 case mydlp_mnesia:get_waiting_schedule_by_rule_id(RuleId) of
+						none -> remove_discovery_status(RuleId);
+						GId -> call_start_discovery_on_ep(RuleId, GId, false)
+					end,
+					{noreply, State#state{timer_dict=TimerDict1}};
 				false -> {ok, Timer1} = timer:send_after(?EP_CONTROL_TIME, {is_ep_discovery_finished, RuleId}),
 					TimerDict1 = dict:store(RuleId, Timer1, TimerDict),
 					{noreply, State#state{timer_dict=TimerDict1}}
@@ -281,7 +289,7 @@ stop() ->
 
 init([]) ->
 	timer:send_after(6000, startup),
-	{ok, #state{discovery_dict=dict:new(), timer_dict=dict:new()}}.
+	{ok, #state{timer_dict=dict:new()}}.
 
 terminate(_Reason, _State) ->
 	ok.
@@ -299,91 +307,86 @@ pause_discovery(RuleId) -> gen_server:cast(?MODULE, {pause_discovery, RuleId}).
 
 continue_discovery(RuleId) -> gen_server:cast(?MODULE, {continue_discovery, RuleId}).
 
-call_start_discovery_on_target(RuleId, Dict, IsOnDemand) ->
+call_start_discovery_on_target(RuleId, IsOnDemand) ->
 	case mydlp_mnesia:get_rule_channel(RuleId) of
-		remote_discovery -> call_remote_storage_discovery(RuleId, Dict, IsOnDemand);
-		discovery -> call_ep_discovery(RuleId, Dict, IsOnDemand);
-		C -> ?ERROR_LOG("Unknown Rule Type: "?S"", [C]), 
-			Dict
+		remote_discovery -> call_remote_storage_discovery(RuleId, IsOnDemand);
+		discovery -> call_ep_discovery(RuleId, IsOnDemand);
+		C -> ?ERROR_LOG("Unknown Rule Type: "?S"", [C])
 	end.
 
-call_remote_storage_discovery(RuleId, Dict, IsOnDemand) -> 
+call_remote_storage_discovery(RuleId, IsOnDemand) -> 
 	Resp = get_discovery_status(RuleId),
 	case Resp of
 		{disc, GroupId} -> 
 			case IsOnDemand of
-				true -> Dict;
-				false -> break_discovery(RuleId, GroupId, Dict)
+				true -> ok;
+				false -> break_discovery(RuleId, GroupId)
 			end;
 		{paused, GroupId} -> call_continue_discovery_on_remote(RuleId),
 			case IsOnDemand of
 				true -> update_discovery_report(GroupId, ?REPORT_STATUS_DISC),
-					dict:store(RuleId, {?ON_DEMAND_DISC, GroupId}, Dict);
-				false -> break_discovery(RuleId, GroupId, Dict) % This case looks like impossible
+					update_discovery_status(RuleId, ?ON_DEMAND_DISC, GroupId);
+				false -> break_discovery(RuleId, GroupId) % This case looks like impossible
 			end;
 		{user_paused, GroupId} ->
 			case IsOnDemand of
 				true -> % means that user paused discovery while ago and now starts again
 					update_discovery_report(GroupId, ?REPORT_STATUS_DISC),
 					call_continue_discovery_on_remote(RuleId),
-					dict:store(RuleId, {?ON_DEMAND_DISC, GroupId}, Dict);
+					update_discovery_status(RuleId, ?ON_DEMAND_DISC, GroupId);
 				false ->% means that user paused discovery while ago and now it is time to schedule
 					% New discovery with a new report id. Ensure that last discovery is stopped.
-					break_discovery(RuleId, GroupId, Dict)
+					break_discovery(RuleId, GroupId)
 			end; 
 		{user_disc, _GroupId} ->
 			case IsOnDemand of 
-				true -> Dict; %looks impossible
-				false -> register_schedules_for_future(RuleId, remote_discovery),% This will be stored and will be runned when discovery finish 
-					Dict
+				true -> ok; %looks impossible
+				false -> register_schedules_for_future(RuleId, remote_discovery)% This will be stored and will be runned when discovery finish 
 			end;
 		_ -> 	
 			case mydlp_mnesia:get_waiting_schedule_by_rule_id(RuleId) of
 				none -> GId = generate_group_id(RuleId, remote_discovery),
-					call_start_discovery_by_rule_id(RuleId, GId, Dict, IsOnDemand);
+					call_start_discovery_by_rule_id(RuleId, GId, IsOnDemand);
 				GIdW -> update_report_as_finished(GIdW),
-					register_schedules_for_future(RuleId, remote_discovery),
-					Dict end
+					register_schedules_for_future(RuleId, remote_discovery) end
 	end.
 
-call_ep_discovery(RuleId, Dict, IsOnDemand) -> 
-	Resp = get_discovery_status(RuleId, Dict),
+call_ep_discovery(RuleId, IsOnDemand) -> 
+	Resp = get_discovery_status(RuleId),
 	case Resp of
 		{disc, GroupId} -> 
 			case IsOnDemand of
-				true -> Dict;
-				false -> break_ep_discovery(RuleId, GroupId, Dict)
+				true -> ok;
+				false -> break_ep_discovery(RuleId, GroupId)
 			end;
 		{paused, GroupId} -> 
 			case IsOnDemand of
 				true -> update_discovery_report(GroupId, ?REPORT_STATUS_DISC),
 					set_command_to_endpoints(RuleId, ?CONTINUE_EP_COMMAND, [{groupId, GroupId}]),
-					dict:store(RuleId, {?ON_DEMAND_DISC, GroupId}, Dict);
-				false -> break_ep_discovery(RuleId, GroupId, Dict)
+					update_discovery_status(RuleId, ?ON_DEMAND_DISC, GroupId);
+				false -> break_ep_discovery(RuleId, GroupId)
 			end;
 		{user_paused, GroupId} -> 
 			case IsOnDemand of
 				true -> % means that user paused discovery while ago and now starts again
 					update_discovery_report(GroupId, ?REPORT_STATUS_DISC),
 					set_command_to_endpoints(RuleId, ?CONTINUE_EP_COMMAND, [{groupId, GroupId}]),
-					dict:store(RuleId, {?ON_DEMAND_DISC, GroupId}, Dict);
+					update_discovery_status(RuleId, ?ON_DEMAND_DISC, GroupId);
 				false ->% means that user paused discovery while ago and now it is time to schedule
 					% New discovery with a new report id. Ensure that last discovery is stopped.
-					break_ep_discovery(RuleId, GroupId, Dict)
+					break_ep_discovery(RuleId, GroupId)
 			end;	
 		{user_disc, _GroupId} ->
 			case IsOnDemand of 
-				true -> Dict; %looks impossible
-				false -> register_schedules_for_future(RuleId, discovery),% This will be stored and will be runned when discovery finish 
-					Dict
+				true -> ok; %looks impossible
+				false -> register_schedules_for_future(RuleId, discovery)% This will be stored and will be runned when discovery finish 
 			end;
 		_ -> 
 			case mydlp_mnesia:get_waiting_schedule_by_rule_id(RuleId) of
 				none -> GId = generate_group_id(RuleId, discovery),
-					call_start_discovery_on_ep(RuleId, GId, Dict, IsOnDemand);
+					call_start_discovery_on_ep(RuleId, GId, IsOnDemand);
 				GIdW -> update_report_as_finished(GIdW),
-					register_schedules_for_future(RuleId, discovery),
-					Dict end
+					register_schedules_for_future(RuleId, discovery) end
 	end.
 
 call_continue_discovery_on_remote(RuleId) ->
@@ -391,132 +394,132 @@ call_continue_discovery_on_remote(RuleId) ->
 	gen_server:cast(?REMOTE_DISCOVERY, {continue_discovering, RuleId}),
 	gen_server:cast(?WEB_DISCOVERY, {continue_discovering, RuleId}).
 
-call_start_discovery_by_rule_id(RuleId, GroupId, Dict, IsOnDemand) -> 
+call_start_discovery_by_rule_id(RuleId, GroupId, IsOnDemand) -> 
 	gen_server:cast(?REMOTE_DISCOVERY, {start_by_rule_id, RuleId, GroupId}),
 	gen_server:cast(?WEB_DISCOVERY, {start_by_rule_id, RuleId, GroupId}),
 	create_timer(RuleId),
 	case IsOnDemand of
-		true -> dict:store(RuleId, {?ON_DEMAND_DISC, GroupId}, Dict);
-		false -> dict:store(RuleId, {?DISC, GroupId}, Dict)
+		true -> update_discovery_status(RuleId, ?ON_DEMAND_DISC, GroupId);
+		false -> update_discovery_status(RuleId, ?DISC, GroupId)
 	end.
 
-call_start_discovery_on_ep(RuleId, GroupId, Dict, IsOnDemand) ->
+call_start_discovery_on_ep(RuleId, GroupId, IsOnDemand) ->
 	set_command_to_endpoints(RuleId, ?START_EP_COMMAND, [{groupId, GroupId}]),
 	create_timer(RuleId),
 	case IsOnDemand of
-		true -> dict:store(RuleId, {?ON_DEMAND_DISC, GroupId}, Dict);
-		false -> dict:store(RuleId, {?DISC, GroupId}, Dict)
+		true -> update_discovery_status(RuleId, ?ON_DEMAND_DISC, GroupId);
+		false -> update_discovery_status(RuleId, ?DISC, GroupId)
 	end.
 
-call_pause_discovery_on_target(RuleId, Dict, IsOnDemand) -> 
+call_pause_discovery_on_target(RuleId, IsOnDemand) -> 
 	case mydlp_mnesia:get_rule_channel(RuleId) of
-		remote_discovery -> call_pause_remote_storage_discovery(RuleId, Dict, IsOnDemand);
-		discovery -> call_pause_ep_discovery(RuleId, Dict, IsOnDemand);
+		remote_discovery -> call_pause_remote_storage_discovery(RuleId, IsOnDemand);
+		discovery -> call_pause_ep_discovery(RuleId, IsOnDemand);
 		C -> ?ERROR_LOG("Unknown Rule Type: "?S"", [C])
 	end.
 
-call_pause_remote_storage_discovery(RuleId, Dict, IsOnDemand) ->
-	case get_discovery_status(RuleId, Dict) of
+call_pause_remote_storage_discovery(RuleId, IsOnDemand) ->
+	case get_discovery_status(RuleId) of
 		{disc, GroupId} -> 
 			cancel_timer(RuleId),
-			mydlp_discover_fs:update_rule_status(RuleId, paused),
-			mydlp_discover_web:update_rule_status(RuleId, paused),
+			%mydlp_discover_fs:update_rule_status(RuleId, paused),
+			%mydlp_discover_web:update_rule_status(RuleId, paused),
 			case IsOnDemand of 
 				true -> update_discovery_report(GroupId, ?REPORT_STATUS_PAUSED_USER),
-					dict:store(RuleId, {?USER_PAUSED, GroupId}, Dict);
+					update_discovery_status(RuleId, ?USER_PAUSED, GroupId);
 				false -> update_discovery_report(GroupId, ?REPORT_STATUS_PAUSED_SYSTEM),
-					dict:store(RuleId, {?SYSTEM_PAUSED, GroupId}, Dict) end;
+					update_discovery_status(RuleId, ?SYSTEM_PAUSED, GroupId) end;
 		{user_disc, GroupId} -> 
 			case IsOnDemand of
 				true -> cancel_timer(RuleId),
-					mydlp_discover_fs:update_rule_status(RuleId, paused),
-					mydlp_discover_web:update_rule_status(RuleId, paused),
+					%mydlp_discover_fs:update_rule_status(RuleId, paused),
+					%mydlp_discover_web:update_rule_status(RuleId, paused),
 					update_discovery_report(GroupId, ?REPORT_STATUS_PAUSED_USER),
-					dict:store(RuleId, {?USER_PAUSED, GroupId}, Dict);
-				false -> Dict
+					update_discovery_status(RuleId, ?USER_PAUSED, GroupId);
+				false -> ok
 			end;
-		_ -> Dict
+		_ -> ok
 	end.
 
-call_pause_ep_discovery(RuleId, Dict, IsOnDemand) ->
-	case get_discovery_status(RuleId, Dict) of
+call_pause_ep_discovery(RuleId, IsOnDemand) ->
+	case get_discovery_status(RuleId) of
 		{disc, GroupId} ->
 			cancel_timer(RuleId),
 			set_command_to_endpoints(RuleId, ?PAUSE_EP_COMMAND, [{groupId, GroupId}]),
 			case IsOnDemand of
 				true -> update_discovery_report(GroupId, ?REPORT_STATUS_PAUSED_USER),
-					dict:store(RuleId, {?USER_PAUSED, GroupId}, Dict);
+					update_discovery_status(RuleId, ?USER_PAUSED, GroupId);
 				false -> update_discovery_report(GroupId, ?REPORT_STATUS_PAUSED_SYSTEM),	
-					dict:store(RuleId, {?SYSTEM_PAUSED, GroupId}, Dict) end;
+					update_discovery_status(RuleId, ?SYSTEM_PAUSED, GroupId) end;
 		{user_disc, GroupId} ->
 			case IsOnDemand of
 				true -> cancel_timer(RuleId),
 					set_command_to_endpoints(RuleId, ?PAUSE_EP_COMMAND, [{groupId, GroupId}]),
 					update_discovery_report(GroupId, ?REPORT_STATUS_PAUSED_USER),
-					dict:store(RuleId, {?USER_PAUSED, GroupId}, Dict);
-				false -> Dict
+					update_discovery_status(RuleId, ?USER_PAUSED, GroupId);
+				false -> ok
 			end;
-		_ -> Dict
+		_ -> ok
 	end.
 	
-call_stop_discovery_on_target(RuleId, Dict, IsOnDemand) ->
+call_stop_discovery_on_target(RuleId, IsOnDemand) ->
 	case mydlp_mnesia:get_rule_channel(RuleId) of
-		remote_discovery -> call_stop_remote_storage_discovery(RuleId, Dict, IsOnDemand);
-		discovery -> call_stop_ep_discovery(RuleId, Dict, IsOnDemand);
+		remote_discovery -> call_stop_remote_storage_discovery(RuleId, IsOnDemand);
+		discovery -> call_stop_ep_discovery(RuleId, IsOnDemand);
 		C -> ?ERROR_LOG("Unknown Rule Type: "?S"", [C])
 	end. 
 
-call_stop_remote_storage_discovery(RuleId, Dict, _IsOnDemand) ->
-	case get_discovery_status(RuleId, Dict) of
-		none -> Dict;
-		stop -> Dict;
+call_stop_remote_storage_discovery(RuleId, _IsOnDemand) ->
+	case get_discovery_status(RuleId) of
+		none -> ok;
+		stop -> ok;
 		{_, GroupId} -> % discovering or paused
 			mydlp_mnesia:del_fs_entries_by_rule_id(RuleId),
 			mydlp_mnesia:del_web_entries_by_rule_id(RuleId),
 			update_report_as_finished(GroupId),
 			cancel_timer(RuleId),
-			mydlp_discover_fs:update_rule_status(RuleId, stopped),
-			mydlp_discover_web:update_rule_status(RuleId, stopped),
+			%mydlp_discover_fs:update_rule_status(RuleId, stopped),
+			%mydlp_discover_web:update_rule_status(RuleId, stopped),
 			case mydlp_mnesia:get_waiting_schedule_by_rule_id(RuleId) of
-				none ->	dict:erase(RuleId, Dict);
-				GId -> call_start_discovery_by_rule_id(RuleId, GId, Dict, false) end
+				none ->	remove_discovery_status(RuleId);
+				GId -> call_start_discovery_by_rule_id(RuleId, GId, false) end
 	end.
 
-call_stop_ep_discovery(RuleId, Dict, _IsOnDemand) ->
-	case get_discovery_status(RuleId, Dict) of
-		none -> Dict;
-		stop -> Dict;
+call_stop_ep_discovery(RuleId, _IsOnDemand) ->
+	case get_discovery_status(RuleId) of
+		none -> ok;
+		stop -> ok;
 		{_, GroupId} ->
 			update_report_as_finished(GroupId),
 			cancel_timer(RuleId),
 			set_command_to_endpoints(RuleId, ?STOP_EP_COMMAND, [{groupId, GroupId}]),
 			case mydlp_mnesia:get_waiting_schedule_by_rule_id(RuleId) of
-				none ->	dict:erase(RuleId, Dict);
-				GId -> call_start_discovery_on_ep(RuleId, GId, Dict, false) end
+				none ->	remove_discovery_status(RuleId);
+				GId -> call_start_discovery_on_ep(RuleId, GId, false) end
 	end.
 	
-call_continue_discovery_on_target(RuleId, Dict) ->
+call_continue_discovery_on_target(RuleId) ->
 	case mydlp_mnesia:get_rule_channel(RuleId) of
-		remote_discovery -> call_continue_remote_storage_discovery(RuleId, Dict);
-		discovery -> call_continue_ep_discovery(RuleId, Dict);
+		remote_discovery -> call_continue_remote_storage_discovery(RuleId);
+		discovery -> call_continue_ep_discovery(RuleId);
 		C -> ?ERROR_LOG("Unknown Rule Type: "?S"", [C])
 	end.
 
-call_continue_remote_storage_discovery(RuleId, Dict) ->
-	case get_discovery_status(RuleId, Dict) of
+call_continue_remote_storage_discovery(RuleId) ->
+	case get_discovery_status(RuleId) of
 		{paused, GroupId} -> create_timer(RuleId),
 					gen_server:cast(?REMOTE_DISCOVERY, {continue_discovering, RuleId}),
 					gen_server:cast(?WEB_DISCOVERY, {continue_discovering, RuleId}),
-					dict:store(RuleId, {?DISC, GroupId}, Dict);
-		_ -> Dict
+					update_discovery_status(RuleId, ?DISC, GroupId);
+		_ -> ok
 	end.
 
-call_continue_ep_discovery(RuleId, Dict) ->
-	case get_discovery_status(RuleId, Dict) of
+call_continue_ep_discovery(RuleId) ->
+	case get_discovery_status(RuleId) of
 		{paused, GroupId} -> create_timer(RuleId),
 					set_command_to_endpoints(RuleId, ?CONTINUE_EP_COMMAND, [{groupId, GroupId}]),
-					dict:store(RuleId, {?DISC, GroupId}, Dict);
-		_ -> Dict
+					update_discovery_status(RuleId, ?DISC, GroupId);
+		_ -> ok
 	end.
 
 set_command_to_endpoints(RuleId, Command, Args) ->
@@ -561,13 +564,12 @@ cancel_timer(RuleId) -> gen_server:cast(?MODULE, {cancel_timer, RuleId}).
 
 create_timer(RuleId) -> gen_server:cast(?MODULE, {create_timer, RuleId}).
 
-break_discovery(RuleId, GroupId, Dict) ->
+break_discovery(RuleId, GroupId) ->
 	case call_immediate_stop_on_remote(RuleId) of
 		ok -> update_report_as_finished(GroupId),
 			GId = generate_group_id(RuleId, remote_discovery),
-			call_start_discovery_by_rule_id(RuleId, GId, Dict, false);
-		R -> ?OPR_LOG("Failed to scheduling discovery: "?S"", [R]), 
-			Dict
+			call_start_discovery_by_rule_id(RuleId, GId, false);
+		R -> ?OPR_LOG("Failed to scheduling discovery: "?S"", [R])
 	end.
 
 call_immediate_stop_on_remote(RuleId) ->
@@ -576,13 +578,13 @@ call_immediate_stop_on_remote(RuleId) ->
 		R -> R
 	end.
 	
-break_ep_discovery(RuleId, GroupId, Dict) ->
+break_ep_discovery(RuleId, GroupId) ->
 	set_command_to_endpoints(RuleId, ?STOP_EP_COMMAND, [{groupId, GroupId}]),
 	update_report_as_finished(GroupId),
 	GId = generate_group_id(RuleId, discovery),
-	call_start_discovery_on_ep(RuleId, GId, Dict, false).
+	call_start_discovery_on_ep(RuleId, GId, false).
 
-get_discovery_status(RuleId, Dict) ->
+get_discovery_status(RuleId) ->
 	case mydlp_mnesia:get_discovery_status(RuleId) of
 		{?DISC, GroupId} -> {disc, GroupId};
 		{?ON_DEMAND_DISC, GroupId} -> {user_disc, GroupId};
@@ -593,28 +595,31 @@ get_discovery_status(RuleId, Dict) ->
 	end.
 
 update_discovery_status(RuleId, Status, GroupId) ->
-	mydlp_mneisa:update_discovery_report(RuleId, Status, GroupId).
+	mydlp_mnesia:update_discovery_status(RuleId, Status, GroupId).
+
+remove_discovery_status(RuleId) ->
+	mydlp_mnesia:remove_discovery_status(RuleId).
 	
-edit_dictionary([RuleId|Rest], Dict) ->
+edit_dictionary([RuleId|Rest]) ->
 	case mydlp_mnesia:get_availabilty_by_rule_id(RuleId) of
 		true -> start_discovery(RuleId); 
 		false -> ok
 	end,
-	edit_dictionary(Rest, Dict);
-edit_dictionary(none, Dict) -> control_already_scheduled_discoveries(Dict);
-edit_dictionary([], Dict) -> control_already_scheduled_discoveries(Dict).
+	edit_dictionary(Rest);
+edit_dictionary(none) -> control_already_scheduled_discoveries();
+edit_dictionary([]) -> control_already_scheduled_discoveries().
 
-control_already_scheduled_discoveries(Dict) ->
-	DiscoveryList = dict:to_list(Dict),
+control_already_scheduled_discoveries() ->
+	DiscoveryList = mydlp_mnesia:get_all_discovery_status(),
 	edit_discoveries(DiscoveryList).
 
-edit_discoveries([{RuleId, {?SYSTEM_PAUSED, _}}|R]) ->
+edit_discoveries([{RuleId, ?SYSTEM_PAUSED, _}|R]) ->
 	case mydlp_mnesia:get_availabilty_by_rule_id(RuleId) of
 		true -> continue_discovery(RuleId);
 		false -> ok
 	end,
 	edit_discoveries(R);
-edit_discoveries([{RuleId, {?DISC, _}}|R]) ->
+edit_discoveries([{RuleId, ?DISC, _}|R]) ->
 	case mydlp_mnesia:get_availabilty_by_rule_id(RuleId) of
 		true -> ok;
 		false -> pause_discovery(RuleId)
@@ -623,8 +628,12 @@ edit_discoveries([{RuleId, {?DISC, _}}|R]) ->
 edit_discoveries([_|R]) -> edit_discoveries(R);
 edit_discoveries([]) -> ok.
 
-finish_running_reports() ->
-	mydlp_mysql:mark_as_finish_all_reports().
+start_timers() ->
+	DiscoveryList = mydlp_mnesia:get_all_discovery_status(),
+	gen_server:cast(?MODULE, {start_timers, DiscoveryList}).
+
+%finish_running_reports() ->
+%	mydlp_mysql:mark_as_finish_all_reports().
 
 start_at_exact_hour() -> % Remaining should be multiplied with 1000
 	{_D, {_H, M, S}} = erlang:localtime(),

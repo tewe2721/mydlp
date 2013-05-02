@@ -67,7 +67,6 @@
 -record(state, {
 	discover_queue,
 	paused_queue,
-	group_id_dict,
 	discover_inprog=false,
 	is_new=false,
 	timer
@@ -86,6 +85,10 @@
 -define(DISCOVERY_PAUSED, "rfs_paused").
 
 -endif.
+
+-define(DISCOVERING, discovering).
+-define(PAUSED, paused).
+-define(STOPPED, stopped).
 
 -ifdef(__PLATFORM_WINDOWS).
 
@@ -149,20 +152,20 @@ continue_discovery(RuleId, GroupId) ->
 handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
 
-handle_call({stop_discovery_by_rule_id, RuleId}, _From, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=GroupDict}=State) ->
-	case dict:find(RuleId, GroupDict) of
-		{ok, {GId, Status}} ->
+handle_call({stop_discovery_by_rule_id, RuleId}, _From, #state{discover_queue=Q, paused_queue=PQ}=State) ->
+	case get_discovery_status(RuleId) of
+		{Status, GId} ->
 			Q1 = drop_items_by_rule_id(RuleId, Q),
 			PQ1 = drop_items_by_rule_id(RuleId, PQ),
 			push_opr_log(RuleId, GId, ?DISCOVERY_FINISHED),
 			case Status of
-				disc -> mydlp_mnesia:del_fs_entries_by_rule_id(RuleId);
-				paused -> mydlp_mnesia:del_fs_entries_by_rule_id(RuleId);
+				?DISCOVERING -> mydlp_mnesia:del_fs_entries_by_rule_id(RuleId);
+				?PAUSED -> mydlp_mnesia:del_fs_entries_by_rule_id(RuleId);
 				_ -> ok
 			end,
-			GroupDict1 = dict:erase(RuleId, GroupDict),
+			mydlp_mnesia:remove_discovery_status(RuleId),
 			filter_discover_cache(RuleId),
-			{reply, ok, State#state{discover_queue=Q1, paused_queue=PQ1, group_id_dict=GroupDict1}};
+			{reply, ok, State#state{discover_queue=Q1, paused_queue=PQ1}};
 		_ -> {reply, ok, State}
 	end;
 
@@ -176,48 +179,34 @@ handle_call({is_discovery_finished, RuleId}, _From, #state{discover_queue=Q, pau
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-handle_cast({update_rule_status, RuleId, Status}, #state{group_id_dict=GroupDict}=State) ->
-	GroupDict1 = case dict:find(RuleId, GroupDict) of
-			{ok, {GroupId, _}} -> dict:store(RuleId, {GroupId, Status}, GroupDict);
-			error -> GroupDict
+handle_cast({update_rule_status, RuleId, Status}, State) ->
+	case get_discovery_status(RuleId) of
+		none -> ok;
+		{_, GId}  -> mydlp_mnesia:update_discovery_status(RuleId, Status, GId)
 	end,
-	{noreply, State#state{group_id_dict=GroupDict1}};
+	{noreply, State};
 
 handle_cast({ql, List}, State) ->
 	[ q(FilePath, RuleIndex, GroupId) || {RuleIndex, FilePath, GroupId} <- List ],
 	{noreply, State};
 
-handle_cast({q, ParentId, FilePath, RuleIndex, GroupId}, #state{discover_queue=Q, group_id_dict=GroupDict, discover_inprog=false} = State) ->
+handle_cast({q, ParentId, FilePath, RuleIndex, _GroupId}, #state{discover_queue=Q, discover_inprog=false} = State) ->
 	Q1 = queue:in({ParentId, FilePath, RuleIndex}, Q),
-	GroupDict1 = case dict:find(RuleIndex, GroupDict) of
-			{ok, {GroupId, _Status}} -> GroupDict;
-			_ -> dict:store(RuleIndex, {GroupId, disc}, GroupDict)
-		end,
 	consume(),
 	set_discover_inprog(),
-	{noreply, State#state{discover_queue=Q1, discover_inprog=true, group_id_dict=GroupDict1}};
+	{noreply, State#state{discover_queue=Q1, discover_inprog=true}};
 
-handle_cast({q, ParentId, FilePath, RuleIndex, GroupId}, #state{discover_queue=Q, group_id_dict=GroupDict, discover_inprog=true} = State) ->
+handle_cast({q, ParentId, FilePath, RuleIndex, _GroupId}, #state{discover_queue=Q, discover_inprog=true} = State) ->
 	Q1 = queue:in({ParentId, FilePath, RuleIndex}, Q),
-	GroupDict1 = case dict:find(RuleIndex, GroupDict) of
-			{ok, {GroupId, _Status}} -> GroupDict;
-			_ -> dict:store(RuleIndex, {GroupId, disc}, GroupDict)
-		end,
-	{noreply,State#state{discover_queue=Q1, group_id_dict=GroupDict1}};
+	{noreply,State#state{discover_queue=Q1}};
 
-handle_cast({push_paused_to_proc_queue, RuleId}, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=GroupDict} = State) ->
-	%reset_discover_cache(),
-	GroupDict1 = case dict:find(RuleId, GroupDict) of
-			{ok, {GId, _S}} -> dict:store(RuleId, {GId, disc}, GroupDict);
-			error -> ?ERROR_LOG("Unknown Rule id: "?S"", [RuleId]),
-				GroupDict
-	end,
-	{noreply, State#state{discover_queue=queue:join(Q, PQ), paused_queue=queue:new(), group_id_dict=GroupDict1}};
+handle_cast({push_paused_to_proc_queue, _RuleId}, #state{discover_queue=Q, paused_queue=PQ} = State) ->
+	{noreply, State#state{discover_queue=queue:join(Q, PQ), paused_queue=queue:new()}};
 
-handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=GroupDict, is_new=IsNew} = State) ->
+handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, is_new=IsNew} = State) ->
 	case queue:out(Q) of
 		{{value, {ParentId, FilePath, RuleIndex}=Item}, Q1} ->
-			case is_paused_or_stopped_by_rule_id(RuleIndex, GroupDict) of
+			case is_paused_or_stopped_by_rule_id(RuleIndex) of
 				paused -> % rule is paused, push the item pause queue
 					PQ1 = queue:in(Item, PQ),
 					consume(),
@@ -228,7 +217,7 @@ handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=Gro
 				_ ->
 					try	case has_discover_rule() of
 							true -> case is_exceptional(FilePath) of
-									false -> discover(ParentId, FilePath, RuleIndex, GroupDict);
+									false -> discover(ParentId, FilePath, RuleIndex);
 									true -> ok end;
 							false -> ok end,
 						consume(),
@@ -242,19 +231,19 @@ handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=Gro
 							{noreply, State#state{discover_queue=Q1, is_new=false}} end
 			end;
 		{empty, _} ->
-			GroupDict1 = case IsNew of
-					true -> GroupDict;
-					false -> mark_finished_rules(PQ, GroupDict) end,
+			case IsNew of
+				true -> ok;
+				false -> mark_finished_rules(PQ) end,
 			unset_discover_inprog(),
-			{noreply, State#state{discover_inprog=false, group_id_dict=GroupDict1, is_new=false}}
+			{noreply, State#state{discover_inprog=false, is_new=false}}
 	end;
 
-handle_cast({stop_discovery, RuleId, GroupId}, #state{group_id_dict=GroupDict}=State) ->
-	GroupDict1 = dict:store(RuleId, {GroupId, stopped}, GroupDict),	
-	{noreply, State#state{group_id_dict=GroupDict1}};
+handle_cast({stop_discovery, RuleId, GroupId}, State) ->
+	mydlp_mnesia:update_discovery_status(RuleId, ?STOPPED, GroupId),
+	{noreply, State};
 
-handle_cast({start_discovery, RuleId, GroupId}, #state{group_id_dict=GroupDict}=State) ->
-	GroupDict1 = dict:store(RuleId, {GroupId, disc}, GroupDict),
+handle_cast({start_discovery, RuleId, GroupId}, State) ->
+	mydlp_mnesia:update_discovery_status(RuleId, ?DISCOVERING, GroupId),
 	PathList = case mydlp_mnesia:get_discovery_directory(RuleId) of
 		none -> [];
 		L when is_list(L) ->
@@ -265,16 +254,16 @@ handle_cast({start_discovery, RuleId, GroupId}, #state{group_id_dict=GroupDict}=
 			, L) end,
 	filter_discover_cache(RuleId),
 	lists:map(fun(P) -> q(P, RuleId, GroupId) end, PathList),
-	{noreply, State#state{group_id_dict=GroupDict1, is_new=true}};
+	{noreply, State#state{is_new=true}};
 
-handle_cast({pause_discovery, RuleId, GroupId}, #state{group_id_dict=GroupDict}=State) ->
-	GroupDict1 = dict:store(RuleId, {GroupId, paused}, GroupDict),
-	{noreply, State#state{group_id_dict=GroupDict1}};
+handle_cast({pause_discovery, RuleId, GroupId}, State) ->
+	mydlp_mnesia:update_discovery_status(RuleId, ?PAUSED, GroupId),
+	{noreply, State};
 
-handle_cast({continue_discovery, RuleId, GroupId}, #state{discover_queue=Q, paused_queue=PQ, group_id_dict=GroupDict}=State) ->
+handle_cast({continue_discovery, RuleId, GroupId}, #state{discover_queue=Q, paused_queue=PQ}=State) ->
 	%reset_discover_cache(),
-	GroupDict1 = dict:store(RuleId, {GroupId, disc}, GroupDict),
-	{noreply, State#state{discover_queue=queue:join(Q, PQ), paused_queue=queue:new(), group_id_dict=GroupDict1}};
+	mydlp_mnesia:update_discovery_status(RuleId, ?DISCOVERING, GroupId),
+	{noreply, State#state{discover_queue=queue:join(Q, PQ), paused_queue=queue:new()}};
 
 handle_cast(_Msg, State) ->
 	{noreply, State}.
@@ -289,28 +278,27 @@ handle_info(_Info, State) ->
 %%%%%%%%%%%%%%%% Implicit functions
 
 
-is_paused_or_stopped_by_rule_id(RuleId, GroupDict) -> 
-	case dict:find(RuleId, GroupDict) of
-		{ok, {_GroupId, Status}} -> Status;
+is_paused_or_stopped_by_rule_id(RuleId) -> 
+	case get_discovery_status(RuleId) of
+		{Status, _} -> Status;
 		_ -> none
 	end.
 
-mark_finished_rules(PausedQ, GroupDict) ->
-	RuleStatus = dict:to_list(GroupDict),
-	DictList = lists:map(fun({RuleId, {GroupId, _Status}}) -> mark_finished_each_rule(RuleId, GroupId, PausedQ) end, RuleStatus),
-	dict:from_list(DictList).
+mark_finished_rules(PausedQ) ->
+	DiscStatus = mydlp_mnesia:get_all_discovery_status(),
+	lists:foreach(fun({RuleId, {GroupId, _Status}}) -> mark_finished_each_rule(RuleId, GroupId, PausedQ) end, DiscStatus).
 
 mark_finished_each_rule(RuleId, GroupId, Q) ->
 	case queue:out(Q) of
 	 	{{value, {_ParentId, _FilePath, RuleIndex}}, Q1} -> 
 			case RuleIndex of
-				RuleId -> push_opr_log(RuleId, GroupId, ?DISCOVERY_PAUSED),
-					{RuleId, {GroupId, paused}};
+				RuleId -> push_opr_log(RuleId, GroupId, ?DISCOVERY_PAUSED);
+					%mydlp_mnesiai:update_discovery_status(RuleId, ?PAUSED, GroupId);
 				_ -> mark_finished_each_rule(RuleId, GroupId, Q1)
 			end;
 		{empty, _Q2} ->
 			push_opr_log(RuleId, GroupId, ?DISCOVERY_FINISHED),
-			{RuleId, {GroupId, stopped}}
+			mydlp_mnesia:remove_discovery_status(RuleId)
 	end.
 
 
@@ -322,6 +310,7 @@ push_opr_log(RuleId, GroupId, Message) ->
 	Time = erlang:universaltime(),
 	OprLog = #opr_log{time=Time, channel=remote_discovery, rule_id=RuleId, message_key=Message, group_id=GroupId},
 	?DISCOVERY_OPR_LOG(OprLog).
+
 
 -endif.
 
@@ -354,7 +343,7 @@ stop() ->
 
 init([]) -> 
 	reset_discover_cache(),
-	{ok, #state{discover_queue=queue:new(), paused_queue=queue:new(), group_id_dict=dict:new()}}.
+	{ok, #state{discover_queue=queue:new(), paused_queue=queue:new()}}.
 
 terminate(_Reason, _State) ->
 	ok.
@@ -363,6 +352,9 @@ code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 
 %%%%%%%%%%%%%%%%% internal
+
+get_discovery_status(RuleId) ->
+	mydlp_mnesia:get_discovery_status(RuleId).
 
 is_finished_by_rule_id(RuleId, Q) ->
 	case queue:out(Q) of
@@ -424,11 +416,11 @@ set_prop_extra(ObjId) ->
 
 -endif.
 
-discover_file(#fs_entry{file_id={FP, RuleIndex}}, GroupDict) ->
+discover_file(#fs_entry{file_id={FP, RuleIndex}}) ->
 	try	timer:sleep(20),
 		{ok, ObjId} = mydlp_container:new(),
 		ok = mydlp_container:setprop(ObjId, "rule_index", RuleIndex),
-		{ok, {GroupId, _}} = dict:find(RuleIndex, GroupDict),
+		{_, GroupId} = get_discovery_status(RuleIndex),
 		ok = mydlp_container:setprop(ObjId, "group_id", GroupId),
 		set_prop_extra(ObjId),
 		ok = mydlp_container:pushfile(ObjId, {raw, FP}),
@@ -445,38 +437,38 @@ discover_file(#fs_entry{file_id={FP, RuleIndex}}, GroupDict) ->
 	end,
 	ok.
 
-discover_dir(#fs_entry{file_id={FP, RuleIndex}, entry_id=EId}, GroupDict) ->
+discover_dir(#fs_entry{file_id={FP, RuleIndex}, entry_id=EId}) ->
 	CList = case file:list_dir(FP) of
 		{ok, LD} -> LD;
 		{error, _} -> [] end,
 	OList = mydlp_mnesia:fs_entry_list_dir(EId),
 	MList = lists:umerge([CList, OList]),
-	{ok, {GroupId, _}} = dict:find(RuleIndex, GroupDict),
+	{_, GroupId} = get_discovery_status(RuleIndex),
 	[ q(EId, filename:absname(FN, FP), RuleIndex, GroupId) || FN <- MList ],
 	ok.
 
-discover_dir_dir(#fs_entry{file_id={FP, RuleIndex}, entry_id=EId}, GroupDict) ->
+discover_dir_dir(#fs_entry{file_id={FP, RuleIndex}, entry_id=EId}) ->
 	OList = mydlp_mnesia:fs_entry_list_dir(EId),
-	{ok, {GroupId, _}} = dict:find(RuleIndex, GroupDict),
+	{_, GroupId} = get_discovery_status(RuleIndex),
 	[ q(EId, filename:absname(FN, FP), RuleIndex, GroupId) || FN <- OList ],
 	ok.
 
-discover(ParentId, FilePath, RuleIndex, GroupDict) ->
+discover(ParentId, FilePath, RuleIndex) ->
 	case is_cached({FilePath, RuleIndex}) of
 		true -> ok;
-		false -> discover1(ParentId, FilePath, RuleIndex, GroupDict) end.
+		false -> discover1(ParentId, FilePath, RuleIndex) end.
 
-discover1(ParentId, FilePath, RuleIndex, GroupDict) ->
+discover1(ParentId, FilePath, RuleIndex) ->
 	case filelib:is_regular(FilePath) of
 		true -> E = fs_entry(ParentId, FilePath, RuleIndex),
 			case is_changed(E) of
-				true -> discover_file(E, GroupDict);
+				true -> discover_file(E);
 				false -> ok end;
 	false -> case filelib:is_dir(FilePath) of
 		true -> E = fs_entry(ParentId, FilePath, RuleIndex),
 			case is_changed(E) of
-				true -> discover_dir(E, GroupDict);
-				false -> discover_dir_dir(E, GroupDict) end;
+				true -> discover_dir(E);
+				false -> discover_dir_dir(E) end;
 	false -> ?ERROR_LOG("DISCOVER: File or directory does not exists. Filename: "?S, [FilePath]),
 		mydlp_mnesia:del_fs_entry(FilePath) end end, % Means file does not exists
 	ok.

@@ -110,13 +110,6 @@
 	targets=[]
 }).
 
--record(discovery_status, {
-	id,
-	rule_id,
-	group_id,
-	status
-}).
-
 -record(m_user, {
 	id,
 	rule_id,
@@ -223,6 +216,13 @@
 	filepath,
 	file_entry_id,
 	dd_id_list=[]
+}).
+
+-record(discovery_status, {
+	id,
+	rule_id,
+	group_id,
+	status
 }).
 
 -record(usb_device, {
