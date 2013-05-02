@@ -163,10 +163,10 @@ handle_call({stop_discovery_by_rule_id, RuleId}, _From, #state{discover_queue=Q,
 				?PAUSED -> mydlp_mnesia:del_fs_entries_by_rule_id(RuleId);
 				_ -> ok
 			end,
-			%mydlp_mnesia:remove_discovery_status(RuleId),
+			mark_as_finished(RuleId),
 			filter_discover_cache(RuleId),
-			{reply, ok, State#state{discover_queue=Q1, paused_queue=PQ1}};
-		_ -> {reply, ok, State#state{is_new=true}}
+			{reply, ok, State#state{discover_queue=Q1, paused_queue=PQ1, is_new=true}};
+		_ -> {reply, ok, State}
 	end;
 
 handle_call({is_discovery_finished, RuleId}, _From, #state{discover_queue=Q, paused_queue=PQ}=State) ->
