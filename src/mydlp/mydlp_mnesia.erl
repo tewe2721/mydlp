@@ -66,7 +66,11 @@
 	delete/1,
 	flush_cache/0,
 	post_start/1,
-	post_start/0
+	post_start/0,
+	update_discovery_status/3,
+	get_discovery_status/1,
+	remove_discovery_status/1,
+	get_all_discovery_status/0
 	]).
 
 -ifdef(__MYDLP_NETWORK).
@@ -124,10 +128,6 @@
 	update_ep_schedules/2,
 	%update_rfs_and_web_schedules/1,
 	get_endpoints_by_rule_id/1,
-	update_discovery_status/3,
-	get_discovery_status/1,
-	remove_discovery_status/1,
-	get_all_discovery_status/0,
 	get_remote_document_databases/0,
 	get_remote_document_databases_by_id/1,
 	add_dd_file_entry/1,
@@ -474,14 +474,6 @@ update_ep_schedules({EndpointId, Ip, Username}, TargetRuleId) ->
 
 get_endpoints_by_rule_id(RuleId) -> aqc({get_endpoints_by_rule_id, RuleId}, nocache).
 
-update_discovery_status(RuleId, Status, GroupId) -> aqc({update_discovery_status, RuleId, Status, GroupId}, nocache).
-
-remove_discovery_status(RuleId) -> aqc({remove_discovery_status, RuleId}, nocache).
-
-get_discovery_status(RuleId) -> aqc({get_discovery_status, RuleId}, nocache).
-
-get_all_discovery_status() -> aqc(get_all_discovery_status, nocache).
-
 get_remote_document_databases() -> aqc(get_remote_document_databases, nocache).
 
 get_remote_document_databases_by_id(DDId) -> aqc({get_remote_document_databases_by_id, DDId}, nocache).
@@ -561,7 +553,13 @@ mnesia_dir_cleanup() -> gen_server:cast(?MODULE, mnesia_dir_cleanup).
 
 flush_cache() -> cache_clean0().
 
+update_discovery_status(RuleId, Status, GroupId) -> aqc({update_discovery_status, RuleId, Status, GroupId}, nocache).
 
+remove_discovery_status(RuleId) -> aqc({remove_discovery_status, RuleId}, nocache).
+
+get_discovery_status(RuleId) -> aqc({get_discovery_status, RuleId}, nocache).
+
+get_all_discovery_status() -> aqc(get_all_discovery_status, nocache).
 
 %%%%%%%%%%%%%% gen_server handles
 
