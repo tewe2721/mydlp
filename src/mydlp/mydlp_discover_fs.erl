@@ -166,7 +166,7 @@ handle_call({stop_discovery_by_rule_id, RuleId}, _From, #state{discover_queue=Q,
 			%mydlp_mnesia:remove_discovery_status(RuleId),
 			filter_discover_cache(RuleId),
 			{reply, ok, State#state{discover_queue=Q1, paused_queue=PQ1}};
-		_ -> {reply, ok, State}
+		_ -> {reply, ok, State#state{is_new=true}}
 	end;
 
 handle_call({is_discovery_finished, RuleId}, _From, #state{discover_queue=Q, paused_queue=PQ}=State) ->
