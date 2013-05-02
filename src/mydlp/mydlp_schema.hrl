@@ -110,6 +110,13 @@
 	targets=[]
 }).
 
+-record(dd_file_entry, {
+	id,
+	filepath,
+	file_entry_id,
+	dd_id_list=[]
+}).
+
 -record(m_user, {
 	id,
 	rule_id,
@@ -209,13 +216,6 @@
 	parent_id,
 	file_size,
 	last_modified
-}).
-
--record(dd_file_entry, {
-	id,
-	filepath,
-	file_entry_id,
-	dd_id_list=[]
 }).
 
 -record(discovery_status, {
