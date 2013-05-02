@@ -163,7 +163,7 @@ handle_call({stop_discovery_by_rule_id, RuleId}, _From, #state{discover_queue=Q,
 				?PAUSED -> mydlp_mnesia:del_fs_entries_by_rule_id(RuleId);
 				_ -> ok
 			end,
-			mydlp_mnesia:remove_discovery_status(RuleId),
+			%mydlp_mnesia:remove_discovery_status(RuleId),
 			filter_discover_cache(RuleId),
 			{reply, ok, State#state{discover_queue=Q1, paused_queue=PQ1}};
 		_ -> {reply, ok, State}
@@ -245,7 +245,8 @@ handle_cast({stop_discovery, RuleId, GroupId}, State) ->
 handle_cast({start_discovery, RuleId, GroupId}, State) ->
 	mydlp_mnesia:update_discovery_status(RuleId, ?DISCOVERING, GroupId),
 	PathList = case mydlp_mnesia:get_discovery_directory(RuleId) of
-		none -> [];
+		none -> push_opr_log(RuleId, GroupId, ?DISCOVERY_FINISHED),
+			[];
 		L when is_list(L) ->
 			lists:map(fun(P) -> 
 				try unicode:characters_to_list(P)
@@ -280,13 +281,19 @@ handle_info(_Info, State) ->
 
 is_paused_or_stopped_by_rule_id(RuleId) -> 
 	case get_discovery_status(RuleId) of
+		{user_paused, _} -> paused;
+		{system_paused, _} -> paused;
+		{paused, _} -> paused;
+		{user_stopped, _} -> stopped;
+		{system_stopped, _} -> stopped;
+		{stopped, _} -> stopped;
 		{Status, _} -> Status;
-		_ -> none
+		_ -> stopped
 	end.
 
 mark_finished_rules(PausedQ) ->
 	DiscStatus = mydlp_mnesia:get_all_discovery_status(),
-	lists:foreach(fun({RuleId, {GroupId, _Status}}) -> mark_finished_each_rule(RuleId, GroupId, PausedQ) end, DiscStatus).
+	lists:foreach(fun({RuleId, _Status, GroupId}) -> mark_finished_each_rule(RuleId, GroupId, PausedQ) end, DiscStatus).
 
 mark_finished_each_rule(RuleId, GroupId, Q) ->
 	case queue:out(Q) of
@@ -298,7 +305,7 @@ mark_finished_each_rule(RuleId, GroupId, Q) ->
 			end;
 		{empty, _Q2} ->
 			push_opr_log(RuleId, GroupId, ?DISCOVERY_FINISHED),
-			mydlp_mnesia:remove_discovery_status(RuleId)
+			mark_as_finished(RuleId) 
 	end.
 
 
@@ -311,6 +318,7 @@ push_opr_log(RuleId, GroupId, Message) ->
 	OprLog = #opr_log{time=Time, channel=remote_discovery, rule_id=RuleId, message_key=Message, group_id=GroupId},
 	?DISCOVERY_OPR_LOG(OprLog).
 
+mark_as_finished(_RuleId) -> ok.
 
 -endif.
 
@@ -327,6 +335,8 @@ push_opr_log(RuleId, GroupId, Message) ->
 	Time = erlang:universaltime(),
 	OprLog = #opr_log{time=Time, channel=discovery, rule_id=RuleId, message_key=Message, group_id=GroupId},
 	?DISCOVERY_OPR_LOG(OprLog).
+
+mark_as_finished(RuleId) -> mydlp_mnesia:remove_discovery_status(RuleId).
 
 -endif.
 

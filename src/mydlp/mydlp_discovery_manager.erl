@@ -69,6 +69,7 @@
 -define(SYSTEM_STOPPED, system_stopped).
 -define(USER_STOPPED, user_stopped).
 -define(FINISHED, finished).
+-define(FS_DISCOVERY, mydlp_discover_rfs).
 -define(REMOTE_DISCOVERY, mydlp_discover_rfs).
 -define(WEB_DISCOVERY, mydlp_discover_web).
 -define(TRY_COUNT, 5).
@@ -186,22 +187,25 @@ handle_cast({create_timer, RuleId}, #state{timer_dict=TimerDict}=State) ->
 			discovery -> {ok, Timer} = timer:send_after(?EP_CONTROL_TIME, {is_ep_discovery_finished, RuleId}),
 					dict:store(RuleId, Timer, TimerDict)
 		end,
+	erlang:display({dict, dict:to_list(TimerDict1)}),
 	{noreply, State#state{timer_dict=TimerDict1}};
 
 handle_cast({start_timers, DiscoveryList}, State) ->
 	TimerList = lists:map(fun({RuleId, _, _}) -> 
 					{ok, T} = case mydlp_mnesia:get_rule_channel(RuleId) of
 							remote_discovery -> timer:send_after(60000, {is_discovery_finished, RuleId});
-							discovery -> timer:send_after(?EP_CONTROL_TIME, {is_ep_discovery_finished, RuleId}) end,
+							discovery -> timer:send_after(?EP_CONTROL_TIME, {is_ep_discovery_finished, RuleId});
+							RT -> ?ERROR_LOG("Unknown Rule Type: ["?S"]", [RT]), {ok, none} end,
 							{RuleId, T} end, DiscoveryList),
-	TimerDict = dict:from_list(TimerList),
+	TimerList1 = lists:filter(fun({_, S}) -> S /= none end, TimerList),
+	TimerDict = dict:from_list(TimerList1),
 	{noreply, State#state{timer_dict=TimerDict}};
 
 handle_cast(_Msg, State) ->
 	{noreply, State}.
 
 handle_info(startup, State) ->
-	start_timers(),
+%	start_timers(), %TODO: Comment out
 	%finish_running_reports(),
 	start_at_exact_hour(),
 	{noreply, State};
@@ -215,6 +219,7 @@ handle_info({async_reply, Reply, From}, State) ->
 	{noreply, State};
 
 handle_info({is_discovery_finished, RuleId}, #state{timer_dict=TimerDict}=State) ->
+	erlang:display({"Timer is elapsed", dict:to_list(TimerDict)}),
 	case dict:find(RuleId, TimerDict) of
 		error -> {noreply, State};
 		{ok, Timer} ->
@@ -222,6 +227,7 @@ handle_info({is_discovery_finished, RuleId}, #state{timer_dict=TimerDict}=State)
 			cancel_timer(Timer),
 			%Reply = mydlp_discover_fs:is_discovery_finished(RuleId),
 			{_, GroupId} = get_discovery_status(RuleId),
+			erlang:display({groupId, GroupId}),
 			Reply = mydlp_mysql:is_all_discovery_finished(GroupId),
 			case Reply of
 				true ->	 
@@ -288,7 +294,7 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
-	timer:send_after(6000, startup),
+	timer:send_after(30000, startup),
 	{ok, #state{timer_dict=dict:new()}}.
 
 terminate(_Reason, _State) ->
@@ -391,7 +397,7 @@ call_ep_discovery(RuleId, IsOnDemand) ->
 
 call_continue_discovery_on_remote(RuleId) ->
 	create_timer(RuleId),
-	gen_server:cast(?REMOTE_DISCOVERY, {continue_discovering, RuleId}),
+	mydlp_discover_fs:continue_paused_discovery(RuleId),
 	gen_server:cast(?WEB_DISCOVERY, {continue_discovering, RuleId}).
 
 call_start_discovery_by_rule_id(RuleId, GroupId, IsOnDemand) -> 
@@ -508,7 +514,7 @@ call_continue_discovery_on_target(RuleId) ->
 call_continue_remote_storage_discovery(RuleId) ->
 	case get_discovery_status(RuleId) of
 		{paused, GroupId} -> create_timer(RuleId),
-					gen_server:cast(?REMOTE_DISCOVERY, {continue_discovering, RuleId}),
+					mydlp_discover_fs:continue_paused_discovery(RuleId),
 					gen_server:cast(?WEB_DISCOVERY, {continue_discovering, RuleId}),
 					update_discovery_status(RuleId, ?DISC, GroupId);
 		_ -> ok
@@ -573,7 +579,7 @@ break_discovery(RuleId, GroupId) ->
 	end.
 
 call_immediate_stop_on_remote(RuleId) ->
-	case gen_server:call(?REMOTE_DISCOVERY, {stop_discovery, RuleId}, 60000) of
+	case gen_server:call(?FS_DISCOVERY, {stop_discovery_by_rule_id, RuleId}, 60000) of
 		ok -> gen_server:call(?WEB_DISCOVERY, {stop_discovery, RuleId}, 60000);
 		R -> R
 	end.
@@ -639,7 +645,8 @@ start_at_exact_hour() -> % Remaining should be multiplied with 1000
 	{_D, {_H, M, S}} = erlang:localtime(),
 	case M of 
 		0 -> timer:send_after(0, start_discovery_scheduling);
-		_ -> Remaining = (((59-M)*6)+S+10) * 1000, %10 is for safity
+		%_ -> Remaining = (((59-M)*60)+S+10) * 1000, %10 is for safity
+		_ -> Remaining = (((59-M)*60)+S+10) * 1, 
 			timer:send_after(Remaining, start_discovery_scheduling)
 	end.
 

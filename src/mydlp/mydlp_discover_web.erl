@@ -91,8 +91,11 @@ handle_call({stop_discovery, RuleId}, _From, #state{discover_queue=Q, paused_que
 		{Status, GId} -> 
 			push_opr_log(RuleId, GId, ?DISCOVERY_FINISHED),
 			case Status of
-				disc -> mydlp_mnesia:del_web_entries_by_rule_id(RuleId);
-				paused -> mydlp_mnesia:del_web_entries_by_rule_id(RuleId)
+				discovering -> mydlp_mnesia:del_web_entries_by_rule_id(RuleId);
+				on_demand_discovering -> mydlp_mnesia:del_web_entries_by_rule_id(RuleId);
+				paused -> mydlp_mnesia:del_web_entries_by_rule_id(RuleId);
+				user_paused -> mydlp_mnesia:del_web_entries_by_rule_id(RuleId);
+				system_paused -> mydlp_mnesia:del_web_entries_by_rule_id(RuleId)
 			end;
 		_ -> ?ERROR_LOG("mydlp_discover web: Unknown Rule Id: ["?S"]", [RuleId])
 	end,
@@ -209,7 +212,9 @@ handle_info({is_finished, RuleId}, #state{timer_dict=TimerDict, paused_queue=Pau
 	case get_discovery_status(RuleId) of
 		{_, GroupId} ->
 			NowS = calendar:datetime_to_gregorian_seconds(calendar:universal_time()),
-			Age = gb_trees:get(RuleId, RuleAge),
+			Age = case gb_trees:is_defined(RuleId, RuleAge) of
+				true -> gb_trees:get(RuleId, RuleAge);
+				false -> 0 end, 
 			case dict:find(RuleId, TimerDict) of
 				{ok, Timer} -> (catch timer:cancel(Timer));
 				_ -> ok end,
