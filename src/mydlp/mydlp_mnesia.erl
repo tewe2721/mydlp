@@ -264,7 +264,7 @@ get_record_fields_common(Record) ->
 		unique_ids -> record_info(fields, unique_ids);
 		config -> record_info(fields, config);
 		fs_entry -> record_info(fields, fs_entry);
-		dd_file_entry -> record_info(fields, dd_file_entry);
+		discovery_status -> record_info(fields, discovery_status);
 		usb_device -> record_info(fields, usb_device);
 		file_hash -> record_info(fields, file_hash);
 		file_fingerprint -> record_info(fields, file_fingerprint);
@@ -287,7 +287,7 @@ get_record_fields_functional(Record) ->
 		discovery_schedule -> record_info(fields, discovery_schedule);
 		discovery_targets -> record_info(fields, discovery_targets);
 		waiting_schedules -> record_info(fields, waiting_schedules);
-		discovery_status -> record_info(fields, discovery_status);
+		dd_file_entry -> record_info(fields, dd_file_entry);
 		notification -> record_info(fields, notification);
 		notification_queue -> record_info(fields, notification_queue);
 		source_domain -> record_info(fields, source_domain);
