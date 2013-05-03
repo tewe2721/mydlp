@@ -87,9 +87,9 @@ finished() -> gen_server:cast(?MODULE, finished).
 handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
 
-handle_call({stop_discovery,RuleId}, _From, State) ->
-	Reply = gen_server:call(mydlp_discover_fs, {stop_discovery_by_rule_id, RuleId}, 60000),
-	{reply, Reply, State};
+%handle_call({stop_discovery,RuleId}, _From, State) ->
+%	Reply = gen_server:call(mydlp_discover_fs, {stop_discovery_by_rule_id, RuleId}, 60000),
+%	{reply, Reply, State};
 
 handle_call({release_mount_by_rule_id, RuleId}, _From, #state{mount_dict=Dict}=State) ->
 	Dict1 = case dict:find(RuleId, Dict) of
@@ -114,9 +114,9 @@ handle_cast({start_by_rule_id, RuleId, GroupId}, #state{mount_dict=Dict}=State) 
 	consume(RemoteStorages, GroupId, RuleId),
 	{noreply, State#state{mount_dict=Dict1}};
 
-handle_cast({continue_discovering, RuleId}, State) ->
-	mydlp_discover_fs:continue_paused_discovery(RuleId),
-	{noreply, State};	
+%handle_cast({continue_discovering, RuleId}, State) ->
+%	mydlp_discover_fs:continue_paused_discovery(RuleId),
+%	{noreply, State};	
 
 handle_cast({consume, RemoteStorages, GroupId, RuleId}, #state{mount_dict=Dict}=State) ->
 	Dict1 = discover_each_mount(RemoteStorages, Dict, GroupId),
