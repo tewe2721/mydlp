@@ -187,7 +187,6 @@ handle_cast({create_timer, RuleId}, #state{timer_dict=TimerDict}=State) ->
 			discovery -> {ok, Timer} = timer:send_after(?EP_CONTROL_TIME, {is_ep_discovery_finished, RuleId}),
 					dict:store(RuleId, Timer, TimerDict)
 		end,
-	erlang:display({dict, dict:to_list(TimerDict1)}),
 	{noreply, State#state{timer_dict=TimerDict1}};
 
 handle_cast({start_timers, DiscoveryList}, State) ->
@@ -195,7 +194,8 @@ handle_cast({start_timers, DiscoveryList}, State) ->
 					{ok, T} = case mydlp_mnesia:get_rule_channel(RuleId) of
 							remote_discovery -> timer:send_after(60000, {is_discovery_finished, RuleId});
 							discovery -> timer:send_after(?EP_CONTROL_TIME, {is_ep_discovery_finished, RuleId});
-							RT -> ?ERROR_LOG("Unknown Rule Type: ["?S"]", [RT]), {ok, none} end,
+							RT -> ?ERROR_LOG("Unknown Rule Type: ["?S"]", [RT]), 
+								remove_discovery_status(RuleId), {ok, none} end,
 							{RuleId, T} end, DiscoveryList),
 	TimerList1 = lists:filter(fun({_, S}) -> S /= none end, TimerList),
 	TimerDict = dict:from_list(TimerList1),
@@ -205,8 +205,7 @@ handle_cast(_Msg, State) ->
 	{noreply, State}.
 
 handle_info(startup, State) ->
-%	start_timers(), %TODO: Comment out
-	%finish_running_reports(),
+	start_timers(), 
 	start_at_exact_hour(),
 	{noreply, State};
 
@@ -219,7 +218,6 @@ handle_info({async_reply, Reply, From}, State) ->
 	{noreply, State};
 
 handle_info({is_discovery_finished, RuleId}, #state{timer_dict=TimerDict}=State) ->
-	erlang:display({"Timer is elapsed", dict:to_list(TimerDict)}),
 	case dict:find(RuleId, TimerDict) of
 		error -> {noreply, State};
 		{ok, Timer} ->
@@ -227,7 +225,6 @@ handle_info({is_discovery_finished, RuleId}, #state{timer_dict=TimerDict}=State)
 			cancel_timer(Timer),
 			%Reply = mydlp_discover_fs:is_discovery_finished(RuleId),
 			{_, GroupId} = get_discovery_status(RuleId),
-			erlang:display({groupId, GroupId}),
 			Reply = mydlp_mysql:is_all_discovery_finished(GroupId),
 			case Reply of
 				true ->	 
@@ -294,7 +291,7 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
-	timer:send_after(30000, startup),
+	timer:send_after(6000, startup),
 	{ok, #state{timer_dict=dict:new()}}.
 
 terminate(_Reason, _State) ->
@@ -367,17 +364,12 @@ call_ep_discovery(RuleId, IsOnDemand) ->
 			end;
 		{paused, GroupId} -> 
 			case IsOnDemand of
-				true -> update_discovery_report(GroupId, ?REPORT_STATUS_DISC),
-					set_command_to_endpoints(RuleId, ?CONTINUE_EP_COMMAND, [{groupId, GroupId}]),
-					update_discovery_status(RuleId, ?ON_DEMAND_DISC, GroupId);
+				true -> call_continue_discovery_on_ep(RuleId, GroupId);
 				false -> break_ep_discovery(RuleId, GroupId)
 			end;
 		{user_paused, GroupId} -> 
 			case IsOnDemand of
-				true -> % means that user paused discovery while ago and now starts again
-					update_discovery_report(GroupId, ?REPORT_STATUS_DISC),
-					set_command_to_endpoints(RuleId, ?CONTINUE_EP_COMMAND, [{groupId, GroupId}]),
-					update_discovery_status(RuleId, ?ON_DEMAND_DISC, GroupId);
+				true -> call_continue_discovery_on_ep(RuleId, GroupId);
 				false ->% means that user paused discovery while ago and now it is time to schedule
 					% New discovery with a new report id. Ensure that last discovery is stopped.
 					break_ep_discovery(RuleId, GroupId)
@@ -399,6 +391,12 @@ call_continue_discovery_on_remote(RuleId) ->
 	create_timer(RuleId),
 	mydlp_discover_fs:continue_paused_discovery(RuleId),
 	gen_server:cast(?WEB_DISCOVERY, {continue_discovering, RuleId}).
+
+call_continue_discovery_on_ep(RuleId, GroupId) ->
+	create_timer(RuleId),
+	update_discovery_report(GroupId, ?REPORT_STATUS_DISC),
+	set_command_to_endpoints(RuleId, ?CONTINUE_EP_COMMAND, [{groupId, GroupId}]),
+	update_discovery_status(RuleId, ?ON_DEMAND_DISC, GroupId).
 
 call_start_discovery_by_rule_id(RuleId, GroupId, IsOnDemand) -> 
 	gen_server:cast(?REMOTE_DISCOVERY, {start_by_rule_id, RuleId, GroupId}),
@@ -428,8 +426,6 @@ call_pause_remote_storage_discovery(RuleId, IsOnDemand) ->
 	case get_discovery_status(RuleId) of
 		{disc, GroupId} -> 
 			cancel_timer(RuleId),
-			%mydlp_discover_fs:update_rule_status(RuleId, paused),
-			%mydlp_discover_web:update_rule_status(RuleId, paused),
 			case IsOnDemand of 
 				true -> update_discovery_report(GroupId, ?REPORT_STATUS_PAUSED_USER),
 					update_discovery_status(RuleId, ?USER_PAUSED, GroupId);
@@ -438,8 +434,6 @@ call_pause_remote_storage_discovery(RuleId, IsOnDemand) ->
 		{user_disc, GroupId} -> 
 			case IsOnDemand of
 				true -> cancel_timer(RuleId),
-					%mydlp_discover_fs:update_rule_status(RuleId, paused),
-					%mydlp_discover_web:update_rule_status(RuleId, paused),
 					update_discovery_report(GroupId, ?REPORT_STATUS_PAUSED_USER),
 					update_discovery_status(RuleId, ?USER_PAUSED, GroupId);
 				false -> ok
@@ -638,15 +632,11 @@ start_timers() ->
 	DiscoveryList = mydlp_mnesia:get_all_discovery_status(),
 	gen_server:cast(?MODULE, {start_timers, DiscoveryList}).
 
-%finish_running_reports() ->
-%	mydlp_mysql:mark_as_finish_all_reports().
-
 start_at_exact_hour() -> % Remaining should be multiplied with 1000
 	{_D, {_H, M, S}} = erlang:localtime(),
 	case M of 
 		0 -> timer:send_after(0, start_discovery_scheduling);
-		%_ -> Remaining = (((59-M)*60)+S+10) * 1000, %10 is for safity
-		_ -> Remaining = (((59-M)*60)+S+10) * 1, 
+		_ -> Remaining = (((59-M)*60)+S+10) * 1000, %10 is for safity
 			timer:send_after(Remaining, start_discovery_scheduling)
 	end.
 

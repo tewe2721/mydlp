@@ -366,6 +366,9 @@ generate_fingerprints1(FilePath, DDId, ExcludeFiles) ->
 				true -> generate_fingerprints_dir(E, DDId, ExcludeFiles);
 				false -> generate_fingerprints_dir_dir(E, DDId, ExcludeFiles) end;
 	false -> ?ERROR_LOG("DISCOVER: File or directory does not exists. Filename: "?S, [FilePath]),
+		case mydlp_mnesia:get_dd_file_entry(FilePath) of
+			none -> ok;
+			D -> mydlp_mysql:del_fingerprints_with_file_id(D#dd_file_entry.file_entry_id) end,
 		mydlp_mnesia:del_fs_entry(FilePath) end end, % Means file does not exists
 	ok.
 
@@ -442,32 +445,32 @@ handle_test_connection(sshfs, Dict) ->
 		{none, E} -> pretiffy_error(E);
 		_ -> release_mount([?TEST_MOUNT_DIR]),"OK" end;
 handle_test_connection(ftpfs, Dict) ->
-	{ok, Address} = dict:find("address", Dict),
-	{ok, Path} = dict:find("path", Dict),
-	{ok, Username} = dict:find("username", Dict),
-	{ok, Password} = dict:find("password", Dict),
+	{ok, Address} = dict:find(<<"address">>, Dict),
+	{ok, Path} = dict:find(<<"path">>, Dict),
+	{ok, Username} = dict:find(<<"username">>, Dict),
+	{ok, Password} = dict:find(<<"password">>, Dict),
 	case handle_each_mount({ftpfs, [Address, Password, Path, Username]}, ?TEST_MOUNT_DIR) of
 		{none, E} -> pretiffy_error(E);
 		_ -> release_mount([?TEST_MOUNT_DIR]),"OK" end;
 handle_test_connection(cifs, Dict) ->
-	{ok, Address} = dict:find("address", Dict),
-	{ok, Path} = dict:find("path", Dict),
-	{ok, Username} = dict:find("username", Dict),
-	{ok, Password} = dict:find("password", Dict),
+	{ok, Address} = dict:find(<<"address">>, Dict),
+	{ok, Path} = dict:find(<<"path">>, Dict),
+	{ok, Username} = dict:find(<<"username">>, Dict),
+	{ok, Password} = dict:find(<<"password">>, Dict),
 	case handle_each_mount({cifs, [Address, Password, Path, Username]}, ?TEST_MOUNT_DIR) of
 		{none, E} -> pretiffy_error(E);
 		_ -> release_mount([?TEST_MOUNT_DIR]),"OK" end;
 handle_test_connection(dfs, Dict) ->
-	{ok, Address} = dict:find("address", Dict),
-	{ok, Path} = dict:find("path", Dict),
-	{ok, Username} = dict:find("username", Dict),
-	{ok, Password} = dict:find("password", Dict),
+	{ok, Address} = dict:find(<<"address">>, Dict),
+	{ok, Path} = dict:find(<<"path">>, Dict),
+	{ok, Username} = dict:find(<<"username">>, Dict),
+	{ok, Password} = dict:find(<<"password">>, Dict),
 	case handle_each_mount({dfs, [Address, Password, Path, Username]}, ?TEST_MOUNT_DIR) of
 		{none, E} -> pretiffy_error(E);
 		_ -> release_mount([?TEST_MOUNT_DIR]), "OK" end;
 handle_test_connection(nfs, Dict) ->
-	{ok, Address} = dict:find("address", Dict),
-	{ok, Path} = dict:find("path", Dict),
+	{ok, Address} = dict:find(<<"address">>, Dict),
+	{ok, Path} = dict:find(<<"path">>, Dict),
 	case handle_each_mount({nfs, [Address, Path]}, ?TEST_MOUNT_DIR) of
 		{none, E} -> pretiffy_error(E);
 		_ -> release_mount([?TEST_MOUNT_DIR]),"OK" end.

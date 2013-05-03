@@ -592,7 +592,8 @@ construct_source(Id) ->
 		{ftpfs, {Address, Path, _, _}} -> "ftpfs://" ++ binary_to_list(Address) ++ binary_to_list(Path);
 		{cifs, {Address, Path, _, _}} -> "cifs://" ++ binary_to_list(Address) ++ "/" ++ binary_to_list(Path);
 		{dfs, {Address, Path, _, _}} -> "dfs://" ++ binary_to_list(Address) ++ "/" ++ binary_to_list(Path);
-		{nfs, {Address, Path}} -> "nfs://" ++ binary_to_list(Address) ++ "/" ++ binary_to_list(Path)
+		{nfs, {Address, Path}} -> "nfs://" ++ binary_to_list(Address) ++ "/" ++ binary_to_list(Path);
+		none -> ?ERROR_LOG("Unknown remote storage with id: ["?S"]", [Id]), "none"
 	end.
 
 

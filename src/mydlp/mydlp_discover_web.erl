@@ -468,6 +468,8 @@ discover_item({WebServerId, PagePath, RuleId}, Data) ->
 		ok = mydlp_container:setprop(ObjId, "channel", "remote_discovery"),
 		ok = mydlp_container:setprop(ObjId, "web_server_id", WebServerId),
 		ok = mydlp_container:setprop(ObjId, "rule_index", RuleId),
+		{_, GroupId} = get_discovery_status(RuleId),
+		ok = mydlp_container:setprop(ObjId, "group_id", GroupId),
 		ok = mydlp_container:setprop(ObjId, "page_path", PagePath),
 		ok = mydlp_container:setprop(ObjId, "filename_unicode", get_fn(WebServerId, PagePath)),
 		ok = mydlp_container:push(ObjId, Data),

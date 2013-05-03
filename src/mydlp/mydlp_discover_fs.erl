@@ -86,8 +86,11 @@
 
 -endif.
 
+-define(ON_DEMAND_DISCOVERING, on_demand_discovering).
 -define(DISCOVERING, discovering).
 -define(PAUSED, paused).
+-define(USER_PAUSED, user_paused).
+-define(SYSTEM_PAUSED, system_paused).
 -define(STOPPED, stopped).
 
 -ifdef(__PLATFORM_WINDOWS).
@@ -160,7 +163,10 @@ handle_call({stop_discovery_by_rule_id, RuleId}, _From, #state{discover_queue=Q,
 			push_opr_log(RuleId, GId, ?DISCOVERY_FINISHED),
 			case Status of
 				?DISCOVERING -> mydlp_mnesia:del_fs_entries_by_rule_id(RuleId);
+				?ON_DEMAND_DISCOVERING -> mydlp_mnesia:del_fs_entries_by_rule_id(RuleId);
 				?PAUSED -> mydlp_mnesia:del_fs_entries_by_rule_id(RuleId);
+				?USER_PAUSED -> mydlp_mnesia:del_fs_entries_by_rule_id(RuleId);
+				?SYSTEM_PAUSED -> mydlp_mnesia:del_fs_entries_by_rule_id(RuleId);
 				_ -> ok
 			end,
 			mark_as_finished(RuleId),
