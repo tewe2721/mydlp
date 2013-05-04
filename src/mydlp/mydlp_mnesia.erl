@@ -66,7 +66,11 @@
 	delete/1,
 	flush_cache/0,
 	post_start/1,
-	post_start/0
+	post_start/0,
+	update_discovery_status/3,
+	get_discovery_status/1,
+	remove_discovery_status/1,
+	get_all_discovery_status/0
 	]).
 
 -ifdef(__MYDLP_NETWORK).
@@ -201,6 +205,8 @@
 	discovery_schedule,
 	discovery_targets,
 	waiting_schedules,
+	{dd_file_entry, ordered_set,
+		fun() -> mnesia:add_table_index(dd_file_entry, filepath) end},
 	{m_user, ordered_set, 
 		fun() -> mnesia:add_table_index(m_user, un_hash) end},
 	{source_domain, ordered_set, 
@@ -235,11 +241,10 @@
 -define(NONDATA_COMMON_TABLES, [
 	config,
 	mc_module, 
+	discovery_status,
 	{fs_entry, ordered_set, 
 		fun() -> mnesia:add_table_index(fs_entry, parent_id),
 			 mnesia:add_table_index(fs_entry, entry_id) end},
-	{dd_file_entry, ordered_set,
-		fun() -> mnesia:add_table_index(dd_file_entry, filepath) end},
 	{mime_type, ordered_set, 
 		fun() -> mnesia:add_table_index(mime_type, mime) end},
 	{regex, ordered_set, 
@@ -259,7 +264,7 @@ get_record_fields_common(Record) ->
 		unique_ids -> record_info(fields, unique_ids);
 		config -> record_info(fields, config);
 		fs_entry -> record_info(fields, fs_entry);
-		dd_file_entry -> record_info(fields, dd_file_entry);
+		discovery_status -> record_info(fields, discovery_status);
 		usb_device -> record_info(fields, usb_device);
 		file_hash -> record_info(fields, file_hash);
 		file_fingerprint -> record_info(fields, file_fingerprint);
@@ -282,6 +287,7 @@ get_record_fields_functional(Record) ->
 		discovery_schedule -> record_info(fields, discovery_schedule);
 		discovery_targets -> record_info(fields, discovery_targets);
 		waiting_schedules -> record_info(fields, waiting_schedules);
+		dd_file_entry -> record_info(fields, dd_file_entry);
 		notification -> record_info(fields, notification);
 		notification_queue -> record_info(fields, notification_queue);
 		source_domain -> record_info(fields, source_domain);
@@ -547,7 +553,13 @@ mnesia_dir_cleanup() -> gen_server:cast(?MODULE, mnesia_dir_cleanup).
 
 flush_cache() -> cache_clean0().
 
+update_discovery_status(RuleId, Status, GroupId) -> aqc({update_discovery_status, RuleId, Status, GroupId}, nocache).
 
+remove_discovery_status(RuleId) -> aqc({remove_discovery_status, RuleId}, nocache).
+
+get_discovery_status(RuleId) -> aqc({get_discovery_status, RuleId}, nocache).
+
+get_all_discovery_status() -> aqc(get_all_discovery_status, nocache).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -701,6 +713,11 @@ handle_result({is_valid_usb_device_id, _DeviceId}, {atomic, Result}) ->
 handle_result(Query, Result) -> handle_result_common(Query, Result).
 
 -endif.
+
+handle_result_common({get_discovery_status, _}, {atomic, Result}) ->
+	case Result of
+		[] -> none;
+		[R] -> R end;
 
 handle_result_common({del_fs_entries_by_rule_id, RuleId}, {atomic, Result}) ->
 	remove_reduntant_fs_entries(Result, RuleId);
@@ -1411,6 +1428,39 @@ handle_query({is_valid_usb_device_id, DeviceId}) ->
 handle_query(Query) -> handle_query_common(Query).
 
 -endif.
+
+handle_query_common({update_discovery_status, RuleId, Status, GroupId}) ->
+	DS = mnesia:match_object(#discovery_status{id='_', rule_id=RuleId, group_id='_', status='_'}),
+	DS1 = case DS of
+		[R] -> R#discovery_status{status=Status};
+		[] -> Id = get_unique_id(discovery_status),
+			#discovery_status{id=Id, rule_id=RuleId, status=Status};
+		E -> ?ERROR_LOG("Unexpected discovery status result: ["?S"]", [E]) end,
+	DS2 = case GroupId of
+		none -> DS1;
+		_ -> DS1#discovery_status{group_id=GroupId} end,
+	mnesia:write(DS2);
+
+handle_query_common({get_discovery_status, RuleId}) ->
+	Q = ?QLCQ([{DS#discovery_status.status, DS#discovery_status.group_id}||
+		DS <- mnesia:table(discovery_status),
+		DS#discovery_status.rule_id == RuleId
+	]),
+	?QLCE(Q);
+
+handle_query_common(get_all_discovery_status) ->
+	Q = ?QLCQ([{DS#discovery_status.rule_id, DS#discovery_status.status, DS#discovery_status.group_id}||
+		DS <- mnesia:table(discovery_status)
+	]),
+	?QLCE(Q);
+
+handle_query_common({remove_discovery_status, RuleId}) ->
+	Q = ?QLCQ([D#discovery_status.id ||	
+		D <- mnesia:table(discovery_status),
+		D#discovery_status.rule_id == RuleId
+		]),
+	Ids = ?QLCE(Q),
+	lists:foreach(fun(I) -> mnesia:delete({discovery_status, I}) end, Ids);
 
 handle_query_common({del_fs_entries_by_rule_id, _RuleId}) ->
 	Q = ?QLCQ([F ||

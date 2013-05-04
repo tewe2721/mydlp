@@ -366,6 +366,9 @@ generate_fingerprints1(FilePath, DDId, ExcludeFiles) ->
 				true -> generate_fingerprints_dir(E, DDId, ExcludeFiles);
 				false -> generate_fingerprints_dir_dir(E, DDId, ExcludeFiles) end;
 	false -> ?ERROR_LOG("DISCOVER: File or directory does not exists. Filename: "?S, [FilePath]),
+		case mydlp_mnesia:get_dd_file_entry(FilePath) of
+			none -> ok;
+			D -> mydlp_mysql:del_fingerprints_with_file_id(D#dd_file_entry.file_entry_id) end,
 		mydlp_mnesia:del_fs_entry(FilePath) end end, % Means file does not exists
 	ok.
 

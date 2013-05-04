@@ -54,6 +54,7 @@
 	delete_log_requeue/1,
 	repopulate_mnesia/0,
 	save_fingerprints/2,
+	del_fingerprints_with_file_id/1,
 	populate_discovery_targets/1,
 	get_progress/0,
 	is_all_ep_discovery_finished/3,
@@ -134,6 +135,9 @@ insert_log_detail(LogId, MatchingDetails) ->
 
 save_fingerprints(DocumentId, FingerprintList) -> 
 	gen_server:call(?MODULE, {save_fingerprints, DocumentId, FingerprintList}, 60000).
+
+del_fingerprints_with_file_id(FileId) ->
+	gen_server:cast(?MODULE, {del_fingerprints_with_file_id, FileId}).
 
 populate_discovery_targets(RuleId) ->
 	gen_server:call(?MODULE, {populate_discovery_targets, RuleId}, 150000).
@@ -269,9 +273,9 @@ handle_call({is_all_ep_discovery_finished, GroupId, Endpoints, Status}, From, St
 handle_call({is_all_discovery_finished, GroupId}, From, State) ->
 	Worker = self(),
 	case lpsq(get_opr_with_group_id_and_status, [GroupId, ?RFS_FINISHED], 5000) of
-		{ok, [[_]]} -> 
+		{ok, [[_]|_]} -> 
 			case lpsq(get_opr_with_group_id_and_status, [GroupId, ?WEB_FINISHED], 5000) of
-				{ok, [[_]]} -> Worker ! {async_reply, true, From};
+				{ok, [[_]|_]} -> Worker ! {async_reply, true, From};
 				_ -> Worker ! {async_reply, false, From} end;
 		_ -> Worker ! {async_reply, false, From}
 	end,
@@ -344,6 +348,13 @@ handle_call(stop, _From,  State) ->
 
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
+
+handle_cast({del_fingerprints_with_file_id, FileId}, State) ->
+	?ASYNC(fun() ->
+			transaction(fun() -> psqt(del_fingerprints, [FileId]) 
+			end, 60000)
+		end, 60000),
+        {noreply, State};
 
 handle_cast({update_report_status, GroupId, NewStatus}, State) ->
 	?ASYNC0(fun() ->
@@ -619,6 +630,7 @@ init([]) ->
 		{mimes_by_data_format_id, <<"SELECT m.mimeType FROM MIMEType AS m, DataFormat_MIMEType dm WHERE dm.DataFormat_id=? and dm.mimeTypes_id=m.id">>},
 		{usb_devices, <<"SELECT deviceId, action FROM USBDevice">>},
 		{insert_fingerprint, <<"INSERT INTO DocumentFingerprint (id, fingerprint, document_id) VALUES (NULL, ?, ?)">>},
+		{del_fingerprints, <<"DELETE FROM DocumentFingerprint where document_id=?">>},
 		%{customer_by_id, <<"SELECT id,static_ip FROM sh_customer WHERE id=?">>},
 		{insert_incident, <<"INSERT INTO IncidentLog (id, date, channel, ruleId, sourceIp, sourceUser, destination, informationTypeId, action, matcherMessage, groupId, visible) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)">>},
 		{insert_incident_file_data, <<"INSERT INTO IncidentLogFile (id, incidentLog_id, filename, content_id) VALUES (NULL, ?, ?, ?)">>},

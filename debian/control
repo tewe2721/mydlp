@@ -8,5 +8,5 @@ Standards-Version: 3.8.0
 Package: mydlp
 Architecture: any
 Conflicts: mydlp-endpoint-linux, solr-common, solr-jetty, solr-tomcat
-Depends: erlang-nox, thrift (>= 0.7.0-1), openssl, unrar, erlang-mysql-driver (>= 0.9.7-4), apache2, mysql-server-5.5, mysql-client-5.5, coreutils, debianutils, iproute, grep, bash, p7zip-full, p7zip-rar, libelf1, libmagic1, binutils, procps, gzip, net-tools, jetty, libjetty-extra-java, openjdk-6-jdk, curl, jsvc, rfc4627-erlang, rsyslog, tnef, heirloom-mailx, tomcat6
+Depends: erlang-nox, thrift (>= 0.7.0-1), openssl, unrar, erlang-mysql-driver (>= 0.9.7-4), apache2, mysql-server-5.5, mysql-client-5.5, coreutils, debianutils, iproute, grep, bash, p7zip-full, p7zip-rar, libelf1, libmagic1, binutils, procps, gzip, net-tools, jetty, libjetty-extra-java, openjdk-6-jdk, curl, jsvc, rfc4627-erlang, rsyslog, tnef, heirloom-mailx, tomcat6, smbfs, curlftpfs, sshfs
 Description: An open source data loss prevention solution.
