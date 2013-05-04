@@ -452,7 +452,8 @@ handle_cast({requeued, LogId}, State) ->
 
 handle_cast({compile_customer, FilterId}, State) ->
 	?ASYNC(fun() ->
-		try	mydlp_mnesia:remove_site(FilterId),
+		try	set_progress(compile),
+			mydlp_mnesia:remove_site(FilterId),
 			populate_site(FilterId),
 			ok
 		after	set_progress(done)
