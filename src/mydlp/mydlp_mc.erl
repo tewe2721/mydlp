@@ -257,16 +257,17 @@ get_leafs(State) -> ets:match(mc_success, {{State, '$1'}, '$2'}). % [[Char, Next
 
 start_state() -> root.
 
-readlines(FileName) ->
+readlines(FileName, IsWholeWord) ->
 	{ok, Bin} = file:read_file(FileName),
-	get_all_lines(Bin, <<>>, []).
+	get_all_lines(IsWholeWord, Bin, <<>>, []).
 
-get_all_lines(<<>>, Line, Acc) -> lists:reverse(lists:flatten([Line|Acc]));
-get_all_lines(<<$\n, Bin/binary>>, Line, Acc) -> get_all_lines(Bin, <<>>, [Line|Acc]);
-get_all_lines(<<C:8/integer, Bin/binary>>, Line, Acc) -> get_all_lines(Bin, <<Line/binary, C>>, Acc).
+get_all_lines(_IsWholeWord, <<>>, Line, Acc) -> lists:reverse(lists:flatten([Line|Acc]));
+get_all_lines(false = IsWholeWord, <<$\n, Bin/binary>>, Line, Acc) -> get_all_lines(IsWholeWord, Bin, <<>>, [Line|Acc]);
+get_all_lines(true = IsWholeWord, <<$\n, Bin/binary>>, Line, Acc) -> get_all_lines(IsWholeWord, Bin, <<>>, [<<" ", Line/binary, " ">>|Acc]);
+get_all_lines(IsWholeWord, <<C:8/integer, Bin/binary>>, Line, Acc) -> get_all_lines(IsWholeWord, Bin, <<Line/binary, C>>, Acc).
 
-mc_gen([{file, FilePath, MatcherConf} = _KeywordGroup|RestOfKeywordGroups], Engine) -> 
-	Keywords = readlines(FilePath),
+mc_gen([{file, FilePath, IsWholeWord, MatcherConf} = _KeywordGroup|RestOfKeywordGroups], Engine) -> 
+	Keywords = readlines(FilePath, IsWholeWord),
 	mc_gen([{list, Keywords, MatcherConf}|RestOfKeywordGroups], Engine);
 mc_gen([{list, Keywords0, MatcherConf} = _KeywordGroup|RestOfKeywordGroups], Engine) -> 
 	Keywords = lists:map(fun(I) ->
@@ -602,7 +603,7 @@ get_kw_patterns([{Id, Func, FuncParam}|Rest], Acc) ->
 	case is_func_kw(Func) of
 		true -> case FuncParam of
 			[{group_id, KGIs}] -> get_kw_patterns(Rest, [{list, func_kw_pattern(Func, KGIs), Id}|Acc]);
-			[{file, BundledFilename}] -> get_kw_patterns(Rest, [{file, filename:absname(BundledFilename, ?CFG(resources_dir)), Id}|Acc]) end;
+			[{file, BundledFilename, IsWholeWord}] -> get_kw_patterns(Rest, [{file, filename:absname(BundledFilename, ?CFG(resources_dir)), IsWholeWord, Id}|Acc]) end;
 		false -> get_kw_patterns(Rest, Acc) end;
 get_kw_patterns([], Acc) -> lists:reverse(Acc).
 
