@@ -259,11 +259,20 @@ start_state() -> root.
 
 readlines(FileName, IsWholeWord) ->
 	{ok, Bin} = file:read_file(FileName),
-	get_all_lines(IsWholeWord, Bin, <<>>, []).
+	A = get_all_lines(IsWholeWord, Bin, <<>>, []),
+	erlang:display({is_whole_word, IsWholeWord}),
+	[io:format("D: '~ts'~n", [W]) || W <- A],
+	A.
 
-get_all_lines(_IsWholeWord, <<>>, Line, Acc) -> lists:reverse(lists:flatten([Line|Acc]));
-get_all_lines(false = IsWholeWord, <<$\n, Bin/binary>>, Line, Acc) -> get_all_lines(IsWholeWord, Bin, <<>>, [Line|Acc]);
-get_all_lines(true = IsWholeWord, <<$\n, Bin/binary>>, Line, Acc) -> get_all_lines(IsWholeWord, Bin, <<>>, [<<" ", Line/binary, " ">>|Acc]);
+get_word(_IsWholeWord, <<>>) -> [];
+get_word(_IsWholeWord, <<" ">>) -> [];
+get_word(_IsWholeWord, <<"\t">>) -> [];
+get_word(false = _IsWholeWord, Bin) -> [Bin];
+get_word(true = _IsWholeWord, Bin) -> [<<" ", Bin/binary, " ">>].
+
+get_all_lines(IsWholeWord, <<>>, Line, Acc) -> lists:reverse(lists:flatten([get_word(IsWholeWord, Line)|Acc]));
+get_all_lines(IsWholeWord, <<$\r, Bin/binary>>, Line, Acc) -> get_all_lines(IsWholeWord, Bin, <<>>, [get_word(IsWholeWord, Line)|Acc]);
+get_all_lines(IsWholeWord, <<$\n, Bin/binary>>, Line, Acc) -> get_all_lines(IsWholeWord, Bin, <<>>, [get_word(IsWholeWord, Line)|Acc]);
 get_all_lines(IsWholeWord, <<C:8/integer, Bin/binary>>, Line, Acc) -> get_all_lines(IsWholeWord, Bin, <<Line/binary, C>>, Acc).
 
 mc_gen([{file, FilePath, IsWholeWord, MatcherConf} = _KeywordGroup|RestOfKeywordGroups], Engine) -> 

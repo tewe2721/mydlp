@@ -1215,8 +1215,8 @@ is_whole_word_by_mid(MId) ->
 	{ok, SAQ} = psq(strarg_by_matcher_id, [MId]),
 	case SAQ of
 		[] -> false;
-		[[<<whole_word>>]] -> true;
-		[[<<partial>>]] -> false end.
+		[[<<"whole_word">>]] -> true;
+		[[<<"partial">>]] -> false end.
 
 populate_match([[OrigId, FuncName]]) -> populate_match(OrigId, FuncName).
 
