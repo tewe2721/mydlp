@@ -615,6 +615,7 @@ init([]) ->
 		{domain_user_sam_by_id, <<"SELECT u.sAMAccountName FROM ADDomainUser AS u WHERE u.id=?">>},
 		{domain_user_aliases_by_id, <<"SELECT a.userAlias FROM ADDomainUserAlias AS a, ADDomainUser_ADDomainUserAlias AS ua WHERE ua.ADDomainUser_id=? AND a.id=ua.aliases_id">>},
 		{itype_by_rule_id, <<"SELECT t.id, CASE WHEN d.distanceEnabled=1 THEN 1 ELSE 0 END, d.distance FROM InformationType AS t, RuleItem AS ri, InformationDescription AS d WHERE ri.rule_id=? AND t.id=ri.item_id AND t.InformationDescription_id=d.id">>},
+		{itype_grouped_by_rule_id, <<"SELECT t.id, CASE WHEN d.distanceEnabled=1 THEN 1 ELSE 0 END, d.distance FROM InformationType AS t, InventoryItem AS ii, RuleItemGroup AS rig, InformationDescription AS d WHERE rig.rule_id=? AND ii.group_id=rig.group_id AND t.id=ii.item_id AND t.InformationDescription_id=d.id">>},
 		{data_formats_by_itype_id, <<"SELECT df.dataFormats_id FROM InformationType_DataFormat AS df WHERE df.InformationType_id=?">>},
 		{ifeature_by_itype_id, <<"SELECT f.threshold,f.matcher_id FROM InformationFeature AS f, InformationDescription_InformationFeature df, InformationType t WHERE t.id=? AND t.informationDescription_id=df.InformationDescription_id AND df.features_id=f.id">>},
 		{match_by_id, <<"SELECT m.id,m.functionName FROM Matcher AS m WHERE m.id=?">>},
@@ -830,6 +831,9 @@ populate_rule(OrigId, Channel, UserMessage, Action, FilterId) ->
 
 	{ok, ITQ} = psq(itype_by_rule_id, [OrigId]),
 	populate_itypes(ITQ, RuleId),
+
+	{ok, ITQ2} = psq(itype_grouped_by_rule_id, [OrigId]),
+	populate_itypes(ITQ2, RuleId),
 
 	{ok, DQ} = psq(domain_by_rule_id, [OrigId]),
 	{ok, DIRQ} = psq(directory_by_rule_id, [OrigId]),

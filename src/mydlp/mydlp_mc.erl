@@ -259,10 +259,7 @@ start_state() -> root.
 
 readlines(FileName, IsWholeWord) ->
 	{ok, Bin} = file:read_file(FileName),
-	A = get_all_lines(IsWholeWord, Bin, <<>>, []),
-	erlang:display({is_whole_word, IsWholeWord}),
-	[io:format("D: '~ts'~n", [W]) || W <- A],
-	A.
+	get_all_lines(IsWholeWord, Bin, <<>>, []).
 
 get_word(_IsWholeWord, <<>>) -> [];
 get_word(_IsWholeWord, <<" ">>) -> [];
