@@ -65,4 +65,6 @@ service Mydlp_ui {
 	oneway void startFingerprinting(1: i32 DDId)
 
 	string testConnection(1: map<string,string> RemoteStorage)
+	
+	string testWebServer(1: string URL)
 }

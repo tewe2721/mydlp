@@ -37,6 +37,7 @@
 %% API
 -export([start_link/0,
 	update_rule_status/2,
+	test_web_server/1,
 	stop/0]).
 
 %% gen_server callbacks
@@ -73,6 +74,8 @@ q(WebServerId, ParentId, PagePath, RuleId) ->
 q(_WebServerId, _ParentId, _PagePath, _RuleId, 0) -> ok;
 q(WebServerId, ParentId, PagePath, RuleId, Depth) -> gen_server:cast(?MODULE, {q, WebServerId, ParentId, PagePath, RuleId, Depth}).
 
+test_web_server(URL) -> gen_server:call(?MODULE, {test_web_server, URL}).
+
 %pause_discovery(RuleId) -> gen_server:cast(?MODULE, {pause_discovery, RuleId}).
 
 update_rule_status(RuleId, Status) -> gen_server:cast(?MODULE, {update_rule_status, RuleId, Status}).
@@ -81,6 +84,15 @@ update_rule_status(RuleId, Status) -> gen_server:cast(?MODULE, {update_rule_stat
 
 handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
+
+handle_call({test_web_server, URL}, _From, State) ->
+	URLS = binary_to_list(URL),
+	R = case httpc:request(head, {URLS, []}, [], [{sync, true}]) of
+		{ok, {{_, 200, _}, _, _}} -> "OK";
+		{ok, {{_, C, Reason}, _, _}} when C > 400 -> integer_to_list(C) ++ " " ++ Reason;
+		_ -> "Unknown error occured"
+	end,
+	{reply, R, State};
 
 handle_call({stop_discovery, RuleId}, _From, #state{discover_queue=Q, paused_queue=PQ}=State) ->
 	NewQ = drop_items_by_rule_id(RuleId, Q),
