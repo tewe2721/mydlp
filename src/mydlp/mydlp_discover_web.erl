@@ -87,12 +87,16 @@ handle_call(stop, _From, State) ->
 
 handle_call({test_web_server, URL}, _From, State) ->
 	URLS = binary_to_list(URL),
-	R = case httpc:request(head, {URLS, []}, [], [{sync, true}]) of
-		{ok, {{_, 200, _}, _, _}} -> "OK";
-		{ok, {{_, C, Reason}, _, _}} when C > 400 -> integer_to_list(C) ++ " " ++ Reason;
-		_ -> "Unknown error occured"
-	end,
-	{reply, R, State};
+	try
+		R = case httpc:request(head, {URLS, []}, [], [{sync, true}]) of
+			{ok, {{_, 200, _}, _, _}} -> "OK";
+			{ok, {{_, C, Reason}, _, _}} when C > 400 -> integer_to_list(C) ++ " " ++ Reason;
+			_ -> "Unknown Error Occured"
+		end,
+		{reply, R, State}
+	catch _Class:_Error ->
+		{reply, "Unknown Error Occured", State}
+	end;
 
 handle_call({stop_discovery, RuleId}, _From, #state{discover_queue=Q, paused_queue=PQ}=State) ->
 	NewQ = drop_items_by_rule_id(RuleId, Q),
