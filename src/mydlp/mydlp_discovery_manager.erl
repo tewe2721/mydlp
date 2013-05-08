@@ -69,7 +69,7 @@
 -define(SYSTEM_STOPPED, system_stopped).
 -define(USER_STOPPED, user_stopped).
 -define(FINISHED, finished).
--define(FS_DISCOVERY, mydlp_discover_rfs).
+-define(FS_DISCOVERY, mydlp_discover_fs).
 -define(REMOTE_DISCOVERY, mydlp_discover_rfs).
 -define(WEB_DISCOVERY, mydlp_discover_web).
 -define(TRY_COUNT, 5).

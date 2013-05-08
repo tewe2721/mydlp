@@ -376,11 +376,12 @@ mark_fingerprinting_as_finished(DocumentIds) ->
 	mydlp_mysql:update_document_fingerprinting_status(DocumentIds, false).
 
 add_dd_to_file_entry(#dd_file_entry{dd_id_list=DDList, file_entry_id=FileEntryId}=Entry, DDId) ->
-	NewList = case lists:member(DDId, DDList) of
+	case lists:member(DDId, DDList) of
 		true -> DDList;
-		false -> [DDId|DDList] end,
-	mydlp_mnesia:add_dd_file_entry(Entry#dd_file_entry{dd_id_list=NewList}),
-	mydlp_mysql:insert_dd_file_entry(FileEntryId, DDId).
+		false -> NewList = [DDId|DDList],
+			mydlp_mnesia:add_dd_file_entry(Entry#dd_file_entry{dd_id_list=NewList}),
+			mydlp_mysql:insert_dd_file_entry(FileEntryId, DDId) 
+	end.
 
 meta(FilePath) ->
 	{ok, FileInfo} = file:read_file_info(FilePath),
