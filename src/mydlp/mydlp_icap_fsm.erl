@@ -501,7 +501,7 @@ drop_preview_bin(DataB)->
 	DestHost1 = case DestHost of
 		undefined -> get_host(Method, Uri);
 		DH -> mydlp_api:drop_host_port(DH) end,
-	DestList = [list_to_binary(DestHost1)],
+	DestList = [{domain,list_to_binary(DestHost1)}],
 
 	AclQ = #aclq{channel=web, src_addr=CAddr, src_user_h=UserHash, destinations=DestList},
 	QRet = mydlp_acl:q(AclQ, DFFiles),

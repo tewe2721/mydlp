@@ -163,7 +163,9 @@ init([]) ->
 'REQ_OK'(#smtpd_fsm{files=Files, message_record=(#message{mail_from=MailFrom} = MessageR)} = State) ->
 	SrcDomainName = get_from_domainname(MessageR),
 	UserH = mydlp_api:hash_un(MailFrom),
-	Destinations = get_dest_domains(MessageR),
+	DestinationDomains = get_dest_domains(MessageR),
+	DestinationUserHashes = get_dest_user_hashes(MessageR),
+	Destinations = lists:usort(lists:append(DestinationDomains, DestinationUserHashes)),
 	HasBCC = has_bcc(MessageR),
 	pre_query(State, Files),
 	AclQ = #aclq{channel=mail, src_domain = SrcDomainName, src_user_h=UserH, destinations=Destinations, has_hidden_destinations=HasBCC},
@@ -423,8 +425,14 @@ log_req(#smtpd_fsm{message_record=MessageR}, Action, {{rule, RuleId}, {file, Fil
 get_dest_domains(#message{rcpt_to=RcptTo, to=ToH, cc=CCH, bcc=BCCH})->
 	RcptToA = lists:map(fun(S) -> mime_util:dec_addr(S) end, RcptTo),
 	DestList = RcptToA ++ ToH ++ CCH ++ BCCH,
-	Domains = [list_to_binary(A#addr.domainname) || A <- DestList],
-	lists:usort(Domains).
+	L = [{domain, list_to_binary(A#addr.domainname)} || A <- DestList],
+	lists:usort(L).
+
+get_dest_user_hashes(#message{rcpt_to=RcptTo, to=ToH, cc=CCH, bcc=BCCH})->
+	RcptToA = lists:map(fun(S) -> mime_util:dec_addr(S) end, RcptTo),
+	DestList = RcptToA ++ ToH ++ CCH ++ BCCH,
+	L = [{user, mydlp_api:hash_un(A#addr.username ++ "@" ++ A#addr.domainname)} || A <- DestList],
+	lists:usort(L).
 
 has_bcc(#message{bcc=undefined} = MessageR)-> has_bcc_1(MessageR);
 has_bcc(#message{bcc=BCCH} = MessageR) when is_list(BCCH)->

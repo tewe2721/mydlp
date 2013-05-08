@@ -2292,7 +2292,7 @@ hash_un(UN) when is_list(UN) ->
 	UN2 = normalize_fn(UN1),
 	erlang:phash2(UN2);
 hash_un(UN) when is_binary(UN) ->
-	hash_un(binary_to_list(UN));
+	hash_un(filename_to_list(UN)); %% To user error tolerant unicode conversion
 hash_un(UN) when is_atom(UN) ->
 	hash_un(atom_to_list(UN)).
 
@@ -3369,7 +3369,6 @@ reverse_binary(Bin) ->
 	S = size(Bin)*8, 
 	<<X:S/integer-little>> = Bin,
 	<<X:S/integer-big>>.
-
 
 bf_encrypt(Key, Data) when is_binary(Data) >= 8 ->
 	bf_encrypt(Key, Data, <<>>, size(Data)).

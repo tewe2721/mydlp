@@ -45,7 +45,7 @@
 	ipmask
 }).
 
--record(dest, {
+-record(dest, { % used for destination domain recors too
 	id,
 	rule_id,
 	destination
@@ -118,6 +118,12 @@
 }).
 
 -record(m_user, {
+	id,
+	rule_id,
+	un_hash
+}).
+
+-record(destination_user, {
 	id,
 	rule_id,
 	un_hash

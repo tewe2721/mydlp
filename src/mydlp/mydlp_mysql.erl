@@ -585,9 +585,9 @@ init([]) ->
 		{custom_action_by_id, <<"SELECT c.name, c.typeKey FROM CustomAction AS c WHERE c.id=?">>},
 		{custom_action_seclore_by_id, <<"SELECT cs.hotFolderId, cs.activityComment FROM CustomActionDescription AS cd, CustomActionDescriptionSeclore AS cs WHERE cd.coupledCustomAction_id=? AND cd.id=cs.id">>},
 		{network_by_rule_id, <<"SELECT n.ipBase,n.ipMask FROM Network AS n, RuleItem AS ri WHERE ri.rule_id=? AND n.id=ri.item_id">>},
-		{domain_by_rule_id, <<"SELECT d.destinationString FROM Domain AS d, RuleItem AS ri WHERE ri.rule_id=? AND d.id=ri.item_id">>},
+		{domain_by_rule_id, <<"SELECT d.destinationString FROM Domain AS d, RuleItem AS ri WHERE ri.rule_id=? AND d.id=ri.item_id AND (ri.ruleColumn IS NULL OR ri.ruleColumn=\"DESTINATION\")">>},
 		{directory_by_rule_id, <<"SELECT d.destinationString FROM FileSystemDirectory AS d, RuleItem AS ri WHERE ri.rule_id=? AND d.id=ri.item_id">>},
-		{source_domain_by_rule_id, <<"SELECT s.sourceDomain FROM SourceDomainName AS s, RuleItem AS ri WHERE ri.rule_id=? AND s.id=ri.item_id">>},
+		{source_domain_by_rule_id, <<"SELECT d.destinationString FROM Domain AS d, RuleItem AS ri WHERE ri.rule_id=? AND d.id=ri.item_id AND ri.ruleColumn=\"SOURCE\"">>},
 		{remote_sshfs, <<"SELECT r.address, r.port, r.path, r.username, r.password FROM RemoteStorageSSHFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
 		{remote_ftpfs, <<"SELECT r.address, r.path, r.username, r.password FROM RemoteStorageFTPFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
 		{remote_cifs, <<"SELECT r.windowsShare, r.path, r.username, r.password FROM RemoteStorageCIFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
@@ -605,9 +605,14 @@ init([]) ->
 		{weekly_schedule_by_rule_id, <<"SELECT s.hour, ws.mon, ws.tue, ws.wed, ws.thu, ws.fri, ws.sat, ws.sun FROM RuleSchedule AS rs, Schedule AS s, WeeklySchedule AS ws WHERE rs.rule_id=? AND rs.schedule_id=s.id AND s.id=ws.id">>},
 		{schedule_intervals_by_rule_id, <<"SELECT si.mon_id, si.tue_id, si.wed_id, si.thu_id, si.fri_id, si.sat_id, si.sun_id FROM RuleSchedule AS rs, ScheduleIntervals si WHERE rs.rule_id=? AND rs.scheduleIntervals_id=si.id">>},
 		{schedule_day_intervals_by_id, <<"SELECT * FROM ScheduleDayInterval WHERE id=?">>},
-		{user_s_by_rule_id, <<"SELECT u.username FROM RuleUserStatic AS u, RuleItem AS ri WHERE ri.rule_id=? AND u.id=ri.item_id">>},
-		{user_ad_u_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=u.id">>},
-		{user_ad_o_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, ADDomainItem i, ADDomainOU o, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=o.id AND o.id=i.parent_id AND i.id=u.id">>},
+		{user_s_by_rule_id, <<"SELECT u.username FROM RuleUserStatic AS u, RuleItem AS ri WHERE ri.rule_id=? AND u.id=ri.item_id AND (ri.ruleColumn IS NULL OR ri.ruleColumn=\"SOURCE\")">>},
+		{user_ad_u_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=u.id AND (ri.ruleColumn IS NULL OR ri.ruleColumn=\"SOURCE\")">>},
+		{user_ad_o_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, ADDomainItem i, ADDomainOU o, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=o.id AND o.id=i.parent_id AND i.id=u.id AND (ri.ruleColumn IS NULL OR ri.ruleColumn=\"SOURCE\")">>},
+		{user_ad_g_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, ADDomainItem i, ADDomainOU o, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=o.id AND o.id=i.parent_id AND i.id=u.id AND (ri.ruleColumn IS NULL OR ri.ruleColumn=\"SOURCE\")">>},
+		{dest_user_s_by_rule_id, <<"SELECT u.username FROM RuleUserStatic AS u, RuleItem AS ri WHERE ri.rule_id=? AND u.id=ri.item_id AND ri.ruleColumn=\"DESTINATION\"">>},
+		{dest_user_ad_u_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=u.id AND ri.ruleColumn=\"DESTINATION\"">>},
+		{dest_user_ad_o_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, ADDomainItem i, ADDomainOU o, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=o.id AND o.id=i.parent_id AND i.id=u.id AND ri.ruleColumn=\"DESTINATION\"">>},
+		{dest_user_ad_g_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, ADDomainItem i, ADDomainOU o, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=o.id AND o.id=i.parent_id AND i.id=u.id AND ri.ruleColumn=\"DESTINATION\"">>},
 		{domain_item_parent_by_id, <<"SELECT i.parent_id FROM ADDomainItem AS i WHERE i.id=?">>},
 		{domain_root_by_id, <<"SELECT r.id, r.domain_id FROM ADDomainRoot AS r WHERE r.id=?">>},
 		{domain_names_by_id, <<"SELECT d.domainName, d.netbiosName FROM ADDomain AS d WHERE d.id=?">>},
@@ -829,6 +834,8 @@ populate_rule(OrigId, Channel, UserMessage, Action, FilterId) ->
 
 	populate_rule_users(OrigId, RuleId),
 
+	populate_rule_dest_users(OrigId, RuleId),
+
 	{ok, ITQ} = psq(itype_by_rule_id, [OrigId]),
 	populate_itypes(ITQ, RuleId),
 
@@ -1046,6 +1053,9 @@ populate_rule_users(RuleOrigId, RuleId) ->
 	{ok, UAOQ} = psq(user_ad_o_by_rule_id, [RuleOrigId]),
 	populate_users_ad_u(UAOQ, RuleId),
 
+	{ok, UAGQ} = psq(user_ad_g_by_rule_id, [RuleOrigId]),
+	populate_users_ad_u(UAGQ, RuleId),
+
 	ok.
 
 populate_users_s([[Username]| Rows], RuleId) ->
@@ -1058,6 +1068,32 @@ populate_users_ad_u([[OrigId]| Rows], RuleId) ->
 	lists:foreach(fun({Username}) -> new_user(Username, RuleId) end, Usernames),
 	populate_users_ad_u(Rows, RuleId);
 populate_users_ad_u([], _RuleId) -> ok.
+
+populate_rule_dest_users(RuleOrigId, RuleId) -> 
+	{ok, USQ} = psq(dest_user_s_by_rule_id, [RuleOrigId]),
+	populate_dest_users_s(USQ, RuleId),
+
+	{ok, UAUQ} = psq(dest_user_ad_u_by_rule_id, [RuleOrigId]),
+	populate_dest_users_ad_u(UAUQ, RuleId),
+
+	{ok, UAOQ} = psq(dest_user_ad_o_by_rule_id, [RuleOrigId]),
+	populate_dest_users_ad_u(UAOQ, RuleId),
+
+	{ok, UAGQ} = psq(dest_user_ad_g_by_rule_id, [RuleOrigId]),
+	populate_users_ad_u(UAGQ, RuleId),
+
+	ok.
+
+populate_dest_users_s([[Username]| Rows], RuleId) ->
+	new_dest_user(Username, RuleId),
+	populate_dest_users_s(Rows, RuleId);
+populate_dest_users_s([], _RuleId) -> ok.
+
+populate_dest_users_ad_u([[OrigId]| Rows], RuleId) ->
+	Usernames = get_usernames(OrigId),
+	lists:foreach(fun({Username}) -> new_dest_user(Username, RuleId) end, Usernames),
+	populate_dest_users_ad_u(Rows, RuleId);
+populate_dest_users_ad_u([], _RuleId) -> ok.
 
 populate_remote_document_database() ->
 	{ok, RDD} = psq(get_remote_document_databases),
@@ -1131,6 +1167,13 @@ new_user(Username, RuleId) ->
 	Id = mydlp_mnesia:get_unique_id(m_user),
 	UsernameH = mydlp_api:hash_un(Username),
 	User = #m_user{id=Id, rule_id=RuleId, un_hash=UsernameH},
+	mydlp_mnesia_write(User),
+	ok.
+
+new_dest_user(Username, RuleId) ->
+	Id = mydlp_mnesia:get_unique_id(destination_user),
+	UsernameH = mydlp_api:hash_un(Username),
+	User = #destination_user{id=Id, rule_id=RuleId, un_hash=UsernameH},
 	mydlp_mnesia_write(User),
 	ok.
 

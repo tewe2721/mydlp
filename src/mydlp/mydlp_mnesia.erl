@@ -209,6 +209,8 @@
 		fun() -> mnesia:add_table_index(dd_file_entry, filepath) end},
 	{m_user, ordered_set, 
 		fun() -> mnesia:add_table_index(m_user, un_hash) end},
+	{destination_user, ordered_set, 
+		fun() -> mnesia:add_table_index(destination_user, un_hash) end},
 	{source_domain, ordered_set, 
 		fun() -> mnesia:add_table_index(source_domain, domain_name) end},
 	itype,
@@ -292,6 +294,7 @@ get_record_fields_functional(Record) ->
 		notification_queue -> record_info(fields, notification_queue);
 		source_domain -> record_info(fields, source_domain);
 		m_user -> record_info(fields, m_user);
+		destination_user -> record_info(fields, destination_user);
 		itype -> record_info(fields, itype);
 		ifeature -> record_info(fields, ifeature);
 		match -> record_info(fields, match);
@@ -760,16 +763,27 @@ handle_result_common(_Query, {atomic, Objects}) -> Objects.
 
 -ifdef(__MYDLP_NETWORK).
 
-is_applicable_destination(Destinations, UserDestination) ->
-	R = mydlp_api:reverse_binary(UserDestination),
-	A = lists:filter(fun(D) -> R1 = mydlp_api:reverse_binary(D),
-				is_sub_destination(R, R1) end, 
-				Destinations),
-	length(A) > 0.
+is_applicable_destination_user(UserDestinations, DUserHash) when is_integer(DUserHash)->
+	L = lists:filter(fun(D) -> is_destination_user(DUserHash, D) end, UserDestinations),
+	length(L) > 0.
 
-is_sub_destination(<<>>, _Dest2) -> true;
-is_sub_destination(<<C/utf8, R/binary>>, <<C1/utf8, R1/binary>>) when C == C1 -> is_sub_destination(R, R1);
-is_sub_destination(_, _) -> false.
+is_destination_user(D, {user, D1})->
+	D == D1;
+is_destination_user(_, _) -> false.
+
+is_applicable_destination_domain(UserDestinations, DDomain) when is_binary(DDomain) ->
+	L = lists:filter(fun(D) -> is_sub_destination_domain(DDomain, D) end, UserDestinations),
+	length(L) > 0.
+
+is_sub_destination_domain(D, {domain, D1}) ->
+	R = mydlp_api:reverse_binary(D),
+	R1 = mydlp_api:reverse_binary(D1),
+	is_sub_destination_domain(R, R1, false);
+is_sub_destination_domain(_, _) -> false.
+
+is_sub_destination_domain(<<>>, _Dest2, AtLeastOneMatch) -> AtLeastOneMatch;
+is_sub_destination_domain(<<C/utf8, R/binary>>, <<C1/utf8, R1/binary>>, _AtLeastOneMatch) when C == C1 -> is_sub_destination_domain(R, R1, true);
+is_sub_destination_domain(_, _, _) -> false.
 
 select_rule_ids_by_source(FilterId, #aclq{channel=Channel} = AclQ) ->
 	Q0 = ?QLCQ([R#rule.id || 
@@ -836,9 +850,19 @@ filter_rule_ids_by_dest(RuleIds, AclQ) -> %TODO: domain names stored as binary. 
 		D#dest.rule_id == R,
 		D#dest.destination /= all,
 		D#dest.destination /= has_bcc,
-		is_applicable_destination(AclQ#aclq.destinations, D#dest.destination)
+		DDomain = D#dest.destination,
+		is_applicable_destination_domain(AclQ#aclq.destinations, DDomain)
 	]),
 	RulenD = ?QLCE(Q1),
+
+	Q2 = ?QLCQ([R ||
+		D <- mnesia:table(destination_user),
+		R <- RuleIds,
+		D#destination_user.rule_id == R,
+		DUserH = D#destination_user.un_hash,
+		is_applicable_destination_user(AclQ#aclq.destinations, DUserH)
+	]),
+	RuleuD = ?QLCE(Q2),
 
 	RuleHD = case AclQ#aclq.has_hidden_destinations of
 		true -> case AclQ#aclq.channel of
@@ -852,10 +876,10 @@ filter_rule_ids_by_dest(RuleIds, AclQ) -> %TODO: domain names stored as binary. 
 			_Else -> [] end;
 		false -> [] end,
 
-	lists:append([RuleaD, RulenD, RuleHD]).
+	lists:append([RuleaD, RulenD, RuleuD, RuleHD]).
 
 get_rule_destinations(RuleIds) -> 
-	DL =get_rule_destinations(RuleIds, 0, []),
+	DL = get_rule_destinations(RuleIds, 0, []),
 	lists:reverse(DL).
 
 get_rule_destinations([Id|RuleIds], Index, Acc) ->
