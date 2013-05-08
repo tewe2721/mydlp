@@ -25,6 +25,8 @@
 %%% @end
 %%%-------------------------------------------------------------------
 
+-ifdef(__MYDLP_NETWORK).
+
 -module(mydlp_document_trainer).
 -author("ozgen@mydlp.com").
 -behaviour(gen_server).
@@ -512,3 +514,6 @@ umount_path(FilePath, TryCount) ->
 					end
 			end
 	end.
+
+-endif.
+

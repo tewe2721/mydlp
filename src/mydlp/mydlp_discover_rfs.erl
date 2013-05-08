@@ -26,6 +26,8 @@
 %%% @end
 %%%-------------------------------------------------------------------
 
+-ifdef(__MYDLP_NETWORK).
+
 -module(mydlp_discover_rfs).
 -author("kerem@mydlp.com").
 -author("ozgen@mydlp.com").
@@ -304,4 +306,6 @@ umount_path(FilePath, TryCount) ->
 					end
 			end
 	end.
+
+-endif.
 

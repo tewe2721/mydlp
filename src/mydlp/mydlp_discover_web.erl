@@ -25,6 +25,8 @@
 %%% @end
 %%%-------------------------------------------------------------------
 
+-ifdef(__MYDLP_NETWORK).
+
 -module(mydlp_discover_web).
 -author("kerem@mydlp.com").
 -behaviour(gen_server).
@@ -551,4 +553,5 @@ is_cached(Element) ->
 		false -> CS1 = gb_sets:add(Element, CS),
 			put(cache, CS1),
 			false end.
-	
+
+-endif.	
