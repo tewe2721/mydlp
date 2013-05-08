@@ -58,7 +58,8 @@
 	pauseDiscoveryOnDemand/1,
 	getRemoteStorageDir/1,
 	startFingerprinting/1,
-	testConnection/1
+	testConnection/1,
+	testWebServer/1
 	]).
 
 %%%%% EXTERNAL INTERFACE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -217,6 +218,8 @@ getRemoteStorageDir(RSId) ->  mydlp_document_trainer:get_remote_storage_dir(RSId
 startFingerprinting(DDId) -> mydlp_document_trainer:start_fingerprinting(DDId).
 
 testConnection(RSDict) -> mydlp_document_trainer:test_connection(RSDict).
+
+testWebServer(URL) -> mydlp_discover_web:test_web_server(URL).
 
 -endif.
 
