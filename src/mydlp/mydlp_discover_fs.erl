@@ -156,6 +156,7 @@ handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
 
 handle_call({stop_discovery_by_rule_id, RuleId}, _From, #state{discover_queue=Q, paused_queue=PQ}=State) ->
+	push_opr_log(RuleId, "none", "Stop Discovery Command Will Executed"),
 	case get_discovery_status(RuleId) of
 		{Status, GId} ->
 			Q1 = drop_items_by_rule_id(RuleId, Q),
@@ -172,7 +173,9 @@ handle_call({stop_discovery_by_rule_id, RuleId}, _From, #state{discover_queue=Q,
 			mark_as_finished(RuleId),
 			filter_discover_cache(RuleId),
 			{reply, ok, State#state{discover_queue=Q1, paused_queue=PQ1, is_new=true}};
-		_ -> {reply, ok, State}
+		_ -> 
+			push_opr_log(RuleId, "none", "Unknown Discovery job."),
+			{reply, ok, State}
 	end;
 
 handle_call({is_discovery_finished, RuleId}, _From, #state{discover_queue=Q, paused_queue=PQ}=State) ->
@@ -245,10 +248,12 @@ handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, is_new=IsNew} = S
 	end;
 
 handle_cast({stop_discovery, RuleId, GroupId}, State) ->
+	push_opr_log(RuleId, GroupId, "Stop Discovery Command Will Executed"),
 	mydlp_mnesia:update_discovery_status(RuleId, ?STOPPED, GroupId),
 	{noreply, State};
 
 handle_cast({start_discovery, RuleId, GroupId}, State) ->
+	push_opr_log(RuleId, GroupId, "Start Discovery Command Will Executed"),
 	mydlp_mnesia:update_discovery_status(RuleId, ?DISCOVERING, GroupId),
 	PathList = case mydlp_mnesia:get_discovery_directory(RuleId) of
 		none -> push_opr_log(RuleId, GroupId, ?DISCOVERY_FINISHED),
@@ -264,11 +269,13 @@ handle_cast({start_discovery, RuleId, GroupId}, State) ->
 	{noreply, State#state{is_new=true}};
 
 handle_cast({pause_discovery, RuleId, GroupId}, State) ->
+	push_opr_log(RuleId, GroupId, "Pause Discovery Command Will Executed"),
 	mydlp_mnesia:update_discovery_status(RuleId, ?PAUSED, GroupId),
 	{noreply, State};
 
 handle_cast({continue_discovery, RuleId, GroupId}, #state{discover_queue=Q, paused_queue=PQ}=State) ->
 	%reset_discover_cache(),
+	push_opr_log(RuleId, GroupId, "Continue Discovery Command Will Executed"),
 	mydlp_mnesia:update_discovery_status(RuleId, ?DISCOVERING, GroupId),
 	{noreply, State#state{discover_queue=queue:join(Q, PQ), paused_queue=queue:new()}};
 
