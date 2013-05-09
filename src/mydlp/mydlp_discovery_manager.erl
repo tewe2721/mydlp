@@ -544,8 +544,8 @@ update_discovery_report(GroupId, NewStatus) ->
 
 generate_group_id(RuleId, Channel) ->
 	Time = erlang:universaltime(),
-	GroupId = integer_to_list(RuleId) ++ "_" ++ integer_to_list(calendar:datetime_to_gregorian_seconds(erlang:localtime())),
 	OrigRuleId = mydlp_mnesia:get_orig_id_by_rule_id(RuleId),
+	GroupId = integer_to_list(OrigRuleId) ++ "_" ++ integer_to_list(calendar:datetime_to_gregorian_seconds(erlang:localtime())),
 	mydlp_mysql:push_discovery_report(Time, GroupId, OrigRuleId, ?REPORT_STATUS_DISC),
 	OprLog = #opr_log{time=Time, channel=Channel, rule_id=RuleId, message_key=?SUCCESS_MOUNT_KEY, group_id=GroupId},%TODO: message key should be revised.
 	?DISCOVERY_OPR_LOG(OprLog),
