@@ -93,18 +93,18 @@
 %%%%%%%%%%%%%  API
 
 start_on_demand_discovery(RuleOrigId) ->
-	RuleId = mydlp_mnesia:get_rule_id_by_orig_id(RuleOrigId),
-	gen_server:cast(?MODULE, {start_on_demand, RuleId}),
+	%RuleId = mydlp_mnesia:get_rule_id_by_orig_id(RuleOrigId),
+	gen_server:cast(?MODULE, {start_on_demand, RuleOrigId}),
 	ok.
 
 stop_discovery_on_demand(RuleOrigId) ->
-	RuleId = mydlp_mnesia:get_rule_id_by_orig_id(RuleOrigId),
-	gen_server:cast(?MODULE, {stop_on_demand, RuleId}),
+	%RuleId = mydlp_mnesia:get_rule_id_by_orig_id(RuleOrigId),
+	gen_server:cast(?MODULE, {stop_on_demand, RuleOrigId}),
 	ok.
 
 pause_discovery_on_demand(RuleOrigId) ->
-	RuleId = mydlp_mnesia:get_rule_id_by_orig_id(RuleOrigId),
-	gen_server:cast(?MODULE, {pause_on_demand, RuleId}),
+	%RuleId = mydlp_mnesia:get_rule_id_by_orig_id(RuleOrigId),
+	gen_server:cast(?MODULE, {pause_on_demand, RuleOrigId}),
 	ok.
 
 get_group_id(RuleId) -> gen_server:call(?MODULE, {get_group_id, RuleId}).
@@ -181,7 +181,7 @@ handle_cast({create_timer, RuleId}, #state{timer_dict=TimerDict}=State) ->
 		_ -> ok
 	end,
 
-	TimerDict1 = case mydlp_mnesia:get_rule_channel(RuleId) of
+	TimerDict1 = case mydlp_mnesia:get_rule_channel_by_orig_id(RuleId) of
 			remote_discovery -> {ok, Timer} = timer:send_after(60000, {is_discovery_finished, RuleId}),
 					dict:store(RuleId, Timer, TimerDict);
 			discovery -> {ok, Timer} = timer:send_after(?EP_CONTROL_TIME, {is_ep_discovery_finished, RuleId}),
@@ -190,13 +190,13 @@ handle_cast({create_timer, RuleId}, #state{timer_dict=TimerDict}=State) ->
 	{noreply, State#state{timer_dict=TimerDict1}};
 
 handle_cast({start_timers, DiscoveryList}, State) ->
-	TimerList = lists:map(fun({RuleId, _, _}) -> 
-					{ok, T} = case mydlp_mnesia:get_rule_channel(RuleId) of
-							remote_discovery -> timer:send_after(60000, {is_discovery_finished, RuleId});
-							discovery -> timer:send_after(?EP_CONTROL_TIME, {is_ep_discovery_finished, RuleId});
+	TimerList = lists:map(fun({RuleOrigId, _, _}) -> 
+					{ok, T} = case mydlp_mnesia:get_rule_channel_by_orig_id(RuleOrigId) of
+							remote_discovery -> timer:send_after(60000, {is_discovery_finished, RuleOrigId});
+							discovery -> timer:send_after(?EP_CONTROL_TIME, {is_ep_discovery_finished, RuleOrigId});
 							RT -> ?ERROR_LOG("Unknown Rule Type: ["?S"]", [RT]), 
-								remove_discovery_status(RuleId), {ok, none} end,
-							{RuleId, T} end, DiscoveryList),
+								remove_discovery_status(RuleOrigId), {ok, none} end,
+							{RuleOrigId, T} end, DiscoveryList),
 	TimerList1 = lists:filter(fun({_, S}) -> S /= none end, TimerList),
 	TimerDict = dict:from_list(TimerList1),
 	{noreply, State#state{timer_dict=TimerDict}};
@@ -311,7 +311,7 @@ pause_discovery(RuleId) -> gen_server:cast(?MODULE, {pause_discovery, RuleId}).
 continue_discovery(RuleId) -> gen_server:cast(?MODULE, {continue_discovery, RuleId}).
 
 call_start_discovery_on_target(RuleId, IsOnDemand) ->
-	case mydlp_mnesia:get_rule_channel(RuleId) of
+	case mydlp_mnesia:get_rule_channel_by_orig_id(RuleId) of
 		remote_discovery -> call_remote_storage_discovery(RuleId, IsOnDemand);
 		discovery -> call_ep_discovery(RuleId, IsOnDemand);
 		C -> ?ERROR_LOG("Unknown Rule Type: "?S"", [C])
@@ -416,7 +416,7 @@ call_start_discovery_on_ep(RuleId, GroupId, IsOnDemand) ->
 	end.
 
 call_pause_discovery_on_target(RuleId, IsOnDemand) -> 
-	case mydlp_mnesia:get_rule_channel(RuleId) of
+	case mydlp_mnesia:get_rule_channel_by_orig_id(RuleId) of
 		remote_discovery -> call_pause_remote_storage_discovery(RuleId, IsOnDemand);
 		discovery -> call_pause_ep_discovery(RuleId, IsOnDemand);
 		C -> ?ERROR_LOG("Unknown Rule Type: "?S"", [C])
@@ -463,7 +463,7 @@ call_pause_ep_discovery(RuleId, IsOnDemand) ->
 	end.
 	
 call_stop_discovery_on_target(RuleId, IsOnDemand) ->
-	case mydlp_mnesia:get_rule_channel(RuleId) of
+	case mydlp_mnesia:get_rule_channel_by_orig_id(RuleId) of
 		remote_discovery -> call_stop_remote_storage_discovery(RuleId, IsOnDemand);
 		discovery -> call_stop_ep_discovery(RuleId, IsOnDemand);
 		C -> ?ERROR_LOG("Unknown Rule Type: "?S"", [C])
@@ -499,7 +499,7 @@ call_stop_ep_discovery(RuleId, _IsOnDemand) ->
 	end.
 	
 call_continue_discovery_on_target(RuleId) ->
-	case mydlp_mnesia:get_rule_channel(RuleId) of
+	case mydlp_mnesia:get_rule_channel_by_orig_id(RuleId) of
 		remote_discovery -> call_continue_remote_storage_discovery(RuleId);
 		discovery -> call_continue_ep_discovery(RuleId);
 		C -> ?ERROR_LOG("Unknown Rule Type: "?S"", [C])
@@ -528,13 +528,12 @@ set_command_to_endpoints(RuleId, Command, Args) ->
 		_ -> ok
 	end,
 	[Endpoints] = mydlp_mnesia:get_endpoints_by_rule_id(RuleId), 
-	OrigRuleId = mydlp_mnesia:get_orig_id_by_rule_id(RuleId),
-	set_each_endpoint_command(Endpoints, RuleId, Command, [{ruleId, OrigRuleId}|Args]).
+	set_each_endpoint_command(Endpoints, Command, [{ruleId, RuleId}|Args]).
 
-set_each_endpoint_command([Alias|Endpoints], RuleId, Command, Args) ->
+set_each_endpoint_command([Alias|Endpoints], Command, Args) ->
 	mydlp_mnesia:save_endpoint_command(Alias, Command, Args),
-	set_each_endpoint_command(Endpoints, RuleId, Command, Args);
-set_each_endpoint_command([], _RuleId, _Command, _Args) -> ok.
+	set_each_endpoint_command(Endpoints, Command, Args);
+set_each_endpoint_command([], _Command, _Args) -> ok.
 
 update_report_as_finished(GroupId) -> 
 	mydlp_mysql:update_report_as_finished(GroupId).
@@ -544,9 +543,8 @@ update_discovery_report(GroupId, NewStatus) ->
 
 generate_group_id(RuleId, Channel) ->
 	Time = erlang:universaltime(),
-	OrigRuleId = mydlp_mnesia:get_orig_id_by_rule_id(RuleId),
-	GroupId = integer_to_list(OrigRuleId) ++ "_" ++ integer_to_list(calendar:datetime_to_gregorian_seconds(erlang:localtime())),
-	mydlp_mysql:push_discovery_report(Time, GroupId, OrigRuleId, ?REPORT_STATUS_DISC),
+	GroupId = integer_to_list(RuleId) ++ "_" ++ integer_to_list(calendar:datetime_to_gregorian_seconds(erlang:localtime())),
+	mydlp_mysql:push_discovery_report(Time, GroupId, RuleId, ?REPORT_STATUS_DISC),
 	OprLog = #opr_log{time=Time, channel=Channel, rule_id=RuleId, message_key=?SUCCESS_MOUNT_KEY, group_id=GroupId},%TODO: message key should be revised.
 	?DISCOVERY_OPR_LOG(OprLog),
 	GroupId .
@@ -600,9 +598,9 @@ update_discovery_status(RuleId, Status, GroupId) ->
 remove_discovery_status(RuleId) ->
 	mydlp_mnesia:remove_discovery_status(RuleId).
 	
-edit_dictionary([RuleId|Rest]) ->
-	case mydlp_mnesia:get_availabilty_by_rule_id(RuleId) of
-		true -> start_discovery(RuleId); 
+edit_dictionary([{_RuleId, RuleOrigId}|Rest]) ->
+	case mydlp_mnesia:get_availabilty_by_rule_id(RuleOrigId) of
+		true -> start_discovery(RuleOrigId); 
 		false -> ok
 	end,
 	edit_dictionary(Rest);

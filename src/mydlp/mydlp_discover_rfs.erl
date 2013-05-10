@@ -105,15 +105,16 @@ handle_call({release_mount_by_rule_id, RuleId}, _From, #state{mount_dict=Dict}=S
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-handle_cast({start_by_rule_id, RuleId, GroupId}, #state{mount_dict=Dict}=State) ->
+handle_cast({start_by_rule_id, OrigRuleId, GroupId}, #state{mount_dict=Dict}=State) ->
+	RuleId = mydlp_mnesia:get_rule_id_by_orig_id(OrigRuleId),
 	RemoteStorages = mydlp_mnesia:get_remote_storages_by_rule_id(RuleId),
-	Dict1 = case dict:find(RuleId, Dict) of
+	Dict1 = case dict:find(OrigRuleId, Dict) of
 			{ok, {FilePaths, _R}} -> release_mount(FilePaths),
-					dict:erase(RuleId, Dict);
+					dict:erase(OrigRuleId, Dict);
 			_ -> ?OPR_LOG("mydlp_discover_rfs: Unknown Rule Id: ["?S"]", [RuleId]), 
 				Dict
 		end,
-	consume(RemoteStorages, GroupId, RuleId),
+	consume(RemoteStorages, GroupId, OrigRuleId),
 	{noreply, State#state{mount_dict=Dict1}};
 
 %handle_cast({continue_discovering, RuleId}, State) ->
@@ -180,9 +181,11 @@ code_change(_OldVsn, State, _Extra) ->
 
 add_mount_path_to_dict(none, Dict, _GroupId) -> Dict;
 add_mount_path_to_dict({MountPath, RuleId}, Dict, GroupId) -> 
-	case dict:find(RuleId, Dict) of
-		error -> dict:store(RuleId, {[MountPath], GroupId}, Dict);
-		{ok, {Paths, GId}} -> dict:store(RuleId, {[MountPath|Paths], GId}, Dict)
+	OrigRuleId = mydlp_mnesia:get_orig_id_by_rule_id(RuleId),
+	erlang:display({mount_path, MountPath}),
+	case dict:find(OrigRuleId, Dict) of
+		error -> dict:store(OrigRuleId, {[MountPath], GroupId}, Dict);
+		{ok, {Paths, GId}} -> dict:store(OrigRuleId, {[MountPath|Paths], GId}, Dict)
 	end.
 
 mount_path(MountPath, Command, Args, Envs, Stdin, RuleId, _GroupId, 1) ->

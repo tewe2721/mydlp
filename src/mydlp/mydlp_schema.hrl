@@ -90,6 +90,7 @@
 -record(discovery_schedule, {
 	id,
 	rule_id,
+	rule_orig_id,
 	schedule_hour, 
 	details,
 	available_intervals

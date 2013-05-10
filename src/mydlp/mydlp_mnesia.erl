@@ -124,6 +124,7 @@
 	get_rule_id_by_orig_id/1,
 	get_orig_id_by_rule_id/1,
 	get_rule_channel/1,
+	get_rule_channel_by_orig_id/1,
 	get_discovery_rule_ids/2,
 	update_ep_schedules/2,
 	%update_rfs_and_web_schedules/1,
@@ -466,14 +467,17 @@ get_orig_id_by_rule_id(RuleId) -> aqc({get_orig_id_by_rule_id, RuleId}, nocache)
 
 get_rule_channel(RuleId) -> aqc({get_rule_channel, RuleId}, nocache).
 
+get_rule_channel_by_orig_id(RuleId) -> aqc({get_rule_channel_by_orig_id, RuleId}, nocache).
+
 get_discovery_rule_ids(Ip, Username) -> aqc({get_discovery_rule_ids, Ip, Username}, nocache).
 
-update_ep_schedules({EndpointId, Ip, Username}, TargetRuleId) ->
+update_ep_schedules({EndpointId, Ip, Username}, TargetOrigRuleId) ->
 	SrcUserH = mydlp_api:hash_un(Username),
 	ClientIp = mydlp_api:str_to_ip(binary_to_list(Ip)),
 	AclQ = #aclq{src_addr=ClientIp, src_user_h=SrcUserH},
+	TargetRuleId = get_rule_id_by_orig_id(TargetOrigRuleId),
 	RuleIds = get_rule_ids(get_dfid(), AclQ#aclq{channel=discovery}),
-	aqc({update_ep_schedules, EndpointId, RuleIds, TargetRuleId}, nocache, dirty).
+	aqc({update_ep_schedules, EndpointId, RuleIds, TargetRuleId, TargetOrigRuleId}, nocache, dirty).
 
 get_endpoints_by_rule_id(RuleId) -> aqc({get_endpoints_by_rule_id, RuleId}, nocache).
 
@@ -623,6 +627,11 @@ handle_result({get_orig_id_by_rule_id, _}, {atomic, Result}) ->
 		[R] -> R end;
 
 handle_result({get_rule_channel, _}, {atomic, Result}) ->
+	case Result of
+		[] -> none;
+		[R] -> R end;
+
+handle_result({get_rule_channel_by_orig_id, _}, {atomic, Result}) ->
 	case Result of
 		[] -> none;
 		[R] -> R end;
@@ -1120,7 +1129,7 @@ handle_query({get_rule_id_by_web_server_id, Id}) ->
 	?QLCE(Q);
 
 handle_query({get_schedules_by_hour, Hour}) ->
-	Q = ?QLCQ([{D#discovery_schedule.rule_id, D#discovery_schedule.details} ||
+	Q = ?QLCQ([{D#discovery_schedule.rule_id, D#discovery_schedule.rule_orig_id, D#discovery_schedule.details} ||
 		D <- mnesia:table(discovery_schedule),
 		D#discovery_schedule.schedule_hour == Hour
 	]),
@@ -1129,7 +1138,7 @@ handle_query({get_schedules_by_hour, Hour}) ->
 handle_query({get_availabilty_by_rule_id, RuleId}) ->
 	Q = ?QLCQ([D#discovery_schedule.available_intervals ||
 		D <- mnesia:table(discovery_schedule),
-		D#discovery_schedule.rule_id == RuleId
+		D#discovery_schedule.rule_orig_id == RuleId
 	]),
 	?QLCE(Q);
 
@@ -1170,14 +1179,21 @@ handle_query({get_rule_channel, RuleId}) ->
 	]),
 	?QLCE(Q);
 
+handle_query({get_rule_channel_by_orig_id, RuleId}) ->
+	Q = ?QLCQ([D#rule.channel ||
+		D <- mnesia:table(rule),
+		D#rule.orig_id == RuleId
+	]),
+	?QLCE(Q);
+
 handle_query({get_discovery_rule_ids, Ip, Username}) ->
 	AclQ = #aclq{src_addr=Ip, src_user_h=Username},
 	get_rule_ids(get_dfid(), AclQ#aclq{channel=discovery});
 
-handle_query({update_ep_schedules, EndpointId, RuleIds, TargetRuleId}) -> 
+handle_query({update_ep_schedules, EndpointId, RuleIds, TargetRuleId, TargetOrigRuleId}) -> 
 	case lists:member(TargetRuleId, RuleIds) of
 		true ->
-			[I] = mnesia:match_object(#discovery_targets{id='_', channel='_', rule_id=TargetRuleId, orig_id='_', group_id='_', targets='_'}),
+			[I] = mnesia:match_object(#discovery_targets{id='_', channel='_', rule_id='_', orig_id=TargetOrigRuleId, group_id='_', targets='_'}),
 			EpList = I#discovery_targets.targets,
 			case lists:member(EndpointId, EpList) of %% TODO: use gb_sets instead of b-in list
 				true -> ok;
@@ -1193,7 +1209,7 @@ handle_query({update_ep_schedules, EndpointId, RuleIds, TargetRuleId}) ->
 handle_query({get_endpoints_by_rule_id, RuleId}) ->
 	Q = ?QLCQ([D#discovery_targets.targets ||
 		D <- mnesia:table(discovery_targets),
-		D#discovery_targets.rule_id == RuleId
+		D#discovery_targets.orig_id == RuleId
 	]),
 	?QLCE(Q);
 
@@ -2418,12 +2434,12 @@ remove_regex(GroupId) ->
 	Regexes = mnesia:match_object(#regex{id='_', group_id=GroupId, plain='_', compiled='_', error='_'}),
 	lists:foreach(fun(#regex{id=Id}) -> mnesia:delete({regex, Id}) end, Regexes), ok.
 
-filter_for_day([{R, daily}|Rows], Acc) -> 
-	filter_for_day(Rows, [R|Acc]);
-filter_for_day([{R, {weekly, DayList}}|Rows], Acc) ->
+filter_for_day([{R, O, daily}|Rows], Acc) -> 
+	filter_for_day(Rows, [{R, O}|Acc]);
+filter_for_day([{R, O, {weekly, DayList}}|Rows], Acc) ->
 	DayAsInt = calendar:day_of_the_week(date()),
 	case lists:nth(DayAsInt, DayList) of
-		1 -> filter_for_day(Rows, [R|Acc]);
+		1 -> filter_for_day(Rows, [{R, O}|Acc]);
 		_ -> filter_for_day(Rows, Acc)
 	end;
 filter_for_day([], []) -> none;

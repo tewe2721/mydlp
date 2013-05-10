@@ -429,6 +429,8 @@ set_prop_extra(ObjId) ->
 	ok = mydlp_container:setprop(ObjId, "drop_path", ?CFG(mount_dir)),
 	ok.
 
+get_rule_index(RuleId) -> mydlp_mnesia:get_rule_id_by_orig_id(RuleId).
+
 -endif.
 
 -ifdef(__MYDLP_ENDPOINT).
@@ -437,12 +439,15 @@ set_prop_extra(ObjId) ->
 	ok = mydlp_container:setprop(ObjId, "channel", "discovery"),
 	ok.
 
+get_rule_index(RuleId) -> RuleId.
+
 -endif.
 
 discover_file(#fs_entry{file_id={FP, RuleIndex}}) ->
 	try	timer:sleep(20),
 		{ok, ObjId} = mydlp_container:new(),
-		ok = mydlp_container:setprop(ObjId, "rule_index", RuleIndex),
+		RuleIndex1 = get_rule_index(RuleIndex),
+		ok = mydlp_container:setprop(ObjId, "rule_index", RuleIndex1),
 		{_, GroupId} = get_discovery_status(RuleIndex),
 		ok = mydlp_container:setprop(ObjId, "group_id", GroupId),
 		set_prop_extra(ObjId),

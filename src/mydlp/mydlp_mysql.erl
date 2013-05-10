@@ -1010,24 +1010,24 @@ populate_discovery_schedule(RuleOrigId, RuleId) ->
 			DayIntervals = populate_day_intervals_as_list(ScheduleDayIntervals, []),	
 	
 			{ok, DailySchedule} = psq(daily_schedule_by_rule_id, [RuleOrigId]),
-			populate_discovery_schedule1(DailySchedule, DayIntervals, RuleId, daily),
+			populate_discovery_schedule1(DailySchedule, DayIntervals, RuleId, RuleOrigId, daily),
 		
 			{ok, WeeklySchedule} = psq(weekly_schedule_by_rule_id, [RuleOrigId]),
-			populate_discovery_schedule1(WeeklySchedule, DayIntervals, RuleId, weekly)
+			populate_discovery_schedule1(WeeklySchedule, DayIntervals, RuleId, RuleOrigId, weekly)
 	end.
 
-populate_discovery_schedule1([[Hour]|Rows], ScheduleIntervals, RuleId, daily) ->
+populate_discovery_schedule1([[Hour]|Rows], ScheduleIntervals, RuleId, RuleOrigId, daily) ->
 	Id = mydlp_mnesia:get_unique_id(discovery_schedule),
-	I = #discovery_schedule{id=Id, rule_id=RuleId, schedule_hour=Hour, details=daily, available_intervals=ScheduleIntervals},
+	I = #discovery_schedule{id=Id, rule_id=RuleId, rule_orig_id=RuleOrigId, schedule_hour=Hour, details=daily, available_intervals=ScheduleIntervals},
 	mydlp_mnesia_write(I),
-	populate_discovery_schedule1(Rows, ScheduleIntervals, RuleId, daily);
-populate_discovery_schedule1([[Hour, M, Tu, W, Th, F, Sa, Su]|Rows], ScheduleIntervals, RuleId, weekly) ->
+	populate_discovery_schedule1(Rows, ScheduleIntervals, RuleId, RuleOrigId, daily);
+populate_discovery_schedule1([[Hour, M, Tu, W, Th, F, Sa, Su]|Rows], ScheduleIntervals, RuleId, RuleOrigId, weekly) ->
 	Detail = lists:flatten([binary_to_list(M), binary_to_list(Tu), binary_to_list(W), binary_to_list(Th), binary_to_list(F), binary_to_list(Sa), binary_to_list(Su)]),
 	Id = mydlp_mnesia:get_unique_id(discovery_schedule),
-	I = #discovery_schedule{id=Id, rule_id=RuleId, schedule_hour=Hour, details={weekly, Detail}, available_intervals=ScheduleIntervals},
+	I = #discovery_schedule{id=Id, rule_id=RuleId, rule_orig_id=RuleOrigId,  schedule_hour=Hour, details={weekly, Detail}, available_intervals=ScheduleIntervals},
 	mydlp_mnesia_write(I),
-	populate_discovery_schedule1(Rows, ScheduleIntervals, RuleId, weekly);
-populate_discovery_schedule1([], _, _, _) -> ok.
+	populate_discovery_schedule1(Rows, ScheduleIntervals, RuleId, RuleOrigId, weekly);
+populate_discovery_schedule1([], _, _, _, _) -> ok.
 
 populate_ep_schedules_entries(RuleId, OrigId) ->
 	Id = mydlp_mnesia:get_unique_id(discovery_targets),

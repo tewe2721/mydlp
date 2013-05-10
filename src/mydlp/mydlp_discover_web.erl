@@ -197,16 +197,18 @@ handle_cast({update_rule_status, RuleId, _Status}, #state{timer_dict=TimerDict}=
 			_ -> TimerDict end,
 	{noreply, State#state{timer_dict=TimerDict1}};
 
-handle_cast({start_by_rule_id, RuleId, GroupId}, #state{timer_dict=TimerDict}=State) ->
-	filter_discover_cache(RuleId),
+
+handle_cast({start_by_rule_id, OrigRuleId, GroupId}, #state{timer_dict=TimerDict}=State) ->
+	filter_discover_cache(OrigRuleId),
+	RuleId = mydlp_mnesia:get_rule_id_by_orig_id(OrigRuleId),
 	WebServers = mydlp_mnesia:get_web_servers_by_rule_id(RuleId),
 	case WebServers of
-		[] -> push_opr_log(RuleId, GroupId, ?DISCOVERY_FINISHED),
+		[] -> push_opr_log(OrigRuleId, GroupId, ?DISCOVERY_FINISHED),
 			{noreply, State};
 		_ -> 
-			{ok, Timer} = timer:send_after(60000, {is_finished, RuleId}),
-			TimerDict1 = dict:store(RuleId, Timer, TimerDict),
-			lists:map(fun(W) -> q(W#web_server.id, W#web_server.start_path, W#web_server.rule_id) end, WebServers),
+			{ok, Timer} = timer:send_after(60000, {is_finished, OrigRuleId}),
+			TimerDict1 = dict:store(OrigRuleId, Timer, TimerDict),
+			lists:map(fun(W) -> q(W#web_server.id, W#web_server.start_path, OrigRuleId) end, WebServers),
 			{noreply, State#state{timer_dict=TimerDict1}}
 	end;
 
@@ -402,19 +404,19 @@ update_web_entry(WE, [{"content-length", Size}|Headers]) ->
 	catch _:_ -> undefined end,
 	update_web_entry(WE#web_entry{size=S}, Headers);
 update_web_entry(WE, [{"last-modified", LMD}|Headers]) ->
-	LM = case httpd_util:convert_request_date(LMD) of
+	LM = case httpd_util:convert_request_date(lists:flatten(LMD)) of
 		bad_date -> undefined;
 		D -> D end,
 	update_web_entry(WE#web_entry{last_modified=LM}, Headers);
 update_web_entry(WE, [{"expires", ED} |Headers]) ->
-	E = case httpd_util:convert_request_date(ED) of
+	E = case httpd_util:convert_request_date(lists:flatten(ED)) of
 		bad_date -> undefined;
 		D -> D end,
 	update_web_entry(WE#web_entry{expires=E}, Headers);
 update_web_entry(WE, [{"cache-control",CacheS}| Headers]) ->
 	MA = case string:str(CacheS, "max-age=") of
 		0 -> undefined;
-		I -> 	NextStr = string:substr(I + 8),
+		I -> 	NextStr = string:substr(CacheS, I + 8),
 			case string:chr(NextStr, $\s) of
 			0 -> undefined;
 			I2 ->	case string:substr(NextStr, 1, I2 - 1) of
@@ -485,7 +487,8 @@ discover_item({WebServerId, PagePath, RuleId}, Data) ->
 		{ok, ObjId} = mydlp_container:new(),
 		ok = mydlp_container:setprop(ObjId, "channel", "remote_discovery"),
 		ok = mydlp_container:setprop(ObjId, "web_server_id", WebServerId),
-		ok = mydlp_container:setprop(ObjId, "rule_index", RuleId),
+		RuleIndex = mydlp_mnesia:get_rule_id_by_orig_id(RuleId),
+		ok = mydlp_container:setprop(ObjId, "rule_index", RuleIndex),
 		{_, GroupId} = get_discovery_status(RuleId),
 		ok = mydlp_container:setprop(ObjId, "group_id", GroupId),
 		ok = mydlp_container:setprop(ObjId, "page_path", PagePath),
