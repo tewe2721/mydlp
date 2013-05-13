@@ -307,11 +307,12 @@ get_mount_path(Id) ->
 
 generate_fingerprints_file(#fs_entry{file_id=FP}, DDId) ->
 	try
-		Filename = filename:basename(FP),
+		Filename0 = filename:basename(FP),
 		CreatedDate = erlang:universaltime(),
 		{ok, Bin} = file:read_file(FP),
-		File = ?BF_C(#file{filename=Filename}, Bin),
-		Md5Hash = File#file.md5_hash,
+		File = ?BF_C(#file{filename=Filename0}, Bin),
+		Md5Hash = mydlp_api:md5_hex(Bin),
+	        Filename = mydlp_api:file_to_str(File),
 		FileId = mydlp_mysql:insert_file_entry(Filename, Md5Hash, CreatedDate),
 		Text = mydlp_api:concat_texts(File),
 		FList = mydlp_pdm:fingerprint(Text),

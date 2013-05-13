@@ -332,9 +332,10 @@ handle_call(insert_document, From, State) ->
 		end, 30000),
 	{noreply, State};
 
-handle_call({insert_file_entry, Id, Filename, Md5Hash, Date}, From, State) ->
+handle_call({insert_file_entry, Id, Filename0, Md5Hash, Date}, From, State) ->
 	Worker = self(),
 	?ASYNC(fun() ->
+			{Filename} = pre_insert_log(Filename0),
 			transaction(fun() ->
 				psqt(insert_file_entry, 
 					[Id, Filename, Md5Hash, Date])
