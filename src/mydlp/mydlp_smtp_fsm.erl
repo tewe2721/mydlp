@@ -260,7 +260,7 @@ pre_query(State, Files) ->
 		false -> ok end.
 
 % refined this
-'BLOCK_REQ'(block, #smtpd_fsm{spool_ref=Ref, message_record=MessageR} = State, {{rule, OrigRuleId}, _, _, _}) ->
+'BLOCK_REQ'(block, #smtpd_fsm{spool_ref=Ref, message_record=MessageR} = State, {{rule, OrigRuleId}, _, _, _, _}) ->
 	MailFrom = MessageR#message.mail_from,
 	RepMessage = #message{mail_from=MailFrom, 
 			rcpt_to=MailFrom,

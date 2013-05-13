@@ -859,8 +859,7 @@ filter_rule_ids_by_dest(RuleIds, AclQ) -> %TODO: domain names stored as binary. 
 		D#dest.rule_id == R,
 		D#dest.destination /= all,
 		D#dest.destination /= has_bcc,
-		DDomain = D#dest.destination,
-		is_applicable_destination_domain(AclQ#aclq.destinations, DDomain)
+		is_applicable_destination_domain(AclQ#aclq.destinations, D#dest.destination)
 	]),
 	RulenD = ?QLCE(Q1),
 
@@ -868,11 +867,10 @@ filter_rule_ids_by_dest(RuleIds, AclQ) -> %TODO: domain names stored as binary. 
 		D <- mnesia:table(destination_user),
 		R <- RuleIds,
 		D#destination_user.rule_id == R,
-		DUserH = D#destination_user.un_hash,
-		is_applicable_destination_user(AclQ#aclq.destinations, DUserH)
+		is_applicable_destination_user(AclQ#aclq.destinations, D#destination_user.un_hash)
 	]),
 	RuleuD = ?QLCE(Q2),
-
+	
 	RuleHD = case AclQ#aclq.has_hidden_destinations of
 		true -> case AclQ#aclq.channel of
 			mail -> Q2 = ?QLCQ([R ||
