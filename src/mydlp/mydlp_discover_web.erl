@@ -145,6 +145,9 @@ handle_cast({continue_discovering, RuleId}, #state{discover_queue=Q, paused_queu
 			{noreply, State}
 	end;
 
+handle_cast({q, _WebServerId, _ParentId, external, _RuleId, _Depth}, State) ->
+	{noreply, State};
+
 handle_cast({q, WebServerId, ParentId, PagePath, RuleId, Depth}, #state{discover_queue=Q, discover_inprog=false} = State) ->
 	Q1 = queue:in({WebServerId, ParentId, PagePath, RuleId, Depth}, Q),
 	consume(),
@@ -525,8 +528,9 @@ discover_links({_WebServerId, _PagePath, _RuleId} = EntryId, Data, Depth) ->
 schedule_links([L|Links], EntryId, Depth) when is_binary(L) ->
 	schedule_links([binary_to_list(L)|Links],  EntryId, Depth);
 schedule_links([L|Links], {WebServerId, PagePath, RuleId} = EntryId, Depth) when is_list(L) ->
-	LPath = add_link_to_path(WebServerId, PagePath, L),
-	q(WebServerId, EntryId, LPath, RuleId, Depth),
+	case add_link_to_path(WebServerId, PagePath, L) of
+		external -> ok;
+		LPath -> q(WebServerId, EntryId, LPath, RuleId, Depth) end,
 	schedule_links(Links, EntryId, Depth);
 schedule_links([], _, _) -> ok.
 
