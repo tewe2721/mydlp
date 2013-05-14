@@ -407,14 +407,16 @@ update_web_entry(WE, [{"content-length", Size}|Headers]) ->
 	catch _:_ -> undefined end,
 	update_web_entry(WE#web_entry{size=S}, Headers);
 update_web_entry(WE, [{"last-modified", LMD}|Headers]) ->
-	LM = case httpd_util:convert_request_date(lists:flatten(LMD)) of
+	LM = case catch httpd_util:convert_request_date(lists:flatten(LMD)) of
 		bad_date -> undefined;
-		D -> D end,
+		{{_Year,_Month,_Date},{_Hour,_Min,_Sec}} = D -> D;
+		_Else -> undefined end,
 	update_web_entry(WE#web_entry{last_modified=LM}, Headers);
 update_web_entry(WE, [{"expires", ED} |Headers]) ->
-	E = case httpd_util:convert_request_date(lists:flatten(ED)) of
+	E = case catch httpd_util:convert_request_date(lists:flatten(ED)) of
 		bad_date -> undefined;
-		D -> D end,
+		{{_Year,_Month,_Date},{_Hour,_Min,_Sec}} = D -> D;
+		_Else -> undefined end,
 	update_web_entry(WE#web_entry{expires=E}, Headers);
 update_web_entry(WE, [{"cache-control",CacheS}| Headers]) ->
 	MA = case string:str(CacheS, "max-age=") of
