@@ -232,7 +232,7 @@ handle_each_mount({sshfs, [Address, Password, Path, Port, Username]}, Id) ->
 			false -> Address end,
 	ConnectionString = UsernameS ++ "@" ++ AddressS ++ ":" ++ PathS, 
 	MountPath = get_mount_path(Id),
-	Args = ["-p", PortS, ConnectionString, MountPath, "-o", "password_stdin"],
+	Args = ["-p", PortS, ConnectionString, MountPath, "-o", "password_stdin", "-o", "UserKnownHostsFile=/dev/null", "-o", "StrictHostKeyChecking=no"],
 	create_and_mount_path(MountPath, ?SSH_COMMAND, Args, [], Stdin);
 
 handle_each_mount({ftpfs, [Address, Password, Path, Username]}, Id) ->
