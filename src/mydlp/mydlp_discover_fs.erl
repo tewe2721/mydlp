@@ -443,8 +443,17 @@ get_rule_index(RuleId) -> RuleId.
 
 -endif.
 
+calculate_sleeptime(FP) ->
+	FS = filelib:file_size(FP),
+	SleepTime = 20 + ( FS div 10000 ),
+	case SleepTime of
+		T when T > 4000 -> 4000;
+		T when T < 20 -> 20;
+		T -> T end.
+
 discover_file(#fs_entry{file_id={FP, RuleIndex}}) ->
-	try	timer:sleep(20),
+	try	SleepTime = calculate_sleeptime(FP),
+		timer:sleep(SleepTime),
 		{ok, ObjId} = mydlp_container:new(),
 		RuleIndex1 = get_rule_index(RuleIndex),
 		ok = mydlp_container:setprop(ObjId, "rule_index", RuleIndex1),

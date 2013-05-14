@@ -224,6 +224,9 @@ handle_call({aclq, ObjId, Timeout}, From, #state{object_tree=OT} = State) ->
 						AclRet = acl_ret(QRet, Obj1, DFFiles),
 						{ok, AclRet}
 					catch	throw:{error, eacces} -> {ok, pass};
+						throw:{error, enomem} -> 
+							?ERROR_LOG("ACLQ: Analysis of a file had failed because of insufficient memory!", []),
+							{ok, pass};
 						throw:{is_not_regularfile, Path} ->
 							case catch string:substr(Path, 2, 2) of
 								":\\" -> ok;
