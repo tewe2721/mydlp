@@ -445,6 +445,8 @@ fetch_data(WebServerId, PagePath) ->
 	URL = get_url(WebServerId, PagePath),
 	httpc:request(get, {URL, []}, [], [{sync, false}]).
 
+handle_head(_RequestId, {error,no_scheme}, State) -> State;
+
 handle_head(_RequestId, {{_, 404, _}, _Headers, _}, State) -> State;
 	
 handle_head(RequestId, {{_, 200, _}, Headers, _}, #state{head_requests=HeadT, get_requests=GetT, rule_age=RuleAge} = State) ->
