@@ -378,7 +378,7 @@ get_remote_rule_tables(FilterId, Addr, UserH) -> aqc({get_remote_rule_tables, Fi
 
 get_remote_rule_ids(FilterId, Addr, UserH) -> aqc({get_remote_rule_ids, FilterId, Addr, UserH}, cache).
 
-get_remote_user_rule_ids() -> aqc(get_remote_user_rule_ids, nocache, dirty).
+get_remote_user_rule_ids() -> aqc(get_remote_user_rule_ids, nocache, dirty, 120000).
 
 get_remote_ipr_rule_ids() -> aqc(get_remote_ipr_rule_ids, nocache, dirty).
 

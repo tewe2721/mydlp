@@ -224,7 +224,7 @@ discover_each_mount([{Id, RuleId, sshfs, {Address, Port, Path, Username, Passwor
 	AddressS = binary_to_list(Address),
 	ConnectionString = UsernameS ++ "@" ++ AddressS ++ ":" ++ PathS, 
 	MountPath = filename:join(?MOUNT_PATH, integer_to_list(Id)),
-	Args = ["-p", PortS, ConnectionString, MountPath, "-o", "password_stdin"],
+	Args = ["-p", PortS, ConnectionString, MountPath, "-o", "password_stdin", "-o", "UserKnownHostsFile=/dev/null", "-o", "StrictHostKeyChecking=no"],
 	MountTuple = create_and_mount_path(MountPath, ?SSH_COMMAND, Args, [], Stdin, RuleId, GroupId),
 	Dict1 = add_mount_path_to_dict(MountTuple, Dict, GroupId),
 	discover_each_mount(RemoteStorages, Dict1, GroupId);

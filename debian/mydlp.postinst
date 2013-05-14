@@ -149,7 +149,7 @@ patch_mysql_schema() {
                 true;
 	else
 		local PACKAGEOLDVERSION=$1
-		for p in $(/bin/ls $SCHEMADIFFDIR)
+		for p in $(/bin/ls $SCHEMADIFFDIR|/usr/bin/sort -V)
 		do
 			local PATCHVERSION=$(echo $p|/bin/sed -s 's/___.*$//g')
 			if $DPKGBIN --compare-versions "$PATCHVERSION" gt "$PACKAGEOLDVERSION"; then
