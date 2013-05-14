@@ -314,12 +314,9 @@ handle_call({get_remote_storage_by_id, RSId}, _From, State) ->
 	case psq(remote_nfs_dir, [RSId]) of
 		{ok, [R2|_]} -> {reply, {nfs, R2}, State};
 		_ ->
-	case psq(remote_dfs_dir, [RSId]) of
-		{ok, [R3|_]} -> {reply, {dfs, R3}, State};
-		_ ->
-	case psq(remote_cifs_dir, [RSId]) of
-		{ok, [R4|_]} -> {reply, {cfs, R4}, State};
-		_ ->{reply, none, State} end end end end end;
+	case psq(remote_windows_dir, [RSId]) of
+		{ok, [R4|_]} -> {reply, {windows, R4}, State};
+		_ ->{reply, none, State} end end end end;
 
 handle_call(insert_document, From, State) ->
 	Worker = self(),
@@ -590,13 +587,11 @@ init([]) ->
 		{source_domain_by_rule_id, <<"SELECT d.destinationString FROM Domain AS d, RuleItem AS ri WHERE ri.rule_id=? AND d.id=ri.item_id AND ri.ruleColumn=\"SOURCE\"">>},
 		{remote_sshfs, <<"SELECT r.address, r.port, r.path, r.username, r.password FROM RemoteStorageSSHFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
 		{remote_ftpfs, <<"SELECT r.address, r.path, r.username, r.password FROM RemoteStorageFTPFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
-		{remote_cifs, <<"SELECT r.windowsShare, r.path, r.username, r.password FROM RemoteStorageCIFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
-		{remote_dfs, <<"SELECT r.windowsShare, r.path, r.username, r.password FROM RemoteStorageDFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
+		{remote_windows, <<"SELECT r.uncPath, r.username, r.password FROM RemoteStorageWindowsShare r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
 		{remote_nfs, <<"SELECT r.address, r.path FROM RemoteStorageNFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
 		{remote_sshfs_dir, <<"SELECT r.address, r.password, r.path, r.port, r.username FROM RemoteStorageSSHFS r WHERE r.id=?">>},
 		{remote_ftpfs_dir, <<"SELECT r.address, r.password, r.path, r.username FROM RemoteStorageFTPFS r WHERE r.id=?">>},
-		{remote_cifs_dir, <<"SELECT r.windowsShare, r.password, r.path, r.username FROM RemoteStorageCIFS r WHERE r.id=?">>},
-		{remote_dfs_dir, <<"SELECT r.windowsShare, r.password, r.path, r.username FROM RemoteStorageDFS r WHERE r.id=?">>},
+		{remote_windows_dir, <<"SELECT r.uncPath, r.password, r.username FROM RemoteStorageWindowsShare r WHERE r.id=?">>},
 		{remote_nfs_dir, <<"SELECT r.address, r.path FROM RemoteStorageNFS r WHERE r.id=?">>},
 		{web_servers, <<"SELECT r.proto, r.address, r.port, r.digDepth, r.startPath FROM WebServer r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
 		{app_name_by_rule_id, <<"SELECT a.destinationString FROM ApplicationName AS a, RuleItem AS ri WHERE ri.rule_id=? AND a.id=ri.item_id">>},
@@ -672,8 +667,7 @@ init([]) ->
 		{get_remote_sshfs, <<"SELECT r.id, r.address, r.password, r.path, r.port, r.username FROM RemoteStorageSSHFS AS r, DocumentDatabaseRemoteStorage AS d WHERE d.id=? and d.remoteStorage_id=r.id">>},
 		{get_remote_ftpfs, <<"SELECT r.id, r.address, r.password, r.path, r.username FROM RemoteStorageFTPFS AS r, DocumentDatabaseRemoteStorage AS d WHERE d.id=? and d.remoteStorage_id=r.id">>},
 		{get_remote_nfs, <<"SELECT r.id, r.address, r.path FROM RemoteStorageNFS AS r, DocumentDatabaseRemoteStorage as d WHERE d.id=? and d.remoteStorage_id=r.id">>},
-		{get_remote_dfs, <<"SELECT r.id, r.windowsShare, r.password, r.path, r.username FROM RemoteStorageDFS AS r, DocumentDatabaseRemoteStorage AS d WHERE d.id=? and d.remoteStorage_id=r.id">>},
-		{get_remote_cifs, <<"SELECT r.id, r.windowsShare, r.password, r.path, r.username FROM RemoteStorageCIFS AS r, DocumentDatabaseRemoteStorage AS d WHERE d.id=? and d.remoteStorage_id=r.id">>},
+		{get_remote_windows, <<"SELECT r.id, r.uncPath, r.password, r.username FROM RemoteStorageWindowsShare AS r, DocumentDatabaseRemoteStorage AS d WHERE d.id=? and d.remoteStorage_id=r.id">>},
 		{get_exclude_files, <<"SELECT e.excludeFileName FROM DocumentDatabaseRemoteStorage AS d, DocumentDatabaseExcludeFile AS e WHERE d.id=? AND d.id=e.documentDatabaseRemoteStorage_id">>},
 		{insert_file_entry, <<"INSERT INTO DocumentDatabaseFileEntry (id, filename, md5Hash, createdDate) VALUES (?, ?, ?, ?)">>},
 		{insert_document, <<"INSERT INTO Document (id) VALUES (NULL)">>},
@@ -945,11 +939,8 @@ populate_remote_storages(RuleOrigId, RuleId) ->
 	{ok, RFTPFS} = psq(remote_ftpfs, [RuleOrigId]),
 	populate_remote_ftpfs(RFTPFS, RuleId),
 
-	{ok, RCIFS} = psq(remote_cifs, [RuleOrigId]),
-	populate_remote_cifs(RCIFS, RuleId),
-
-	{ok, RDFS} = psq(remote_dfs, [RuleOrigId]),
-	populate_remote_dfs(RDFS, RuleId),
+	{ok, RWindows} = psq(remote_windows, [RuleOrigId]),
+	populate_remote_windows(RWindows, RuleId),
 
 	{ok, RNFS} = psq(remote_nfs, [RuleOrigId]),
 	populate_remote_nfs(RNFS, RuleId),
@@ -970,19 +961,12 @@ populate_remote_ftpfs([[Address, Path, Username, Password]|Rows], RuleId) ->
 	populate_remote_ftpfs(Rows, RuleId);
 populate_remote_ftpfs([], _RuleId) -> ok.
 
-populate_remote_cifs([[WindowsShare, Path, Username, Password]|Rows], RuleId) ->
+populate_remote_windows([[UNCPath, Username, Password]|Rows], RuleId) ->
 	Id = mydlp_mnesia:get_unique_id(remote_storage),
-	I = #remote_storage{id=Id, rule_id=RuleId, type=cifs, details={WindowsShare, Path, Username, Password}},
+	I = #remote_storage{id=Id, rule_id=RuleId, type=windows, details={UNCPath, Username, Password}},
 	mydlp_mnesia_write(I),
-	populate_remote_cifs(Rows, RuleId);
-populate_remote_cifs([], _RuleId) -> ok.
-
-populate_remote_dfs([[WindowsShare, Path, Username, Password]|Rows], RuleId) ->
-	Id = mydlp_mnesia:get_unique_id(remote_storage),
-	I = #remote_storage{id=Id, rule_id=RuleId, type=dfs, details={WindowsShare, Path, Username, Password}},
-	mydlp_mnesia_write(I),
-	populate_remote_dfs(Rows, RuleId);
-populate_remote_dfs([], _RuleId) -> ok.
+	populate_remote_windows(Rows, RuleId);
+populate_remote_windows([], _RuleId) -> ok.
 
 populate_remote_nfs([[Address, Path]|Rows], RuleId) ->
 	Id = mydlp_mnesia:get_unique_id(remote_storage),
@@ -1121,12 +1105,9 @@ get_remote_storage_with_type(DDRSId) ->
 	case psq(get_remote_nfs, [DDRSId]) of
 		{ok, [[Id2|R2]]} -> {nfs, R2, Id2};
 		_ ->
-	case psq(get_remote_dfs, [DDRSId]) of
-		{ok, [[Id3|R3]]} -> {dfs, R3, Id3};
-		_ ->
-	case psq(get_remote_cifs, [DDRSId]) of
-		{ok, [[Id4|R4]]} -> {cifs, R4, Id4};
-		_ ->none end end end end end.
+	case psq(get_remote_windows, [DDRSId]) of
+		{ok, [[Id4|R4]]} -> {windows, R4, Id4};
+		_ ->none end end end end.
 
 get_usernames(OrigId) ->
 	Users = get_users(OrigId),

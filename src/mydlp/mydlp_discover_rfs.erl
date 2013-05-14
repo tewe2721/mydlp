@@ -182,7 +182,6 @@ code_change(_OldVsn, State, _Extra) ->
 add_mount_path_to_dict(none, Dict, _GroupId) -> Dict;
 add_mount_path_to_dict({MountPath, RuleId}, Dict, GroupId) -> 
 	OrigRuleId = mydlp_mnesia:get_orig_id_by_rule_id(RuleId),
-	erlang:display({mount_path, MountPath}),
 	case dict:find(OrigRuleId, Dict) of
 		error -> dict:store(OrigRuleId, {[MountPath], GroupId}, Dict);
 		{ok, {Paths, GId}} -> dict:store(OrigRuleId, {[MountPath|Paths], GId}, Dict)
@@ -244,12 +243,6 @@ discover_each_mount([{Id, RuleId, ftpfs, {Address, Path, Username, Password}}|Re
 	MountTuple = create_and_mount_path(MountPath, ?FTP_COMMAND, Args, [], none, RuleId, GroupId),
 	Dict1 = add_mount_path_to_dict(MountTuple, Dict, GroupId),
 	discover_each_mount(RemoteStorages, Dict1, GroupId);
-discover_each_mount([{Id, RuleId, cifs, Details}|RemoteStorages], Dict, GroupId) ->
-	Dict1 = discover_windows_share(Id, RuleId, Details, Dict, GroupId),
-	discover_each_mount(RemoteStorages, Dict1, GroupId);
-discover_each_mount([{Id, RuleId, dfs, Details}|RemoteStorages], Dict, GroupId) ->
-	Dict1 = discover_windows_share(Id, RuleId, Details, Dict, GroupId),
-	discover_each_mount(RemoteStorages, Dict1, GroupId);
 discover_each_mount([{Id, RuleId, nfs, {Address, Path}}|RemoteStorages], Dict, GroupId) ->
 	PathS = binary_to_list(Path),
 	AddressS = binary_to_list(Address),
@@ -259,13 +252,10 @@ discover_each_mount([{Id, RuleId, nfs, {Address, Path}}|RemoteStorages], Dict, G
 	MountTuple = create_and_mount_path(MountPath, ?MOUNT_COMMAND, Args, [], none, RuleId, GroupId),
 	Dict1 = add_mount_path_to_dict(MountTuple, Dict, GroupId),
 	discover_each_mount(RemoteStorages, Dict1, GroupId);
-discover_each_mount([], Dict, _GroupId) -> Dict.
-
-discover_windows_share(Id, RuleId, {WindowsShare, Path, Username, Password}, Dict, GroupId) ->
+discover_each_mount([{Id, RuleId, windows, {UNCPath, Username, Password}}|RemoteStorages], Dict, GroupId) ->
 	PasswordS = binary_to_list(Password),
 	UsernameS = binary_to_list(Username),
-	PathS = binary_to_list(Path),
-	WindowsSharePath =  "//" ++ binary_to_list(WindowsShare) ++ "/" ++ PathS,
+	WindowsSharePath = binary_to_list(UNCPath),
 	MountPath = filename:join(?MOUNT_PATH, integer_to_list(Id)),
 	Args = ["-o","ro", WindowsSharePath, MountPath],
 	MountTuple = case UsernameS of
@@ -276,7 +266,9 @@ discover_windows_share(Id, RuleId, {WindowsShare, Path, Username, Password}, Dic
 					_ -> create_and_mount_path(MountPath, ?SMB_COMMAND, Args, [{"USER", UsernameS}, {"PASSWD", PasswordS}], none, RuleId, GroupId)
 				end
 		end,
-	add_mount_path_to_dict(MountTuple, Dict, GroupId).
+	Dict1 = add_mount_path_to_dict(MountTuple, Dict, GroupId),
+	discover_each_mount(RemoteStorages, Dict1, GroupId);
+discover_each_mount([], Dict, _GroupId) -> Dict.
 
 release_mounts() -> 
 	case file:list_dir(?MOUNT_PATH) of

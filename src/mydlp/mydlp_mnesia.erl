@@ -1398,7 +1398,7 @@ handle_query({remove_endpoint_command, EndpointId, CommandList, Args}) ->
 
 handle_query({del_web_entries_by_rule_id, _RuleId}) ->
 	Q = ?QLCQ([F ||
-		F <- mnesia:table(fs_entry)
+		F <- mnesia:table(web_entry)
 		]),
 	?QLCE(Q);
 
@@ -2177,8 +2177,7 @@ remove_reduntant_fs_entries([#fs_entry{file_id={_, RuleId1}}=Item|Rest], RuleId)
 		_ -> ok
 	end,
 	remove_reduntant_fs_entries(Rest, RuleId);
-%remove_reduntant_fs_entries([_|Rest], RuleId) ->
-%	mnesia:dirty_delete_object(Rest, RuleId);
+remove_reduntant_fs_entries([_|Rest], RuleId) -> remove_reduntant_fs_entries(Rest, RuleId);
 remove_reduntant_fs_entries([], _RuleId) -> ok.
 
 
@@ -2191,8 +2190,6 @@ remove_reduntant_web_entries([#web_entry{entry_id={_, _, RuleId1}}=Item|Rest], R
 		_ -> ok
 	end,
 	remove_reduntant_web_entries(Rest, RuleId);
-%remove_reduntant_fs_entries([_|Rest], RuleId) ->
-%	mnesia:dirty_delete_object(Rest, RuleId);
 remove_reduntant_web_entries([], _RuleId) -> ok.
 
 remove_filters(FIs) -> lists:foreach(fun(Id) -> remove_filter(Id) end, FIs), ok.

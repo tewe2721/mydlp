@@ -257,12 +257,6 @@ handle_each_mount({ftpfs, [Address, Password, Path, Username]}, Id) ->
 	Args = ["-o", "ro,utf8", AddressPath, MountPath],
 	create_and_mount_path(MountPath, ?FTP_COMMAND, Args, [], none);
 
-handle_each_mount({cifs, Details}, Id) ->
-	handle_windows_share(Details, Id);
-
-handle_each_mount({dfs, Details}, Id) ->
-	handle_windows_share(Details, Id);
-
 handle_each_mount({nfs, [Address, Path]}, Id) ->
 	PathS = case is_binary(Path) of 
 			true -> binary_to_list(Path);
@@ -273,22 +267,18 @@ handle_each_mount({nfs, [Address, Path]}, Id) ->
 	AddressPath = AddressS ++ ":" ++ PathS,
 	MountPath = get_mount_path(Id),
 	Args = ["-o", "ro,soft,intr,rsize=8192,wsize=8192", AddressPath, MountPath],
-	create_and_mount_path(MountPath, ?MOUNT_COMMAND, Args, [], none).
+	create_and_mount_path(MountPath, ?MOUNT_COMMAND, Args, [], none);
 
-handle_windows_share([WindowsShare, Password, Path, Username], Id) ->
+handle_each_mount({windows, [UNCPath, Password, Username]}, Id) ->
 	PasswordS =  case is_binary(Password) of
 			true -> binary_to_list(Password);
 			false -> Password end,
 	UsernameS = case is_binary(Username) of 
 			true -> binary_to_list(Username);
 			false -> Username end,
-	PathS = case is_binary(Path) of
-			true -> binary_to_list(Path);
-			false -> Path end,
-	WindowsShareS = case is_binary(WindowsShare) of
-			true -> binary_to_list(WindowsShare);
-			false -> WindowsShare end,
-	WindowsSharePath =  "//" ++ WindowsShareS ++ "/" ++ PathS,
+	WindowsSharePath = case is_binary(UNCPath) of
+			true -> binary_to_list(UNCPath);
+			false -> UNCPath end,
 	MountPath = get_mount_path(Id),
 	Args = ["-o","ro", WindowsSharePath, MountPath],
 	case UsernameS of
@@ -455,22 +445,13 @@ handle_test_connection(ftpfs, Dict) ->
 	case handle_each_mount({ftpfs, [Address, Password, Path, Username]}, ?TEST_MOUNT_DIR) of
 		{none, E} -> pretiffy_error(E);
 		_ -> release_mount([?TEST_MOUNT_DIR]),"OK" end;
-handle_test_connection(cifs, Dict) ->
+handle_test_connection(windows, Dict) ->
 	{ok, Address} = dict:find(<<"address">>, Dict),
-	{ok, Path} = dict:find(<<"path">>, Dict),
 	{ok, Username} = dict:find(<<"username">>, Dict),
 	{ok, Password} = dict:find(<<"password">>, Dict),
-	case handle_each_mount({cifs, [Address, Password, Path, Username]}, ?TEST_MOUNT_DIR) of
+	case handle_each_mount({windows, [Address, Password, Username]}, ?TEST_MOUNT_DIR) of
 		{none, E} -> pretiffy_error(E);
 		_ -> release_mount([?TEST_MOUNT_DIR]),"OK" end;
-handle_test_connection(dfs, Dict) ->
-	{ok, Address} = dict:find(<<"address">>, Dict),
-	{ok, Path} = dict:find(<<"path">>, Dict),
-	{ok, Username} = dict:find(<<"username">>, Dict),
-	{ok, Password} = dict:find(<<"password">>, Dict),
-	case handle_each_mount({dfs, [Address, Password, Path, Username]}, ?TEST_MOUNT_DIR) of
-		{none, E} -> pretiffy_error(E);
-		_ -> release_mount([?TEST_MOUNT_DIR]), "OK" end;
 handle_test_connection(nfs, Dict) ->
 	{ok, Address} = dict:find(<<"address">>, Dict),
 	{ok, Path} = dict:find(<<"path">>, Dict),

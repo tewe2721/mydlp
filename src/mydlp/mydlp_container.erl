@@ -590,8 +590,7 @@ construct_source(Id) ->
 	case mydlp_mnesia:get_remote_storage_by_id(Id) of
 		{sshfs, {Address, _, Path, _, _}} -> "sshfs://" ++ binary_to_list(Address) ++ ":" ++binary_to_list(Path);
 		{ftpfs, {Address, Path, _, _}} -> "ftpfs://" ++ binary_to_list(Address) ++ binary_to_list(Path);
-		{cifs, {Address, Path, _, _}} -> "cifs://" ++ binary_to_list(Address) ++ "/" ++ binary_to_list(Path);
-		{dfs, {Address, Path, _, _}} -> "dfs://" ++ binary_to_list(Address) ++ "/" ++ binary_to_list(Path);
+		{windows, {Address, _, _}} -> binary_to_list(Address);
 		{nfs, {Address, Path}} -> "nfs://" ++ binary_to_list(Address) ++ "/" ++ binary_to_list(Path);
 		none -> ?ERROR_LOG("Unknown remote storage with id: ["?S"]", [Id]), "none"
 	end.
