@@ -609,10 +609,16 @@ init([]) ->
 		{user_s_by_rule_id, <<"SELECT u.username FROM RuleUserStatic AS u, RuleItem AS ri WHERE ri.rule_id=? AND u.id=ri.item_id AND (ri.ruleColumn IS NULL OR ri.ruleColumn=\"SOURCE\")">>},
 		{user_ad_u_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=u.id AND (ri.ruleColumn IS NULL OR ri.ruleColumn=\"SOURCE\")">>},
 		{user_ad_o_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, ADDomainItem i, ADDomainOU o, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=o.id AND o.id=i.parent_id AND i.id=u.id AND (ri.ruleColumn IS NULL OR ri.ruleColumn=\"SOURCE\")">>},
+		{ou_id_by_rule_id, <<"SELECT o.id FROM ADDomainOU o, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=o.id AND (ri.ruleColumn IS NULL OR ri.ruleColumn=\"SOURCE\")">>},
 		{user_ad_g_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, ADDomainItem i, ADDomainOU o, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=o.id AND o.id=i.parent_id AND i.id=u.id AND (ri.ruleColumn IS NULL OR ri.ruleColumn=\"SOURCE\")">>},
+
+		{ou_ad_by_ou_id, <<"SELECT u.id FROM ADDomainOU u, ADDomainItem i, ADDomainOU o WHERE o.id=? AND o.id=i.parent_id AND i.id=u.id">>},
+		{user_ad_by_ou_id, <<"SELECT u.id FROM ADDomainUser u, ADDomainItem i, ADDomainOU o WHERE o.id=? AND o.id=i.parent_id AND i.id=u.id">>},
+
 		{dest_user_s_by_rule_id, <<"SELECT u.username FROM RuleUserStatic AS u, RuleItem AS ri WHERE ri.rule_id=? AND u.id=ri.item_id AND ri.ruleColumn=\"DESTINATION\"">>},
 		{dest_user_ad_u_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=u.id AND ri.ruleColumn=\"DESTINATION\"">>},
 		{dest_user_ad_o_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, ADDomainItem i, ADDomainOU o, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=o.id AND o.id=i.parent_id AND i.id=u.id AND ri.ruleColumn=\"DESTINATION\"">>},
+		{dest_ou_id_by_rule_id, <<"SELECT o.id FROM ADDomainOU o, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=o.id AND ri.ruleColumn=\"DESTINATION\"">>},
 		{dest_user_ad_g_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, ADDomainItem i, ADDomainOU o, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=o.id AND o.id=i.parent_id AND i.id=u.id AND ri.ruleColumn=\"DESTINATION\"">>},
 		{domain_item_parent_by_id, <<"SELECT i.parent_id FROM ADDomainItem AS i WHERE i.id=?">>},
 		{domain_root_by_id, <<"SELECT r.id, r.domain_id FROM ADDomainRoot AS r WHERE r.id=?">>},
@@ -1054,6 +1060,9 @@ populate_rule_users(RuleOrigId, RuleId) ->
 	{ok, UAOQ} = psq(user_ad_o_by_rule_id, [RuleOrigId]),
 	populate_users_ad_u(UAOQ, RuleId),
 
+	{ok, OUQ} = psq(ou_id_by_rule_id, [RuleOrigId]),
+	populate_ou(OUQ, RuleId),
+
 	{ok, UAGQ} = psq(user_ad_g_by_rule_id, [RuleOrigId]),
 	populate_users_ad_u(UAGQ, RuleId),
 
@@ -1070,6 +1079,18 @@ populate_users_ad_u([[OrigId]| Rows], RuleId) ->
 	populate_users_ad_u(Rows, RuleId);
 populate_users_ad_u([], _RuleId) -> ok.
 
+populate_ou(OQ, RuleId) -> populate_ou(OQ, [], RuleId).
+
+populate_ou([[OUId]|Rows], OUEx, RuleId) ->
+	case lists:member(OUId, OUEx) of
+		true -> populate_ou(Rows, OUEx, RuleId);
+		false -> 
+			{ok, UQ} = psq(user_ad_by_ou_id, [OUId]),
+			populate_users_ad_u(UQ, RuleId),
+			{ok, OUQ} = psq(ou_ad_by_ou_id, [OUId]),
+			populate_ou(Rows ++ OUQ, [OUId|OUEx], RuleId) end;
+populate_ou([], _Ex, _RuleId) -> ok.
+
 populate_rule_dest_users(RuleOrigId, RuleId) -> 
 	{ok, USQ} = psq(dest_user_s_by_rule_id, [RuleOrigId]),
 	populate_dest_users_s(USQ, RuleId),
@@ -1079,6 +1100,9 @@ populate_rule_dest_users(RuleOrigId, RuleId) ->
 
 	{ok, UAOQ} = psq(dest_user_ad_o_by_rule_id, [RuleOrigId]),
 	populate_dest_users_ad_u(UAOQ, RuleId),
+
+	{ok, OUQ} = psq(dest_ou_id_by_rule_id, [RuleOrigId]),
+	populate_dest_ou(OUQ, RuleId),
 
 	{ok, UAGQ} = psq(dest_user_ad_g_by_rule_id, [RuleOrigId]),
 	populate_users_ad_u(UAGQ, RuleId),
@@ -1095,6 +1119,18 @@ populate_dest_users_ad_u([[OrigId]| Rows], RuleId) ->
 	lists:foreach(fun({Username}) -> new_dest_user(Username, RuleId) end, Usernames),
 	populate_dest_users_ad_u(Rows, RuleId);
 populate_dest_users_ad_u([], _RuleId) -> ok.
+
+populate_dest_ou(OQ, RuleId) -> populate_dest_ou(OQ, [], RuleId).
+
+populate_dest_ou([[OUId]|Rows], OUEx, RuleId) ->
+	case lists:member(OUId, OUEx) of
+		true -> populate_dest_ou(Rows, OUEx, RuleId);
+		false -> 
+			{ok, UQ} = psq(user_ad_by_ou_id, [OUId]),
+			populate_dest_users_ad_u(UQ, RuleId),
+			{ok, OUQ} = psq(ou_ad_by_ou_id, [OUId]),
+			populate_dest_ou(Rows ++ OUQ, [OUId|OUEx], RuleId) end;
+populate_dest_ou([], _Ex,  _RuleId) -> ok.
 
 populate_remote_document_database() ->
 	{ok, RDD} = psq(get_remote_document_databases),
