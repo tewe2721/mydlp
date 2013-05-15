@@ -187,7 +187,7 @@ stop() ->
 init([]) ->
 	%timer:send_after(60000, startup),
 	filelib:ensure_dir(?MOUNT_PATH),
-	finished(),
+	finished(), % to trigger releasem mounts
 	{ok, #state{mount_dict=dict:new()}}.
 
 terminate(_Reason, _State) ->
