@@ -40,6 +40,7 @@
 -export([start_link/0,
 	update_rule_status/2,
 	test_web_server/1,
+	start_discovery/2,
 	stop/0]).
 
 %% gen_server callbacks
@@ -77,6 +78,8 @@ q(_WebServerId, _ParentId, _PagePath, _RuleId, 0) -> ok;
 q(WebServerId, ParentId, PagePath, RuleId, Depth) -> gen_server:cast(?MODULE, {q, WebServerId, ParentId, PagePath, RuleId, Depth}).
 
 test_web_server(URL) -> gen_server:call(?MODULE, {test_web_server, URL}).
+
+start_discovery(RuleId, GroupId) -> gen_server:cast(?MODULE, {start_by_rule_id, RuleId, GroupId}).
 
 %pause_discovery(RuleId) -> gen_server:cast(?MODULE, {pause_discovery, RuleId}).
 

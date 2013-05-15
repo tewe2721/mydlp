@@ -205,6 +205,7 @@ handle_cast(_Msg, State) ->
 	{noreply, State}.
 
 handle_info(startup, State) ->
+	continue_discovery(),
 	start_timers(), 
 	start_at_exact_hour(),
 	{noreply, State};
@@ -625,6 +626,20 @@ edit_discoveries([{RuleId, ?DISC, _}|R]) ->
 	edit_discoveries(R);
 edit_discoveries([_|R]) -> edit_discoveries(R);
 edit_discoveries([]) -> ok.
+
+continue_discovery() ->
+	Discoveries = mydlp_mnesia:get_all_discovery_status(),
+	continue_discovery1(Discoveries).
+
+continue_discovery1([{RuleId, Status, GroupId}|Rest]) ->
+	case Status of
+		stopped -> continue_discovery1(Rest);
+		user_stopped -> continue_discovery1(Rest);
+		_ -> mydlp_discover_rfs:start_discovery(RuleId, GroupId),
+			mydlp_discover_web:start_discovery(RuleId, GroupId),
+			continue_discovery1(Rest)
+	end;
+continue_discovery1([]) -> ok.
 
 start_timers() ->
 	DiscoveryList = mydlp_mnesia:get_all_discovery_status(),

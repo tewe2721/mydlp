@@ -479,79 +479,83 @@ discover_file(#fs_entry{file_id={FP, RuleIndex}}) ->
 	end,
 	ok.
 
-	discover_dir(#fs_entry{file_id={FP, RuleIndex}, entry_id=EId}) ->
-		CList = case file:list_dir(FP) of
-			{ok, LD} -> LD;
-			{error, _} -> [] end,
-		OList = mydlp_mnesia:fs_entry_list_dir(EId),
-		MList = lists:umerge([CList, OList]),
-		case get_discovery_status(RuleIndex) of
-			none -> ok;
-			{_, GroupId} ->[ q(EId, filename:absname(FN, FP), RuleIndex, GroupId) || FN <- MList ] end,
-		ok.
+discover_dir(#fs_entry{file_id={FP, RuleIndex}, entry_id=EId}) ->
+	CList = case file:list_dir(FP) of
+		{ok, LD} -> LD;
+		{error, _} -> [] end,
+	OList = mydlp_mnesia:fs_entry_list_dir(EId),
+	MList = lists:umerge([CList, OList]),
+	case get_discovery_status(RuleIndex) of
+		none -> ok;
+		{_, GroupId} ->[ q(EId, filename:absname(FN, FP), RuleIndex, GroupId) || FN <- MList ] end,
+	ok.
 
-	discover_dir_dir(#fs_entry{file_id={FP, RuleIndex}, entry_id=EId}) ->
-		OList = mydlp_mnesia:fs_entry_list_dir(EId),
-		case get_discovery_status(RuleIndex) of
-			none -> ok;
-			{_, GroupId} -> [ q(EId, filename:absname(FN, FP), RuleIndex, GroupId) || FN <- OList ] end,
-		ok.
+discover_dir_dir(#fs_entry{file_id={FP, RuleIndex}, entry_id=EId}) ->
+	OList = mydlp_mnesia:fs_entry_list_dir(EId),
+	CList = case file:list_dir(FP) of
+		{ok, LD} -> LD;
+		{error, _} -> [] end,
+	MList = lists:umerge([CList, OList]),
+	case get_discovery_status(RuleIndex) of
+		none -> ok;
+		{_, GroupId} -> [ q(EId, filename:absname(FN, FP), RuleIndex, GroupId) || FN <- MList ] end,
+	ok.
 
-	discover(ParentId, FilePath, RuleIndex) ->
-		case is_cached({FilePath, RuleIndex}) of
-			true -> ok;
-			false -> discover1(ParentId, FilePath, RuleIndex) end.
+discover(ParentId, FilePath, RuleIndex) ->
+	case is_cached({FilePath, RuleIndex}) of
+		true -> ok;
+		false -> discover1(ParentId, FilePath, RuleIndex) end.
 
-	discover1(ParentId, FilePath, RuleIndex) ->
-		case filelib:is_regular(FilePath) of
-			true -> E = fs_entry(ParentId, FilePath, RuleIndex),
-				case is_changed(E) of
-					true -> discover_file(E);
-					false -> ok end;
-		false -> case filelib:is_dir(FilePath) of
-			true -> E = fs_entry(ParentId, FilePath, RuleIndex),
-				case is_changed(E) of
-					true -> discover_dir(E);
-					false -> discover_dir_dir(E) end;
-		false -> %?ERROR_LOG("DISCOVER: File or directory does not exists. Filename: "?S, [FilePath]),
-			mydlp_mnesia:del_fs_entry(FilePath) end end, % Means file does not exists
-		ok.
+discover1(ParentId, FilePath, RuleIndex) ->
+	case filelib:is_regular(FilePath) of
+		true -> E = fs_entry(ParentId, FilePath, RuleIndex),
+			case is_changed(E) of
+				true -> discover_file(E);
+				false -> ok end;
+	false -> case filelib:is_dir(FilePath) of
+	true -> E = fs_entry(ParentId, FilePath, RuleIndex),
+		case is_changed(E) of
+				true -> discover_dir(E);
+				false -> discover_dir_dir(E) end;
+	false -> %?ERROR_LOG("DISCOVER: File or directory does not exists. Filename: "?S, [FilePath]),
+		mydlp_mnesia:del_fs_entry(FilePath) end end, % Means file does not exists
+	ok.
 
 
-	-ifdef(__MYDLP_ENDPOINT).
+-ifdef(__MYDLP_ENDPOINT).
 
-	set_discover_inprog() ->
-		mydlp_container:set_ep_meta("discover_inprog", "yes"),
-		mydlp_sync:sync_now().
+set_discover_inprog() ->
+	mydlp_container:set_ep_meta("discover_inprog", "yes"),
+	mydlp_sync:sync_now().
 
-	unset_discover_inprog() ->
-		reset_discover_cache(),
-		mydlp_container:set_ep_meta("discover_inprog", "no"),
-		mydlp_sync:sync_now().
+unset_discover_inprog() ->
+	reset_discover_cache(),
+	mydlp_container:set_ep_meta("discover_inprog", "no"),
+	mydlp_sync:sync_now().
 
-	-endif.
+-endif.
 
-	-ifdef(__MYDLP_NETWORK).
+-ifdef(__MYDLP_NETWORK).
 
-	set_discover_inprog() -> ok.
+set_discover_inprog() -> ok.
 
-	unset_discover_inprog() -> 
-		reset_discover_cache().
-	-endif.
+unset_discover_inprog() -> 
+	reset_discover_cache().
+-endif.
 
-	filter_discover_cache(RuleId) ->
-		CS = get(cache),
-		CS1 = gb_sets:filter(fun({_FP, RuleIndex}) -> RuleIndex /= RuleId end, CS),
-		put(cache, CS1), ok.
+filter_discover_cache(RuleId) ->
+	CS = get(cache),
+	CS1 = gb_sets:filter(fun({_FP, RuleIndex}) -> RuleIndex /= RuleId end, CS),
+	put(cache, CS1), ok.
 
-	reset_discover_cache() ->
-		put(cache, gb_sets:new()), ok.
+reset_discover_cache() ->
+	put(cache, gb_sets:new()), ok.
 
-	is_cached(Element) ->
-		CS = get(cache),
-		case gb_sets:is_element(Element, CS) of
-			true -> true;
-			false -> CS1 = gb_sets:add(Element, CS),
-				put(cache, CS1),
-				false end.
-		
+is_cached(Element) ->
+	CS = get(cache),
+	case gb_sets:is_element(Element, CS) of
+		true -> true;
+		false -> CS1 = gb_sets:add(Element, CS),
+			put(cache, CS1),
+			false end.
+	
