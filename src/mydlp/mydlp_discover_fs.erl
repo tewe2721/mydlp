@@ -501,9 +501,13 @@ discover_dir(#fs_entry{file_id={FP, RuleIndex}, entry_id=EId}) ->
 
 discover_dir_dir(#fs_entry{file_id={FP, RuleIndex}, entry_id=EId}) ->
 	OList = mydlp_mnesia:fs_entry_list_dir(EId),
+	CList = case file:list_dir(FP) of
+		{ok, LD} -> LD;
+		{error, _} -> [] end,
+	MList = lists:umerge([CList, OList]),
 	case get_discovery_status(RuleIndex) of
 		none -> ok;
-		{_, GroupId} -> [ q(EId, filename:absname(FN, FP), RuleIndex, GroupId) || FN <- OList ] end,
+		{_, GroupId} -> [ q(EId, filename:absname(FN, FP), RuleIndex, GroupId) || FN <- MList ] end,
 	ok.
 
 discover(ParentId, FilePath, RuleIndex) ->
@@ -518,10 +522,10 @@ discover1(ParentId, FilePath, RuleIndex) ->
 				true -> discover_file(E);
 				false -> ok end;
 	false -> case filelib:is_dir(FilePath) of
-		true -> E = fs_entry(ParentId, FilePath, RuleIndex),
-			case is_changed(E) of
-				true -> discover_dir(E);
-				false -> discover_dir_dir(E) end;
+	true -> E = fs_entry(ParentId, FilePath, RuleIndex),
+		case is_changed(E) of
+			true -> discover_dir(E);
+			false -> discover_dir_dir(E) end;
 	false -> %?ERROR_LOG("DISCOVER: File or directory does not exists. Filename: "?S, [FilePath]),
 		mydlp_mnesia:del_fs_entry(FilePath) end end, % Means file does not exists
 	ok.

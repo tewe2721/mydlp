@@ -42,6 +42,7 @@
 	start_remote_discovery/0,
 	finished/0,
 	release_mount_by_rule_id/1,
+	start_discovery/2,
 	stop/0]).
 
 %% gen_server callbacks
@@ -77,6 +78,8 @@
 %%%%%%%%%%%%%  API
 
 release_mount_by_rule_id(RuleId) -> gen_server:call(?MODULE, {release_mount_by_rule_id, RuleId}).
+
+start_discovery(RuleId, GroupId) -> gen_server:cast(?MODULE, {start_by_rule_id, RuleId, GroupId}).
 
 start_remote_discovery() -> ok.
 	%RemoteStorages = mydlp_mnesia:get_remote_storages().
@@ -119,7 +122,7 @@ handle_cast({start_by_rule_id, OrigRuleId, GroupId}, #state{mount_dict=Dict}=Sta
 	Dict1 = case dict:find(OrigRuleId, Dict) of
 			{ok, {FilePaths, _R}} -> catch release_mount(FilePaths),
 					dict:erase(OrigRuleId, Dict);
-			_ -> ?OPR_LOG("mydlp_discover_rfs: Unknown Rule Id: ["?S"]", [RuleId]), 
+			_ -> ok, 
 				Dict
 		end,
 	consume(RemoteStorages, GroupId, OrigRuleId),

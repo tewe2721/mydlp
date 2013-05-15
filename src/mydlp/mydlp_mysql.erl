@@ -526,7 +526,7 @@ handle_info({'DOWN', _, _, Pid , _} = Msg, #state{host=Host,
 		{error, C, E} -> ?ERROR_LOG("An error occurred when trying to create a new connection instead of dead one.~nClass: "?S" Error: "?S"~nState: "?S, [C, E,State]);
 		{error, E} -> ?ERROR_LOG("An error occurred when trying to create a new connection instead of dead one.~nError: "?S"~nState: "?S, [E,State]) ,
 			?ERROR_LOG("Waiting 500ms and retrying to create connection. Msg: "?S, [Msg]),
-			timer:tc(500),
+			timer:sleep(500),
 			handle_info(Msg, State);
 			%{stop, normalStop, State};
 		error -> ?ERROR_LOG("An error occurred when trying to create a new connection instead of dead one.~nState: "?S, [State]) ,
