@@ -63,6 +63,7 @@
 	insert_dd_file_entry/2,
 	get_remote_storage_by_id/1,
 	update_document_fingerprinting_status/2,
+	does_hash_exist_in_dd/2,
 	stop/0]).
 
 %% gen_server callbacks
@@ -152,6 +153,11 @@ compile_customer() -> compile_customer(mydlp_mnesia:get_dfid()).
 
 compile_customer(FilterId) when is_integer(FilterId) ->
 	gen_server:cast(?MODULE, {compile_customer, FilterId}).
+
+does_hash_exist_in_dd(MD5Hex, DDId) when is_list(MD5Hex) -> 
+	does_hash_exist_in_dd(list_to_binary(string:to_lower(MD5Hex)), DDId);
+does_hash_exist_in_dd(MD5Hex, DDId) when is_binary(MD5Hex) ->
+	gen_server:call(?MODULE, {does_hash_exist_in_dd, MD5Hex, DDId}, 15000).
 
 %is_multisite() -> gen_server:call(?MODULE, is_multisite).
 is_multisite() -> false.
@@ -339,6 +345,16 @@ handle_call({insert_file_entry, Id, Filename0, Md5Hash, Date}, From, State) ->
 				end, 30000),
                         Worker ! {async_reply, Id, From}
 		end, 30000),
+	{noreply, State};
+
+handle_call({does_hash_exist_in_dd, MD5Hex, DDId}, From, State) ->
+	Worker = self(),
+	?ASYNC(fun() ->
+			Reply = case psq(file_entry_by_hash_and_dd, [MD5Hex, DDId]) of
+				[] -> false;
+				[_|_] -> true end,
+                        Worker ! {async_reply, Reply, From}
+		end, 14500),
 	{noreply, State};
 
 handle_call(stop, _From,  State) ->
@@ -633,6 +649,7 @@ init([]) ->
 		{kg_rdbms_regexes_by_matcher_id, <<"SELECT rev.string FROM MatcherArgument AS ma, NonCascadingArgument AS nca, RegularExpressionGroup AS reg, RDBMSEnumeratedValue AS rev WHERE ma.coupledMatcher_id=? AND ma.coupledArgument_id=nca.id AND nca.argument_id=reg.id AND reg.rdbmsInformationTarget_id=rev.informationTarget_id">>},
 		{dd_by_matcher_id, <<"SELECT dd.id FROM MatcherArgument AS ma, NonCascadingArgument AS nca, DocumentDatabase AS dd WHERE ma.coupledMatcher_id=? AND ma.coupledArgument_id=nca.id AND nca.argument_id=dd.id">>},
 		{filehash_by_dd_id, <<"SELECT ddfe.md5Hash FROM DocumentDatabase_DocumentDatabaseFileEntry AS dd, DocumentDatabaseFileEntry AS ddfe WHERE dd.DocumentDatabase_id=? AND dd.fileEntries_id=ddfe.id">>},
+		{file_entry_by_hash_and_dd, <<"SELECT ddfe.id FROM DocumentDatabase_DocumentDatabaseFileEntry AS dd, DocumentDatabaseFileEntry AS ddfe WHERE ddfe.md5Hash=? AND dd.DocumentDatabase_id=? AND dd.fileEntries_id=ddfe.id">>},
 		{filefingerprint_by_dd_id, <<"SELECT df.fingerprint FROM DocumentDatabase_DocumentDatabaseFileEntry AS dd, DocumentDatabaseFileEntry AS ddfe, DocumentFingerprint AS df WHERE dd.DocumentDatabase_id=? AND dd.fileEntries_id=ddfe.id AND df.document_id=ddfe.id">>},
 		{rdbmsfingerprint_by_dd_id, <<"SELECT df.fingerprint FROM DocumentDatabase_DocumentDatabaseRDBMSEntry AS dd, DocumentDatabaseRDBMSEntry AS ddre, DocumentFingerprint AS df WHERE dd.DocumentDatabase_id=? AND dd.rdbmsEntries_id=ddre.id AND df.document_id=ddre.id">>},
 		%{user_by_rule_id, <<"SELECT eu.id, eu.username FROM sh_ad_entry_user AS eu, sh_ad_cross AS c, sh_ad_rule_cross AS rc WHERE rc.parent_rule_id=? AND rc.group_id=c.group_id AND c.entry_id=eu.entry_id">>},

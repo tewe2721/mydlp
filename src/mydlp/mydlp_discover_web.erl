@@ -460,9 +460,6 @@ fetch_data(WebServerId, PagePath) ->
 	URL = get_url(WebServerId, PagePath),
 	httpc:request(get, {URL, []}, [], [{sync, false}]).
 
-handle_head(_RequestId, {error,no_scheme}, State) -> State;
-
-handle_head(_RequestId, {{_, 404, _}, _Headers, _}, State) -> State;
 	
 handle_head(RequestId, {{_, 200, _}, Headers, _}, #state{head_requests=HeadT, get_requests=GetT, rule_age=RuleAge} = State) ->
 	{WebServerId, ParentId, PagePath, RuleId, Depth} = gb_trees:get(RequestId, HeadT),
@@ -478,7 +475,15 @@ handle_head(RequestId, {{_, 200, _}, Headers, _}, #state{head_requests=HeadT, ge
 			true -> discover_cached_page(EntryId, RuleId, Depth - 1);
 			false -> ok end,
 			GetT end,
-	State#state{head_requests=HeadT1, get_requests=GetT1, rule_age=RuleAge1}.
+	State#state{head_requests=HeadT1, get_requests=GetT1, rule_age=RuleAge1};
+
+handle_head(RequestId, Code, #state{head_requests=HeadT} = State) -> 
+	case Code of
+		{error,no_scheme} -> ok;
+		{{_, 404, _}, _Headers, _} -> ok;
+		_ -> ?ERROR_LOG("HEAD: Response is inproper: "?S, Code) end,
+	HeadT1 = gb_trees:delete(RequestId, HeadT),
+	State#state{head_requests=HeadT1}.
 
 handle_get(RequestId, {{_, 200, _}, _Headers, Data}, #state{get_requests=GetT, rule_age=RuleAge} = State) ->
 	{WebServerId, _ParentId, PagePath, RuleId, Depth} = gb_trees:get(RequestId, GetT),
@@ -489,7 +494,15 @@ handle_get(RequestId, {{_, 200, _}, _Headers, Data}, #state{get_requests=GetT, r
 	case is_html(EntryId) of 
 		true -> discover_links(EntryId, Data, Depth - 1);
 		false -> ok end,
-	State#state{get_requests=GetT1, rule_age=RuleAge1}.
+	State#state{get_requests=GetT1, rule_age=RuleAge1};
+
+handle_get(RequestId, Code, #state{get_requests=GetT} = State) -> 
+	case Code of
+		{error,no_scheme} -> ok;
+		{{_, 404, _}, _Headers, _} -> ok;
+		_ -> ?ERROR_LOG("GET: Response is inproper: "?S, Code) end,
+	GetT1 = gb_trees:delete(RequestId, GetT),
+	State#state{get_requests=GetT1}.
 
 get_fn(WebServerId, PagePath) -> 
 	URL = get_url(WebServerId, PagePath),
