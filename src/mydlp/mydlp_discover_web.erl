@@ -88,8 +88,8 @@ handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
 
 handle_call({test_web_server, URL}, _From, State) ->
-	URLS = binary_to_list(URL),
 	try
+		URLS = binary_to_list(URL),
 		R = case httpc:request(head, {URLS, []}, [], [{sync, true}]) of
 			{ok, {{_, 200, _}, _, _}} -> "OK";
 			{ok, {{_, C, Reason}, _, _}} when C > 400 -> integer_to_list(C) ++ " " ++ Reason;
@@ -103,21 +103,23 @@ handle_call({test_web_server, URL}, _From, State) ->
 handle_call({stop_discovery, RuleId}, _From, #state{discover_queue=Q, paused_queue=PQ}=State) ->
 	NewQ = drop_items_by_rule_id(RuleId, Q),
 	NewPQ = drop_items_by_rule_id(RuleId, PQ),
-	%GetT = gb_tree:empty(),
-	%HeadT = gb_tree:empty(),
-	case get_discovery_status(RuleId) of
-		{Status, GId} -> 
-			push_opr_log(RuleId, GId, ?DISCOVERY_FINISHED),
-			case Status of
-				discovering -> mydlp_mnesia:del_web_entries_by_rule_id(RuleId);
-				on_demand_discovering -> mydlp_mnesia:del_web_entries_by_rule_id(RuleId);
-				paused -> mydlp_mnesia:del_web_entries_by_rule_id(RuleId);
-				user_paused -> mydlp_mnesia:del_web_entries_by_rule_id(RuleId);
-				system_paused -> mydlp_mnesia:del_web_entries_by_rule_id(RuleId)
-			end;
-		_ -> ?ERROR_LOG("mydlp_discover web: Unknown Rule Id: ["?S"]", [RuleId])
-	end,
-	filter_discover_cache(RuleId),
+	?FLE(fun() ->
+		%GetT = gb_tree:empty(),
+		%HeadT = gb_tree:empty(),
+		case get_discovery_status(RuleId) of
+			{Status, GId} -> 
+				push_opr_log(RuleId, GId, ?DISCOVERY_FINISHED),
+				case Status of
+					discovering -> mydlp_mnesia:del_web_entries_by_rule_id(RuleId);
+					on_demand_discovering -> mydlp_mnesia:del_web_entries_by_rule_id(RuleId);
+					paused -> mydlp_mnesia:del_web_entries_by_rule_id(RuleId);
+					user_paused -> mydlp_mnesia:del_web_entries_by_rule_id(RuleId);
+					system_paused -> mydlp_mnesia:del_web_entries_by_rule_id(RuleId)
+				end;
+			_ -> ?ERROR_LOG("mydlp_discover web: Unknown Rule Id: ["?S"]", [RuleId])
+		end,
+		filter_discover_cache(RuleId)
+	end)(),
 	{reply, ok, State#state{discover_queue=NewQ, paused_queue=NewPQ}};
 
 handle_call(_Msg, _From, State) ->
@@ -203,8 +205,15 @@ handle_cast({update_rule_status, RuleId, _Status}, #state{timer_dict=TimerDict}=
 
 handle_cast({start_by_rule_id, OrigRuleId, GroupId}, #state{timer_dict=TimerDict}=State) ->
 	filter_discover_cache(OrigRuleId),
-	RuleId = mydlp_mnesia:get_rule_id_by_orig_id(OrigRuleId),
-	WebServers = mydlp_mnesia:get_web_servers_by_rule_id(RuleId),
+	WebServers = try
+		RuleId =  mydlp_mnesia:get_rule_id_by_orig_id(OrigRuleId),
+		mydlp_mnesia:get_web_servers_by_rule_id(RuleId)
+	catch Class:Error -> ?ERROR_LOG("Web: Can not get web servers  "
+			"Class: ["?S"]. Error: ["?S"].~n"
+			"Stack trace: "?S"~nState: "?S"~n",	
+			[Class, Error, erlang:get_stacktrace(), State]),
+		[] end,
+
 	case WebServers of
 		[] -> push_opr_log(OrigRuleId, GroupId, ?DISCOVERY_FINISHED),
 			{noreply, State};
@@ -287,7 +296,10 @@ code_change(_OldVsn, State, _Extra) ->
 %%%%%%%%%%%%%%%%% internal
 
 get_discovery_status(RuleId) ->
-	mydlp_mnesia:get_discovery_status(RuleId).
+        case catch mydlp_mnesia:get_discovery_status(RuleId) of
+                none -> none;
+                {_, _GroupId} = R -> R;
+                _Else -> none end.
 
 is_paused_or_stopped_by_rule_id(RuleId) ->
 	case get_discovery_status(RuleId) of
