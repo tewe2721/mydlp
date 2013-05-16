@@ -62,6 +62,7 @@
 	insert_file_entry/3,
 	insert_dd_file_entry/2,
 	get_remote_storage_by_id/1,
+	get_remote_document_databases_by_id/1,
 	update_document_fingerprinting_status/2,
 	does_hash_exist_in_dd/2,
 	stop/0]).
@@ -175,6 +176,8 @@ insert_file_entry(Filename, Md5Hash, Date) ->
 insert_dd_file_entry(FileEntryId, DDId) -> gen_server:cast(?MODULE, {insert_dd_file_entry,FileEntryId, DDId}).
 
 get_remote_storage_by_id(RSId) -> gen_server:call(?MODULE, {get_remote_storage_by_id, RSId}).
+
+get_remote_document_databases_by_id(DDId) -> gen_server:call(?MODULE, {get_remote_document_databases_by_id, DDId}).
 
 update_document_fingerprinting_status(DDIds, Status) -> gen_server:cast(?MODULE, {update_document_fingerprinting_status, DDIds, Status}).
 
@@ -323,6 +326,11 @@ handle_call({get_remote_storage_by_id, RSId}, _From, State) ->
 	case psq(remote_windows_dir, [RSId]) of
 		{ok, [R4|_]} -> {reply, {windows, R4}, State};
 		_ ->{reply, none, State} end end end end;
+
+handle_call({get_remote_document_databases_by_id, DDId}, _From, State) ->
+	{ok, RSIds} = psq(get_remote_document_databases_by_id, [DDId]),
+	RemoteDDs = get_each_remote_storage_with_type(RSIds, []),	
+	{reply, RemoteDDs, State};
 
 handle_call(insert_document, From, State) ->
 	Worker = self(),
@@ -688,6 +696,7 @@ init([]) ->
 		{get_opr_with_group_id_and_ep, <<"SELECT o.id FROM OperationLog AS o WHERE groupId=? AND source=? AND messageKey=?">>},
 		{get_opr_with_group_id_and_status, <<"SELECT o.id FROM OperationLog AS o WHERE groupId=? AND messageKey=?">>},
 		{get_remote_document_databases, <<"SELECT * FROM DocumentDatabase_DocumentDatabaseRemoteStorage">>},
+		{get_remote_document_databases_by_id, <<"SELECT documentDatabaseRemoteStorages_id FROM DocumentDatabase_DocumentDatabaseRemoteStorage where DocumentDatabase_id=?">>},
 		{get_remote_sshfs, <<"SELECT r.id, r.address, r.password, r.path, r.port, r.username FROM RemoteStorageSSHFS AS r, DocumentDatabaseRemoteStorage AS d WHERE d.id=? and d.remoteStorage_id=r.id">>},
 		{get_remote_ftpfs, <<"SELECT r.id, r.address, r.password, r.path, r.username FROM RemoteStorageFTPFS AS r, DocumentDatabaseRemoteStorage AS d WHERE d.id=? and d.remoteStorage_id=r.id">>},
 		{get_remote_nfs, <<"SELECT r.id, r.address, r.path FROM RemoteStorageNFS AS r, DocumentDatabaseRemoteStorage as d WHERE d.id=? and d.remoteStorage_id=r.id">>},
@@ -787,7 +796,7 @@ populate_site(FilterId) ->
 	{ok, CQ} = psq(configs),
 	populate_configs(CQ, FilterId),
 
-	populate_remote_document_database(),
+	%populate_remote_document_database(),
 
 	%TODO: should add for multi-site
 	%{ok, SQ} = psq(customer_by_id, [FilterId]),
@@ -1133,34 +1142,41 @@ populate_dest_ou([[OUId]|Rows], OUEx, RuleId) ->
 			populate_dest_ou(Rows ++ OUQ, [OUId|OUEx], RuleId) end;
 populate_dest_ou([], _Ex,  _RuleId) -> ok.
 
-populate_remote_document_database() ->
-	{ok, RDD} = psq(get_remote_document_databases),
-	populate_each_remote_dd(RDD).
+%populate_remote_document_database() ->
+%	{ok, RDD} = psq(get_remote_document_databases),
+%	populate_each_remote_dd(RDD).
 
-populate_each_remote_dd([[DDId, DDRSId]|Rest]) ->
-	RS = get_remote_storage_with_type(DDRSId),
-	Id = mydlp_mnesia:get_unique_id(remote_storage_dd),
-	I = case RS of
-		none -> #remote_storage_dd{id=Id, document_id=DDId, details=none, rs_id=none, exclude_files=none};
-		{Type, D, RSId} -> {ok, EF} = psq(get_exclude_files, [DDRSId]),
-				#remote_storage_dd{id=Id, document_id=DDId, details={Type, D}, rs_id=RSId, exclude_files=lists:flatten(EF)}
-	end,
-	mydlp_mnesia_write(I),
-	populate_each_remote_dd(Rest);
-populate_each_remote_dd([]) -> ok.
+%populate_each_remote_dd([[DDId, DDRSId]|Rest]) ->
+%	RS = get_remote_storage_with_type(DDRSId),
+%	Id = mydlp_mnesia:get_unique_id(remote_storage_dd),
+%	I = case RS of
+%		none -> #remote_storage_dd{id=Id, document_id=DDId, details=none, rs_id=none, exclude_files=none};
+%		{Type, D, RSId} -> {ok, EF} = psq(get_exclude_files, [DDRSId]),
+%				#remote_storage_dd{id=Id, document_id=DDId, details={Type, D}, rs_id=RSId, exclude_files=lists:flatten(EF)}
+%	end,
+%	mydlp_mnesia_write(I),
+%	populate_each_remote_dd(Rest);
+%populate_each_remote_dd([]) -> ok.
+
+get_each_remote_storage_with_type([[DDRSId]|Rest], Acc) ->
+	case get_remote_storage_with_type(DDRSId) of
+		none -> get_each_remote_storage_with_type(Rest, Acc);
+		R -> get_each_remote_storage_with_type(Rest, [R|Acc])
+	end;
+get_each_remote_storage_with_type([], Acc) -> lists:flatten(Acc).
 	
 get_remote_storage_with_type(DDRSId) ->
 	case psq(get_remote_sshfs, [DDRSId]) of
-		{ok, [[Id|R]]} -> {sshfs, R, Id};
+		{ok, [[Id|R]]} -> {{sshfs, R}, Id};
 		_ ->
 	case psq(get_remote_ftpfs, [DDRSId]) of
-		{ok, [[Id1|R1]]} -> {ftpfs, R1, Id1};
+		{ok, [[Id1|R1]]} -> {{ftpfs, R1}, Id1};
 		_ ->
 	case psq(get_remote_nfs, [DDRSId]) of
-		{ok, [[Id2|R2]]} -> {nfs, R2, Id2};
+		{ok, [[Id2|R2]]} -> {{nfs, R2}, Id2};
 		_ ->
 	case psq(get_remote_windows, [DDRSId]) of
-		{ok, [[Id4|R4]]} -> {windows, R4, Id4};
+		{ok, [[Id4|R4]]} -> {{windows, R4}, Id4};
 		_ ->none end end end end.
 
 get_usernames(OrigId) ->

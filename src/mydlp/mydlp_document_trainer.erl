@@ -39,6 +39,7 @@
 %% API
 -export([start_link/0,
 	start_fingerprinting/1,
+	stop_fingerprinting/1,
 	get_remote_storage_dir/1,
 	test_connection/1,
 	stop/0
@@ -77,6 +78,8 @@ consume() -> gen_server:cast(?MODULE, consume).
 get_remote_storage_dir(RSId) -> gen_server:call(?MODULE, {get_remote_storage_dir, RSId}).
 
 start_fingerprinting(DDId) -> gen_server:cast(?MODULE, {start_fingerprinting, DDId}).
+
+stop_fingerprinting(DDId) -> gen_server:cast(?MODULE, {stop_fingerprinting, DDId}).
 
 test_connection(RSDict) -> gen_server:call(?MODULE, {test_connection, RSDict}, 5*60*1000).
 
@@ -119,6 +122,12 @@ handle_cast({handle_remotes, RDDs, DDId}, #state{document_ids=Ids}=State) ->
 handle_cast({start_fingerprinting, DDId}, State) ->
 	handle_start_fingerprinting(DDId),
 	{noreply, State};
+
+handle_cast({stop_fingerprinting, DDId}, #state{queue=Q, document_ids=DocumentIds} = State) ->
+	Q1 = drop_items_by_dd_id(DDId, Q),
+	mydlp_mysql:update_document_fingerprinting_status([DDId], false),
+	DocumentIds1 = lists:delete(DDId, DocumentIds),
+	{noreply, State#state{queue=Q1, document_ids=DocumentIds1}};
 
 handle_cast({q, MountPath, ExcludeFiles, DDId}, #state{queue=Q, in_prog=false}=State) ->
 	Q1 = queue:in({MountPath, ExcludeFiles, DDId}, Q),
@@ -184,6 +193,18 @@ code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 
 %%%%%%%%%%%%%%%%% internal
+drop_items_by_dd_id(DDId, Q) -> drop_items_by_dd_id(DDId, Q, queue:new()).
+
+drop_items_by_dd_id(DDId, Q, AccQ) ->
+	case queue:out(Q) of
+		 {{value, {_FP, _EF, DD}=Item}, Q1} -> 
+			AccQ1 = case DDId of
+					DD -> AccQ;
+					_ -> queue:in(Item, AccQ)
+				end,
+			drop_items_by_dd_id(DDId, Q1, AccQ1);
+		{empty, _Q2} -> AccQ
+	end.
 
 mount_path(MountPath, Command, Args, Envs, Stdin, 1) ->
 	case mydlp_api:cmd_bool(?MOUNTPOINT_COMMAND, ["-q", MountPath]) of
@@ -337,7 +358,11 @@ generate_fingerprints_dir(#fs_entry{file_id=FP, entry_id=EId}, DDId, ExcludeFile
 
 generate_fingerprints_dir_dir(#fs_entry{file_id=FP, entry_id=EId}, DDId, ExcludeFiles) ->
 	OList = mydlp_mnesia:fs_entry_list_dir(EId),
-	[ q(filename:absname(FN, FP), ExcludeFiles, DDId) || FN <- OList ],
+	CList = case file:list_dir(FP) of
+		{ok, LD} -> LD;
+		{error, _} -> [] end,
+	MList = lists:umerge([CList, OList]),
+	[ q(filename:absname(FN, FP), ExcludeFiles, DDId) || FN <- MList ],
 	ok.
 
 generate_fingerprints(FilePath, DDId, ExcludeFiles) ->
@@ -465,8 +490,12 @@ handle_test_connection(nfs, Dict) ->
 
 
 handle_start_fingerprinting(DDId) ->
-	RDDs = mydlp_mnesia:get_remote_document_databases_by_id(DDId),
-	gen_server:cast(?MODULE, {handle_remotes, RDDs, DDId}).
+	RDDs = mydlp_mysql:get_remote_document_databases_by_id(DDId),
+	case RDDs of
+		[] -> mydlp_mysgl:update_document_fingerprinting_status([DDId], false);
+		_ -> RDDs1 = lists:map(fun({TD, RSId}) -> {DDId, TD, RSId, []} end, RDDs),
+			gen_server:cast(?MODULE, {handle_remotes, RDDs1, DDId})
+	end.
 
 release_mounts() -> 
 	case file:list_dir(?MOUNT_PATH) of
