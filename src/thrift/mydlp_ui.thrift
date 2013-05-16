@@ -63,6 +63,8 @@ service Mydlp_ui {
 	list<string> getRemoteStorageDir(1: i32 RSId)
 
 	oneway void startFingerprinting(1: i32 DDId)
+	
+	oneway void stopFingerprinting(1: i32 DDId)
 
 	string testConnection(1: map<string,string> RemoteStorage)
 	

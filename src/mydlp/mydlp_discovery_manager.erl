@@ -205,7 +205,7 @@ handle_cast(_Msg, State) ->
 	{noreply, State}.
 
 handle_info(startup, State) ->
-	continue_discovery(),
+	continue_discovery_after_init(),
 	start_timers(), 
 	start_at_exact_hour(),
 	{noreply, State};
@@ -627,7 +627,7 @@ edit_discoveries([{RuleId, ?DISC, _}|R]) ->
 edit_discoveries([_|R]) -> edit_discoveries(R);
 edit_discoveries([]) -> ok.
 
-continue_discovery() ->
+continue_discovery_after_init() ->
 	Discoveries = mydlp_mnesia:get_all_discovery_status(),
 	continue_discovery1(Discoveries).
 
@@ -645,7 +645,7 @@ start_timers() ->
 	DiscoveryList = mydlp_mnesia:get_all_discovery_status(),
 	gen_server:cast(?MODULE, {start_timers, DiscoveryList}).
 
-start_at_exact_hour() -> % Remaining should be multiplied with 1000
+start_at_exact_hour() -> 
 	{_D, {_H, M, S}} = erlang:localtime(),
 	case M of 
 		0 -> timer:send_after(0, start_discovery_scheduling);
