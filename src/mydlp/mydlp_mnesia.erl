@@ -841,7 +841,13 @@ select_rule_ids_by_source(FilterId, #aclq{channel=Channel} = AclQ) ->
 				U#source_domain.domain_name == DomainName
 				]), ?QLCE(Q4) end, 
 
-	RuleIds = lists:append([RulesD, RulesI, RulesU, RulesDU]),
+	%TODO: Dummy skeleton. Will be implemented.
+	RulesHN = case AclQ#aclq.src_hostname of
+		unknown -> [];
+		Hostname -> []
+	end,
+
+	RuleIds = lists:append([RulesD, RulesI, RulesU, RulesDU, RulesHN]),
 	RuleIds.
 
 filter_rule_ids_by_dest(RuleIds, AclQ) -> %TODO: domain names stored as binary. Unicode characters should be examined wheter it is problem or not.
@@ -950,10 +956,11 @@ handle_query({update_notification_queue_item, RuleId, Status}) ->
 
 handle_query({get_remote_rule_tables, FilterId, Addr, UserH}) ->
 	AclQ = #aclq{src_addr=Addr, src_user_h=UserH},
+	EndpointHostName = mydlp_mysql:get_endpoint_hostname(Addr),
 	RemovableStorageRuleTable = get_rules(FilterId, AclQ#aclq{channel=removable}),
 	PrinterRuleTable = get_rules(FilterId, AclQ#aclq{channel=printer}),
 	InboundRuleTable = get_rules(FilterId, AclQ#aclq{channel=inbound}),
-	DiscoveryRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=discovery}),
+	DiscoveryRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=discovery, src_hostname=EndpointHostName}),
 	ScreenshotRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=screenshot}),
 	ApplicationNames = get_rule_destinations(ScreenshotRuleIds),
 	Directories = get_rule_destinations(DiscoveryRuleIds),

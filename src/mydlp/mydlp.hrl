@@ -88,6 +88,7 @@
 		src_domain=undefined,
 		src_addr=unknown,
 		src_user_h=unknown,
+		src_hostname=unknown,
 		destinations=[],
 		has_hidden_destinations=false
         }).

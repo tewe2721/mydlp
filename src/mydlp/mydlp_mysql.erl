@@ -64,6 +64,7 @@
 	get_remote_storage_by_id/1,
 	get_remote_document_databases_by_id/1,
 	update_document_fingerprinting_status/2,
+	get_endpoint_hostname/1,
 	stop/0]).
 
 %% gen_server callbacks
@@ -175,6 +176,8 @@ get_remote_document_databases_by_id(DDId) -> gen_server:call(?MODULE, {get_remot
 
 update_document_fingerprinting_status(DDIds, Status) -> gen_server:cast(?MODULE, {update_document_fingerprinting_status, DDIds, Status}).
 
+get_endpoint_hostname(Addr) -> gen_server:call(?MODULE, {get_endpoint_hostname, Addr}).
+
 %%%%%%%%%%%%%% gen_server handles
 
 %handle_call(is_multisite, _From, State) ->
@@ -282,6 +285,15 @@ handle_call({is_all_discovery_finished, GroupId}, From, State) ->
 				_ -> Worker ! {async_reply, false, From} end;
 		_ -> Worker ! {async_reply, false, From}
 	end,
+	{noreply, State};
+
+handle_call({get_endpoint_hostname, {I1, I2, I3, I4}}, From, State) ->
+	Worker = self(),
+	IpStr = integer_to_list(I1) ++ "." ++ integer_to_list(I2) ++ "." ++ integer_to_list(I3) ++ "." ++ integer_to_list(I4),
+	case lpsq(get_endpoint_hostname, [IpStr], 5000) of
+		{ok, [[Hostname]]} -> Worker ! {async_reply, Hostname, From};
+		R -> ?ERROR_LOG("Error occured when getting endpoint hostname witp ip: ["?S"], Error: ["?S"]", [IpStr, R]), 
+			Worker ! {async_reply, none, From} end,
 	{noreply, State};
 
 handle_call({save_fingerprints, DocumentId, FingerprintList}, From, State) ->
@@ -673,6 +685,7 @@ init([]) ->
 		{mark_as_finish_all_reports, <<"UPDATE DiscoveryReport SET status=\"stopped\", finishDate=? WHERE status != \"finished\" AND status != \"stopped\"">>},
 		{update_document_fingerprinting_status, <<"UPDATE DocumentDatabase SET currentlyFingerprinting=? WHERE id=?">>},
 		{get_endpoint_alias, <<"SELECT endpointAlias, endpointId FROM Endpoint">>},
+		{get_endpoint_hostname, <<"SELECT hostname FROM EndpointStatus where ipAddress=?">>},
 		{get_id_with_endpoint_alias, <<"SELECT endpointId FROM Endpoint where endpointAlias=?">>},
 		{get_ip_and_username, <<"SELECT ipAddress, username FROM EndpointStatus where endpointAlias=?">>},
 		{get_alias_with_ip, <<"SELECT endpointAlias FROM EndpointStatus where ipAddress=?">>},

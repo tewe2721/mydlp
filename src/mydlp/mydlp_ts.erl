@@ -98,6 +98,7 @@ getRuletable(EndpointId, Ipaddress, Userh, Revisionid) ->
 	UserHI = mydlp_api:binary_to_integer(Userh),
 	ClientIpS = binary_to_list(Ipaddress),
 	ClientIp = mydlp_api:str_to_ip(ClientIpS),
+	erlang:display({client, binary_to_list(EndpointId), ClientIpS, UserHI, RevisionIdI}),
 	mydlp_api:generate_client_policy(EndpointId, ClientIp, UserHI, RevisionIdI).
 
 apiQuery(Ipaddress, Filename, Data) ->
