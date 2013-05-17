@@ -100,7 +100,7 @@ push_log(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc, GroupId) ->
 	gen_server:call(?MODULE, {push_log, {Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc, GroupId}}, 60000).
 
 push_opr_log(Context, Term) ->
-	gen_server:call(?MODULE, {push_opr_log, Context, Term}, 60000).
+	gen_server:cast(?MODULE, {push_opr_log, Context, Term}).
 
 push_discovery_report(StartDate, GroupId, RuleId, Status) ->
 	gen_server:call(?MODULE, {push_discovery_report, StartDate, GroupId, RuleId, Status}, 60000).
@@ -210,19 +210,6 @@ handle_call({push_log, {Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Mi
 			{atomic, ILId} = ltransaction(fun() ->
 					psqt(insert_incident, 
 						[Time, ChannelS, RuleId1, Ip1, User1, To1, ITypeId, ActionS, Misc1, GroupId1, Visible]),
-					last_insert_id_t() end, 30000),
-			Reply = ILId,	
-                        Worker ! {async_reply, Reply, From}
-		end, 30000),
-	{noreply, State};
-
-handle_call({push_opr_log, Context, {opr_log, #opr_log{time=Time, channel=Channel, rule_id=RuleId, message_key=MessageKey, group_id=GroupId}}}, From , State) ->
-	Worker = self(),
-	?ASYNC(fun() ->
-			{Time1, _ChannelS, RuleId1, MessageKey1, GroupId1, Visible, Severity} = pre_push_opr_log(Time, Channel, RuleId, MessageKey, GroupId),
-			{atomic, ILId} = ltransaction(fun() ->
-					psqt(insert_opr_log_disc, 
-						[Time1, Context, RuleId1, GroupId1, MessageKey1, Visible, Severity]),
 					last_insert_id_t() end, 30000),
 			Reply = ILId,	
                         Worker ! {async_reply, Reply, From}
@@ -366,6 +353,13 @@ handle_call(stop, _From,  State) ->
 
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
+
+handle_cast({push_opr_log, Context, {opr_log, #opr_log{time=Time, channel=Channel, rule_id=RuleId, message_key=MessageKey, group_id=GroupId}}}, State) ->
+	?ASYNC(fun() ->
+			{Time1, _ChannelS, RuleId1, MessageKey1, GroupId1, Visible, Severity} = pre_push_opr_log(Time, Channel, RuleId, MessageKey, GroupId),
+			lpsq(insert_opr_log_disc, [Time1, Context, RuleId1, GroupId1, MessageKey1, Visible, Severity], 42000)
+		end, 45000),
+	{noreply, State};
 
 handle_cast({del_fingerprints_with_file_id, FileId}, State) ->
 	?ASYNC(fun() ->
