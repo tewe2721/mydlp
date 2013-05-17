@@ -124,33 +124,33 @@ acl_call1(Query, Files, Timeout) -> gen_server:call(?MODULE, {acl, Query, Files,
 
 -ifdef(__MYDLP_NETWORK).
 
-acl_exec(none, []) -> pass;
-acl_exec(_RuleTables, []) -> pass;
-acl_exec(RuleTables, Files) ->
-	acl_exec2(RuleTables, Files).
+acl_exec(_SpawnOpts, none, []) -> pass;
+acl_exec(_SpawnOpts, _RuleTables, []) -> pass;
+acl_exec(SpawnOpts, RuleTables, Files) ->
+	acl_exec2(SpawnOpts, RuleTables, Files).
 
 -endif.
 
-acl_exec2(none, _Files) -> pass;
-acl_exec2({Req, {_Id, DefaultAction}, Rules}, Files) ->
-	case { DefaultAction, acl_exec3(Req, Rules, Files) } of
+acl_exec2(_SpawnOpts, none, _Files) -> pass;
+acl_exec2(SpawnOpts, {Req, {_Id, DefaultAction}, Rules}, Files) ->
+	case { DefaultAction, acl_exec3(SpawnOpts, Req, Rules, Files) } of
 		{DefaultAction, return} -> DefaultAction;
 		{_DefaultAction, Action} -> Action end.
 
-acl_exec3(_Req, [], _Files) -> return;
-acl_exec3(_Req, _AllRules, []) -> return;
-acl_exec3(Req, AllRules, Files) ->
-	acl_exec3(Req, AllRules, Files, [], false).
+acl_exec3(_SpawnOpts, _Req, [], _Files) -> return;
+acl_exec3(_SpawnOpts, _Req, _AllRules, []) -> return;
+acl_exec3(SpawnOpts, Req, AllRules, Files) ->
+	acl_exec3(SpawnOpts, Req, AllRules, Files, [], false).
 
-acl_exec3(_Req, _AllRules, [], [], _CleanFiles) -> return;
+acl_exec3(_SpawnOpts, _Req, _AllRules, [], [], _CleanFiles) -> return;
 
-acl_exec3(Req, AllRules, [], ExNewFiles, false) ->
-	acl_exec3(Req, AllRules, [], ExNewFiles, true);
+acl_exec3(SpawnOpts, Req, AllRules, [], ExNewFiles, false) ->
+	acl_exec3(SpawnOpts, Req, AllRules, [], ExNewFiles, true);
 
-acl_exec3(Req, AllRules, [], ExNewFiles, CleanFiles) ->
-	acl_exec3(Req, AllRules, ExNewFiles, [], CleanFiles);
+acl_exec3(SpawnOpts, Req, AllRules, [], ExNewFiles, CleanFiles) ->
+	acl_exec3(SpawnOpts, Req, AllRules, ExNewFiles, [], CleanFiles);
 	
-acl_exec3(Req, AllRules, Files, ExNewFiles, CleanFiles) ->
+acl_exec3(SpawnOpts, Req, AllRules, Files, ExNewFiles, CleanFiles) ->
 	{InChunk, RestOfFiles} = mydlp_api:get_chunk(Files),
 	Files1 = mydlp_api:load_files(InChunk),
 
@@ -172,8 +172,8 @@ acl_exec3(Req, AllRules, Files, ExNewFiles, CleanFiles) ->
 	FFiles = PFiles4,
 
 	CTX = ctx_cache(),
-	AclR = case apply_rules(CTX, AllRules, FFiles) of
-		return -> acl_exec3(Req, AllRules, RestOfFiles,
+	AclR = case apply_rules(CTX, SpawnOpts, AllRules, FFiles) of
+		return -> acl_exec3(SpawnOpts, Req, AllRules, RestOfFiles,
 				lists:append(ExNewFiles, NewFiles), CleanFiles);
 		Else -> Else end,
 	ctx_cache_stop(CTX),
@@ -187,52 +187,53 @@ acl_exec3(Req, AllRules, Files, ExNewFiles, CleanFiles) ->
 
 -ifdef(__MYDLP_NETWORK).
 
-handle_acl({q, #aclq{} = AclQ}, Files, _State) ->
+handle_acl({q, #aclq{} = AclQ}, Files, SpawnOpts, _State) ->
 	CustomerId = mydlp_mnesia:get_dfid(),
 	Rules = mydlp_mnesia:get_rules(CustomerId, AclQ),
-	acl_exec(Rules, Files);
+	acl_exec(SpawnOpts, Rules, Files);
 
-handle_acl({get_remote_rule_tables, EndpointId}, _Files, _State) ->
+handle_acl({get_remote_rule_tables, EndpointId}, _Files, _SpawnOpts, _State) ->
 	CustomerId = mydlp_mnesia:get_dfid(),
 	% TODO: change needed for multi-site use
 	mydlp_mnesia:get_remote_rule_tables(CustomerId, EndpointId);
 
-handle_acl({qr, RuleId}, Files, _State) when is_integer(RuleId) ->
+handle_acl({qr, RuleId}, Files, SpawnOpts, _State) when is_integer(RuleId) ->
 	CustomerId = mydlp_mnesia:get_dfid(),
 	Rules = mydlp_mnesia:get_rule_table(CustomerId, [RuleId]),
-	acl_exec(Rules, Files);
+	acl_exec(SpawnOpts, Rules, Files);
 
-handle_acl(Q, _Files, _State) -> throw({error, {undefined_query, Q}}).
+handle_acl(Q, _Files, _SpawnOpts, _State) -> throw({error, {undefined_query, Q}}).
 
 -endif.
 
 -ifdef(__MYDLP_ENDPOINT).
 
-handle_acl({qe, _Channel}, [#file{mime_type= <<"mydlp-internal/usb-device;id=unknown">>}] = Files, _State) ->
+handle_acl({qe, _Channel}, [#file{mime_type= <<"mydlp-internal/usb-device;id=unknown">>}] = Files, _SpawnOpts, _State) ->
 	{?CFG(error_action), mydlp_api:empty_aclr(Files, usb_device_id_unknown)};
 
-handle_acl({qe, _Channel}, [#file{mime_type= <<"mydlp-internal/usb-device;id=", DeviceId/binary>>}] = Files, _State) ->
+handle_acl({qe, _Channel}, [#file{mime_type= <<"mydlp-internal/usb-device;id=", DeviceId/binary>>}] = Files, _SpawnOpts, _State) ->
 	case mydlp_mnesia:is_valid_usb_device_id(DeviceId) of % TODO: need refinements for multi-user usage.
 		true -> pass;
 		false -> {block, mydlp_api:empty_aclr(Files, usb_device_rejected)} end;
 
-handle_acl({qe, Channel}, Files, _State) ->
+handle_acl({qe, Channel}, Files, SpawnOpts, _State) ->
 	Rules = mydlp_mnesia:get_rule_table(Channel),
-	acl_exec2(Rules, Files);
+	acl_exec2(SpawnOpts, Rules, Files);
 
-handle_acl({qe, Channel, RuleIndex}, Files, _State) ->
+handle_acl({qe, Channel, RuleIndex}, Files, SpawnOpts, _State) ->
 	Rules = mydlp_mnesia:get_rule_table(Channel, RuleIndex),
-	acl_exec2(Rules, Files);
+	acl_exec2(SpawnOpts, Rules, Files);
 
-handle_acl(Q, _Files, _State) -> throw({error, {undefined_query, Q}}).
+handle_acl(Q, _Files, _SpawnOpts, _State) -> throw({error, {undefined_query, Q}}).
 
 -endif.
 
 handle_call({acl, Query, Files, Timeout}, From, State) ->
 	Worker = self(),
+	SpawnOpts = get_spawn_opts(Query),
 	mydlp_api:mspawn(fun() ->
 		Return = try 
-			Result = handle_acl(Query, Files, State),
+			Result = handle_acl(Query, Files, SpawnOpts, State),
 			{ok, Result}
 		catch throw:{error,eacces} -> {error, {throw, {error,eaccess}}};
 		      Class:Error ->
@@ -296,66 +297,72 @@ code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 
 %%%%%%%%%%%%%%% helper func
-apply_rules(_CTX, [], _Files) -> return;
-apply_rules(_CTX, _Rules, []) -> return;
-apply_rules(CTX, [{Id, Action, ITypes} = RS|Rules], Files) ->
-	Result = try execute_itypes(CTX, ITypes, Files)
+get_spawn_opts(#aclq{channel=mail}) -> [{priority, low}];
+get_spawn_opts(#aclq{channel=discovery}) -> [{priority, low}, {fullsweep_after, 0}];
+get_spawn_opts(#aclq{channel=remote_discovery}) -> [{priority, low}, {fullsweep_after, 0}];
+get_spawn_opts(_Else) -> [].
+
+
+apply_rules(_CTX, _SpawnOpts, [], _Files) -> return;
+apply_rules(_CTX, _SpawnOpts, _Rules, []) -> return;
+apply_rules(CTX, SpawnOpts, [{Id, Action, ITypes} = RS|Rules], Files) ->
+	Result = try execute_itypes(CTX, SpawnOpts, ITypes, Files)
 		catch Class:Error -> 
 			?ERROR_LOG("Internal error. Class: "?S", Error: "?S".~nRS: "?S"~nStacktrace: "?S, 
 				[Class, Error, RS, erlang:get_stacktrace()]),
 		{error, {file, Files}, {itype, -1}, {misc, "internal_error"}} end,
 	case Result of
-		neg -> apply_rules(CTX, Rules, Files);
+		neg -> apply_rules(CTX, SpawnOpts, Rules, Files);
 		{pos, {file, File}, {itype, ITypeOrigId}, {misc, Misc}, {matching_details, MatchingDetails}} -> 
 			{Action, {{rule, Id}, {file, File}, {itype, ITypeOrigId}, {misc, Misc}, {matching_details, MatchingDetails}}};
 		{error, {file, File}, {itype, ITypeOrigId}, {misc, Misc}} -> 
 			case ?CFG(error_action) of
-				pass -> apply_rules(CTX, Rules, Files);
+				pass -> apply_rules(CTX, SpawnOpts, Rules, Files);
 				EAction -> {EAction, {{rule, Id}, {file, File}, 
 						{itype, ITypeOrigId}, {misc, Misc}}} 
 			end
 	end.
 
 
-execute_itypes(_CTX, [], _Files) -> neg;
-execute_itypes(_CTX, _ITypes, []) -> neg;
-execute_itypes(CTX, ITypes, Files) ->
-	PAnyRet = mydlp_api:pany(fun(F) -> execute_itypes_pf(CTX, ITypes, F) end, Files, 900000),
+execute_itypes(_CTX, _SpawnOpts, [], _Files) -> neg;
+execute_itypes(_CTX, _SpawnOpts, _ITypes, []) -> neg;
+execute_itypes(CTX, SpawnOpts, ITypes, Files) ->
+	PAnyRet = mydlp_api:pany(fun(F) -> execute_itypes_pf(CTX, SpawnOpts, ITypes, F) end, Files, 900000, SpawnOpts),
 	case PAnyRet of
 		false -> neg;
 		{ok, _File, Ret} -> Ret end.
 
 
-execute_itypes_pf(CTX, ITypes, File) -> 
+execute_itypes_pf(CTX, SpawnOpts, ITypes, File) -> 
         File1 = case File#file.mime_type of 
                 undefined -> 	MT = mydlp_tc:get_mime(File#file.filename, File#file.data),
 				File#file{mime_type=MT};
                 _Else ->	File end,
 
-	PAnyRet = mydlp_api:pany(fun(T) -> execute_itype_pf(CTX, T, File1) end, ITypes, 850000),
+	PAnyRet = mydlp_api:pany(fun(T) -> execute_itype_pf(CTX, SpawnOpts, T, File1) end, ITypes, 850000, SpawnOpts),
 	
 	case PAnyRet of
 		false -> neg;
 		{ok, _IType, Ret} -> Ret end.
 
-execute_itype_pf(CTX, {ITypeOrigId, all, Distance, IFeatures}, File) ->
-	execute_itype_pf1(CTX, ITypeOrigId, Distance, IFeatures, File);
-execute_itype_pf(CTX, {ITypeOrigId, DataFormats, Distance, IFeatures},
+execute_itype_pf(CTX, SpawnOpts, {ITypeOrigId, all, Distance, IFeatures}, File) ->
+	execute_itype_pf1(CTX, SpawnOpts, ITypeOrigId, Distance, IFeatures, File);
+execute_itype_pf(CTX, SpawnOpts, {ITypeOrigId, DataFormats, Distance, IFeatures},
 		#file{mime_type=MT} = File) ->
         case mydlp_mnesia:is_mime_of_dfid(MT, DataFormats) of
                 false -> neg;
-		true -> execute_itype_pf1(CTX, ITypeOrigId, Distance, IFeatures, File) end.
+		true -> execute_itype_pf1(CTX, SpawnOpts, ITypeOrigId, Distance, IFeatures, File) end.
 
-execute_itype_pf1(CTX, ITypeOrigId, Distance, IFeatures, File) ->
-	case execute_ifeatures(CTX, Distance, IFeatures, File) of
+execute_itype_pf1(CTX, SpawnOpts, ITypeOrigId, Distance, IFeatures, File) ->
+	case execute_ifeatures(CTX, SpawnOpts, Distance, IFeatures, File) of
 		neg -> neg;
 		{pos, MatchingDetails} -> {pos, {file, File}, {itype, ITypeOrigId}, {misc, ""}, {matching_details, MatchingDetails}};
 		{error, {file, File}, {misc, Misc}} ->
 				{error, {file, File}, {itype, ITypeOrigId}, {misc, Misc}};
 		E -> E end.
 
-execute_ifeatures(_CTX, _Distance, [], _File) -> neg;
-execute_ifeatures(CTX, Distance, IFeatures, File) ->
+execute_ifeatures(_CTX, _SpawnOpts, _Distance, [], _File) -> neg;
+execute_ifeatures(CTX, SpawnOpts, Distance, IFeatures, File) ->
 	try	UseDistance = case Distance of
 			undefined -> false;
 			_Else -> lists:all(fun({_Threshold, {_MId, Func, _FuncParams}}) ->
@@ -366,7 +373,7 @@ execute_ifeatures(CTX, Distance, IFeatures, File) ->
 							{pos, T, SI} -> {pos, T, SI, Func};
 							R -> R
 						end end,
-					IFeatures, 800000),
+					IFeatures, 800000, SpawnOpts),
 		%%%% TODO: Check for PAnyRet whether contains error
 		case {PAllRet, UseDistance} of
 			{false, _} -> neg;

@@ -201,6 +201,7 @@ handle_call({aclq, ObjId, Timeout}, From, #state{object_tree=OT} = State) ->
 	case gb_trees:lookup(ObjId, OT) of
 		{value, #object{eof_flag=true} = Obj} -> 
 			Worker = self(),
+			SpawnOpts = get_spawn_opts(Obj),
 			mydlp_api:mspawn(fun() -> 
 					Return = try 
 						File = object_to_file(Obj),
@@ -226,7 +227,7 @@ handle_call({aclq, ObjId, Timeout}, From, #state{object_tree=OT} = State) ->
 						{ok, AclRet}
 					catch	throw:{error, eacces} -> {ok, pass};
 						throw:{error, enomem} -> 
-							?ERROR_LOG("ACLQ: Analysis of a file had failed because of insufficient memory!", []),
+							?ERROR_LOG("ACLQ: Analysis of a file had failed because of insufficient memory!~nStacktrace: "?S, [erlang:get_stacktrace()]),
 							{ok, pass};
 						throw:{is_not_regularfile, Path} ->
 							case catch string:substr(Path, 2, 2) of
@@ -239,7 +240,7 @@ handle_call({aclq, ObjId, Timeout}, From, #state{object_tree=OT} = State) ->
 								[Class, Error, erlang:get_stacktrace(), ObjId, State]),
 								{ierror, {Class, Error}} end,
 					Worker ! {async_reply, Return, From}
-				end, Timeout);
+				end, Timeout, SpawnOpts);
 		{value, #object{eof_flag=false} = Obj} -> 
 			?ERROR_LOG("ACLQ: eof_flag is not true, can not ACLQ before EOF: ObjId="?S", Obj="?S" OT="?S"~n",
 				[ObjId, Obj, OT]),
@@ -426,6 +427,12 @@ set_common_meta() ->
 		ok
 	end),
 	ok.
+
+get_spawn_opts(#object{} = Object) -> get_spawn_opts1(get_channel(Object)).
+
+get_spawn_opts1(discovery) -> [{priority, low}, {fullsweep_after, 0}];
+get_spawn_opts1(remote_discovery) -> [{priority, low}, {fullsweep_after, 0}];
+get_spawn_opts1(_Else) -> [].
 
 -ifdef(__MYDLP_NETWORK).
 

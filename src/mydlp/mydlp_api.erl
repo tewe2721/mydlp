@@ -1,4 +1,4 @@
-%%%
+%c;%%
 %%%    Copyright (C) 2010 Huseyin Kerem Cevahir <kerem@mydlp.com>
 %%%
 %%%--------------------------------------------------------------------------
@@ -2024,11 +2024,16 @@ metafy_files([F|Rest], Acc) -> metafy_files(Rest, [metafy(F)|Acc]);
 metafy_files([], Acc) -> lists:reverse(Acc).
 
 metafy(#file{} = File) ->
-	File1 = load_file(File),
-	File2 = hashify(File1),
-	File3 = sizefy(File2),
-	File4 = mimefy(File3),
-	File4.
+	File1 = sizefy(File),
+	IsLoad = case File1#file.size of
+		undefined -> false;
+		S when is_integer(S) -> ( S < ?CFG(maximum_chunk_size) ) end,
+	
+	case IsLoad of
+		true ->	File2 = load_file(File1),
+			File3 = hashify(File2),
+			mimefy(File3);
+		false -> File1 end.
 
 %%-------------------------------------------------------------------------
 %% @doc If present hashes data returns file.
@@ -2051,7 +2056,7 @@ hashify(#file{} = File) -> File.
 %%-------------------------------------------------------------------------
 sizefy(#file{size=undefined, dataref=undefined, data=undefined} = File) -> File;
 sizefy(#file{size=undefined, dataref=undefined, data=Data} = File) -> 
-	Size = size(Data),
+	Size = byte_size(Data),
 	File#file{size=Size};
 sizefy(#file{size=undefined, dataref=Ref} = File) -> 
 	Size = ?BB_S(Ref),
@@ -2941,17 +2946,19 @@ empty_aclr(RuleId, Files, Misc) -> {{rule, RuleId}, {file, Files}, {itype, -1}, 
 
 mspawn(Fun) -> mspawn(Fun, ?CFG(spawn_timeout)).
 
-mspawn(Fun, Timeout) ->
-	Pid = spawn(Fun),
+mspawn(Fun, Timeout) -> mspawn(Fun, Timeout, []).
+
+mspawn(Fun, Timeout, Opt) ->
+	Pid = spawn_opt(Fun, Opt),
 	mspawntimer(Timeout, Pid),
 	Pid.
 
 mspawn_link(Fun) -> mspawn_link(Fun, ?CFG(spawn_timeout)).
 
-mspawn_link(Fun, Timeout) ->
-	Pid = spawn_link(Fun),
-	mspawntimer(Timeout, Pid),
-	Pid.
+mspawn_link(Fun, Timeout) -> mspawn_link(Fun, Timeout, []).
+
+mspawn_link(Fun, Timeout, Opt) ->
+	mspawn(Fun, Timeout, lists:usort([link|Opt])).
 
 mspawntimer(Timeout, Pid) ->
 	{ok, _} = timer:exit_after(Timeout, Pid, timeout).
@@ -2963,9 +2970,11 @@ mspawntimer(Timeout, Pid) ->
 
 pmap(Fun, ListOfArgs) -> pmap(Fun, ListOfArgs, ?CFG(spawn_timeout)).
 
-pmap(Fun, ListOfArgs, Timeout) ->
+pmap(Fun, ListOfArgs, Timeout) -> pmap(Fun, ListOfArgs, Timeout, []).
+
+pmap(Fun, ListOfArgs, Timeout, SpawnOpts) ->
 	Self = self(),
-	Pids = lists:map(fun(I) -> mspawn_link(fun() -> pmap_f(Self, Fun, I) end, Timeout) end, ListOfArgs),
+	Pids = lists:map(fun(I) -> mspawn_link(fun() -> pmap_f(Self, Fun, I) end, Timeout, SpawnOpts) end, ListOfArgs),
 	pmap_gather(Pids, Timeout).
 
 pmap_gather(Pids, Timeout) -> pmap_gather(Pids, Timeout, []).
@@ -2994,7 +3003,9 @@ pmap_f(Parent, Fun, I) ->
 %%-------------------------------------------------------------------------
 pall(Fun, ListOfArgs) -> pall(Fun, ListOfArgs, ?CFG(spawn_timeout)).
 
-pall(Fun, ListOfArgs, Timeout) -> pany(Fun, ListOfArgs, Timeout, true).
+pall(Fun, ListOfArgs, Timeout) -> pall(Fun, ListOfArgs, Timeout, []).
+
+pall(Fun, ListOfArgs, Timeout, SpawnOpts) -> pany(Fun, ListOfArgs, Timeout, SpawnOpts, true).
 
 %%-------------------------------------------------------------------------
 %% @doc Paralel lists:any function with managed spawns, returns for anything other than false or neg
@@ -3003,11 +3014,13 @@ pall(Fun, ListOfArgs, Timeout) -> pany(Fun, ListOfArgs, Timeout, true).
 
 pany(Fun, ListOfArgs) -> pany(Fun, ListOfArgs, ?CFG(spawn_timeout)).
 
-pany(Fun, ListOfArgs, Timeout) -> pany(Fun, ListOfArgs, Timeout, false).
+pany(Fun, ListOfArgs, Timeout) -> pany(Fun, ListOfArgs, Timeout, []).
 
-pany(Fun, ListOfArgs, Timeout, IsPAll) ->
+pany(Fun, ListOfArgs, Timeout, SpawnOpts) -> pany(Fun, ListOfArgs, Timeout, SpawnOpts, false).
+
+pany(Fun, ListOfArgs, Timeout, SpawnOpts, IsPAll) ->
 	Self = self(),
-	Pid = mspawn(fun() -> pany_sup_f(Self, Fun, ListOfArgs, Timeout, IsPAll) end, Timeout + 1500),
+	Pid = mspawn(fun() -> pany_sup_f(Self, Fun, ListOfArgs, Timeout, SpawnOpts, IsPAll) end, Timeout + 1500, SpawnOpts),
 	pany_gather(Pid, Timeout).
 
 pany_gather(Pid, Timeout) ->
@@ -3018,9 +3031,9 @@ pany_gather(Pid, Timeout) ->
 		exit({timeout, {pany, Pid}})
 	end.
 
-pany_sup_f(Parent, Fun, ListOfArgs, Timeout, IsPAll) -> 
+pany_sup_f(Parent, Fun, ListOfArgs, Timeout, SpawnOpts, IsPAll) -> 
 	Self = self(),
-	Pids = lists:map(fun(I) -> mspawn_link(fun() -> pany_child_f(Self, Fun, I, Timeout) end, Timeout + 500) end, ListOfArgs),
+	Pids = lists:map(fun(I) -> mspawn_link(fun() -> pany_child_f(Self, Fun, I, Timeout) end, Timeout + 500, SpawnOpts) end, ListOfArgs),
 
 	NumberOfPids = length(Pids),
 	pany_sup_gather(NumberOfPids, Parent, Timeout, IsPAll, []).
