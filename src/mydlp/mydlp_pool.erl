@@ -206,6 +206,7 @@ start_worker_wait(#state{module_name=ModuleName} = State, Interval, Count) ->
 		{S1, {ok, Pid}} -> {S1, {ok, Pid}};
 		{S1, _Else} -> 	(catch ModuleName:restart_backoff()),
 				?ERROR_LOG("Waiting "?S"ms after calling restart_backoff to start worker.", [Interval]),
+				timer:sleep(Interval),
 				start_worker_wait(S1, Interval, Count - 1) end.
 
 start_worker(#state{module_name=ModuleName, inactive=IQ, workers=WS} = State) ->

@@ -572,7 +572,9 @@ init([]) ->
 	RDB = ?CFG(mysql_report_database),
 	PoolSize = ?CFG(mysql_pool_size),
 	
-	{ok, MPid} = mysql:start_link(pp, Host, Port, User, Password, DB, fun(_,_,_,_) -> ok end, utf8),
+	MPid = case mysql:start_link(pp, Host, Port, User, Password, DB, fun(_,_,_,_) -> ok end, utf8) of
+		{ok, M} -> M;
+		{error, {already_started, M}} -> M end,
 	erlang:monitor(process, MPid), 
 	
 	PoolReturns = [ mysql:connect(pp, Host, undefined, User, Password, DB, utf8, true) || _I <- lists:seq(1, 2)],
