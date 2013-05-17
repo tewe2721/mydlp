@@ -144,7 +144,7 @@ process_item({EndpointId, {endpoint_log, LogTerm} }) ->
 					file=Files, misc=Misc, payload=Payload},
 			process_item({EndpointId, {endpoint_log, LogTerm1}});
 		_Else -> ?ERROR_LOG("RECEIVE: Unexpected enpdoint_log item: ?S", [LogTerm]) end;
-process_item({EndpointId, {endpoint_opr_log, Context, Term}}) -> 
+process_item({EndpointId, {endpoint_opr_log, Context, #opr_log{} = Term}}) -> 
 	{IpAddress, _UserH, _Hostname} = mydlp_mnesia:get_user_from_endpoint_id(EndpointId),
 	mydlp_mysql:push_opr_log(Context, {ep_opr_log, Term#opr_log{ip_address=IpAddress, endpoint_id=EndpointId}});
 process_item(Item) -> 

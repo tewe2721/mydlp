@@ -292,7 +292,7 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
-	timer:send_after(6000, startup),
+	timer:send_after(60000, startup),
 	{ok, #state{timer_dict=dict:new()}}.
 
 terminate(_Reason, _State) ->
@@ -525,7 +525,9 @@ call_continue_ep_discovery(RuleId) ->
 
 set_command_to_endpoints(RuleId, Command, Args) ->
 	case Command of
-		?START_EP_COMMAND -> mydlp_mysql:populate_discovery_targets(RuleId);
+		?START_EP_COMMAND -> EndpointIds = mydlp_mnesia:get_endpoint_ids(),
+				erlang:display({ids, EndpointIds}),
+				lists:map(fun(I) -> mydlp_mnesia:update_ep_schedules(I, RuleId) end, EndpointIds);
 		_ -> ok
 	end,
 	[Endpoints] = mydlp_mnesia:get_endpoints_by_rule_id(RuleId), 
@@ -548,6 +550,7 @@ generate_group_id(RuleId, Channel) ->
 	mydlp_mysql:push_discovery_report(Time, GroupId, RuleId, ?REPORT_STATUS_DISC),
 	OprLog = #opr_log{time=Time, channel=Channel, rule_id=RuleId, message_key=?SUCCESS_MOUNT_KEY, group_id=GroupId},%TODO: message key should be revised.
 	?DISCOVERY_OPR_LOG(OprLog),
+	erlang:display("push log finished"),
 	GroupId .
 
 register_schedules_for_future(RuleId, Channel) ->

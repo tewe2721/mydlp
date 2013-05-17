@@ -101,6 +101,7 @@
 	remove_old_user_address/0,
 	get_user_from_address/1,
 	get_user_from_endpoint_id/1,
+	get_endpoint_ids/0,
 	save_endpoint_command/3,
 	save_endpoint_command/2,
 	remove_old_endpoint_command/0,
@@ -430,6 +431,8 @@ get_user_from_address(IpAddress) -> aqc({get_user_from_address, IpAddress}, noca
 
 get_user_from_endpoint_id(EndpointId) -> aqc({get_user_from_endpoint_id, EndpointId}, nocache, dirty).
 
+get_endpoint_ids() -> aqc(get_endpoint_ids, nocache, dirty).
+
 save_endpoint_command(EndpointId, Command, Args) -> aqc({save_endpoint_command, EndpointId, Command, Args}, nocache, dirty).
 
 save_endpoint_command(EndpointId, Command) -> aqc({save_endpoint_command, EndpointId, Command}, nocache, dirty).
@@ -486,10 +489,9 @@ get_rule_channel_by_orig_id(RuleId) -> aqc({get_rule_channel_by_orig_id, RuleId}
 
 get_discovery_rule_ids(Ip, Username) -> aqc({get_discovery_rule_ids, Ip, Username}, nocache).
 
-update_ep_schedules({EndpointId, Ip, Username}, TargetOrigRuleId) ->
-	SrcUserH = mydlp_api:hash_un(Username),
-	ClientIp = mydlp_api:str_to_ip(binary_to_list(Ip)),
-	AclQ = #aclq{src_addr=ClientIp, src_user_h=SrcUserH},
+update_ep_schedules(EndpointId, TargetOrigRuleId) ->
+	{Addr, UserH, Hostname} = get_user_from_endpoint_id(EndpointId), 
+	AclQ = #aclq{endpoint_id=EndpointId, src_addr=Addr, src_user_h=UserH, src_hostname=Hostname},
 	TargetRuleId = get_rule_id_by_orig_id(TargetOrigRuleId),
 	RuleIds = get_rule_ids(get_dfid(), AclQ#aclq{channel=discovery}),
 	aqc({update_ep_schedules, EndpointId, RuleIds, TargetRuleId, TargetOrigRuleId}, nocache, dirty).
@@ -1431,6 +1433,11 @@ handle_query({get_user_from_address, IpAddress}) ->
 
 handle_query({get_user_from_endpoint_id, EndpointId}) ->
         mnesia:dirty_match_object(#user_address{endpoint_id=EndpointId, ipaddr='_', un_hash='_', username='_', hostname='_', last_seen='_'});
+
+handle_query(get_endpoint_ids) ->
+	Q = ?QLCQ([ U#user_address.endpoint_id ||
+		U <- mnesia:table(user_address)]),
+	?QLCE(Q);
 
 handle_query({save_endpoint_command, EndpointId, Command, [{ruleId, RuleId}, {groupId, GroupId}]=Args}) ->
 	{MegaSecs, Secs, _MicroSecs} = erlang:now(),

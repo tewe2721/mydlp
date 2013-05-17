@@ -55,7 +55,7 @@
 	repopulate_mnesia/0,
 	save_fingerprints/2,
 	del_fingerprints_with_file_id/1,
-	populate_discovery_targets/1,
+	%populate_discovery_targets/1,
 	get_progress/0,
 	is_all_ep_discovery_finished/3,
 	is_all_discovery_finished/1,
@@ -141,8 +141,8 @@ save_fingerprints(DocumentId, FingerprintList) ->
 del_fingerprints_with_file_id(FileId) ->
 	gen_server:cast(?MODULE, {del_fingerprints_with_file_id, FileId}).
 
-populate_discovery_targets(RuleId) ->
-	gen_server:call(?MODULE, {populate_discovery_targets, RuleId}, 150000).
+%populate_discovery_targets(RuleId) ->
+%	gen_server:call(?MODULE, {populate_discovery_targets, RuleId}, 150000).
 
 requeued(LogId) -> 
 	gen_server:cast(?MODULE, {requeued, LogId}).
@@ -283,18 +283,18 @@ handle_call({save_fingerprints, DocumentId, FingerprintList}, From, State) ->
 		end, 60000),
         {noreply, State};
 
-handle_call({populate_discovery_targets, RuleId}, From, State) ->
-	Worker = self(),
-	?ASYNC(fun() ->
-		{ok, Aliasses} =  psq(get_endpoint_alias),
-		case Aliasses of
-			[] -> ok;
-			_ ->
-				IpsAndNames = get_identities(Aliasses),
-				lists:map(fun(I) -> mydlp_mnesia:update_ep_schedules(I, RuleId) end, IpsAndNames) end,
-		Worker ! {async_reply, ok, From}
-	end, 149000),
-	{noreply, State};
+%handle_call({populate_discovery_targets, RuleId}, From, State) ->
+%	Worker = self(),
+%	?ASYNC(fun() ->
+%		{ok, Aliasses} =  psq(get_endpoint_alias),
+%		case Aliasses of
+%			[] -> ok;
+%			_ ->
+%				IpsAndNames = get_identities(Aliasses),
+%				lists:map(fun(I) -> mydlp_mnesia:update_ep_schedules(I, RuleId) end, IpsAndNames) end,
+%		Worker ! {async_reply, ok, From}
+%	end, 149000),
+%	{noreply, State};
 
 handle_call({get_remote_storage_by_id, RSId}, _From, State) ->
 	case psq(remote_sshfs_dir, [RSId]) of
@@ -359,6 +359,20 @@ handle_cast({push_opr_log, Context, {opr_log, #opr_log{time=Time, channel=Channe
 			{Time1, _ChannelS, RuleId1, MessageKey1, GroupId1, Visible, Severity} = pre_push_opr_log(Time, Channel, RuleId, MessageKey, GroupId),
 			lpsq(insert_opr_log_disc, [Time1, Context, RuleId1, GroupId1, MessageKey1, Visible, Severity], 42000)
 		end, 45000),
+	{noreply, State};
+
+handle_cast({push_opr_log, Context, {ep_opr_log, #opr_log{time=Time, channel=Channel, rule_id=RuleId, message_key=MessageKey, group_id=GroupId, endpoint_id=EndpointId}}}, State) ->
+	?ASYNC(fun() ->
+			{Time1, _ChannelS, RuleId1, MessageKey1, GroupId1, Visible, Severity} = pre_push_opr_log(Time, Channel, RuleId, MessageKey, GroupId),
+			lpsq(insert_opr_log_ep_disc, [Time1, Context, RuleId1, GroupId1, MessageKey1, Visible, Severity, EndpointId], 42000)
+		end, 30000),
+	{noreply, State};
+
+handle_cast({push_opr_log, Context, {key, MessageKey}}, State) ->
+	Time=erlang:universaltime(),
+	?ASYNC(fun() ->
+			lpsq(insert_opr_log,[Time, Context, MessageKey, 1, 0], 42000) % 1 for visible column, 0 for severity
+		end, 30000),
 	{noreply, State};
 
 handle_cast({del_fingerprints_with_file_id, FileId}, State) ->
@@ -770,13 +784,13 @@ psqt(PreparedKey, Params) ->
 %%%%%%%%%%%% internal
 	
 
-get_identities(Rows) -> get_identities(Rows, []).
+%get_identities(Rows) -> get_identities(Rows, []).
 
-get_identities([[Alias, EndpointId]|Rows], Acc) ->
-	case lpsq(get_ip_and_username, [Alias], 30000) of
-		{ok, [[Ip,Username]]} -> get_identities(Rows, [{EndpointId, Ip, Username}|Acc]);
-		_ -> ?ERROR_LOG("Unknown Endpoint Alias: ["?S"]", [Alias]), get_identities(Rows, Acc) end;
-get_identities([], Acc) -> Acc.
+%get_identities([[Alias, EndpointId]|Rows], Acc) ->
+%	case lpsq(get_ip_and_username, [Alias], 30000) of
+%		{ok, [[Ip,Username]]} -> get_identities(Rows, [{EndpointId, Ip, Username}|Acc]);
+%		_ -> ?ERROR_LOG("Unknown Endpoint Alias: ["?S"]", [Alias]), get_identities(Rows, Acc) end;
+%get_identities([], Acc) -> Acc.
 
 populate_site(FilterId) ->
 	set_progress(compile),
