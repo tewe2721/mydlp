@@ -216,32 +216,6 @@ handle_call({push_log, {Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Mi
 		end, 30000),
 	{noreply, State};
 
-handle_call({push_opr_log, Context, {ep_opr_log, #opr_log{time=Time, channel=Channel, rule_id=RuleId, message_key=MessageKey, group_id=GroupId, endpoint_id=EndpointId}}}, From , State) ->
-	Worker = self(),
-	?ASYNC(fun() ->
-			{Time1, _ChannelS, RuleId1, MessageKey1, GroupId1, Visible, Severity} = pre_push_opr_log(Time, Channel, RuleId, MessageKey, GroupId),
-			{atomic, ILId} = ltransaction(fun() ->
-					psqt(insert_opr_log_ep_disc, 
-						[Time1, Context, RuleId1, GroupId1, MessageKey1, Visible, Severity, EndpointId]),
-					last_insert_id_t() end, 30000),
-			Reply = ILId,	
-                        Worker ! {async_reply, Reply, From}
-		end, 30000),
-	{noreply, State};
-
-handle_call({push_opr_log, Context, {key, MessageKey}}, From, State) ->
-	Worker = self(),
-	Time=erlang:universaltime(),
-	?ASYNC(fun() ->
-			{atomic, ILId} = ltransaction(fun() ->
-					psqt(insert_opr_log, 
-						[Time, Context, MessageKey, 1, 0]), % 1 for visible column, 0 for severity
-					last_insert_id_t() end, 30000),
-			Reply = ILId,	
-                        Worker ! {async_reply, Reply, From}
-		end, 30000),
-	{noreply, State};
-
 handle_call({push_discovery_report, StartDate, GroupId, RuleId, Status}, From, State) ->
 	Worker = self(),
 	?ASYNC(fun() ->
@@ -282,19 +256,6 @@ handle_call({save_fingerprints, DocumentId, FingerprintList}, From, State) ->
                         Worker ! {async_reply, ok, From}
 		end, 60000),
         {noreply, State};
-
-%handle_call({populate_discovery_targets, RuleId}, From, State) ->
-%	Worker = self(),
-%	?ASYNC(fun() ->
-%		{ok, Aliasses} =  psq(get_endpoint_alias),
-%		case Aliasses of
-%			[] -> ok;
-%			_ ->
-%				IpsAndNames = get_identities(Aliasses),
-%				lists:map(fun(I) -> mydlp_mnesia:update_ep_schedules(I, RuleId) end, IpsAndNames) end,
-%		Worker ! {async_reply, ok, From}
-%	end, 149000),
-%	{noreply, State};
 
 handle_call({get_remote_storage_by_id, RSId}, _From, State) ->
 	case psq(remote_sshfs_dir, [RSId]) of
