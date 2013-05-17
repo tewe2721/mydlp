@@ -45,7 +45,7 @@
 	generateFingerprintsWithFile/3,
 	compileCustomer/1,
 	getCompileStatus/0,
-	getRuletable/4,
+	getRuletable/2,
 	receiveBegin/1,
 	receiveChunk/5,
 	requeueIncident/1,
@@ -93,12 +93,9 @@ getCompileStatus() ->
 	Atom = mydlp_mysql:get_progress(),
 	atom_to_list(Atom).
 
-getRuletable(EndpointId, Ipaddress, Userh, Revisionid) ->
+getRuletable(EndpointId, Revisionid) ->
 	RevisionIdI = mydlp_api:binary_to_integer(Revisionid),
-	UserHI = mydlp_api:binary_to_integer(Userh),
-	ClientIpS = binary_to_list(Ipaddress),
-	ClientIp = mydlp_api:str_to_ip(ClientIpS),
-	mydlp_api:generate_client_policy(EndpointId, ClientIp, UserHI, RevisionIdI).
+	mydlp_api:generate_client_policy(EndpointId, RevisionIdI).
 
 apiQuery(Ipaddress, Filename, Data) ->
 	{ok, Itemid} = mydlp_container:new(), 
@@ -118,25 +115,23 @@ apiQuery(Ipaddress, Filename, Data) ->
 	
 	
 
-receiveBegin(_Ipaddress) -> 
+receiveBegin(_EndpointId) -> 
 	{ok, Ret} = mydlp_container:new(), 
 	RetL = integer_to_list(Ret),
 	list_to_binary(RetL).
 
-receiveChunk(Ipaddress, Itemid, Chunkdata, Chunknumtotal, Chunknumtotal) -> 
-	ClientIpS = binary_to_list(Ipaddress),
-	ClientIp = mydlp_api:str_to_ip(ClientIpS),
+receiveChunk(EndpointId, Itemid, Chunkdata, Chunknumtotal, Chunknumtotal) -> 
 	case mydlp_container:push(Itemid, Chunkdata) of
 		ok -> case mydlp_container:eof(Itemid) of
 			ok -> case mydlp_container:getdata(Itemid) of
-				{ok, Data} -> mydlp_item_receive:r(ClientIp, Data),
+				{ok, Data} -> mydlp_item_receive:r(EndpointId, Data),
 					mydlp_container:destroy(Itemid),
 					<<"ok">>;
 				_Else2 -> <<"error">> end;
 			_Else1 -> <<"error">> end;
 		_Else -> <<"error">> end;
 
-receiveChunk(_Ipaddress, Itemid, Chunkdata, _Chunknum, _Chunknumtotal) -> 
+receiveChunk(_EndpointId, Itemid, Chunkdata, _Chunknum, _Chunknumtotal) -> 
 	case mydlp_container:push(Itemid, Chunkdata) of
 		ok -> <<"ok">>;
 		_Else -> <<"error">> end.
@@ -194,11 +189,15 @@ registerUserAddress(EndpointId, Ipaddress, Userh, Data) ->
 			Else -> ?ERROR_LOG("Error occurred obtaining encryption key: "?S , [Else]), ok end;
 		_Else -> ok end,
 
+	Hostname = case get_arg_value(MetaDict, "hostname") of
+		"" -> unknown;
+		H -> H end,
+
 	Username = get_arg_value(MetaDict, "user"),
 	UserHI = mydlp_api:binary_to_integer(Userh),
 	ClientIpS = binary_to_list(Ipaddress),
 	ClientIp = mydlp_api:str_to_ip(ClientIpS),
-	mydlp_mnesia:save_user_address(ClientIp, UserHI, Username),
+	mydlp_mnesia:save_user_address(EndpointId, ClientIp, UserHI, Username, Hostname),
 	MetaDict.
 
 saveLicenseKey(LicenseKey) ->

@@ -124,6 +124,18 @@
 	un_hash
 }).
 
+-record(m_endpoint_id, {
+	id,
+	rule_id,
+	endpoint_id
+}).
+
+-record(m_hostname, {
+	id,
+	rule_id,
+	hostname
+}).
+
 -record(destination_user, {
 	id,
 	rule_id,
@@ -157,9 +169,11 @@
 }).
 
 -record(user_address, {
+	endpoint_id,
 	ipaddr,
 	un_hash,
 	username,
+	hostname,
 	last_seen
 }).
 

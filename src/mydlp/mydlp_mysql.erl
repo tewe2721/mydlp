@@ -229,17 +229,13 @@ handle_call({push_opr_log, Context, {opr_log, #opr_log{time=Time, channel=Channe
 		end, 30000),
 	{noreply, State};
 
-handle_call({push_opr_log, Context, {ep_opr_log, #opr_log{time=Time, channel=Channel, rule_id=RuleId, message_key=MessageKey, group_id=GroupId, ip_address=IpAddress}}}, From , State) ->
+handle_call({push_opr_log, Context, {ep_opr_log, #opr_log{time=Time, channel=Channel, rule_id=RuleId, message_key=MessageKey, group_id=GroupId, endpoint_id=EndpointId}}}, From , State) ->
 	Worker = self(),
 	?ASYNC(fun() ->
 			{Time1, _ChannelS, RuleId1, MessageKey1, GroupId1, Visible, Severity} = pre_push_opr_log(Time, Channel, RuleId, MessageKey, GroupId),
-			{I1, I2, I3, I4} = IpAddress,
-			IpAddress1 = integer_to_list(I1)++"."++integer_to_list(I2)++"."++integer_to_list(I3)++"."++integer_to_list(I4),
-			{ok, [[Alias]]} = lpsq(get_alias_with_ip, [IpAddress1], 5000),
-			{ok, [[Source]]} = psq(get_id_with_endpoint_alias, [Alias]),
 			{atomic, ILId} = ltransaction(fun() ->
 					psqt(insert_opr_log_ep_disc, 
-						[Time1, Context, RuleId1, GroupId1, MessageKey1, Visible, Severity, Source]),
+						[Time1, Context, RuleId1, GroupId1, MessageKey1, Visible, Severity, EndpointId]),
 					last_insert_id_t() end, 30000),
 			Reply = ILId,	
                         Worker ! {async_reply, Reply, From}
@@ -608,6 +604,8 @@ init([]) ->
 		{custom_action_seclore_by_id, <<"SELECT cs.hotFolderId, cs.activityComment FROM CustomActionDescription AS cd, CustomActionDescriptionSeclore AS cs WHERE cd.coupledCustomAction_id=? AND cd.id=cs.id">>},
 		{network_by_rule_id, <<"SELECT n.ipBase,n.ipMask FROM Network AS n, RuleItem AS ri WHERE ri.rule_id=? AND n.id=ri.item_id">>},
 		{domain_by_rule_id, <<"SELECT d.destinationString FROM Domain AS d, RuleItem AS ri WHERE ri.rule_id=? AND d.id=ri.item_id AND (ri.ruleColumn IS NULL OR ri.ruleColumn=\"DESTINATION\")">>},
+		{hostname_by_rule_id, <<"SELECT h.hostname FROM Hostname AS h, RuleItem AS ri WHERE ri.rule_id=? AND h.id=ri.item_id">>},
+		{endpoint_id_by_rule_id, <<"SELECT e.endpointId FROM Endpoint AS e, EndpointItem AS ei, RuleItem AS ri WHERE ri.rule_id=? AND ei.id=ri.item_id AND ei.endpoint_id=e.id">>},
 		{directory_by_rule_id, <<"SELECT d.destinationString FROM FileSystemDirectory AS d, RuleItem AS ri WHERE ri.rule_id=? AND d.id=ri.item_id">>},
 		{source_domain_by_rule_id, <<"SELECT d.destinationString FROM Domain AS d, RuleItem AS ri WHERE ri.rule_id=? AND d.id=ri.item_id AND ri.ruleColumn=\"SOURCE\"">>},
 		{remote_sshfs, <<"SELECT r.address, r.port, r.path, r.username, r.password FROM RemoteStorageSSHFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
@@ -859,6 +857,12 @@ populate_rule(OrigId, Channel, UserMessage, Action, FilterId) ->
 	{ok, IQ} = psq(network_by_rule_id, [OrigId]),
 	populate_iprs(IQ, RuleId),
 
+	{ok, HQ} = psq(hostname_by_rule_id, [OrigId]),
+	populate_hostnames(HQ, RuleId),
+
+	{ok, EQ} = psq(endpoint_id_by_rule_id, [OrigId]),
+	populate_endpoint_ids(EQ, RuleId),
+
 	populate_rule_users(OrigId, RuleId),
 
 	populate_rule_dest_users(OrigId, RuleId),
@@ -929,6 +933,20 @@ populate_iprs([[Base, Subnet]| Rows], RuleId) ->
 	mydlp_mnesia_write(I),
 	populate_iprs(Rows, RuleId);
 populate_iprs([], _RuleId) -> ok.
+
+populate_hostnames([[Hostname]| Rows], RuleId) ->
+	Id = mydlp_mnesia:get_unique_id(m_hostname),
+	H = #m_hostname{id=Id, rule_id=RuleId, hostname=Hostname},
+	mydlp_mnesia_write(H),
+	populate_hostnames(Rows, RuleId);
+populate_hostnames([], _RuleId) -> ok.
+
+populate_endpoint_ids([[EndpointId]| Rows], RuleId) ->
+	Id = mydlp_mnesia:get_unique_id(m_endpoint_id),
+	E = #m_endpoint_id{id=Id, rule_id=RuleId, endpoint_id=EndpointId},
+	mydlp_mnesia_write(E),
+	populate_endpoint_ids(Rows, RuleId);
+populate_endpoint_ids([], _RuleId) -> ok.
 
 populate_destinations([[Destination]|Rows], RuleId, Channel=screenshot) ->
 	Id = mydlp_mnesia:get_unique_id(dest),
@@ -1565,18 +1583,27 @@ populate_usb_devices([[DeviceId, ActionB]|Rows], FilterId) ->
 	populate_usb_devices(Rows, FilterId);
 populate_usb_devices([], _FilterId) -> ok.
 
-get_user_ipr_rid(UserRIds, IprRIds) -> get_user_ipr_rid(UserRIds, IprRIds, []).
+cross_product_two_rigs(RId1, RId2) -> cross_product_two_rigs(RId1, RId2, []).
 
-get_user_ipr_rid([RIds|UserRIds], IprRIds, Acc) ->
-	A = lists:map(fun(I) -> lists:usort(RIds ++ I) end, IprRIds),
-	get_user_ipr_rid(UserRIds, IprRIds, Acc ++ A);
-get_user_ipr_rid([], _IprRIds, Acc) -> lists:usort(Acc).
+cross_product_two_rigs([RId1|Rest], RId2, Acc) ->
+	A = lists:map(fun(I) -> lists:usort(RId1 ++ I) end, RId2),
+	cross_product_two_rigs(Rest, RId2, Acc ++ A);
+cross_product_two_rigs([], _, Acc) -> lists:usort(Acc).
+
+cross_product_rule_id_groups(RuleIdGroups) -> cross_product_rule_id_groups(RuleIdGroups, []).
+
+cross_product_rule_id_groups([RIdGroup|Rest], Acc) ->
+	Acc1 = cross_product_two_rigs(RIdGroup, Acc),
+	cross_product_rule_id_groups(Rest, Acc1);
+cross_product_rule_id_groups([], Acc) -> lists:usort(Acc).
 
 populate_mc_modules() ->
 	RDRIs = mydlp_mnesia:get_remote_default_rule_ids(),
 	RURIs = mydlp_mnesia:get_remote_user_rule_ids(),
 	RIRIs = mydlp_mnesia:get_remote_ipr_rule_ids(),
-	RIDSs1 = get_user_ipr_rid(RURIs, RIRIs),
+	RHRIs = mydlp_mnesia:get_remote_hostname_rule_ids(),
+	RERIs = mydlp_mnesia:get_remote_endpoint_id_rule_ids(),
+	RIDSs1 = cross_product_rule_id_groups([RURIs, RIRIs, RHRIs, RERIs]),
 	RIDSs2 = [[]|RIDSs1], %% for default rule ids
 	RIDSs = lists:map(fun(I) -> lists:usort(RDRIs ++ I) end, RIDSs2),
 	populate_mc_modules([local|RIDSs]).

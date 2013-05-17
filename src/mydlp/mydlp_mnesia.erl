@@ -84,20 +84,23 @@
 	get_rule_ids/2,
 	get_remote_user_rule_ids/0,
 	get_remote_ipr_rule_ids/0,
+	get_remote_hostname_rule_ids/0,
+	get_remote_endpoint_id_rule_ids/0,
 	get_remote_default_rule_ids/0,
-	get_remote_rule_tables/3,
-	get_remote_rule_ids/3,
+	get_remote_rule_tables/2,
+	get_remote_rule_ids/2,
 	get_notification_items/1,
 	get_notification_queue_items/1,
 	get_early_notification_queue_items/0,
 	update_notification_queue_item/2,
-	get_remote_mc_module/3,
+	get_remote_mc_module/2,
 	get_fid/1,
 	remove_site/1,
 	add_fhash/3,
-	save_user_address/3,
+	save_user_address/5,
 	remove_old_user_address/0,
 	get_user_from_address/1,
+	get_user_from_endpoint_id/1,
 	save_endpoint_command/3,
 	save_endpoint_command/2,
 	remove_old_endpoint_command/0,
@@ -210,6 +213,9 @@
 		fun() -> mnesia:add_table_index(dd_file_entry, filepath) end},
 	{m_user, ordered_set, 
 		fun() -> mnesia:add_table_index(m_user, un_hash) end},
+	{m_endpoint_id, ordered_set, 
+		fun() -> mnesia:add_table_index(m_endpoint_id, endpoint_id) end},
+	m_hostname,
 	{destination_user, ordered_set, 
 		fun() -> mnesia:add_table_index(destination_user, un_hash) end},
 	{source_domain, ordered_set, 
@@ -221,7 +227,8 @@
 		fun() -> mnesia:add_table_index(keyword, group_id) end},
 	site_desc,
 	{user_address, ordered_set, 
-		fun() -> mnesia:add_table_index(user_address, last_seen) end},
+		fun() -> mnesia:add_table_index(user_address, last_seen),
+			 mnesia:add_table_index(user_address, ipaddr) end},
 	{endpoint_command, ordered_set, 
 		fun() -> mnesia:add_table_index(endpoint_command, endpoint_id) end},
 	user_message,
@@ -295,6 +302,7 @@ get_record_fields_functional(Record) ->
 		notification_queue -> record_info(fields, notification_queue);
 		source_domain -> record_info(fields, source_domain);
 		m_user -> record_info(fields, m_user);
+		m_endpoint_id -> record_info(fields, m_endpoint_id);
 		destination_user -> record_info(fields, destination_user);
 		itype -> record_info(fields, itype);
 		ifeature -> record_info(fields, ifeature);
@@ -374,13 +382,17 @@ get_rule_ids(FilterId, AclQ) -> aqc({get_rule_ids, FilterId, AclQ}, cache).
 
 get_rule_table(FilterId, RuleIDs) -> aqc({get_rule_table, FilterId, RuleIDs}, cache).
 
-get_remote_rule_tables(FilterId, Addr, UserH) -> aqc({get_remote_rule_tables, FilterId, Addr, UserH}, cache).
+get_remote_rule_tables(FilterId, EndpointId) -> aqc({get_remote_rule_tables, FilterId, EndpointId}, cache).
 
-get_remote_rule_ids(FilterId, Addr, UserH) -> aqc({get_remote_rule_ids, FilterId, Addr, UserH}, cache).
+get_remote_rule_ids(FilterId, EndpointId) -> aqc({get_remote_rule_ids, FilterId, EndpointId}, cache).
 
 get_remote_user_rule_ids() -> aqc(get_remote_user_rule_ids, nocache, dirty, 120000).
 
 get_remote_ipr_rule_ids() -> aqc(get_remote_ipr_rule_ids, nocache, dirty).
+
+get_remote_hostname_rule_ids() -> aqc(get_remote_hostname_rule_ids, nocache, dirty).
+
+get_remote_endpoint_id_rule_ids() -> aqc(get_remote_endpoint_id_rule_ids, nocache, dirty).
 
 get_remote_default_rule_ids() -> aqc(get_remote_default_rule_ids, nocache, dirty).
 
@@ -392,11 +404,11 @@ get_early_notification_queue_items() -> aqc(get_early_notification_queue_items, 
 
 update_notification_queue_item(RuleId, NewStatus) -> aqc({update_notification_queue_item, RuleId, NewStatus}, nocache). 
 
-get_remote_mc_module(FilterId, Addr, UserH) -> 
-	RuleIDs = get_remote_rule_ids(FilterId, Addr, UserH),
+get_remote_mc_module(FilterId, EndpointId) -> 
+	RuleIDs = get_remote_rule_ids(FilterId, EndpointId),
 	Mods = case get_mc_module(RuleIDs) of
-		[] -> ?ERROR_LOG("Cannot find mc module for remote. Addr: "?S", UserH: "?S", Rule Ids: "?S , 
-			[Addr, UserH, RuleIDs]), get_mc_module();
+		[] -> ?ERROR_LOG("Cannot find mc module for remote. EndpointId: "?S", Rule Ids: "?S , 
+			[EndpointId, RuleIDs]), get_mc_module();
 		ML -> ML end,
 	#mc_module{target=local, modules=Mods}.
 
@@ -409,11 +421,13 @@ add_fhash(Hash, FileId, GroupId) when is_binary(Hash) ->
 
 new_authority(Node) -> gen_server:call(?MODULE, {new_authority, Node}, 30000).
 
-save_user_address(IpAddress, UserHash, UserName) -> aqc({save_user_address, IpAddress, UserHash, UserName}, nocache, dirty).
+save_user_address(EndpointId, IpAddress, UserHash, UserName, Hostname) -> aqc({save_user_address, EndpointId, IpAddress, UserHash, UserName, Hostname}, nocache, dirty).
 
 remove_old_user_address() -> aqc(remove_old_user_address, nocache, dirty).
 
 get_user_from_address(IpAddress) -> aqc({get_user_from_address, IpAddress}, nocache, dirty).
+
+get_user_from_endpoint_id(EndpointId) -> aqc({get_user_from_endpoint_id, EndpointId}, nocache, dirty).
 
 save_endpoint_command(EndpointId, Command, Args) -> aqc({save_endpoint_command, EndpointId, Command, Args}, nocache, dirty).
 
@@ -575,8 +589,14 @@ get_all_discovery_status() -> aqc(get_all_discovery_status, nocache).
 
 handle_result({get_user_from_address, _IpAddress}, {atomic, Result}) -> 
 	case Result of
-		[] -> {nil, unknown};
-		[#user_address{username=UserName, un_hash=UserHash}] -> {UserName, UserHash} end;
+		[] -> {unknown, nil, unknown, unknown};
+		[#user_address{endpoint_id=EndpointId, username=UserName, un_hash=UserHash, hostname=Hostname}|_] -> 
+				{EndpointId, UserName, UserHash, Hostname} end;
+
+handle_result({get_user_from_endpoint_id, _EndpointId}, {atomic, Result}) -> 
+	case Result of
+		[] -> {unknown, unknown, unknown};
+		[#user_address{ipaddr=IpAddr, un_hash=UserHash, hostname=Hostname}|_] -> {IpAddr, UserHash, Hostname} end;
 
 handle_result({get_user_message, _OrigRuleId, Format}, {atomic, Result}) -> 
 	Message = case Result of
@@ -808,6 +828,7 @@ select_rule_ids_by_source(FilterId, #aclq{channel=Channel} = AclQ) ->
 
 	RulesI = case AclQ#aclq.src_addr of
 		unknown -> [];
+		undefined -> [];
 		Addr -> Q = ?QLCQ([R#rule.id || 
 				R <- mnesia:table(rule),
 				I <- mnesia:table(ipr),
@@ -821,6 +842,7 @@ select_rule_ids_by_source(FilterId, #aclq{channel=Channel} = AclQ) ->
 
 	RulesU = case AclQ#aclq.src_user_h of
 		unknown -> [];
+		undefined -> [];
 		UserH -> Q2 = ?QLCQ([R#rule.id || 
 				R <- mnesia:table(rule),
 				U <- mnesia:table(m_user),
@@ -830,7 +852,20 @@ select_rule_ids_by_source(FilterId, #aclq{channel=Channel} = AclQ) ->
 				U#m_user.un_hash == UserH
 				]), ?QLCE(Q2) end,
 
+	RulesEI = case AclQ#aclq.endpoint_id of
+		unknown -> [];
+		undefined -> [];
+		EndpointId -> Q3 = ?QLCQ([R#rule.id || 
+				R <- mnesia:table(rule),
+				E <- mnesia:table(m_endpoint_id),
+				R#rule.filter_id == FilterId,
+				R#rule.channel == Channel,
+				E#m_endpoint_id.rule_id == R#rule.id,
+				E#m_endpoint_id.endpoint_id == EndpointId
+				]), ?QLCE(Q3) end,
+
 	RulesDU = case AclQ#aclq.src_domain of
+		unknown -> [];
 		undefined -> [];
 		DomainName -> Q4 = ?QLCQ([R#rule.id ||
 				R <- mnesia:table(rule),
@@ -841,8 +876,20 @@ select_rule_ids_by_source(FilterId, #aclq{channel=Channel} = AclQ) ->
 				U#source_domain.domain_name == DomainName
 				]), ?QLCE(Q4) end, 
 
-	RuleIds = lists:append([RulesD, RulesI, RulesU, RulesDU]),
-	RuleIds.
+	RulesH = case AclQ#aclq.src_hostname of
+		unknown -> [];
+		undefined -> [];
+		Hostname -> Q5 = ?QLCQ([R#rule.id ||
+				R <- mnesia:table(rule),
+				H <- mnesia:table(m_hostname),
+				R#rule.filter_id == FilterId,
+				R#rule.channel == Channel,
+				H#m_hostname.rule_id == R#rule.id,
+				compare_hostname(Hostname, H#m_hostname.hostname)
+				]), ?QLCE(Q5) end, 
+
+	RuleIds = lists:append([RulesD, RulesI, RulesU, RulesEI, RulesDU, RulesH]),
+	lists:usort(RuleIds).
 
 filter_rule_ids_by_dest(RuleIds, AclQ) -> %TODO: domain names stored as binary. Unicode characters should be examined wheter it is problem or not.
 	Q0 = ?QLCQ([R ||
@@ -948,8 +995,9 @@ handle_query({update_notification_queue_item, RuleId, Status}) ->
 	mnesia:write(I#notification_queue{status=NewStatus, event_threshold=NewEventThreshold, is_shadow=false}),
 	Action;
 
-handle_query({get_remote_rule_tables, FilterId, Addr, UserH}) ->
-	AclQ = #aclq{src_addr=Addr, src_user_h=UserH},
+handle_query({get_remote_rule_tables, FilterId, EndpointId}) ->
+	{Addr, UserH, Hostname} = get_user_from_endpoint_id(EndpointId), 
+	AclQ = #aclq{endpoint_id=EndpointId, src_addr=Addr, src_user_h=UserH, src_hostname=Hostname},
 	RemovableStorageRuleTable = get_rules(FilterId, AclQ#aclq{channel=removable}),
 	PrinterRuleTable = get_rules(FilterId, AclQ#aclq{channel=printer}),
 	InboundRuleTable = get_rules(FilterId, AclQ#aclq{channel=inbound}),
@@ -969,8 +1017,9 @@ handle_query({get_remote_rule_tables, FilterId, Addr, UserH}) ->
 		{encryption, none, EncryptionRuleTable}
 	];
 
-handle_query({get_remote_rule_ids, FilterId, Addr, UserH}) ->
-	AclQ = #aclq{src_addr=Addr, src_user_h=UserH},
+handle_query({get_remote_rule_ids, FilterId, EndpointId}) ->
+	{Addr, UserH, Hostname} = get_user_from_endpoint_id(EndpointId), 
+	AclQ = #aclq{endpoint_id=EndpointId, src_addr=Addr, src_user_h=UserH, src_hostname=Hostname},
 	RemovableStorageRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=removable}),
 	PrinterRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=printer}),
 	DiscoveryRuleIds = get_rule_ids(FilterId, AclQ#aclq{channel=discovery}),
@@ -997,6 +1046,48 @@ handle_query({get_rule_table, FilterId, RuleIDs}) ->
 		end, RuleIDs),
 	Rules1 = lists:usort(fun({FId,_,_},{SId,_,_}) -> FId =< SId end, Rules),
 	resolve_all(Rules1, FilterId);
+
+handle_query(get_remote_hostnames_rule_ids) ->
+	Q1 = ?QLCQU([H#m_hostname.hostname || 
+		H <- mnesia:table(m_hostname)
+		]),
+	UniqHostnameList = ?QLCE(Q1),
+
+	PHRL = lists:map(fun(Hostname) -> 
+			Q2 = ?QLCQ([R#rule.id || 
+				R <- mnesia:table(rule),
+				H <- mnesia:table(m_hostname),
+				R#rule.channel /= api,
+				R#rule.channel /= web,
+				R#rule.channel /= mail,
+				H#m_hostname.rule_id == R#rule.id,
+				compare_hostname(Hostname, H#m_hostname.hostname)
+				]),
+			RL = ?QLCE(Q2),
+			lists:usort(RL) end, UniqHostnameList),
+
+	lists:usort([[]|PHRL]);
+
+handle_query(get_remote_endpoint_id_rule_ids) ->
+	Q1 = ?QLCQU([E#m_endpoint_id.endpoint_id || 
+		E <- mnesia:table(m_endpoint_id)
+		]),
+	UniqEndpointIdList = ?QLCE(Q1),
+
+	PERL = lists:map(fun(EndpointId) -> 
+			Q2 = ?QLCQ([R#rule.id || 
+				R <- mnesia:table(rule),
+				E <- mnesia:table(m_endpoint_id),
+				R#rule.channel /= api,
+				R#rule.channel /= web,
+				R#rule.channel /= mail,
+				E#m_endpoint_id.rule_id == R#rule.id,
+				E#m_endpoint_id.endpoint_id == EndpointId
+				]),
+			RL = ?QLCE(Q2),
+			lists:usort(RL) end, UniqEndpointIdList),
+
+	lists:usort([[]|PERL]);
 
 handle_query(get_remote_user_rule_ids) ->
 	Q1 = ?QLCQU([U#m_user.un_hash || 
@@ -1318,10 +1409,10 @@ handle_query({remove_site, FI}) ->
 	lists:foreach(fun(Id) -> mnesia:delete({usb_device, Id}) end, UDIs),
 	lists:foreach(fun(Id) -> mnesia:delete({remote_storage_dd, Id}) end, RDDs);
 
-handle_query({save_user_address, IpAddress, UserHash, UserName}) ->
+handle_query({save_user_address, EndpointId, IpAddress, UserHash, UserName, Hostname}) ->
 	{MegaSecs, Secs, _MicroSecs} = erlang:now(),
         Born = 1000000*MegaSecs + Secs,
-	U = #user_address{ipaddr=IpAddress, un_hash=UserHash, username=UserName, last_seen=Born},
+	U = #user_address{endpoint_id=EndpointId, ipaddr=IpAddress, un_hash=UserHash, username=UserName, last_seen=Born, hostname=Hostname},
 	mnesia:dirty_write(U);
 
 handle_query(remove_old_user_address) ->
@@ -1335,7 +1426,10 @@ handle_query(remove_old_user_address) ->
 	lists:foreach(fun(Id) -> mnesia:dirty_delete({user_address, Id}) end, UAIs);
 
 handle_query({get_user_from_address, IpAddress}) ->
-	mnesia:dirty_read(user_address, IpAddress);
+        mnesia:dirty_match_object(#user_address{endpoint_id='_', ipaddr=IpAddress, un_hash='_', username='_', hostname='_', last_seen='_'});
+
+handle_query({get_user_from_endpoint_id, EndpointId}) ->
+        mnesia:dirty_match_object(#user_address{endpoint_id=EndpointId, ipaddr='_', un_hash='_', username='_', hostname='_', last_seen='_'});
 
 handle_query({save_endpoint_command, EndpointId, Command, [{ruleId, RuleId}, {groupId, GroupId}]=Args}) ->
 	{MegaSecs, Secs, _MicroSecs} = erlang:now(),
@@ -2011,6 +2105,24 @@ call_timer(Time) -> timer:send_after(Time, cleanup_now).
 
 ip_band({A1,B1,C1,D1}, {A2,B2,C2,D2}) -> {A1 band A2, B1 band B2, C1 band C2, D1 band D2}.
 
+compare_hostname(Current0, Pattern0) ->
+	Current = case Current0 of
+		C when is_binary(C) -> binary_to_list(C);
+		C when is_list(C) -> C end,
+	Pattern = case Pattern0 of
+		P when is_binary(P) -> binary_to_list(P);
+		P when is_list(P) -> P end,
+	PatternTokens = string:tokens(Pattern, "*"),
+	compare_hostname1(Current, PatternTokens).
+
+compare_hostname1(Current, [T|Tokens]) ->
+	case string:str(Current, T) of
+		0 -> false;
+		I -> 	Rest = string:substr(Current, I + length(T)),
+			compare_hostname1(Rest, Tokens) end;
+compare_hostname1(_Current, []) -> true.
+
+
 %resolve_all(Rules) -> resolve_all(Rules, get_dfid()).
 
 resolve_all(Rules, FilterId) ->
@@ -2304,6 +2416,18 @@ remove_rule(RI) ->
 		]),
 	WSs = ?QLCE(Q12),
 
+	Q13 = ?QLCQ([H#m_hostname.id ||	
+		H <- mnesia:table(m_hostname),
+		H#m_hostname.rule_id == RI
+		]),
+	Hs = ?QLCE(Q13),
+
+	Q14 = ?QLCQ([E#m_endpoint_id.id ||	
+		E <- mnesia:table(m_endpoint_id),
+		E#m_endpoint_id.rule_id == RI
+		]),
+	EIs = ?QLCE(Q14),
+
 	lists:foreach(fun(Id) -> mnesia:delete({ipr, Id}) end, IIs),
 	lists:foreach(fun(Id) -> mnesia:delete({m_user, Id}) end, UIs),
 	lists:foreach(fun(Id) -> mnesia:delete({dest, Id}) end, DIs),
@@ -2314,6 +2438,8 @@ remove_rule(RI) ->
 	lists:foreach(fun(Id) -> mnesia:delete({discovery_targets, Id}) end, DESs),
 	lists:foreach(fun(Id) -> mnesia:delete({waiting_schedules, Id}) end, WSCs),
 	lists:foreach(fun(Id) -> mnesia:delete({web_server, Id}) end, WSs),
+	lists:foreach(fun(Id) -> mnesia:delete({m_hostname, Id}) end, Hs),
+	lists:foreach(fun(Id) -> mnesia:delete({m_endpoint_id, Id}) end, EIs),
 
 	remove_data_formats(DFIs),
 	remove_itypes(ITIs),

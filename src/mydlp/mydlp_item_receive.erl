@@ -56,7 +56,7 @@
 
 %%%%%%%%%%%%%  API
 
-r(IpAddress, Item) -> gen_server:cast(?MODULE, {r, IpAddress, Item}).
+r(EndpointId, Item) -> gen_server:cast(?MODULE, {r, EndpointId, Item}).
 
 %%%%%%%%%%%%%% gen_server handles
 
@@ -66,22 +66,22 @@ handle_call(stop, _From, State) ->
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-handle_cast({r, IpAddress, Bin}, State) when is_binary(Bin) ->
+handle_cast({r, EndpointId, Bin}, State) when is_binary(Bin) ->
 	try	Term = erlang:binary_to_term(Bin),
-		handle_cast({r, IpAddress, Term}, State)
+		handle_cast({r, EndpointId, Term}, State)
 	catch Class:Error ->
-		?ERROR_LOG("ITEM_RECEIVE: Error occured: Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~nIpAddress: ["?S"] Bin: "?S".~nState: "?S"~n ",
-			[Class, Error, erlang:get_stacktrace(), IpAddress, Bin, State]),
+		?ERROR_LOG("ITEM_RECEIVE: Error occured: Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~nEndpointId: ["?S"] Bin: "?S".~nState: "?S"~n ",
+			[Class, Error, erlang:get_stacktrace(), EndpointId, Bin, State]),
 		{noreply, State}
 	end;
 
-handle_cast({r, IpAddress, Item}, #state{item_queue=Q, item_inprog=false} = State) ->
-	Q1 = queue:in({IpAddress, Item}, Q),
+handle_cast({r, EndpointId, Item}, #state{item_queue=Q, item_inprog=false} = State) ->
+	Q1 = queue:in({EndpointId, Item}, Q),
 	consume_item(),
 	{noreply, State#state{item_queue=Q1, item_inprog=true}};
 
-handle_cast({r, IpAddress, Item}, #state{item_queue=Q, item_inprog=true} = State) ->
-	Q1 = queue:in({IpAddress, Item}, Q),
+handle_cast({r, EndpointId, Item}, #state{item_queue=Q, item_inprog=true} = State) ->
+	Q1 = queue:in({EndpointId, Item}, Q),
 	{noreply,State#state{item_queue=Q1}};
 
 handle_cast(consume_item, #state{item_queue=Q} = State) ->
@@ -128,11 +128,12 @@ code_change(_OldVsn, State, _Extra) ->
 
 %%%%%%%%%%%%%%%%% internal
 
-process_item({_IpAddress, []}) -> ok;
-process_item({IpAddress, [Item|Rest]}) -> 
-	process_item({IpAddress, Item}),
-	process_item({IpAddress, Rest});
-process_item({IpAddress, {endpoint_log, LogTerm} }) -> 
+process_item({_EndpointId, []}) -> ok;
+process_item({EndpointId, [Item|Rest]}) -> 
+	process_item({EndpointId, Item}),
+	process_item({EndpointId, Rest});
+process_item({EndpointId, {endpoint_log, LogTerm} }) -> 
+	{IpAddress, _UserH, _Hostname} = mydlp_mnesia:get_user_from_endpoint_id(EndpointId),
 	case LogTerm of
 		#log{file=Files} ->
 			Files1 = [ mydlp_api:reconstruct_cr(F) || F <- Files ], % To clean invalid cachrefs
@@ -141,10 +142,11 @@ process_item({IpAddress, {endpoint_log, LogTerm} }) ->
 			LogTerm1 = #log{time=Time, channel=Channel, rule_id=RuleId, action=Action, 
 					user=User, ip=Ip, destination=Destination, itype_id=ITypeId,
 					file=Files, misc=Misc, payload=Payload},
-			process_item({IpAddress, {endpoint_log, LogTerm1}});
+			process_item({EndpointId, {endpoint_log, LogTerm1}});
 		_Else -> ?ERROR_LOG("RECEIVE: Unexpected enpdoint_log item: ?S", [LogTerm]) end;
-process_item({IpAddress, {endpoint_opr_log, Context, Term}}) -> 
-	mydlp_mysql:push_opr_log(Context, {ep_opr_log, Term#opr_log{ip_address=IpAddress}});
+process_item({EndpointId, {endpoint_opr_log, Context, Term}}) -> 
+	{IpAddress, _UserH, _Hostname} = mydlp_mnesia:get_user_from_endpoint_id(EndpointId),
+	mydlp_mysql:push_opr_log(Context, {ep_opr_log, Term#opr_log{ip_address=IpAddress, endpoint_id=EndpointId}});
 process_item(Item) -> 
 	?ERROR_LOG("RECEIVE: Unexpected item: ?S", [Item]),
 	ok. % TODO log unkown item.

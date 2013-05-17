@@ -85,9 +85,11 @@
 
 -record(aclq, {
 		channel :: 'web' | 'mail' | 'removable' | 'printer' | 'discovery' | 'remote_discovery',
-		src_domain=undefined,
+		endpoint_id=unknown,
+		src_domain=unknown,
 		src_addr=unknown,
 		src_user_h=unknown,
+		src_hostname=unknown,
 		destinations=[],
 		has_hidden_destinations=false
         }).

@@ -39,7 +39,7 @@
 -ifdef(__MYDLP_NETWORK).
 
 -export([
-	get_remote_rule_tables/2,
+	get_remote_rule_tables/1,
 	q/2,
 	qr/2
 	]).
@@ -74,7 +74,7 @@
 
 -ifdef(__MYDLP_NETWORK).
 
-get_remote_rule_tables(Addr, UserH) -> acl_call({get_remote_rule_tables, Addr, UserH}).
+get_remote_rule_tables(EndpointId) -> acl_call({get_remote_rule_tables, EndpointId}).
 
 q(AclQ, Files) -> acl_call({q, AclQ}, Files).
 
@@ -192,10 +192,10 @@ handle_acl({q, #aclq{} = AclQ}, Files, _State) ->
 	Rules = mydlp_mnesia:get_rules(CustomerId, AclQ),
 	acl_exec(Rules, Files);
 
-handle_acl({get_remote_rule_tables, Addr, UserH}, _Files, _State) ->
+handle_acl({get_remote_rule_tables, EndpointId}, _Files, _State) ->
 	CustomerId = mydlp_mnesia:get_dfid(),
 	% TODO: change needed for multi-site use
-	mydlp_mnesia:get_remote_rule_tables(CustomerId, Addr, UserH);
+	mydlp_mnesia:get_remote_rule_tables(CustomerId, EndpointId);
 
 handle_acl({qr, RuleId}, Files, _State) when is_integer(RuleId) ->
 	CustomerId = mydlp_mnesia:get_dfid(),

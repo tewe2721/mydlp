@@ -89,7 +89,8 @@
 		message_key=undefined,
 		group_id=undefined,
 		report_id=undefined,
-		ip_address=undefined
+		ip_address=unknown,
+		endpoint_id=unknown
 	}).
 
 -define(ACL_LOG(Log),

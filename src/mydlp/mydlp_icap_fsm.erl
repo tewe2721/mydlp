@@ -56,8 +56,10 @@
 -record(state, {
 	socket,
 	addr,
+	endpoint_id=unknown,
 	username=nil,
 	un_hash=unknown,
+	src_hostname=unknown,
 	icap_request,
 	icap_headers,
 	icap_body=[],
@@ -225,10 +227,11 @@ init([]) ->
 				other=[#http_header{key=Key, value=Value}|Others]}   %% misc other headers
         end,
 
-	{UserName, UserHash} = case IcapHeaders1#icap_headers.x_client_ip of
-		undefined -> {nil, unknown};
+	{EndpointId, UserName, UserHash, Hostname} = case IcapHeaders1#icap_headers.x_client_ip of
+		undefined -> {unknown, nil, unknown, unknown};
 		IP -> mydlp_mnesia:get_user_from_address(IP) end,
-        {next_state, 'ICAP_HEADER', State#state{username=UserName, un_hash=UserHash, icap_headers=IcapHeaders1}, ?CFG(fsm_timeout)};
+        {next_state, 'ICAP_HEADER', State#state{endpoint_id=EndpointId, username=UserName, un_hash=UserHash, src_hostname=Hostname,
+					icap_headers=IcapHeaders1}, ?CFG(fsm_timeout)};
 
 'ICAP_HEADER'(timeout, State) ->
 	?DEBUG(?S" Client connection timeout - closing.\n", [self()]),
@@ -495,7 +498,7 @@ drop_preview_bin(DataB)->
 'REQ_OK'(#state{icap_headers=#icap_headers{x_client_ip=CAddr},
 		http_request=#http_request{method=Method, path=Uri},
 		http_req_headers=#http_headers{host=DestHost},
-		un_hash=UserHash } = State) ->
+		endpoint_id=EndpointId, un_hash=UserHash, src_hostname=Hostname } = State) ->
 	DFFiles = df_to_files(State),
 
 	DestHost1 = case DestHost of
@@ -503,7 +506,7 @@ drop_preview_bin(DataB)->
 		DH -> mydlp_api:drop_host_port(DH) end,
 	DestList = [{domain,list_to_binary(DestHost1)}],
 
-	AclQ = #aclq{channel=web, src_addr=CAddr, src_user_h=UserHash, destinations=DestList},
+	AclQ = #aclq{channel=web, endpoint_id=EndpointId, src_addr=CAddr, src_user_h=UserHash, destinations=DestList, src_hostname=Hostname},
 	QRet = mydlp_acl:q(AclQ, DFFiles),
 	acl_ret(QRet, DFFiles, State).
 

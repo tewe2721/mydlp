@@ -208,8 +208,9 @@ handle_call({aclq, ObjId, Timeout}, From, #state{object_tree=OT} = State) ->
 						Channel = get_channel(Obj),
 						{QRet, Obj1} = case Channel of
 							api ->	IpAddress = get_ip_address(Obj),
-								{UserName, UserHash} = mydlp_mnesia:get_user_from_address(IpAddress),
-								AclQ = #aclq{channel=Channel, src_addr=IpAddress, src_user_h=UserHash},
+								{EndpointId, UserName, UserHash, Hostname} = mydlp_mnesia:get_user_from_address(IpAddress),
+								AclQ = #aclq{endpoint_id=EndpointId, channel=Channel, 
+									src_addr=IpAddress, src_user_h=UserHash, src_hostname=Hostname},
 								{mydlp_acl:q(AclQ, DFFiles), set_api_user(Obj, UserName)};
 							discovery -> 
 								RuleIndex = get_discovery_rule_index(Obj),
