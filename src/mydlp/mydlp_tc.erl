@@ -239,7 +239,7 @@ handle_info(_Info, State) ->
 -define(THRIFT_SOCK_OPTS, [binary, {packet, 0}, {active, false}, {nodelay, true}]).
 
 init([]) ->
-	case catch gen_tcp:connect("localhost", 9090, ?THRIFT_SOCK_OPTS, 2500) of
+	case catch gen_tcp:connect("localhost", 9090, ?THRIFT_SOCK_OPTS, 500) of
 	    {ok, Sock} -> 
 		try	{ok, JClient} = thrift_client_util:new("localhost",9090, mydlp_thrift, []),
 			{ok, #state{backend_java=JClient}}
