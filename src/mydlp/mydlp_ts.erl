@@ -193,7 +193,10 @@ registerUserAddress(EndpointId, Ipaddress, Userh, Data) ->
 		"" -> unknown;
 		H -> H end,
 
-	Username = get_arg_value(MetaDict, "user"),
+	Username = case get_arg_value(MetaDict, "user") of
+		"" -> unknown;
+		U -> U end,
+
 	UserHI = mydlp_api:binary_to_integer(Userh),
 	ClientIpS = binary_to_list(Ipaddress),
 	ClientIp = mydlp_api:str_to_ip(ClientIpS),
