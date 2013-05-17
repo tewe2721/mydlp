@@ -195,7 +195,7 @@ start_workers(#state{pool_size=PoolSize, workers=WS} = State) ->
 				{_S1, Else} -> throw({error, {can_not_start_worker, Else}}) end;
 		true -> State end.
 
-start_worker_wait(State) -> start_worker_wait(State, 750, 6).
+start_worker_wait(State) -> start_worker_wait(State, 500, 6).
 
 start_worker_wait(State, _Interval, 0) ->
 	case start_worker(State) of
