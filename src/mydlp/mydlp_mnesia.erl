@@ -303,6 +303,7 @@ get_record_fields_functional(Record) ->
 		source_domain -> record_info(fields, source_domain);
 		m_user -> record_info(fields, m_user);
 		m_endpoint_id -> record_info(fields, m_endpoint_id);
+		m_hostname -> record_info(fields, m_hostname);
 		destination_user -> record_info(fields, destination_user);
 		itype -> record_info(fields, itype);
 		ifeature -> record_info(fields, ifeature);
@@ -314,7 +315,7 @@ get_record_fields_functional(Record) ->
 		web_server -> record_info(fields,web_server);
 		web_entry -> record_info(fields,web_entry);
 		user_message -> record_info(fields, user_message);
-		_Else -> not_found
+		_Else -> throw({error, not_found})
 	end.
 
 -endif.
@@ -1047,7 +1048,7 @@ handle_query({get_rule_table, FilterId, RuleIDs}) ->
 	Rules1 = lists:usort(fun({FId,_,_},{SId,_,_}) -> FId =< SId end, Rules),
 	resolve_all(Rules1, FilterId);
 
-handle_query(get_remote_hostnames_rule_ids) ->
+handle_query(get_remote_hostname_rule_ids) ->
 	Q1 = ?QLCQU([H#m_hostname.hostname || 
 		H <- mnesia:table(m_hostname)
 		]),
