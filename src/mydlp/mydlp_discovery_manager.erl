@@ -479,10 +479,9 @@ call_stop_remote_storage_discovery(RuleId, _IsOnDemand) ->
 			mydlp_mnesia:del_web_entries_by_rule_id(RuleId),
 			update_report_as_finished(GroupId),
 			cancel_timer(RuleId),
-			%mydlp_discover_fs:update_rule_status(RuleId, stopped),
-			%mydlp_discover_web:update_rule_status(RuleId, stopped),
 			case mydlp_mnesia:get_waiting_schedule_by_rule_id(RuleId) of
-				none ->	remove_discovery_status(RuleId);
+				none ->	remove_discovery_status(RuleId),
+					mydlp_discover_rfs:release_mount_by_rule_id(RuleId);
 				GId -> call_start_discovery_by_rule_id(RuleId, GId, false) end
 	end.
 
@@ -526,7 +525,6 @@ call_continue_ep_discovery(RuleId) ->
 set_command_to_endpoints(RuleId, Command, Args) ->
 	case Command of
 		?START_EP_COMMAND -> EndpointIds = mydlp_mnesia:get_endpoint_ids(),
-				erlang:display({ids, EndpointIds}),
 				lists:map(fun(I) -> mydlp_mnesia:update_ep_schedules(I, RuleId) end, EndpointIds);
 		_ -> ok
 	end,
@@ -550,7 +548,6 @@ generate_group_id(RuleId, Channel) ->
 	mydlp_mysql:push_discovery_report(Time, GroupId, RuleId, ?REPORT_STATUS_DISC),
 	OprLog = #opr_log{time=Time, channel=Channel, rule_id=RuleId, message_key=?SUCCESS_MOUNT_KEY, group_id=GroupId},%TODO: message key should be revised.
 	?DISCOVERY_OPR_LOG(OprLog),
-	erlang:display("push log finished"),
 	GroupId .
 
 register_schedules_for_future(RuleId, Channel) ->

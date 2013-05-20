@@ -141,9 +141,6 @@ save_fingerprints(DocumentId, FingerprintList) ->
 del_fingerprints_with_file_id(FileId) ->
 	gen_server:cast(?MODULE, {del_fingerprints_with_file_id, FileId}).
 
-%populate_discovery_targets(RuleId) ->
-%	gen_server:call(?MODULE, {populate_discovery_targets, RuleId}, 150000).
-
 requeued(LogId) -> 
 	gen_server:cast(?MODULE, {requeued, LogId}).
 
