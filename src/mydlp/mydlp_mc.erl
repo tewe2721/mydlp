@@ -455,10 +455,11 @@ mc_gen_source(_Key, Acc, Count) when Count > ?STATE_CHUNK -> lists:flatten(Acc);
 mc_gen_source('$end_of_table', Acc, _Count) -> lists:flatten(Acc);
 mc_gen_source(Key, Acc, Count) -> 
 	[{State, _Acceptance}] = ets:lookup(mc_states, Key),
-	{Acc1, HasFailure} = case get_failure(State) of
-		not_found -> {Acc, false};
-		FailureState -> 
-			IsAccept = is_accept(State),
+	{Acc1, HasFailure} = case { get_failure(State), is_accept(State) } of
+		{not_found, false} -> {Acc, false};
+		{not_found, IsAccept} -> 
+			{mc_gen_source_f(root, State, IsAccept, Acc), true};
+		{FailureState, IsAccept} -> 
 			{mc_gen_source_f(FailureState, State, IsAccept, Acc), true} end,
 	IsAcceptRec = is_accept_rec(State),
 	Acc2 = case {get_leafs(State), HasFailure} of
