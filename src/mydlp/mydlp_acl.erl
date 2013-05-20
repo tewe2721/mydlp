@@ -475,10 +475,11 @@ is_in_valid_distance([], DistanceList,  ListOfThresholdReqs, _Distance) ->
 
 is_in_valid_distance(ListOfIndexes, DistanceList, ListOfThresholdReqs, Distance) ->
 	SumOfThresholds = lists:sum(ListOfThresholdReqs),
-	[_H1,{IndexValue, _Pattern, _MFunc, _T}|_] = DistanceList,
+	%[_H1,{IndexValue, _Pattern, _MFunc, _T}|_] = DistanceList,
+	[{IndexValue, _Pattern, _MFunc, _T}|_] = ListOfIndexes,
 	EarlyNeg = (length(DistanceList) < SumOfThresholds),
 	case EarlyNeg of 
-		true ->	{TailOfIndexList, NewDistanceList} = find_in_distance(ListOfIndexes, Distance, IndexValue),
+		true -> {TailOfIndexList, NewDistanceList} = find_in_distance(ListOfIndexes, Distance, IndexValue),
 			is_in_valid_distance(TailOfIndexList, NewDistanceList, ListOfThresholdReqs, Distance);
 		false -> case is_all_thresholds_satisfied(DistanceList, ListOfThresholdReqs) of
 				{true, MatchingDetails} -> {pos, MatchingDetails};
