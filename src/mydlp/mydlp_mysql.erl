@@ -300,8 +300,8 @@ handle_call({does_hash_exist_in_dd, MD5Hex, DDId}, From, State) ->
 	Worker = self(),
 	?ASYNC(fun() ->
 			Reply = case psq(file_entry_by_hash_and_dd, [MD5Hex, DDId]) of
-				[] -> false;
-				[_|_] -> true end,
+				{ok, []} -> false;
+				{ok, [_|_]} -> true end,
                         Worker ! {async_reply, Reply, From}
 		end, 14500),
 	{noreply, State};

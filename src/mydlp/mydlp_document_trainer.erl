@@ -323,7 +323,7 @@ generate_fingerprints_file(#fs_entry{file_id=FP}, DDId) ->
 		{ok, Bin} = file:read_file(FP),
 		File = ?BF_C(#file{filename=Filename0}, Bin),
 		Md5Hash = mydlp_api:md5_hex(Bin),
-		case mydlp_mnesia:does_hash_exist_in_dd(Md5Hash, DDId) of
+		case mydlp_mysql:does_hash_exist_in_dd(Md5Hash, DDId) of
 			false ->
 				Filename = mydlp_api:file_to_str(File),
 				FileId = mydlp_mysql:insert_file_entry(Filename, Md5Hash, CreatedDate),
