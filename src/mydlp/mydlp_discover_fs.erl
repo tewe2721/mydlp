@@ -128,7 +128,9 @@ ql(List) -> gen_server:cast(?MODULE, {ql, List}).
 
 q(FilePath, RuleIndex, GroupId) -> q(none, FilePath, RuleIndex, GroupId).
 
-q(ParentId, FilePath, RuleIndex, GroupId) -> gen_server:cast(?MODULE, {q, ParentId, FilePath, RuleIndex, GroupId}).
+q(ParentId, FilePath, RuleIndex, GroupId) -> gen_server:cast(?MODULE, {q, ParentId, FilePath, RuleIndex, GroupId, false}).
+
+qp(ParentId, FilePath, RuleIndex, GroupId) -> gen_server:cast(?MODULE, {q, ParentId, FilePath, RuleIndex, GroupId, true}).
 
 continue_paused_discovery(RuleId) ->
 	gen_server:cast(?MODULE, {push_paused_to_proc_queue, RuleId}),
@@ -203,14 +205,20 @@ handle_cast({ql, List}, State) ->
 	end),
 	{noreply, State};
 
-handle_cast({q, ParentId, FilePath, RuleIndex, _GroupId}, #state{discover_queue=Q, discover_inprog=false} = State) ->
-	Q1 = queue:in({ParentId, FilePath, RuleIndex}, Q),
+handle_cast({q, ParentId, FilePath, RuleIndex, _GroupId, IsPrior}, #state{discover_queue=Q, discover_inprog=false} = State) ->
+	Item = {ParentId, FilePath, RuleIndex},
+	Q1 = case IsPrior of
+		true -> queue:in_r(Item, Q);
+		false -> queue:in(Item, Q) end,
 	consume(),
 	set_discover_inprog(),
 	{noreply, State#state{discover_queue=Q1, discover_inprog=true}};
 
-handle_cast({q, ParentId, FilePath, RuleIndex, _GroupId}, #state{discover_queue=Q, discover_inprog=true} = State) ->
-	Q1 = queue:in({ParentId, FilePath, RuleIndex}, Q),
+handle_cast({q, ParentId, FilePath, RuleIndex, _GroupId, IsPrior}, #state{discover_queue=Q, discover_inprog=true} = State) ->
+	Item = {ParentId, FilePath, RuleIndex},
+	Q1 = case IsPrior of
+		true -> queue:in_r(Item, Q);
+		false -> queue:in(Item, Q) end,
 	{noreply,State#state{discover_queue=Q1}};
 
 handle_cast({push_paused_to_proc_queue, _RuleId}, #state{discover_queue=Q, paused_queue=PQ} = State) ->
@@ -496,7 +504,7 @@ discover_dir(#fs_entry{file_id={FP, RuleIndex}, entry_id=EId}) ->
 	MList = lists:umerge([CList, OList]),
 	case get_discovery_status(RuleIndex) of
 		none -> ok;
-		{_, GroupId} ->[ q(EId, filename:absname(FN, FP), RuleIndex, GroupId) || FN <- MList ] end,
+		{_, GroupId} ->[ qp(EId, filename:absname(FN, FP), RuleIndex, GroupId) || FN <- MList ] end,
 	ok.
 
 discover_dir_dir(#fs_entry{file_id={FP, RuleIndex}, entry_id=EId}) ->
@@ -507,7 +515,7 @@ discover_dir_dir(#fs_entry{file_id={FP, RuleIndex}, entry_id=EId}) ->
 	MList = lists:umerge([CList, OList]),
 	case get_discovery_status(RuleIndex) of
 		none -> ok;
-		{_, GroupId} -> [ q(EId, filename:absname(FN, FP), RuleIndex, GroupId) || FN <- MList ] end,
+		{_, GroupId} -> [ qp(EId, filename:absname(FN, FP), RuleIndex, GroupId) || FN <- MList ] end,
 	ok.
 
 discover(ParentId, FilePath, RuleIndex) ->
