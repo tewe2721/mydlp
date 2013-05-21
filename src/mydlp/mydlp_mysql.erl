@@ -191,13 +191,17 @@ update_document_fingerprinting_status(DDIds, Status) -> gen_server:cast(?MODULE,
 handle_call(get_progress, _From, #state{compile_progress=Progress} = State) ->
         {reply, Progress, State};
 
-handle_call(get_denied_page, _From, State) ->
-	% Probably will create problems in multisite use.
-	{ok, DPQ} = psq(denied_page),
-	Reply = case DPQ of
-		[[DeniedPage]] when is_binary(DeniedPage) -> DeniedPage;
-		_Else -> not_found end,
-        {reply, Reply, State};
+handle_call(get_denied_page, From, State) ->
+	Worker = self(),
+	?ASYNC(fun() ->
+			% Probably will create problems in multisite use.
+			{ok, DPQ} = psq(denied_page),
+			Reply = case DPQ of
+				[[DeniedPage]] when is_binary(DeniedPage) -> DeniedPage;
+				_Else -> not_found end,
+			Worker ! {async_reply, Reply, From}
+		end, 30000),
+        {noreply, State};
 
 handle_call({push_log, {Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc, GroupId}}, From, State) ->
 	Worker = self(),
@@ -235,13 +239,15 @@ handle_call({is_all_ep_discovery_finished, GroupId, Endpoints, Status}, From, St
 
 handle_call({is_all_discovery_finished, GroupId}, From, State) ->
 	Worker = self(),
-	case lpsq(get_opr_with_group_id_and_status, [GroupId, ?RFS_FINISHED], 5000) of
-		{ok, [[_]|_]} -> 
-			case lpsq(get_opr_with_group_id_and_status, [GroupId, ?WEB_FINISHED], 5000) of
-				{ok, [[_]|_]} -> Worker ! {async_reply, true, From};
-				_ -> Worker ! {async_reply, false, From} end;
-		_ -> Worker ! {async_reply, false, From}
-	end,
+	?ASYNC(fun() ->
+			Reply = case lpsq(get_opr_with_group_id_and_status, [GroupId, ?RFS_FINISHED], 5000) of
+				{ok, [[_]|_]} -> 
+					case lpsq(get_opr_with_group_id_and_status, [GroupId, ?WEB_FINISHED], 5000) of
+						{ok, [[_]|_]} -> true;
+						_ -> false end;
+				_ -> false end,
+			Worker ! {async_reply, Reply, From}
+		end, 30000),
 	{noreply, State};
 
 handle_call({save_fingerprints, DocumentId, FingerprintList}, From, State) ->
@@ -254,24 +260,34 @@ handle_call({save_fingerprints, DocumentId, FingerprintList}, From, State) ->
 		end, 60000),
         {noreply, State};
 
-handle_call({get_remote_storage_by_id, RSId}, _From, State) ->
-	case psq(remote_sshfs_dir, [RSId]) of
-		{ok, [R|_]} -> {reply, {sshfs, R}, State};
-		_ ->
-	case psq(remote_ftpfs_dir, [RSId]) of
-		{ok, [R1|_]} -> {reply, {ftpfs, R1}, State};
-		_ ->
-	case psq(remote_nfs_dir, [RSId]) of
-		{ok, [R2|_]} -> {reply, {nfs, R2}, State};
-		_ ->
-	case psq(remote_windows_dir, [RSId]) of
-		{ok, [R4|_]} -> {reply, {windows, R4}, State};
-		_ ->{reply, none, State} end end end end;
+handle_call({get_remote_storage_by_id, RSId}, From, State) ->
+	Worker = self(),
+	?ASYNC(fun() ->
+			Reply = case psq(remote_sshfs_dir, [RSId]) of
+				{ok, [R|_]} -> {sshfs, R};
+				_ ->
+			case psq(remote_ftpfs_dir, [RSId]) of
+				{ok, [R1|_]} -> {ftpfs, R1};
+				_ ->
+			case psq(remote_nfs_dir, [RSId]) of
+				{ok, [R2|_]} -> {nfs, R2};
+				_ ->
+			case psq(remote_windows_dir, [RSId]) of
+				{ok, [R4|_]} -> {windows, R4};
+				_ -> none end end end end,
+			Worker ! {async_reply, Reply, From}
+		end, 14500),
+        {noreply, State};
 
-handle_call({get_remote_document_databases_by_id, DDId}, _From, State) ->
-	{ok, RSIds} = psq(get_remote_document_databases_by_id, [DDId]),
-	RemoteDDs = get_each_remote_storage_with_type(RSIds, []),	
-	{reply, RemoteDDs, State};
+handle_call({get_remote_document_databases_by_id, DDId}, From, State) ->
+	Worker = self(),
+	?ASYNC(fun() ->
+			{ok, RSIds} = psq(get_remote_document_databases_by_id, [DDId]),
+			RemoteDDs = get_each_remote_storage_with_type(RSIds, []),
+			Reply = RemoteDDs,
+			Worker ! {async_reply, Reply, From}
+		end, 14500),
+        {noreply, State};
 
 handle_call(insert_document, From, State) ->
 	Worker = self(),
@@ -347,24 +363,24 @@ handle_cast({update_report_status, GroupId, NewStatus}, State) ->
 	{noreply, State};
 
 handle_cast({update_report_as_finished, GroupId}, State) ->
-	Time = erlang:universaltime(),
 	?ASYNC0(fun() ->
+		Time = erlang:universaltime(),
 		rpsq(update_report_as_finished, ["stopped", Time, GroupId], 60000)
 	end),
 	{noreply, State};
 
 handle_cast(mark_as_finish_all_reports, State) ->
-	Time = erlang:universaltime(),
 	?ASYNC0(fun() ->
+		Time = erlang:universaltime(),
 		rpsq(mark_as_finish_all_reports, [Time], 60000)
 	end),
 	{noreply, State};
 
 handle_cast({update_document_fingerprinting_status, DDIds, Status}, State) ->
-	Value = case Status of
+	?ASYNC0(fun() ->
+		Value = case Status of
 			true -> 1;
 			false -> 0 end,
-	?ASYNC0(fun() ->
 		lists:foreach(fun(I) -> psq(update_document_fingerprinting_status, [Value, I], 60000) end, DDIds)
 	end),
 	{noreply, State};
@@ -1558,7 +1574,7 @@ cross_product_two_rigs([RId1|Rest], RId2, Acc) ->
 	cross_product_two_rigs(Rest, RId2, Acc ++ A);
 cross_product_two_rigs([], _, Acc) -> lists:usort(Acc).
 
-cross_product_rule_id_groups(RuleIdGroups) -> cross_product_rule_id_groups(RuleIdGroups, []).
+cross_product_rule_id_groups(RuleIdGroups) -> cross_product_rule_id_groups(RuleIdGroups, [[]]).
 
 cross_product_rule_id_groups([RIdGroup|Rest], Acc) ->
 	Acc1 = cross_product_two_rigs(RIdGroup, Acc),
@@ -1571,9 +1587,9 @@ populate_mc_modules() ->
 	RIRIs = mydlp_mnesia:get_remote_ipr_rule_ids(),
 	RHRIs = mydlp_mnesia:get_remote_hostname_rule_ids(),
 	RERIs = mydlp_mnesia:get_remote_endpoint_id_rule_ids(),
-	RIDSs1 = cross_product_rule_id_groups([RURIs, RIRIs, RHRIs, RERIs]),
-	RIDSs2 = [[]|RIDSs1], %% for default rule ids
-	RIDSs = lists:map(fun(I) -> lists:usort(RDRIs ++ I) end, RIDSs2),
+	RIDSs0 = cross_product_rule_id_groups([RURIs, RIRIs, RHRIs, RERIs]),
+	RIDSs1 = lists:map(fun(I) -> lists:usort(RDRIs ++ I) end, RIDSs0),
+	RIDSs = lists:usort(RIDSs1),
 	populate_mc_modules([local|RIDSs]).
 	
 populate_mc_modules([T|Rest]) ->
