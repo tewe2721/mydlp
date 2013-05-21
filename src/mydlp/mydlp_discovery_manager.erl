@@ -115,103 +115,115 @@ handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
 
 handle_call({get_group_id, RuleId}, _From, State) ->
-	Reply = case mydlp_mnesia:get_discovery_status(RuleId) of
-			{_, GroupId} -> GroupId;
-			_ -> -1
-		end,
-	{reply, Reply, State};
+	?REPLYGUARD(fun() ->
+		Reply = case mydlp_mnesia:get_discovery_status(RuleId) of
+				{_, GroupId} -> GroupId;
+				_ -> -1
+			end,
+		{reply, Reply, State}
+	end, -1, State);
 
 handle_call({is_paused_or_stopped, RuleId}, _From, State) ->
-	Reply = case mydlp_mnesia:get_discovery_status(RuleId) of
-			{?SYSTEM_PAUSED, _} -> paused;
-			{?USER_PAUSED, _} -> paused;
-			{?SYSTEM_STOPPED, _} -> stopped;
-			{?USER_STOPPED, _} -> stopped;
-			_ -> none
-		end,
-	{reply, Reply, State};
+	?REPLYGUARD(fun() ->
+		Reply = case mydlp_mnesia:get_discovery_status(RuleId) of
+				{?SYSTEM_PAUSED, _} -> paused;
+				{?USER_PAUSED, _} -> paused;
+				{?SYSTEM_STOPPED, _} -> stopped;
+				{?USER_STOPPED, _} -> stopped;
+				_ -> none
+			end,
+		{reply, Reply, State}
+	end, none, State);
 
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
 
 handle_cast({start_on_demand, RuleId}, State) ->
-	call_start_discovery_on_target(RuleId, true),
+	catch call_start_discovery_on_target(RuleId, true),
 	{noreply, State};
 
 handle_cast({pause_on_demand, RuleId}, State) ->
-	call_pause_discovery_on_target(RuleId, true),
+	catch call_pause_discovery_on_target(RuleId, true),
 	{noreply, State};
 
 handle_cast({stop_on_demand, RuleId}, State) ->
-	call_stop_discovery_on_target(RuleId, true),
+	catch call_stop_discovery_on_target(RuleId, true),
 	{noreply, State};
 
 handle_cast({manage_schedules, Schedules}, State) ->
-	edit_dictionary(Schedules),
+	catch edit_dictionary(Schedules),
 	{noreply, State};
 
 handle_cast({start_discovery, RuleId}, State) ->
-	call_start_discovery_on_target(RuleId, false),
+	catch call_start_discovery_on_target(RuleId, false),
 	{noreply, State};
 
 handle_cast({stop_discovery, RuleId}, State) ->
-	call_stop_discovery_on_target(RuleId, false),
+	catch call_stop_discovery_on_target(RuleId, false),
 	{noreply, State};
 
 handle_cast({pause_discovery, RuleId}, State) ->
-	call_pause_discovery_on_target(RuleId, false),
+	catch call_pause_discovery_on_target(RuleId, false),
 	{noreply, State};
 
 handle_cast({continue_discovery, RuleId}, State) ->
-	call_continue_discovery_on_target(RuleId),
+	catch call_continue_discovery_on_target(RuleId),
 	{noreply, State};
 
 handle_cast({cancel_timer, RuleId}, #state{timer_dict=TimerDict}=State) ->
-	case dict:find(RuleId, TimerDict) of
-		{ok, TRef} -> (catch timer:cancel(TRef));
-		_ -> ok
-	end,
-	TimerDict1 = dict:erase(RuleId, TimerDict),
-	{noreply, State#state{timer_dict=TimerDict1}};
+	?NOREPLYGUARD(fun() ->
+		case dict:find(RuleId, TimerDict) of
+			{ok, TRef} -> (catch timer:cancel(TRef));
+			_ -> ok
+		end,
+		TimerDict1 = dict:erase(RuleId, TimerDict),
+		{noreply, State#state{timer_dict=TimerDict1}}
+	end, State);
 
 handle_cast({create_timer, RuleId}, #state{timer_dict=TimerDict}=State) ->
-	case dict:find(RuleId, TimerDict) of
-		{ok, TRef} -> timer:cancel(TRef);
-		_ -> ok
-	end,
-
-	TimerDict1 = case mydlp_mnesia:get_rule_channel_by_orig_id(RuleId) of
-			remote_discovery -> {ok, Timer} = timer:send_after(60000, {is_discovery_finished, RuleId}),
-					dict:store(RuleId, Timer, TimerDict);
-			discovery -> {ok, Timer} = timer:send_after(?EP_CONTROL_TIME, {is_ep_discovery_finished, RuleId}),
-					dict:store(RuleId, Timer, TimerDict)
+	?NOREPLYGUARD(fun() ->
+		case dict:find(RuleId, TimerDict) of
+			{ok, TRef} -> timer:cancel(TRef);
+			_ -> ok
 		end,
-	{noreply, State#state{timer_dict=TimerDict1}};
+
+		TimerDict1 = case mydlp_mnesia:get_rule_channel_by_orig_id(RuleId) of
+				remote_discovery -> {ok, Timer} = timer:send_after(60000, {is_discovery_finished, RuleId}),
+						dict:store(RuleId, Timer, TimerDict);
+				discovery -> {ok, Timer} = timer:send_after(?EP_CONTROL_TIME, {is_ep_discovery_finished, RuleId}),
+						dict:store(RuleId, Timer, TimerDict)
+			end,
+		{noreply, State#state{timer_dict=TimerDict1}}
+	end, State);
 
 handle_cast({start_timers, DiscoveryList}, State) ->
-	TimerList = lists:map(fun({RuleOrigId, _, _}) -> 
+	?NOREPLYGUARD(fun() ->
+		TimerList = lists:map(fun({RuleOrigId, _, _}) -> 
 					{ok, T} = case mydlp_mnesia:get_rule_channel_by_orig_id(RuleOrigId) of
 							remote_discovery -> timer:send_after(60000, {is_discovery_finished, RuleOrigId});
 							discovery -> timer:send_after(?EP_CONTROL_TIME, {is_ep_discovery_finished, RuleOrigId});
 							RT -> ?ERROR_LOG("Unknown Rule Type: ["?S"]", [RT]), 
 								remove_discovery_status(RuleOrigId), {ok, none} end,
 							{RuleOrigId, T} end, DiscoveryList),
-	TimerList1 = lists:filter(fun({_, S}) -> S /= none end, TimerList),
-	TimerDict = dict:from_list(TimerList1),
-	{noreply, State#state{timer_dict=TimerDict}};
+		TimerList1 = lists:filter(fun({_, S}) -> S /= none end, TimerList),
+		TimerDict = dict:from_list(TimerList1),
+		{noreply, State#state{timer_dict=TimerDict}}
+	end, State);
 
 handle_cast(_Msg, State) ->
 	{noreply, State}.
 
 handle_info(startup, State) ->
-	continue_discovery_after_init(),
-	start_timers(), 
-	start_at_exact_hour(),
-	{noreply, State};
+	?NOREPLYGUARD(fun() ->
+		continue_discovery_after_init(),
+		start_timers(), 
+		start_at_exact_hour(),
+		{noreply, State}
+	end, State);
 
 handle_info(start_discovery_scheduling, State) ->
-	start_discovery_scheduling(),
+	catch start_discovery_scheduling(),
 	{noreply, State};
 
 handle_info({async_reply, Reply, From}, State) ->
@@ -219,62 +231,66 @@ handle_info({async_reply, Reply, From}, State) ->
 	{noreply, State};
 
 handle_info({is_discovery_finished, RuleId}, #state{timer_dict=TimerDict}=State) ->
-	case dict:find(RuleId, TimerDict) of
-		error -> {noreply, State};
-		{ok, Timer} ->
-			try
-			cancel_timer(Timer),
-			%Reply = mydlp_discover_fs:is_discovery_finished(RuleId),
-			{_, GroupId} = get_discovery_status(RuleId),
-			Reply = mydlp_mysql:is_all_discovery_finished(GroupId),
-			case Reply of
-				true ->	 
-					TimerDict1 = dict:erase(RuleId, TimerDict),
-					mydlp_discover_rfs:release_mount_by_rule_id(RuleId),
-					update_report_as_finished(GroupId),
-					case mydlp_mnesia:get_waiting_schedule_by_rule_id(RuleId) of
-						none ->	remove_discovery_status(RuleId);
-						GId -> call_start_discovery_by_rule_id(RuleId, GId, false)
-					end,
-					{noreply, State#state{timer_dict=TimerDict1}};
-				false -> 
-					{ok, Timer1} = timer:send_after(60000, {is_discovery_finished, RuleId}),
-					TimerDict1 = dict:store(RuleId, Timer1, TimerDict),
-					{noreply, State#state{timer_dict=TimerDict1}}
-			end
-			catch _Class:_Error ->
-				{ok, Timer2} = timer:send_after(60000, {is_discovery_finished, RuleId}),
-				TimerDict2 = dict:store(RuleId, Timer2, TimerDict),
-				{noreply, State#state{timer_dict=TimerDict2}}
-			end
-	end;
+	?NOREPLYGUARD(fun() ->
+		case dict:find(RuleId, TimerDict) of
+			error -> {noreply, State};
+			{ok, Timer} ->
+				try
+				cancel_timer(Timer),
+				%Reply = mydlp_discover_fs:is_discovery_finished(RuleId),
+				{_, GroupId} = get_discovery_status(RuleId),
+				Reply = mydlp_mysql:is_all_discovery_finished(GroupId),
+				case Reply of
+					true ->	 
+						TimerDict1 = dict:erase(RuleId, TimerDict),
+						mydlp_discover_rfs:release_mount_by_rule_id(RuleId),
+						update_report_as_finished(GroupId),
+						case mydlp_mnesia:get_waiting_schedule_by_rule_id(RuleId) of
+							none ->	remove_discovery_status(RuleId);
+							GId -> call_start_discovery_by_rule_id(RuleId, GId, false)
+						end,
+						{noreply, State#state{timer_dict=TimerDict1}};
+					false -> 
+						{ok, Timer1} = timer:send_after(60000, {is_discovery_finished, RuleId}),
+						TimerDict1 = dict:store(RuleId, Timer1, TimerDict),
+						{noreply, State#state{timer_dict=TimerDict1}}
+				end
+				catch _Class:_Error ->
+					{ok, Timer2} = timer:send_after(60000, {is_discovery_finished, RuleId}),
+					TimerDict2 = dict:store(RuleId, Timer2, TimerDict),
+					{noreply, State#state{timer_dict=TimerDict2}}
+				end
+		end
+	end, State);
 
 handle_info({is_ep_discovery_finished, RuleId}, #state{timer_dict=TimerDict}=State) ->
-	case dict:find(RuleId, TimerDict) of
-		error -> {noreply, State};
-		{ok, Timer} ->
-			try
-			cancel_timer(Timer),
-			{_, GroupId} = get_discovery_status(RuleId),
-			[Endpoints] = mydlp_mnesia:get_endpoints_by_rule_id(RuleId), 
-			case mydlp_mysql:is_all_ep_discovery_finished(GroupId, Endpoints, ?EP_DISC_FINISHED) of
-				true -> TimerDict1 = dict:erase(RuleId, TimerDict),
-					update_report_as_finished(GroupId),
-					 case mydlp_mnesia:get_waiting_schedule_by_rule_id(RuleId) of
-						none -> remove_discovery_status(RuleId);
-						GId -> call_start_discovery_on_ep(RuleId, GId, false)
-					end,
-					{noreply, State#state{timer_dict=TimerDict1}};
-				false -> {ok, Timer1} = timer:send_after(?EP_CONTROL_TIME, {is_ep_discovery_finished, RuleId}),
-					TimerDict1 = dict:store(RuleId, Timer1, TimerDict),
-					{noreply, State#state{timer_dict=TimerDict1}}
-			end
-			catch _Class:_Error ->
-				{ok, Timer2} = timer:send_after(?EP_CONTROL_TIME, {is_ep_discovery_finished, RuleId}),
-				TimerDict2 = dict:store(RuleId, Timer2, TimerDict),
-				{noreply, State#state{timer_dict=TimerDict2}}	
-			end
-	end;
+	?NOREPLYGUARD(fun() ->
+		case dict:find(RuleId, TimerDict) of
+			error -> {noreply, State};
+			{ok, Timer} ->
+				try
+				cancel_timer(Timer),
+				{_, GroupId} = get_discovery_status(RuleId),
+				[Endpoints] = mydlp_mnesia:get_endpoints_by_rule_id(RuleId), 
+				case mydlp_mysql:is_all_ep_discovery_finished(GroupId, Endpoints, ?EP_DISC_FINISHED) of
+					true -> TimerDict1 = dict:erase(RuleId, TimerDict),
+						update_report_as_finished(GroupId),
+						 case mydlp_mnesia:get_waiting_schedule_by_rule_id(RuleId) of
+							none -> remove_discovery_status(RuleId);
+							GId -> call_start_discovery_on_ep(RuleId, GId, false)
+						end,
+						{noreply, State#state{timer_dict=TimerDict1}};
+					false -> {ok, Timer1} = timer:send_after(?EP_CONTROL_TIME, {is_ep_discovery_finished, RuleId}),
+						TimerDict1 = dict:store(RuleId, Timer1, TimerDict),
+						{noreply, State#state{timer_dict=TimerDict1}}
+				end
+				catch _Class:_Error ->
+					{ok, Timer2} = timer:send_after(?EP_CONTROL_TIME, {is_ep_discovery_finished, RuleId}),
+					TimerDict2 = dict:store(RuleId, Timer2, TimerDict),
+					{noreply, State#state{timer_dict=TimerDict2}}	
+				end
+		end
+	end, State);
 
 handle_info(_Info, State) ->
 	{noreply, State}.

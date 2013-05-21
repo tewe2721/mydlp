@@ -35,6 +35,24 @@
 				[Class, Error, erlang:get_stacktrace()]) end
 	 end).
 
+-define(REPLYGUARD(Fun, ErrReply, ErrState), (fun() -> 
+		try Fun()
+		catch Class:Error ->
+			?ERROR_LOG("Logged exception: Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
+				[Class, Error, erlang:get_stacktrace()]),
+			{reply, ErrReply, ErrState}
+		end
+	 end)() ).
+
+-define(NOREPLYGUARD(Fun, ErrState), (fun() -> 
+		try Fun()
+		catch Class:Error ->
+			?ERROR_LOG("Logged exception: Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
+				[Class, Error, erlang:get_stacktrace()]),
+			{noreply, ErrState}
+		end
+	 end)() ).
+
 -define(EMF(Fun, ErrKey), 
 		try Fun()
 		catch Class:Error ->

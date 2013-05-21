@@ -158,13 +158,13 @@ handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
 
 handle_call({stop_discovery_by_rule_id, RuleId}, _From, #state{discover_queue=Q, paused_queue=PQ}=State) ->
-	push_opr_log(RuleId, "none", "Stop Discovery Command Will Executed"),
-	case get_discovery_status(RuleId) of
-		{Status, GId} ->
-			Q1 = drop_items_by_rule_id(RuleId, Q),
-			PQ1 = drop_items_by_rule_id(RuleId, PQ),
-			push_opr_log(RuleId, GId, ?DISCOVERY_FINISHED),
-			?FLE(fun() ->
+	?REPLYGUARD(fun() ->
+		push_opr_log(RuleId, "none", "Stop Discovery Command Will Executed"),
+		case get_discovery_status(RuleId) of
+			{Status, GId} ->
+				Q1 = drop_items_by_rule_id(RuleId, Q),
+				PQ1 = drop_items_by_rule_id(RuleId, PQ),
+				push_opr_log(RuleId, GId, ?DISCOVERY_FINISHED),
 				case Status of
 					?DISCOVERING -> mydlp_mnesia:del_fs_entries_by_rule_id(RuleId);
 					?ON_DEMAND_DISCOVERING -> mydlp_mnesia:del_fs_entries_by_rule_id(RuleId);
@@ -174,30 +174,32 @@ handle_call({stop_discovery_by_rule_id, RuleId}, _From, #state{discover_queue=Q,
 					_ -> ok
 				end,
 				mark_as_finished(RuleId),
-				filter_discover_cache(RuleId)
-			end)(),
-			{reply, ok, State#state{discover_queue=Q1, paused_queue=PQ1, is_new=true}};
-		_ -> 
-			push_opr_log(RuleId, "none", "Unknown Discovery job."),
-			{reply, ok, State}
-	end;
+				filter_discover_cache(RuleId),
+				{reply, ok, State#state{discover_queue=Q1, paused_queue=PQ1, is_new=true}};
+			_ -> 
+				push_opr_log(RuleId, "none", "Unknown Discovery job."),
+				{reply, ok, State}
+		end
+	end, ok, State);
 
 handle_call({is_discovery_finished, RuleId}, _From, #state{discover_queue=Q, paused_queue=PQ}=State) ->
-	Reply = case catch is_finished_by_rule_id(RuleId, Q) of
-		true -> is_finished_by_rule_id(RuleId, PQ);
-		false -> false;
-		_Else -> false end,
-	{reply, Reply, State};
+	?REPLYGUARD(fun() ->
+		Reply = case is_finished_by_rule_id(RuleId, Q) of
+			true -> is_finished_by_rule_id(RuleId, PQ);
+			false -> false end,
+		{reply, Reply, State}
+	end, false, State);
 
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
 handle_cast({update_rule_status, RuleId, Status}, State) ->
-	case get_discovery_status(RuleId) of
-		none -> ok;
-		{_, GId}  -> catch mydlp_mnesia:update_discovery_status(RuleId, Status, GId)
-	end,
-	{noreply, State};
+	?NOREPLYGUARD(fun() ->
+		case get_discovery_status(RuleId) of
+			none -> ok;
+			{_, GId}  -> mydlp_mnesia:update_discovery_status(RuleId, Status, GId) end,
+		{noreply, State}
+	end, State);
 
 handle_cast({ql, List}, State) ->
 	?ASYNC0(fun() ->
@@ -206,92 +208,108 @@ handle_cast({ql, List}, State) ->
 	{noreply, State};
 
 handle_cast({q, ParentId, FilePath, RuleIndex, _GroupId, IsPrior}, #state{discover_queue=Q, discover_inprog=false} = State) ->
-	Item = {ParentId, FilePath, RuleIndex},
-	Q1 = case IsPrior of
-		true -> queue:in_r(Item, Q);
-		false -> queue:in(Item, Q) end,
-	consume(),
-	set_discover_inprog(),
-	{noreply, State#state{discover_queue=Q1, discover_inprog=true}};
+	?NOREPLYGUARD(fun() ->
+		Item = {ParentId, FilePath, RuleIndex},
+		Q1 = case IsPrior of
+			true -> queue:in_r(Item, Q);
+			false -> queue:in(Item, Q) end,
+		consume(),
+		set_discover_inprog(),
+		{noreply, State#state{discover_queue=Q1, discover_inprog=true}}
+	end, State);
 
 handle_cast({q, ParentId, FilePath, RuleIndex, _GroupId, IsPrior}, #state{discover_queue=Q, discover_inprog=true} = State) ->
-	Item = {ParentId, FilePath, RuleIndex},
-	Q1 = case IsPrior of
-		true -> queue:in_r(Item, Q);
-		false -> queue:in(Item, Q) end,
-	{noreply,State#state{discover_queue=Q1}};
+	?NOREPLYGUARD(fun() ->
+		Item = {ParentId, FilePath, RuleIndex},
+		Q1 = case IsPrior of
+			true -> queue:in_r(Item, Q);
+			false -> queue:in(Item, Q) end,
+		{noreply,State#state{discover_queue=Q1}}
+	end, State);
 
 handle_cast({push_paused_to_proc_queue, _RuleId}, #state{discover_queue=Q, paused_queue=PQ} = State) ->
-	{noreply, State#state{discover_queue=queue:join(Q, PQ), paused_queue=queue:new()}};
+	?NOREPLYGUARD(fun() ->
+		{noreply, State#state{discover_queue=queue:join(Q, PQ), paused_queue=queue:new()}}
+	end, State);
 
 handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, is_new=IsNew} = State) ->
-	case queue:out(Q) of
-		{{value, {ParentId, FilePath, RuleIndex}=Item}, Q1} ->
-			case is_paused_or_stopped_by_rule_id(RuleIndex) of
-				paused -> % rule is paused, push the item pause queue
-					PQ1 = queue:in(Item, PQ),
-					consume(),
-					{noreply, State#state{discover_queue=Q1, paused_queue=PQ1, is_new=false}};
-				stopped -> % rule is stopped, drop item
-					consume(),
-					{noreply, State#state{discover_queue=Q1, paused_queue=PQ, is_new=false}};
-				_ ->
-					try	case has_discover_rule() of
-							true -> case is_exceptional(FilePath) of
-									false -> discover(ParentId, FilePath, RuleIndex);
-									true -> ok end;
-							false -> ok end,
+	?NOREPLYGUARD(fun() ->
+		case queue:out(Q) of
+			{{value, {ParentId, FilePath, RuleIndex}=Item}, Q1} ->
+				case is_paused_or_stopped_by_rule_id(RuleIndex) of
+					paused -> % rule is paused, push the item pause queue
+						PQ1 = queue:in(Item, PQ),
 						consume(),
-						{noreply, State#state{discover_queue=Q1, is_new=false}}
-					catch Class:Error ->
-						?ERROR_LOG("Discover Queue Consume: Error occured: "
-								"Class: ["?S"]. Error: ["?S"].~n"
-								"Stack trace: "?S"~n.FilePath: "?S"~nState: "?S"~n ",	
-								[Class, Error, erlang:get_stacktrace(), FilePath, State]),
+						{noreply, State#state{discover_queue=Q1, paused_queue=PQ1, is_new=false}};
+					stopped -> % rule is stopped, drop item
+						consume(),
+						{noreply, State#state{discover_queue=Q1, paused_queue=PQ, is_new=false}};
+					_ ->
+						try	case has_discover_rule() of
+								true -> case is_exceptional(FilePath) of
+										false -> discover(ParentId, FilePath, RuleIndex);
+										true -> ok end;
+								false -> ok end,
 							consume(),
-							{noreply, State#state{discover_queue=Q1, is_new=false}} end
-			end;
-		{empty, _} ->
-			case IsNew of
-				true -> ok;
-				false -> mark_finished_rules(PQ) end,
-			unset_discover_inprog(),
-			{noreply, State#state{discover_inprog=false, is_new=false}}
-	end;
+							{noreply, State#state{discover_queue=Q1, is_new=false}}
+						catch Class:Error ->
+							?ERROR_LOG("Discover Queue Consume: Error occured: "
+									"Class: ["?S"]. Error: ["?S"].~n"
+									"Stack trace: "?S"~n.FilePath: "?S"~nState: "?S"~n ",	
+									[Class, Error, erlang:get_stacktrace(), FilePath, State]),
+								consume(),
+								{noreply, State#state{discover_queue=Q1, is_new=false}} end
+				end;
+			{empty, _} ->
+				case IsNew of
+					true -> ok;
+					false -> mark_finished_rules(PQ) end,
+				unset_discover_inprog(),
+				{noreply, State#state{discover_inprog=false, is_new=false}}
+		end
+	end, State);
 
 handle_cast({stop_discovery, RuleId, GroupId}, State) ->
-	push_opr_log(RuleId, GroupId, "Stop Discovery Command Will Executed"),
-	catch mydlp_mnesia:update_discovery_status(RuleId, ?STOPPED, GroupId),
-	{noreply, State};
+	?NOREPLYGUARD(fun() ->
+		push_opr_log(RuleId, GroupId, "Stop Discovery Command Will Executed"),
+		mydlp_mnesia:update_discovery_status(RuleId, ?STOPPED, GroupId),
+		{noreply, State}
+	end, State);
 
 handle_cast({start_discovery, RuleId, GroupId}, State) ->
-	push_opr_log(RuleId, GroupId, "Start Discovery Command Will Executed"),
-	?FLE(fun() ->
-		mydlp_mnesia:update_discovery_status(RuleId, ?DISCOVERING, GroupId),
-		PathList = case mydlp_mnesia:get_discovery_directory(RuleId) of
-			none -> push_opr_log(RuleId, GroupId, ?DISCOVERY_FINISHED),
-				[];
-			L when is_list(L) ->
-				lists:map(fun(P) -> 
-					try unicode:characters_to_list(P)
-						catch _:_ -> binary_to_list(P) end  %% TODO: log this case
-					 end
-				, L) end,
-		filter_discover_cache(RuleId),
-		lists:map(fun(P) -> q(P, RuleId, GroupId) end, PathList)
-	end)(),
-	{noreply, State#state{is_new=true}};
+	?NOREPLYGUARD(fun() ->
+		push_opr_log(RuleId, GroupId, "Start Discovery Command Will Executed"),
+		?FLE(fun() ->
+			mydlp_mnesia:update_discovery_status(RuleId, ?DISCOVERING, GroupId),
+			PathList = case mydlp_mnesia:get_discovery_directory(RuleId) of
+				none -> push_opr_log(RuleId, GroupId, ?DISCOVERY_FINISHED),
+					[];
+				L when is_list(L) ->
+					lists:map(fun(P) -> 
+						try unicode:characters_to_list(P)
+							catch _:_ -> binary_to_list(P) end  %% TODO: log this case
+						 end
+					, L) end,
+			filter_discover_cache(RuleId),
+			lists:map(fun(P) -> q(P, RuleId, GroupId) end, PathList)
+		end)(),
+		{noreply, State#state{is_new=true}}
+	end, State);
 
 handle_cast({pause_discovery, RuleId, GroupId}, State) ->
-	push_opr_log(RuleId, GroupId, "Pause Discovery Command Will Executed"),
-	catch mydlp_mnesia:update_discovery_status(RuleId, ?PAUSED, GroupId),
-	{noreply, State};
+	?NOREPLYGUARD(fun() ->
+		push_opr_log(RuleId, GroupId, "Pause Discovery Command Will Executed"),
+		mydlp_mnesia:update_discovery_status(RuleId, ?PAUSED, GroupId),
+		{noreply, State}
+	end, State);
 
 handle_cast({continue_discovery, RuleId, GroupId}, #state{discover_queue=Q, paused_queue=PQ}=State) ->
-	%reset_discover_cache(),
-	push_opr_log(RuleId, GroupId, "Continue Discovery Command Will Executed"),
-	catch mydlp_mnesia:update_discovery_status(RuleId, ?DISCOVERING, GroupId),
-	{noreply, State#state{discover_queue=queue:join(Q, PQ), paused_queue=queue:new()}};
+	?NOREPLYGUARD(fun() ->
+		%reset_discover_cache(),
+		push_opr_log(RuleId, GroupId, "Continue Discovery Command Will Executed"),
+		mydlp_mnesia:update_discovery_status(RuleId, ?DISCOVERING, GroupId),
+		{noreply, State#state{discover_queue=queue:join(Q, PQ), paused_queue=queue:new()}}
+	end, State);
 
 handle_cast(_Msg, State) ->
 	{noreply, State}.

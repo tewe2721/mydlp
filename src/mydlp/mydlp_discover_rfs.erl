@@ -97,57 +97,63 @@ handle_call(stop, _From, State) ->
 %	{reply, Reply, State};
 
 handle_call({release_mount_by_rule_id, RuleId}, _From, #state{mount_dict=Dict}=State) ->
-	Dict1 = case dict:find(RuleId, Dict) of
-			{ok, {FilePaths, _R}} -> catch release_mount(FilePaths),
-					dict:erase(RuleId, Dict);
-			_ -> ?OPR_LOG("mydlp_discover_rfs: Unknown Rule Id: ["?S"]", [RuleId]), 
-				Dict
-		end,
-	{reply, ok, State#state{mount_dict=Dict1}};
+	?REPLYGUARD(fun() ->
+		Dict1 = case dict:find(RuleId, Dict) of
+				{ok, {FilePaths, _R}} -> catch release_mount(FilePaths),
+						dict:erase(RuleId, Dict);
+				_ -> ?OPR_LOG("mydlp_discover_rfs: Unknown Rule Id: ["?S"]", [RuleId]), 
+					Dict
+			end,
+		{reply, ok, State#state{mount_dict=Dict1}}
+	end, ok, State);
 
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
 handle_cast({start_by_rule_id, OrigRuleId, GroupId}, #state{mount_dict=Dict}=State) ->
-	RuleId = (catch mydlp_mnesia:get_rule_id_by_orig_id(OrigRuleId)),
-	RemoteStorages = try
-			mydlp_mnesia:get_remote_storages_by_rule_id(RuleId)
-		catch Class:Error ->
-			?ERROR_LOG("RFS: Error occured: "
-					"Class: ["?S"]. Error: ["?S"].~n"
-					"Stack trace: "?S"~nState: "?S"~n ",
-					[Class, Error, erlang:get_stacktrace(), State]),
-			[] end,
-	
-	Dict1 = case dict:find(OrigRuleId, Dict) of
-			{ok, {FilePaths, _R}} -> catch release_mount(FilePaths),
-					dict:erase(OrigRuleId, Dict);
-			_ -> ok, 
-				Dict
-		end,
-	consume(RemoteStorages, GroupId, OrigRuleId),
-	{noreply, State#state{mount_dict=Dict1}};
+	?NOREPLYGUARD(fun() ->
+		RuleId = mydlp_mnesia:get_rule_id_by_orig_id(OrigRuleId),
+		RemoteStorages = try
+				mydlp_mnesia:get_remote_storages_by_rule_id(RuleId)
+			catch Class:Error ->
+				?ERROR_LOG("RFS: Error occured: "
+						"Class: ["?S"]. Error: ["?S"].~n"
+						"Stack trace: "?S"~nState: "?S"~n ",
+						[Class, Error, erlang:get_stacktrace(), State]),
+				[] end,
+		
+		Dict1 = case dict:find(OrigRuleId, Dict) of
+				{ok, {FilePaths, _R}} -> catch release_mount(FilePaths),
+						dict:erase(OrigRuleId, Dict);
+				_ -> ok, 
+					Dict
+			end,
+		consume(RemoteStorages, GroupId, OrigRuleId),
+		{noreply, State#state{mount_dict=Dict1}}
+	end, State);
 
 %handle_cast({continue_discovering, RuleId}, State) ->
 %	mydlp_discover_fs:continue_paused_discovery(RuleId),
 %	{noreply, State};	
 
 handle_cast({consume, RemoteStorages, GroupId, RuleId}, #state{mount_dict=Dict}=State) ->
-	Dict1 = try discover_each_mount(RemoteStorages, Dict, GroupId)
-		catch Class:Error ->
-			?ERROR_LOG("RFS: Error occured: "
-					"Class: ["?S"]. Error: ["?S"].~n"
-					"Stack trace: "?S"~nState: "?S"~n ",
-					[Class, Error, erlang:get_stacktrace(), State]),
-			Dict end,
-	
-	case dict:find(RuleId, Dict1) of
-		{ok, {MountPaths, GroupId}} -> catch mydlp_discover_fs:ql([{RuleId, MountPath, GroupId}|| MountPath <- MountPaths]);
-		_ ->	Time = erlang:universaltime(),
-			OprLog = #opr_log{time=Time, channel=remote_discovery, rule_id=RuleId, message_key=?RFS_DISC_FINISHED, group_id=GroupId},
-			?DISCOVERY_OPR_LOG(OprLog)
-	end,
-	{noreply, State#state{mount_dict=Dict1}};
+	?NOREPLYGUARD(fun() ->
+		Dict1 = try discover_each_mount(RemoteStorages, Dict, GroupId)
+			catch Class:Error ->
+				?ERROR_LOG("RFS: Error occured: "
+						"Class: ["?S"]. Error: ["?S"].~n"
+						"Stack trace: "?S"~nState: "?S"~n ",
+						[Class, Error, erlang:get_stacktrace(), State]),
+				Dict end,
+		
+		case dict:find(RuleId, Dict1) of
+			{ok, {MountPaths, GroupId}} -> catch mydlp_discover_fs:ql([{RuleId, MountPath, GroupId}|| MountPath <- MountPaths]);
+			_ ->	Time = erlang:universaltime(),
+				OprLog = #opr_log{time=Time, channel=remote_discovery, rule_id=RuleId, message_key=?RFS_DISC_FINISHED, group_id=GroupId},
+				?DISCOVERY_OPR_LOG(OprLog)
+		end,
+		{noreply, State#state{mount_dict=Dict1}}
+	end, State);
 
 handle_cast(finished, State) ->
 	catch release_mounts(),
@@ -161,7 +167,7 @@ handle_info(startup, State) ->
 	{noreply, State};
 
 handle_info(schedule_now, State) ->
-	start_remote_discovery(),
+	catch start_remote_discovery(),
 	{noreply, State};
 
 handle_info({async_reply, Reply, From}, State) ->
