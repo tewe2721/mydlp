@@ -227,15 +227,16 @@ get_meta(#file{} = File) ->
 	{Filename, MimeType, Size, Hash}.
 
 process_log_files(LogId, false = IsLogData, [File|Files]) ->
-	File1 = mydlp_api:load_files(File),
-	{Filename, MimeType, Size, Hash} = get_meta(File1),
-	mydlp_api:clean_files(File1),
+	{Filename, MimeType, Size, Hash} = get_meta(File),
+	mydlp_api:clean_files(File),
 
 	mydlp_mysql:insert_log_blueprint(LogId, Filename, MimeType, Size, Hash),
-
 	process_log_files(LogId, IsLogData, Files);
 process_log_files(LogId, true = IsLogData, [File|Files]) ->
-	File1 = mydlp_api:load_files(File),
+	File1 = case ( File#file.size < ?CFG(maximum_object_size) ) of 
+		true -> mydlp_api:load_files(File);
+		false -> ?ERROR_LOG("Unexpected big item. File: "?S, [File]),
+			File#file{data=undefined} end,
 
 	case File1#file.data of
 		undefined -> process_log_files(LogId, false, [File1]);
