@@ -477,11 +477,11 @@ handle_head(RequestId, {{_, 200, _}, Headers, _}, #state{head_requests=HeadT, ge
 			GetT end,
 	State#state{head_requests=HeadT1, get_requests=GetT1, rule_age=RuleAge1};
 
-handle_head(RequestId, Code, #state{head_requests=HeadT} = State) -> 
-	case Code of
+handle_head(RequestId, Result, #state{head_requests=HeadT} = State) -> 
+	case Result of
 		{error,no_scheme} -> ok;
 		{{_, 404, _}, _Headers, _} -> ok;
-		_ -> ?ERROR_LOG("HEAD: Response is inproper: "?S, Code) end,
+		_ -> ?ERROR_LOG("HEAD: Response is inproper: "?S, [Result]) end,
 	HeadT1 = gb_trees:delete(RequestId, HeadT),
 	State#state{head_requests=HeadT1}.
 
@@ -496,11 +496,11 @@ handle_get(RequestId, {{_, 200, _}, _Headers, Data}, #state{get_requests=GetT, r
 		false -> ok end,
 	State#state{get_requests=GetT1, rule_age=RuleAge1};
 
-handle_get(RequestId, Code, #state{get_requests=GetT} = State) -> 
-	case Code of
+handle_get(RequestId, Result, #state{get_requests=GetT} = State) -> 
+	case Result of
 		{error,no_scheme} -> ok;
 		{{_, 404, _}, _Headers, _} -> ok;
-		_ -> ?ERROR_LOG("GET: Response is inproper: "?S, Code) end,
+		_ -> ?ERROR_LOG("GET: Response is inproper: "?S, [Result]) end,
 	GetT1 = gb_trees:delete(RequestId, GetT),
 	State#state{get_requests=GetT1}.
 
