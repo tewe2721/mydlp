@@ -153,7 +153,7 @@ get_text(Filename, MT, Data) ->
 
 get_text1(Filename0, MT, Data) ->
 	Filename = prettify_filename(Filename0),
-	try	RawText = call_pool({thrift, java, getText, [Filename, MT, Data]}),
+	try	RawText = call_pool({thrift, java, getText, [Filename, MT, Data]}, 480000),
 		Text = case MT of
 			?MIME_TEXT -> try mydlp_api:remove_html_tags(RawText) catch _:_ -> RawText end;
 			_Else -> RawText end,
@@ -167,7 +167,7 @@ get_unicode_text(Data) -> get_unicode_text(undefined, Data).
 
 get_unicode_text(undefined, Data) -> get_unicode_text(<<>>, Data);
 get_unicode_text(Encoding, Data) ->
-	try	RawText = call_pool({thrift, java, getUnicodeText, [Encoding, Data]}),
+	try	RawText = call_pool({thrift, java, getUnicodeText, [Encoding, Data]}, 300000),
 		Size = size(RawText) - 1,
 		case RawText of
 			<<>> -> <<>>;
@@ -241,7 +241,7 @@ handle_info(_Info, State) ->
 init([]) ->
 	case catch gen_tcp:connect("localhost", 9090, ?THRIFT_SOCK_OPTS, 500) of
 	    {ok, Sock} -> 
-		try	{ok, JClient} = thrift_client_util:new("localhost",9090, mydlp_thrift, []),
+		try	{ok, JClient} = thrift_client_util:new("localhost",9090, mydlp_thrift, [{framed, true}]),
 			{ok, #state{backend_java=JClient}}
 		after	catch gen_tcp:close(Sock) end;
 	    Error -> {stop, Error} end.
@@ -255,8 +255,10 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 
-call_pool(Req) ->
-	case mydlp_pool:call(?MODULE, Req, 180000) of
+call_pool(Req) -> call_pool(Req, 180000).
+
+call_pool(Req, Timeout) ->
+	case mydlp_pool:call(?MODULE, Req, Timeout) of
 		{ok, <<"mydlp-internal/error">>} -> throw({error, exception_at_backend});
 		{ok, Ret} -> Ret;
 		{error, Reason} -> throw({error, Reason});
