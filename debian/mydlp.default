@@ -9,7 +9,7 @@ ERLANG_EXTRA_OPTS="+fnu +K true +P 524288 +A 30 -smp auto -env ERL_MAX_ETS_TABLE
 
 # Extra options for Jsvc
 # It is recommended to increase this to 4g or more.
-JSVC_EXTRA_OPTS="$( [ $(uname -i) == 'x86_64' ] && echo -n '-Xmx4g' || echo -n '-Xmx2g' )"
+JSVC_EXTRA_OPTS="$( [ $(uname -p) == 'x86_64' ] && echo -n '-Xmx4g' || echo -n '-Xmx2g' )"
 #JSVC_EXTRA_OPTS="-Xmx6g"
 
 # Set true to disable control of Jetty
