@@ -25,44 +25,7 @@
 
 -include("mydlp_logger.hrl").
 
--define(CFG(Key), mydlp_config:Key()).
-
-% creates new Fun with encapsulates orginal fun to Log any Exception 
--define(FLE(Fun), fun() -> 
-		try Fun()
-		catch Class:Error ->
-			?ERROR_LOG("Logged exception: Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
-				[Class, Error, erlang:get_stacktrace()]) end
-	 end).
-
--define(REPLYGUARD(Fun, ErrReply, ErrState), (fun() -> 
-		try Fun()
-		catch Class:Error ->
-			?ERROR_LOG("Logged exception: Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
-				[Class, Error, erlang:get_stacktrace()]),
-			{reply, ErrReply, ErrState}
-		end
-	 end)() ).
-
--define(NOREPLYGUARD(Fun, ErrState), (fun() -> 
-		try Fun()
-		catch Class:Error ->
-			?ERROR_LOG("Logged exception: Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
-				[Class, Error, erlang:get_stacktrace()]),
-			{noreply, ErrState}
-		end
-	 end)() ).
-
--define(EMF(Fun, ErrKey), 
-		try Fun()
-		catch Class:Error ->
-			?ERROR_LOG("Logged exception: Class: ["?S"]. Error: ["?S"].~nStack trace: "?S"~n",
-				[Class, Error, erlang:get_stacktrace()]),
-			{ierror, Class, {ErrKey,Error}} end).
-
--define(ASYNC0(Fun), mydlp_api:mspawn(?FLE(Fun))).
-
--define(ASYNC(Fun, Timeout), mydlp_api:mspawn(?FLE(Fun), Timeout)).
+-include("mydlp_macro.hrl").
 
 -define(MIME_TIKA_OOXML, <<"application/x-tika-ooxml">>).
 -define(MIME_OOXML_WORD, <<"application/vnd.openxmlformats-officedocument.wordprocessingml.document">>).

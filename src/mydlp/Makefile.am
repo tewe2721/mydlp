@@ -80,6 +80,7 @@ dist_hrl_DATA = \
 	mydlp_big_binary.hrl \
 	mydlp_http.hrl \
 	mydlp_logger.hrl \
+	mydlp_macro.hrl \
 	mydlp_smtp.hrl \
 	mydlp_schema.hrl
 

@@ -163,7 +163,7 @@ handle_re(Call, _Data, _State) -> throw({error,{unhandled_re_call,Call}}).
 %	lists:append([{HP, HI}], return_as_tuple(TP, TI)).
 
 handle_info({async_reply, Reply, From}, State) ->
-	gen_server:reply(From, Reply),
+	?SAFEREPLY(From, Reply),
 	{noreply, State};
 
 handle_info(_Info, State) ->

@@ -255,7 +255,7 @@ handle_info({async_acl_q, Res, From}, State) ->
 		{ok, R} -> R;
 		{error, _} -> ?CFG(error_action) end, % TODO conf
 
-	gen_server:reply(From, Reply),
+	?SAFEREPLY(From, Reply),
 	{noreply, State};
 
 handle_info(_Info, State) ->

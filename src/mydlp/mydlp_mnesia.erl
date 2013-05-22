@@ -1736,7 +1736,7 @@ handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
 handle_info({async_reply, Reply, From}, State) ->
-	gen_server:reply(From, Reply),
+	?SAFEREPLY(From, Reply),
 	{noreply, State};
 
 handle_info(cleanup_now, State) ->

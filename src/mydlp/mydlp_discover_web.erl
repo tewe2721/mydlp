@@ -265,7 +265,7 @@ handle_info({is_finished, RuleId}, #state{timer_dict=TimerDict, paused_queue=Pau
 	end;
 
 handle_info({async_reply, Reply, From}, State) ->
-	gen_server:reply(From, Reply),
+	?SAFEREPLY(From, Reply),
 	{noreply, State};
 
 handle_info(_Info, State) -> 

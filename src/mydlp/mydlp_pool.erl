@@ -148,7 +148,7 @@ handle_cast(_Msg, State) ->
 	{noreply, State}.
 
 handle_info({async_reply, Reply, From}, State) ->
-	gen_server:reply(From, Reply),
+	?SAFEREPLY(From, Reply),
 	{noreply, State};
 
 handle_info({inactivate, Pid}, #state{inactive=IQ, workers=WS} = State) ->

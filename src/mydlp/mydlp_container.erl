@@ -86,13 +86,25 @@
 	object_tree
 	}).
 
--define(ACLQ_TIMEOUT_SEAP_DIFF, 10000).
+-ifdef(__MYDLP_ENDPOINT).
 
 -define(ACLQ_TIMEOUT_MIN, 20000).
 
 -define(ACLQ_TIMEOUT_MAX, 140000).
 
 -define(ACLQ_TIMEOUT_CONST, 0.01144).
+
+-endif.
+
+-ifdef(__MYDLP_NETWORK).
+
+-define(ACLQ_TIMEOUT_MIN, 300000).
+
+-define(ACLQ_TIMEOUT_MAX, 900000).
+
+-define(ACLQ_TIMEOUT_CONST, 0.0572).
+
+-endif.
 
 %%%% API
 
@@ -244,8 +256,8 @@ handle_call({aclq, ObjId, Timeout}, From, #state{object_tree=OT} = State) ->
 		{value, #object{eof_flag=false} = Obj} -> 
 			?ERROR_LOG("ACLQ: eof_flag is not true, can not ACLQ before EOF: ObjId="?S", Obj="?S" OT="?S"~n",
 				[ObjId, Obj, OT]),
-			gen_server:reply(From, {error, eof_flag_is_not_true});
-		none -> gen_server:reply(From, {error, not_in_object_tree}) end,
+			?SAFEREPLY(From, {error, eof_flag_is_not_true});
+		none -> ?SAFEREPLY(From, {error, not_in_object_tree}) end,
 	{noreply, State};
 
 handle_call({obj_size, ObjId}, _From, #state{object_tree=OT} = State) ->
@@ -392,7 +404,7 @@ handle_cast(_Msg, State) ->
 	{noreply, State}.
 
 handle_info({async_reply, Reply, From}, State) ->
-	gen_server:reply(From, Reply),
+	?SAFEREPLY(From, Reply),
 	{noreply, State};
 
 handle_info(cleanup_now, #state{object_tree=OT} = State) ->

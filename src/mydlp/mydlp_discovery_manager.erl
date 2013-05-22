@@ -227,7 +227,7 @@ handle_info(start_discovery_scheduling, State) ->
 	{noreply, State};
 
 handle_info({async_reply, Reply, From}, State) ->
-	gen_server:reply(From, Reply),
+	?SAFEREPLY(From, Reply),
 	{noreply, State};
 
 handle_info({is_discovery_finished, RuleId}, #state{timer_dict=TimerDict}=State) ->
