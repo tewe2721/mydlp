@@ -492,7 +492,7 @@ handle_test_connection(nfs, Dict) ->
 handle_start_fingerprinting(DDId) ->
 	RDDs = mydlp_mysql:get_remote_document_databases_by_id(DDId),
 	case RDDs of
-		[] -> mydlp_mysgl:update_document_fingerprinting_status([DDId], false);
+		[] -> mydlp_mysql:update_document_fingerprinting_status([DDId], false);
 		_ -> RDDs1 = lists:map(fun({TD, RSId}) -> {DDId, TD, RSId, []} end, RDDs),
 			gen_server:cast(?MODULE, {handle_remotes, RDDs1, DDId})
 	end.
