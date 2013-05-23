@@ -77,7 +77,12 @@ q(WebServerId, ParentId, PagePath, RuleId) ->
 q(_WebServerId, _ParentId, _PagePath, _RuleId, 0) -> ok;
 q(WebServerId, ParentId, PagePath, RuleId, Depth) -> gen_server:cast(?MODULE, {q, WebServerId, ParentId, PagePath, RuleId, Depth}).
 
-test_web_server(URL) -> gen_server:call(?MODULE, {test_web_server, URL}).
+test_web_server(URL) -> 
+	try
+		gen_server:call(?MODULE, {test_web_server, URL}, 60000)
+	catch _:_ ->
+		"HTTP Request Timed Out"
+	end.
 
 start_discovery(RuleId, GroupId) -> gen_server:cast(?MODULE, {start_by_rule_id, RuleId, GroupId}).
 
@@ -87,13 +92,17 @@ update_rule_status(RuleId, Status) -> gen_server:cast(?MODULE, {update_rule_stat
 
 %%%%%%%%%%%%%% gen_server handles
 
+-define(HTTP_REQ_HEADERS, [
+	{"User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:20.0) Gecko/20100101 Firefox/20.0"}
+]).
+
 handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
 
 handle_call({test_web_server, URL}, _From, State) ->
 	try
 		URLS = binary_to_list(URL),
-		R = case httpc:request(head, {URLS, []}, [], [{sync, true}]) of
+		R = case httpc:request(head, {URLS, ?HTTP_REQ_HEADERS}, [], [{sync, true}]) of
 			{ok, {{_, 200, _}, _, _}} -> "OK";
 			{ok, {{_, C, Reason}, _, _}} when C > 400 -> integer_to_list(C) ++ " " ++ Reason;
 			_ -> "Unknown Error Occured"
@@ -391,7 +400,7 @@ fetch_meta(WebServerId, PagePath) ->
 	URL = get_url(WebServerId, PagePath),
 	case URL of
 		external -> external;
-		_ -> httpc:request(head, {URL, []}, [], [{sync, false}]) end.
+		_ -> httpc:request(head, {URL, ?HTTP_REQ_HEADERS}, [], [{sync, false}]) end.
 
 is_changed(WebServerId, PagePath, ParentId, RuleId, Headers) ->
 	WE = web_entry(WebServerId, PagePath, ParentId, RuleId),
@@ -458,7 +467,7 @@ update_rule_age(RuleId, RuleAge) ->
 	
 fetch_data(WebServerId, PagePath) ->
 	URL = get_url(WebServerId, PagePath),
-	httpc:request(get, {URL, []}, [], [{sync, false}]).
+	httpc:request(get, {URL, ?HTTP_REQ_HEADERS}, [], [{sync, false}]).
 
 	
 handle_head(RequestId, {{_, 200, _}, Headers, _}, #state{head_requests=HeadT, get_requests=GetT, rule_age=RuleAge} = State) ->

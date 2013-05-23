@@ -286,9 +286,12 @@ handle_cast({start_discovery, RuleId, GroupId}, State) ->
 					[];
 				L when is_list(L) ->
 					lists:map(fun(P) -> 
-						case unicode:characters_to_list(P) of
+						P1 = case P of 
+							all -> get_all_discovery_directory();
+							P -> P end,
+						case unicode:characters_to_list(P1) of
 							R when is_list(R) -> R;
-							_ -> binary_to_list(P) end  %% TODO: log this case
+							_ -> binary_to_list(P1) end  %% TODO: log this case
 						 end
 					, L) end,
 			filter_discover_cache(RuleId),
@@ -366,9 +369,19 @@ push_opr_log(RuleId, GroupId, Message) ->
 
 mark_as_finished(_RuleId) -> ok.
 
+get_all_discovery_directory() -> throw({error, should_not_call_this}).
+
 -endif.
 
 -ifdef(__MYDLP_ENDPOINT).
+
+-ifdef(__PLATFORM_WINDOWS).
+	get_all_discovery_directory() -> <<"C:/">>.
+-endif.
+
+-ifdef(__PLATFORM_LINUX).
+	get_all_discovery_directory() -> <<"/">>.
+-endif.
 
 has_discover_rule() ->
 	true.

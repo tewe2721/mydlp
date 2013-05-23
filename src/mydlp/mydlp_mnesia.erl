@@ -724,7 +724,7 @@ handle_result({get_discovery_directory, RuleId}, {atomic, Result}) ->
 		end,
 	lists:map(fun(P) ->
 			case P of
-				all -> <<"C:/">>;
+				all -> all;
 				_ -> P
 			end
 		end, FilePaths);	
