@@ -920,7 +920,8 @@ populate_iprs([], _RuleId) -> ok.
 
 populate_hostnames([[Hostname]| Rows], RuleId) ->
 	Id = mydlp_mnesia:get_unique_id(m_hostname),
-	H = #m_hostname{id=Id, rule_id=RuleId, hostname=Hostname},
+	HostnameL = mydlp_nlp:to_lower_bin(Hostname),
+	H = #m_hostname{id=Id, rule_id=RuleId, hostname=HostnameL},
 	mydlp_mnesia_write(H),
 	populate_hostnames(Rows, RuleId);
 populate_hostnames([], _RuleId) -> ok.

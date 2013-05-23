@@ -1070,8 +1070,9 @@ get_logged_on_user() ->
 
 	case get_port_resp(Port, [], 25000) of
 		{ok, Data} -> 
-			try unicode:characters_to_list(Data)
-			catch _:_ -> binary_to_list(Data) end;
+			case unicode:characters_to_list(Data) of
+				L when is_list(L) -> L;
+				_ -> binary_to_list(Data) end;
 		_Else -> "" end.
 
 -define(LOGGEDONDOMAINBIN, "/usr/sbin/mydlp-logged-on-domain").
@@ -1085,8 +1086,9 @@ get_logged_on_domain() ->
 
 	case get_port_resp(Port, [], 25000) of
 		{ok, Data} ->
-			try unicode:characters_to_list(Data)
-			catch _:_ -> binary_to_list(Data) end;
+			case unicode:characters_to_list(Data) of
+				L when is_list(L) -> L;
+				_ -> binary_to_list(Data) end;
 		_Else -> "" end.
 
 -endif.

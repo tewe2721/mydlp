@@ -31,6 +31,7 @@
 
 %% API
 -export([to_lower_str/1]).
+-export([to_lower_bin/1]).
 -export([to_lower/1]).
 -export([xml_char/1]).
 -export([normalize/1]).
@@ -91,7 +92,17 @@ normal_bin(C) when C >= 11776, C =< 11903 -> <<32>>; %% Unicode Supplemental Pun
 normal_bin(C) when C >= 12288, C =< 12351 -> <<32>>; %% Unicode CJK Symbols and Punctuation	U+3000	U+303F
 normal_bin(C) -> C1 = to_lower(C), <<C1/utf8>>.
 
-to_lower_str(Str) -> to_lower_str(Str, []).
+to_lower_bin(Bin) -> to_lower_bin(Bin, <<>>).
+
+to_lower_bin(<<>>, Acc) -> Acc;
+to_lower_bin(Bin, Acc) ->
+	case get_uchar(Bin) of
+		{C,Rest} ->
+			LowerC = to_lower(C),
+			to_lower_bin(Rest, <<Acc/binary, LowerC/utf8>>);
+		none -> to_lower_bin(<<>>, Acc) end.
+
+to_lower_str(Str) when is_list(Str) -> to_lower_str(Str, []).
 
 to_lower_str([C|Rest], Ret) -> to_lower_str(Rest, [to_lower(C)|Ret]);
 to_lower_str([], Ret) -> lists:reverse(Ret).

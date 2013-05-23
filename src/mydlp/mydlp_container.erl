@@ -571,8 +571,9 @@ execute_custom_action(seclore, {HotFolderId, ActivityComments}, Obj) ->
 	case get_destination(Obj) of % Assuming this is a discovery or endpoint object with a filepath,
 		undefined -> ?ERROR_LOG("Can not protect object with file path. Obj: "?S, [Obj]);
 		FilePath -> 
-			FPRet = try Bin = unicode:characters_to_binary(FilePath), {ok, Bin}
-				catch _:_ -> {error, "mydlp.error.canNotEncodeFilePathAsUnicode"} end,
+			FPRet = case  unicode:characters_to_binary(FilePath) of
+					Bin when is_binary(Bin) -> {ok, Bin};
+					_ -> {error, "mydlp.error.canNotEncodeFilePathAsUnicode"} end,
 			case FPRet of
 				{ok, FPB} -> case mydlp_tc:seclore_protect(FPB, HotFolderId, ActivityComments) of
 						<<"ok ", Rest/binary>> -> <<"seclore.fileId ", Rest/binary>>;

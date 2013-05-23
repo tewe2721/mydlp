@@ -234,8 +234,9 @@ seclore_protect_file(#file{filename=Filename, given_type=GT} = File, HotFolderId
 	File2 = File1#file{filename=FN},
 	FilePath = filename:absname(FN, TempDir),
 	ok = file:write_file(FilePath, File1#file.data),
-	FPRet = try Bin = unicode:characters_to_binary(FilePath), {ok, Bin}
-		catch _:_ -> {error, "mydlp.error.canNotEncodeFilePathAsUnicode"} end,
+	FPRet = case unicode:characters_to_binary(FilePath) of 
+			Bin when is_binary(Bin) -> {ok, Bin};
+			_ -> {error, "mydlp.error.canNotEncodeFilePathAsUnicode"} end,
 	Message = case FPRet of
 		{ok, FPB} -> case mydlp_tc:seclore_protect(FPB, HotFolderId, ActivityComments) of
 				<<"ok ", Rest/binary>> -> <<"seclore.fileId ", Rest/binary>>;

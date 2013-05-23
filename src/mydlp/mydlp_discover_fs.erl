@@ -286,8 +286,9 @@ handle_cast({start_discovery, RuleId, GroupId}, State) ->
 					[];
 				L when is_list(L) ->
 					lists:map(fun(P) -> 
-						try unicode:characters_to_list(P)
-							catch _:_ -> binary_to_list(P) end  %% TODO: log this case
+						case unicode:characters_to_list(P) of
+							R when is_list(R) -> R;
+							_ -> binary_to_list(P) end  %% TODO: log this case
 						 end
 					, L) end,
 			filter_discover_cache(RuleId),

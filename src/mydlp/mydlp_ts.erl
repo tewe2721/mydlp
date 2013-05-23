@@ -191,7 +191,16 @@ registerUserAddress(EndpointId, Ipaddress, Userh, Data) ->
 
 	Hostname = case get_arg_value(MetaDict, "hostname") of
 		"" -> unknown;
-		H -> H end,
+		H when is_binary(H) -> mydlp_nlp:to_lower_bin(H);
+		H when is_list(H) -> 
+			try 	HBin = unicode:characters_to_binary(H),
+				mydlp_nlp:to_lower_bin(HBin)
+			catch Class2:Error2 -> 
+				?ERROR_LOG("REGISTER_USER_ADDRESS: Error occured when normalizing hostname: Class: ["?S"]. Error: ["?S"].~n"
+						"Stack trace: "?S"~n",
+					[Class2, Error2, erlang:get_stacktrace()]),
+				unknown 
+			end end,
 
 	Username = case get_arg_value(MetaDict, "user") of
 		"" -> unknown;
