@@ -1056,7 +1056,7 @@ get_agent_version() ->
 		stderr_to_stdout]),
 
 	case get_port_resp(Port, [], 50000) of
-		{ok, Data} -> Data;
+		{ok, Data} -> binary_to_list(Data);
 		_Else -> "" end.
 
 -define(LOGGEDONUSERBIN, "/usr/sbin/mydlp-logged-on-user").
@@ -1069,7 +1069,9 @@ get_logged_on_user() ->
 		stderr_to_stdout]),
 
 	case get_port_resp(Port, [], 25000) of
-		{ok, Data} -> Data;
+		{ok, Data} -> 
+			try unicode:characters_to_list(Data)
+			catch _:_ -> binary_to_list(Data) end;
 		_Else -> "" end.
 
 -define(LOGGEDONDOMAINBIN, "/usr/sbin/mydlp-logged-on-domain").
@@ -1082,7 +1084,9 @@ get_logged_on_domain() ->
 		stderr_to_stdout]),
 
 	case get_port_resp(Port, [], 25000) of
-		{ok, Data} -> Data;
+		{ok, Data} ->
+			try unicode:characters_to_list(Data)
+			catch _:_ -> binary_to_list(Data) end;
 		_Else -> "" end.
 
 -endif.
