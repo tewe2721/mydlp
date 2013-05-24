@@ -3279,6 +3279,18 @@ quoted_to_raw(<<C/integer, Rest/binary>>, Acc ) -> quoted_to_raw(Rest, <<Acc/bin
 quoted_to_raw(<<>>, Acc ) -> Acc.
 
 %%-------------------------------------------------------------------------
+%% @doc Joins binary items
+%% @end
+%%-------------------------------------------------------------------------
+binary_join(BinList) -> binary_join(BinList, <<32>>).
+
+binary_join(BinList, SepBin) -> binary_join(BinList, SepBin, <<>>).
+
+binary_join([B], S, Acc) -> binary_join([], S, <<Acc/binary, B/binary>>);
+binary_join([B|Rest], S, Acc) -> binary_join(Rest, S, <<Acc/binary, B/binary, S/binary>>);
+binary_join([], _S, Acc) -> Acc.
+
+%%-------------------------------------------------------------------------
 %% @doc Removes html tags from given text
 %% @end
 %%-------------------------------------------------------------------------

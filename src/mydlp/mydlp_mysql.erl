@@ -1304,6 +1304,23 @@ write_regex(RegexGroupId, RegexS) ->
 	R = #regex{id=RegexId, group_id=RegexGroupId, plain=RegexS},
 	mydlp_mnesia_write(R).
 
+permutate_keyword(Keyword) when is_binary(Keyword) ->
+	KeywordParts = binary:split(Keyword, [<<32>>], [global]),
+	KeywordPerms = perms_keyword_part_list(KeywordParts),
+	lists:map(fun(KP) -> 
+		mydlp_api:binary_join(KP)
+	end, KeywordPerms).
+
+perms_keyword_part_list([]) -> [[]];
+perms_keyword_part_list(L)  -> [[H|T] || H <- L, T <- perms_keyword_part_list(L--[H])].
+
+write_keyword(IsWholeWord, false = _IsScrambled, KeywordGroupId, KeywordS) -> write_keyword(IsWholeWord, KeywordGroupId, KeywordS);
+write_keyword(IsWholeWord, true = _IsScrambled, KeywordGroupId, KeywordS) ->
+	PermutatedKeywords = permutate_keyword(KeywordS),
+	lists:foreach(fun(K) -> 
+		write_keyword(IsWholeWord, KeywordGroupId, K)
+	end, PermutatedKeywords).
+
 write_keyword(IsWholeWord, KeywordGroupId, KeywordS) ->
 	Keyword = case IsWholeWord of
 		false -> KeywordS;
@@ -1314,10 +1331,13 @@ write_keyword(IsWholeWord, KeywordGroupId, KeywordS) ->
 
 is_whole_word_by_mid(MId) ->
 	{ok, SAQ} = psq(strarg_by_matcher_id, [MId]),
-	case SAQ of
-		[] -> false;
-		[[<<"whole_word">>]] -> true;
-		[[<<"partial">>]] -> false end.
+	PropList = lists:flatten(SAQ),
+	lists:member(<<"whole_word">>, PropList).
+
+is_scrambled_by_mid(MId) ->
+	{ok, SAQ} = psq(strarg_by_matcher_id, [MId]),
+	PropList = lists:flatten(SAQ),
+	lists:member(<<"scrambled">>, PropList).
 
 populate_match([[OrigId, FuncName]]) -> populate_match(OrigId, FuncName).
 
@@ -1467,23 +1487,25 @@ populate_match(Id, <<"keyword">>) ->
 	[[KeywordS]] = REQ,
 	KeywordGroupId = mydlp_mnesia:get_unique_id(keyword_group_id),
 	IsWholeWord = is_whole_word_by_mid(Id),
-	write_keyword(IsWholeWord, KeywordGroupId, KeywordS),
+	IsScrambled = is_scrambled_by_mid(Id),
+	write_keyword(IsWholeWord, IsScrambled, KeywordGroupId, KeywordS),
 	FuncParams=[{group_id, KeywordGroupId}],
 	new_match(Func, FuncParams);
 
 populate_match(Id, <<"keyword_group">>) ->
 	Func = keyword_match,
 	IsWholeWord = is_whole_word_by_mid(Id),
+	IsScrambled = is_scrambled_by_mid(Id),
 	{ok, BKGQ} = psq(kg_bundled_by_matcher_id, [Id]),
 	FuncParams = case BKGQ of
 		[] ->	KeywordGroupId = mydlp_mnesia:get_unique_id(keyword_group_id),
 			{ok, REQ} = psq(kg_regexes_by_matcher_id, [Id]),
 			lists:foreach(fun([KeywordS]) ->
-				write_keyword(IsWholeWord, KeywordGroupId, KeywordS)
+				write_keyword(IsWholeWord, IsScrambled, KeywordGroupId, KeywordS)
 			end, REQ),
 			{ok, REREQ} = psq(kg_rdbms_regexes_by_matcher_id, [Id]),
 			lists:foreach(fun([KeywordS]) ->
-				write_keyword(IsWholeWord, KeywordGroupId, KeywordS)
+				write_keyword(IsWholeWord, IsScrambled, KeywordGroupId, KeywordS)
 			end, REREQ),
 			[{group_id, KeywordGroupId}];
 		[[BundledFileName]] -> [{file, BundledFileName, IsWholeWord}] end,
