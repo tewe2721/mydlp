@@ -99,19 +99,19 @@ function insert_contents() {
 }
 
 function delete_logs() {
-	echo "DELETE LOW_PRIORITY FROM $MYSQLDB.IncidentLog WHERE id BETWEEN $MINDBID AND $NEXTMINDBID"|$MYSQL
+	echo "DELETE LOW_PRIORITY IGNORE FROM $MYSQLDB.IncidentLog WHERE id BETWEEN $MINDBID AND $NEXTMINDBID"|$MYSQL
 }
 
 function delete_logfiles() {
-	echo "DELETE LOW_PRIORITY FROM $MYSQLDB.IncidentLogFile WHERE incidentLog_id BETWEEN $MINDBID AND $NEXTMINDBID"|$MYSQL
+	echo "DELETE LOW_PRIORITY IGNORE FROM $MYSQLDB.IncidentLogFile WHERE incidentLog_id BETWEEN $MINDBID AND $NEXTMINDBID"|$MYSQL
 }
 
 function delete_blueprints() {
-	echo "DELETE LOW_PRIORITY FROM $MYSQLDB.IncidentLogFileBlueprint WHERE id IN (SELECT b.id FROM $MYSQLARCHIVEDB.IncidentLogFileBlueprint as b WHERE b.id BETWEEN $MINDBBID AND $NEXTMINDBBID)"|$MYSQL
+	echo "DELETE LOW_PRIORITY IGNORE FROM $MYSQLDB.IncidentLogFileBlueprint WHERE id IN (SELECT b.id FROM $MYSQLARCHIVEDB.IncidentLogFileBlueprint as b WHERE b.id BETWEEN $MINDBBID AND $NEXTMINDBBID)"|$MYSQL
 }
 
 function delete_contents() {
-	echo "DELETE LOW_PRIORITY FROM $MYSQLDB.IncidentLogFileContent WHERE id IN (SELECT b.id FROM $MYSQLARCHIVEDB.IncidentLogFileContent as b WHERE b.id BETWEEN $MINDBCID AND $NEXTMINDBCID)"|$MYSQL
+	echo "DELETE LOW_PRIORITY IGNORE FROM $MYSQLDB.IncidentLogFileContent WHERE id IN (SELECT b.id FROM $MYSQLARCHIVEDB.IncidentLogFileContent as b WHERE b.id BETWEEN $MINDBCID AND $NEXTMINDBCID)"|$MYSQL
 }
 
 function move_logs_to_archive() {
