@@ -1321,6 +1321,8 @@ write_keyword(IsWholeWord, true = _IsScrambled, KeywordGroupId, KeywordS) ->
 		write_keyword(IsWholeWord, KeywordGroupId, K)
 	end, PermutatedKeywords).
 
+write_keyword(_IsWholeWord, _KeywordGroupId, KeywordS) when byte_size(KeywordS) < 3 -> ok;
+write_keyword(_IsWholeWord, _KeywordGroupId, KeywordS) when size(KeywordS) < 3 -> ok;
 write_keyword(IsWholeWord, KeywordGroupId, KeywordS) ->
 	Keyword = case IsWholeWord of
 		false -> KeywordS;
