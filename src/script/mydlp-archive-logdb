@@ -107,11 +107,23 @@ function delete_logfiles() {
 }
 
 function delete_blueprints() {
-	echo "DELETE LOW_PRIORITY IGNORE FROM $MYSQLDB.IncidentLogFileBlueprint WHERE id IN (SELECT b.id FROM $MYSQLARCHIVEDB.IncidentLogFileBlueprint as b WHERE b.id BETWEEN $MINDBBID AND $NEXTMINDBBID)"|$MYSQL
+	local TMPFILE=$(mktemp)
+	echo "SELECT q.id FROM $MYSQLDB.IncidentLogFileBlueprint q WHERE q.id BETWEEN $MINDBBID AND $NEXTMINDBBID AND q.id NOT IN (SELECT b.id FROM $MYSQLDB.IncidentLogFileBlueprint as b, $MYSQLDB.IncidentLogFile f where f.blueprint_id=b.id)"|$MYSQL > $TMPFILE
+	if [ -n "$(cat $TMPFILE)" ]; then
+		sed -ie "s/^\\(.*\\)$/DELETE LOW_PRIORITY IGNORE FROM $MYSQLDB.IncidentLogFileBlueprint WHERE id=\1;/" $TMPFILE
+		$MYSQL < $TMPFILE
+	fi
+	rm -f $TMPFILE
 }
 
 function delete_contents() {
-	echo "DELETE LOW_PRIORITY IGNORE FROM $MYSQLDB.IncidentLogFileContent WHERE id IN (SELECT b.id FROM $MYSQLARCHIVEDB.IncidentLogFileContent as b WHERE b.id BETWEEN $MINDBCID AND $NEXTMINDBCID)"|$MYSQL
+	local TMPFILE=$(mktemp)
+	echo "SELECT q.id FROM $MYSQLDB.IncidentLogFileContent q WHERE q.id BETWEEN $MINDBCID AND $NEXTMINDBCID AND q.id NOT IN (SELECT c.id FROM $MYSQLDB.IncidentLogFileContent as c, $MYSQLDB.IncidentLogFile f where f.content_id=c.id)"|$MYSQL > $TMPFILE
+	if [ -n "$(cat $TMPFILE)" ]; then
+		sed -ie "s/^\\(.*\\)$/DELETE LOW_PRIORITY IGNORE FROM $MYSQLDB.IncidentLogFileContent WHERE id=\1;/" $TMPFILE
+		$MYSQL < $TMPFILE
+	fi
+	rm -f $TMPFILE
 }
 
 function move_logs_to_archive() {
