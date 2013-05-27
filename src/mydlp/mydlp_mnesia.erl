@@ -136,7 +136,9 @@
 	get_remote_document_databases/0,
 	get_remote_document_databases_by_id/1,
 	add_dd_file_entry/1,
-	get_dd_file_entry/1
+	get_dd_file_entry/1,
+	get_rule_name_by_id/1,
+	get_rule_orig_id_by_id/1
 	]).
 
 -endif.
@@ -205,6 +207,7 @@
 	dest,
 	notification, 
 	notification_queue,
+	rule_details,
 	remote_storage,
 	remote_storage_dd,
 	discovery_schedule,
@@ -301,6 +304,7 @@ get_record_fields_functional(Record) ->
 		dd_file_entry -> record_info(fields, dd_file_entry);
 		notification -> record_info(fields, notification);
 		notification_queue -> record_info(fields, notification_queue);
+		rule_details -> record_info(fields, rule_details);
 		source_domain -> record_info(fields, source_domain);
 		m_user -> record_info(fields, m_user);
 		m_endpoint_id -> record_info(fields, m_endpoint_id);
@@ -508,6 +512,10 @@ add_dd_file_entry(#dd_file_entry{filepath=FilePath}=Record) ->
 
 get_dd_file_entry(FilePath) -> aqc({get_dd_file_entry, FilePath}, nocache).
 
+get_rule_name_by_id(RuleId) -> aqc({get_rule_name_by_id, RuleId}, nocache).
+
+get_rule_orig_id_by_id(RuleId) -> aqc({get_rule_orig_id_by_id, RuleId}, nocache).
+
 -endif.
 
 -ifdef(__MYDLP_ENDPOINT).
@@ -689,6 +697,18 @@ handle_result({get_dd_file_entry, _FilePath}, {atomic, Result}) ->
 		[] -> none;
 		[DDFileEntry] -> DDFileEntry;
 		R -> ?ERROR_LOG("Unexpected dd file entry result: ["?S"]", R)
+	end;
+
+handle_result({get_rule_name_by_id, RuleId}, {atomic, Result}) ->
+	case Result of
+		[] -> ?ERROR_LOG("Unexpected empty result in getting rule name by id: "?S"", [RuleId]);
+		[Name] -> Name
+	end;
+
+handle_result({get_rule_orig_id_by_id, RuleId}, {atomic, Result}) ->
+	case Result of
+		[] -> ?ERROR_LOG("Unexpected empty result in getting rule original id by id: "?S"", [RuleId]);
+		[OrigRuleId] -> OrigRuleId
 	end;
 
 handle_result(Query, Result) -> handle_result_common(Query, Result).
@@ -1332,7 +1352,21 @@ handle_query({remove_redundant_dd_file_entries, FilePath}) ->
 		]),
 	Ids = ?QLCE(Q),
 	lists:foreach(fun(I) -> mnesia:delete({dd_file_entry, I}) end, Ids);
-	
+
+handle_query({get_rule_name_by_id, RuleId}) ->
+	Q = ?QLCQ([D#rule_details.hr_name ||
+		D <-  mnesia:table(rule_details),
+		D#rule_details.rule_id == RuleId
+	]),
+	?QLCE(Q);
+
+handle_query({get_rule_orig_id_by_id, RuleId}) ->
+	Q = ?QLCQ([D#rule_details.rule_orig_id ||
+		D <-  mnesia:table(rule_details),
+		D#rule_details.rule_id == RuleId
+	]),
+	?QLCE(Q);
+
 handle_query({get_matchers, RuleIDs}) ->
 	ML = lists:map(fun(RId) ->
 		Q1 = ?QLCQ([F#ifeature.match_id ||
@@ -2436,6 +2470,12 @@ remove_rule(RI) ->
 		]),
 	EIs = ?QLCE(Q14),
 
+	Q15 = ?QLCQ([RD#rule_details.id ||
+		RD <- mnesia:table(rule_details),
+		RD#rule_details.rule_id == RI
+		]),
+	RDs = ?QLCE(Q15),
+
 	lists:foreach(fun(Id) -> mnesia:delete({ipr, Id}) end, IIs),
 	lists:foreach(fun(Id) -> mnesia:delete({m_user, Id}) end, UIs),
 	lists:foreach(fun(Id) -> mnesia:delete({dest, Id}) end, DIs),
@@ -2448,6 +2488,7 @@ remove_rule(RI) ->
 	lists:foreach(fun(Id) -> mnesia:delete({web_server, Id}) end, WSs),
 	lists:foreach(fun(Id) -> mnesia:delete({m_hostname, Id}) end, Hs),
 	lists:foreach(fun(Id) -> mnesia:delete({m_endpoint_id, Id}) end, EIs),
+	lists:foreach(fun(Id) -> mnesia:delete({rule_details, Id}) end, RDs),
 
 	remove_data_formats(DFIs),
 	remove_itypes(ITIs),

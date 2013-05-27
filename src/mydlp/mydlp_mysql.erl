@@ -686,8 +686,8 @@ init([]) ->
 		{get_exclude_files, <<"SELECT e.excludeFileName FROM DocumentDatabaseRemoteStorage AS d, DocumentDatabaseExcludeFile AS e WHERE d.id=? AND d.id=e.documentDatabaseRemoteStorage_id">>},
 		{insert_file_entry, <<"INSERT INTO DocumentDatabaseFileEntry (id, filename, md5Hash, createdDate) VALUES (?, ?, ?, ?)">>},
 		{insert_document, <<"INSERT INTO Document (id) VALUES (NULL)">>},
-		{insert_dd_file_entry, <<"INSERT INTO DocumentDatabase_DocumentDatabaseFileEntry (fileEntries_id, DocumentDatabase_id) VALUES(?, ?)">>}
-
+		{insert_dd_file_entry, <<"INSERT INTO DocumentDatabase_DocumentDatabaseFileEntry (fileEntries_id, DocumentDatabase_id) VALUES(?, ?)">>},
+		{rule_name_by_rule_id, <<"SELECT name FROM Rule where id=?">>}
 	]],
 
 	{ok, #state{host=Host, port=Port, 
@@ -865,6 +865,9 @@ populate_rule(OrigId, Channel, UserMessage, Action, FilterId) ->
 	{ok, ENT} = psq(email_notification_by_rule_id, [OrigId, OrigId]),
 	populate_notifications(ENT, RuleId, email),
 
+	{ok, HRName} = psq(rule_name_by_rule_id, [OrigId]),
+	populate_rule_details(RuleId, OrigId, HRName),
+
 	{ok, SDN} = psq(source_domain_by_rule_id, [OrigId]),
 	populate_source_domains(SDN, RuleId),
 
@@ -956,6 +959,16 @@ populate_notifications([[Notification]|Rows], RuleId, Type) ->
 	mydlp_mnesia_write(I),
 	populate_notifications(Rows, RuleId, Type);
 populate_notifications([], _RuleId, _Type) -> ok.
+
+populate_rule_details(RuleId, OrigId, HRName) ->
+	Id = mydlp_mnesia:get_unique_id(rule_details),
+	RD = case HRName of
+		[] -> #rule_details{id=Id, rule_id=RuleId, rule_orig_id=OrigId, hr_name=undefined};
+		[[Name]] -> #rule_details{id=Id, rule_id=RuleId, rule_orig_id=OrigId, hr_name=Name};
+		R -> ?ERROR_LOG("Unexpected Query Result in rule detail generation. "?S"", [R]),
+			#rule_details{id=Id, rule_id=RuleId, rule_orig_id=OrigId, hr_name=undefined}
+	end,
+	mydlp_mnesia_write(RD).
 
 populate_source_domains([[SourceDomain]|Rows], RuleId) ->
 	Id = mydlp_mnesia:get_unique_id(source_domain),
