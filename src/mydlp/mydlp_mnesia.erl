@@ -93,6 +93,7 @@
 	get_notification_queue_items/1,
 	get_early_notification_queue_items/0,
 	update_notification_queue_item/2,
+	get_number_of_incidents/1,
 	get_remote_mc_module/2,
 	get_fid/1,
 	remove_site/1,
@@ -410,6 +411,8 @@ get_early_notification_queue_items() -> aqc(get_early_notification_queue_items, 
 
 update_notification_queue_item(RuleId, NewStatus) -> aqc({update_notification_queue_item, RuleId, NewStatus}, nocache). 
 
+get_number_of_incidents(RuleId) -> aqc({get_number_of_incidents, RuleId}, nocache). 
+
 get_remote_mc_module(FilterId, EndpointId) -> 
 	RuleIDs = get_remote_rule_ids(FilterId, EndpointId),
 	Mods = case get_mc_module(RuleIDs) of
@@ -711,6 +714,13 @@ handle_result({get_rule_orig_id_by_id, RuleId}, {atomic, Result}) ->
 		[OrigRuleId] -> OrigRuleId
 	end;
 
+handle_result({get_number_of_incidents, RuleId}, {atomic, Result}) ->
+	case Result of 
+		[] -> ?ERROR_LOG("Unexpected empty result in getting number of incidents by id: "?S"", [RuleId]);
+		[{true, Threshold}] -> round(math:sqrt(Threshold));
+		[{Count, _}] -> Count 
+	end;
+
 handle_result(Query, Result) -> handle_result_common(Query, Result).
 
 -endif.
@@ -977,10 +987,10 @@ handle_query({get_notification_items, OrigRuleId}) ->
 	]),
 	?QLCE(Q);
 
-handle_query({get_notification_queue_items, OrigRuleId}) ->
+handle_query({get_notification_queue_items, RuleId}) ->
 	Q = ?QLCQ([N#notification_queue.status ||
 		N <- mnesia:table(notification_queue),
-		N#notification_queue.rule_id == OrigRuleId
+		N#notification_queue.rule_id == RuleId
 	]),
 	?QLCE(Q);
 
@@ -1017,6 +1027,13 @@ handle_query({update_notification_queue_item, RuleId, Status}) ->
 				end,
 	mnesia:write(I#notification_queue{status=NewStatus, event_threshold=NewEventThreshold, is_shadow=false}),
 	Action;
+
+handle_query({get_number_of_incidents, RuleId}) ->
+	Q = ?QLCQ([{N#notification_queue.status, N#notification_queue.event_threshold} ||
+		N <- mnesia:table(notification_queue),
+		N#notification_queue.rule_id==RuleId
+	]),
+	?QLCE(Q);
 
 handle_query({get_remote_rule_tables, FilterId, EndpointId}) ->
 	{Addr, UserH, Hostname} = get_user_from_endpoint_id(EndpointId), 
@@ -1356,7 +1373,7 @@ handle_query({remove_redundant_dd_file_entries, FilePath}) ->
 handle_query({get_rule_name_by_id, RuleId}) ->
 	Q = ?QLCQ([D#rule_details.hr_name ||
 		D <-  mnesia:table(rule_details),
-		D#rule_details.rule_id == RuleId
+		D#rule_details.rule_orig_id == RuleId
 	]),
 	?QLCE(Q);
 
