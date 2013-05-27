@@ -75,7 +75,9 @@ q(WebServerId, ParentId, PagePath, RuleId) ->
 		_Else -> ok end.
 
 q(_WebServerId, _ParentId, _PagePath, _RuleId, 0) -> ok;
-q(WebServerId, ParentId, PagePath, RuleId, Depth) -> gen_server:cast(?MODULE, {q, WebServerId, ParentId, PagePath, RuleId, Depth}).
+q(WebServerId, ParentId, PagePath, RuleId, Depth) -> gen_server:cast(?MODULE, {q, WebServerId, ParentId, PagePath, RuleId, Depth, false}).
+
+qp(WebServerId, ParentId, PagePath, RuleId, Depth) -> gen_server:cast(?MODULE, {q, WebServerId, ParentId, PagePath, RuleId, Depth, true}).
 
 test_web_server(URL) -> 
 	try
@@ -159,17 +161,21 @@ handle_cast({continue_discovering, RuleId}, #state{discover_queue=Q, paused_queu
 			{noreply, State}
 	end;
 
-handle_cast({q, _WebServerId, _ParentId, external, _RuleId, _Depth}, State) ->
+handle_cast({q, _WebServerId, _ParentId, external, _RuleId, _Depth, _IsPrior}, State) ->
 	{noreply, State};
 
-handle_cast({q, WebServerId, ParentId, PagePath, RuleId, Depth}, #state{discover_queue=Q, discover_inprog=false} = State) ->
-	Q1 = queue:in({WebServerId, ParentId, PagePath, RuleId, Depth}, Q),
+handle_cast({q, WebServerId, ParentId, PagePath, RuleId, Depth, IsPrior}, #state{discover_queue=Q, discover_inprog=false} = State) ->
+	Q1 = case IsPrior of
+		true -> queue:in_r({WebServerId, ParentId, PagePath, RuleId, Depth}, Q);
+		false ->queue:in({WebServerId, ParentId, PagePath, RuleId, Depth}, Q) end,
 	consume(),
 	set_discover_inprog(),
 	{noreply, State#state{discover_queue=Q1, discover_inprog=true}};
 
-handle_cast({q, WebServerId, ParentId, PagePath, RuleId, Depth}, #state{discover_queue=Q, discover_inprog=true} = State) ->
-	Q1 = queue:in({WebServerId, ParentId, PagePath, RuleId, Depth}, Q),
+handle_cast({q, WebServerId, ParentId, PagePath, RuleId, Depth, IsPrior}, #state{discover_queue=Q, discover_inprog=true} = State) ->
+	Q1 = case IsPrior of
+		true -> queue:in_r({WebServerId, ParentId, PagePath, RuleId, Depth}, Q);
+		false -> queue:in({WebServerId, ParentId, PagePath, RuleId, Depth}, Q) end,
 	{noreply,State#state{discover_queue=Q1}};
 
 handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, head_requests=HeadT} = State) ->
@@ -188,7 +194,7 @@ handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, head_requests=Hea
 						false -> case fetch_meta(WebServerId, PagePath) of
 							{ok, RequestId} ->
 								HeadT1 = gb_trees:enter(RequestId, {WebServerId, ParentId, PagePath, RuleId, Depth}, HeadT),
-								consume(),
+								delayed_consume(State),
 								{noreply, State#state{discover_queue=Q1, head_requests=HeadT1}};
 							external -> consume(),
 								{noreply, State#state{discover_queue=Q1}} end;
@@ -273,6 +279,10 @@ handle_info({is_finished, RuleId}, #state{timer_dict=TimerDict, paused_queue=Pau
 		_ -> {noreply, State}
 	end;
 
+handle_info(delayed_consume, State) ->
+	consume(),
+	{noreply, State};
+
 handle_info({async_reply, Reply, From}, State) ->
 	?SAFEREPLY(From, Reply),
 	{noreply, State};
@@ -281,6 +291,16 @@ handle_info(_Info, State) ->
 	{noreply, State}.
 
 %%%%%%%%%%%%%%%% Implicit functions
+
+delayed_consume(#state{get_requests=GetT, head_requests=HeadT} = _State) ->
+	TotalSize = gb_trees:size(GetT) + gb_trees:size(HeadT),
+	T = case TotalSize of
+		I when I < 1 -> 1;
+		I when I > 100 -> 200;
+		I -> I end,
+	Delay = T * 50,
+	timer:send_after(Delay, delayed_consume),
+	ok.
 
 consume() -> gen_server:cast(?MODULE, consume).
 
@@ -489,7 +509,11 @@ handle_head(RequestId, {{_, 200, _}, Headers, _}, #state{head_requests=HeadT, ge
 handle_head(RequestId, Result, #state{head_requests=HeadT} = State) -> 
 	case Result of
 		{error,no_scheme} -> ok;
+		{error, socket_closed_remotely} -> ?ERROR_LOG("HEAD: Server closed connection.", []);
+		{error, emfile} -> ?ERROR_LOG("HEAD: Too many open files. Please update /etc/security/limits.conf .", []);
 		{{_, 404, _}, _Headers, _} -> ok;
+		{{_, Code, Line}, _Headers, _} -> ?ERROR_LOG("HEAD: Response is inproper. Code: "?S" Line: "?S, [Code, Line]);
+		{error, Err} -> ?ERROR_LOG("HEAD: An error occurred: "?S, [Err]);
 		_ -> ?ERROR_LOG("HEAD: Response is inproper: "?S, [Result]) end,
 	HeadT1 = gb_trees:delete(RequestId, HeadT),
 	State#state{head_requests=HeadT1}.
@@ -508,7 +532,11 @@ handle_get(RequestId, {{_, 200, _}, _Headers, Data}, #state{get_requests=GetT, r
 handle_get(RequestId, Result, #state{get_requests=GetT} = State) -> 
 	case Result of
 		{error,no_scheme} -> ok;
+		{error, socket_closed_remotely} -> ?ERROR_LOG("HEAD: Server closed connection.", []);
+		{error, emfile} -> ?ERROR_LOG("HEAD: Too many open files. Please update /etc/security/limits.conf .", []);
 		{{_, 404, _}, _Headers, _} -> ok;
+		{{_, Code, Line}, _Headers, _} -> ?ERROR_LOG("GET: Response is inproper. Code: "?S" Line: "?S, [Code, Line]);
+		{error, Err} -> ?ERROR_LOG("GET: An error occurred: "?S, [Err]);
 		_ -> ?ERROR_LOG("GET: Response is inproper: "?S, [Result]) end,
 	GetT1 = gb_trees:delete(RequestId, GetT),
 	State#state{get_requests=GetT1}.
@@ -526,26 +554,31 @@ get_fn(WebServerId, PagePath) ->
 				end
 		end.
 
-discover_item({WebServerId, PagePath, RuleId}, Data) ->
-	try	timer:sleep(20),
-		{ok, ObjId} = mydlp_container:new(),
-		ok = mydlp_container:setprop(ObjId, "channel", "remote_discovery"),
-		ok = mydlp_container:setprop(ObjId, "web_server_id", WebServerId),
-		RuleIndex = mydlp_mnesia:get_rule_id_by_orig_id(RuleId),
-		ok = mydlp_container:setprop(ObjId, "rule_index", RuleIndex),
-		{_, GroupId} = get_discovery_status(RuleId),
-		ok = mydlp_container:setprop(ObjId, "group_id", GroupId),
-		ok = mydlp_container:setprop(ObjId, "page_path", PagePath),
-		ok = mydlp_container:setprop(ObjId, "filename_unicode", get_fn(WebServerId, PagePath)),
-		ok = mydlp_container:push(ObjId, Data),
-		ok = mydlp_container:eof(ObjId),
-		{ok, _Action} = mydlp_container:aclq(ObjId),
-		ok = mydlp_container:destroy(ObjId)
-	catch Class:Error ->
-		?ERROR_LOG("DISCOVER FILE: Error occured: Class: ["?S"]. Error: ["?S"].~n"
+discover_item({WebServerId, PagePath, RuleId} = Item, Data) ->
+	try 	RuleIndex = mydlp_mnesia:get_rule_id_by_orig_id(RuleId),
+		case get_discovery_status(RuleIndex) of
+                none -> ok;
+                {_, GroupId} -> discover_item1(Item, Data, RuleIndex, GroupId) end
+        catch Class:Error ->
+		?ERROR_LOG("DISCOVER WEB: Error occured: Class: ["?S"]. Error: ["?S"].~n"
 				"Stack trace: "?S"~nWebServerId: "?S" PagePath: ["?S"].~n",
 			[Class, Error, erlang:get_stacktrace(), WebServerId, PagePath])
-	end,
+        end,
+        ok.
+
+discover_item1({WebServerId, PagePath, _RuleId}, Data, RuleIndex, GroupId) ->
+	timer:sleep(20),
+	{ok, ObjId} = mydlp_container:new(),
+	ok = mydlp_container:setprop(ObjId, "channel", "remote_discovery"),
+	ok = mydlp_container:setprop(ObjId, "web_server_id", WebServerId),
+	ok = mydlp_container:setprop(ObjId, "rule_index", RuleIndex),
+	ok = mydlp_container:setprop(ObjId, "group_id", GroupId),
+	ok = mydlp_container:setprop(ObjId, "page_path", PagePath),
+	ok = mydlp_container:setprop(ObjId, "filename_unicode", get_fn(WebServerId, PagePath)),
+	ok = mydlp_container:push(ObjId, Data),
+	ok = mydlp_container:eof(ObjId),
+	{ok, _Action} = mydlp_container:aclq(ObjId),
+	ok = mydlp_container:destroy(ObjId),
 	ok.
 
 is_html(EntryId) ->
@@ -571,7 +604,7 @@ schedule_links([L|Links], EntryId, Depth) when is_binary(L) ->
 schedule_links([L|Links], {WebServerId, PagePath, RuleId} = EntryId, Depth) when is_list(L) ->
 	case add_link_to_path(WebServerId, PagePath, L) of
 		external -> ok;
-		LPath -> q(WebServerId, EntryId, LPath, RuleId, Depth) end,
+		LPath -> qp(WebServerId, EntryId, LPath, RuleId, Depth) end,
 	schedule_links(Links, EntryId, Depth);
 schedule_links([], _, _) -> ok.
 

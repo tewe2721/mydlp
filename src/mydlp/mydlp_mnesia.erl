@@ -1766,7 +1766,8 @@ handle_info({mnesia_system_event,{inconsistent_database, _Context, _Node}}, Stat
 	mnesia_dir_cleanup(),
 	{noreply, State};
 
-handle_info(_Info, State) ->
+handle_info(Info, State) ->
+	?ERROR_LOG("MNESIA INFO: "?S, [Info]),
 	{noreply, State}.
 
 %%%%%%%%%%%%%%%% Implicit functions
@@ -1792,7 +1793,7 @@ handle_cast(mnesia_dir_cleanup, State) ->
 				AbsFileName = filename:absname(FN, MnesiaDir),
 				file:delete(AbsFileName) end
 			, MnesiaFiles),
-		boot_mnesia()
+		schedule_boot_mnesia()
 	catch  	Class:Error ->
 		?ERROR_LOG("MNESIA_CLEANUP: Error occured: Class: ["?S"]. Error: ["?S"].~n"
 			"Stack trace: "?S"~n", [Class, Error, erlang:get_stacktrace()]) end,
