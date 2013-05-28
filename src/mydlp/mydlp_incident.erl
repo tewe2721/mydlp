@@ -212,9 +212,9 @@ get_detalied_message(RuleId, {{I1, I2, I3, I4}, User, Time}) ->
 			R when is_binary(R) -> binary_to_list(R);
 			RS -> RS end,
 	{{Yr,Mt,Dy},{Hr,Mnt,Scnd}} = Time,
-	TimeS = integer_to_list(Mt) ++ "." ++ integer_to_list(Dy) ++ "." ++ integer_to_list(Yr) ++ " " ++
-		integer_to_list(Hr) ++ ":" ++ integer_to_list(Mnt) ++ ":" ++ integer_to_list(Scnd),
-	Details = "Time: " ++ TimeS ++ "\n" ++ 
+	TimeD = io_lib:format('~2..0b.~2..0b.~4..0b', [Mt, Dy, Yr]),
+	TimeT = io_lib:format('~2..0b:~2..0b:~2..0b', [Hr, Mnt, Scnd]),
+	Details = "Date: " ++ TimeD ++ " " ++ TimeT ++ "\n" ++ 
 		"User: " ++ UserS ++ "\n" ++ 
 		"IP: " ++ IpS ++ "\n" ++
 		"Rule: " ++ get_rule_detail_field(RuleId) ++ "\n",
