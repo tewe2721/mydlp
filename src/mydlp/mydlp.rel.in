@@ -23,6 +23,9 @@
  [{kernel, "@ERLANG_LIB_VER_kernel@"},
   {stdlib, "@ERLANG_LIB_VER_stdlib@"},
   {sasl, "@ERLANG_LIB_VER_sasl@"},
+  {crypto, "@ERLANG_LIB_VER_crypto@"},
+  {public_key, "@ERLANG_LIB_VER_public_key@"},
+  {ssl, "@ERLANG_LIB_VER_ssl@"},
   {mydlp, "@VERSION@"}
  ]}.
 %% vim: set filetype=erlang:

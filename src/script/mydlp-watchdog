@@ -14,6 +14,7 @@ SQUIDINIT=/etc/init.d/squid3
 RSYSLOGINIT=/etc/init.d/rsyslog
 
 WATCHDOGLOGFILE=/var/log/mydlp/watchdog.log
+ERRORLOG=/var/log/mydlp/error.log
 
 MQLIMIT=50
 
@@ -235,9 +236,20 @@ function flushMQ() {
         postqueue -f
 }
 
+function cleanupMnesiaIfFatalExists() {
+	if [ -r "$ERRORLOG" -a -n "$(tail -100|grep -e '\*\* ERROR \*\* (core dumped to file:'|grep -e 'Mnesia')" ]; then
+		echo "Cleaning up MyDLP Runtime database. Policy will be recompiled after restart."
+		rm -f /var/lib/mydlp/mnesia/*
+	elif [ -r "$ERRORLOG" -a -n "$(tail -100|grep -e '\*\* FATAL \*\*'|grep -e 'Mnesia')" ]; then
+		echo "Cleaning up MyDLP Runtime database. Policy will be recompiled after restart."
+		rm -f /var/lib/mydlp/mnesia/*
+	fi
+}
+
 function restartMyDLP {
         stopPostfix
         stopMyDLP
+	cleanupMnesiaIfFatalExists
         startMyDLP
         startPostfix
 	flushMQ
@@ -280,14 +292,19 @@ function watchdogAction {
 
 TMPFILE=$(mktemp)
 
+START_DATE="$(date)"
+
 watchdogAction > $TMPFILE 2>&1
+
+FINISH_DATE="$(date)"
 
 if [ -n "$(cat $TMPFILE)" ]; then
 	echo >> $TMPFILE
-	echo "Watchdog action completed at $(date)" >> $TMPFILE
-
+	echo "Watchdog action started ad $START_DATE and completed at $FINISH_DATE" >> $TMPFILE
 	mydlp-backoff-mail "$WATCHDOG_FROM_ADDRESS" "$WATCHDOG_TO_ADDRESS" "$WATCHDOG_SUBJECT" $TMPFILE
+	logger -p local6.error -t mydlp-watchdog -f $TMPFILE
 fi
+echo "Watchdog action started ad $START_DATE and completed at $FINISH_DATE" >> $WATCHDOGLOGFILE
 
 rm -f $TMPFILE
 
