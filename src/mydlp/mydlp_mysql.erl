@@ -611,7 +611,7 @@ init([]) ->
 		{user_ad_u_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=u.id AND (ri.ruleColumn IS NULL OR ri.ruleColumn=\"SOURCE\")">>},
 		{user_ad_o_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, ADDomainItem i, ADDomainOU o, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=o.id AND o.id=i.parent_id AND i.id=u.id AND (ri.ruleColumn IS NULL OR ri.ruleColumn=\"SOURCE\")">>},
 		{ou_id_by_rule_id, <<"SELECT o.id FROM ADDomainOU o, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=o.id AND (ri.ruleColumn IS NULL OR ri.ruleColumn=\"SOURCE\")">>},
-		{user_ad_g_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, ADDomainItem i, ADDomainOU o, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=o.id AND o.id=i.parent_id AND i.id=u.id AND (ri.ruleColumn IS NULL OR ri.ruleColumn=\"SOURCE\")">>},
+		{user_ad_g_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, ADDomainItem i, ADDomainUser_ADDomainGroup ug, ADDomainGroup g, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=g.id AND g.id=ug.groups_id AND ug.users_id=u.id AND i.id=u.id AND (ri.ruleColumn IS NULL OR ri.ruleColumn=\"SOURCE\")">>},
 
 		{ou_ad_by_ou_id, <<"SELECT u.id FROM ADDomainOU u, ADDomainItem i, ADDomainOU o WHERE o.id=? AND o.id=i.parent_id AND i.id=u.id">>},
 		{user_ad_by_ou_id, <<"SELECT u.id FROM ADDomainUser u, ADDomainItem i, ADDomainOU o WHERE o.id=? AND o.id=i.parent_id AND i.id=u.id">>},
@@ -620,7 +620,7 @@ init([]) ->
 		{dest_user_ad_u_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=u.id AND ri.ruleColumn=\"DESTINATION\"">>},
 		{dest_user_ad_o_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, ADDomainItem i, ADDomainOU o, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=o.id AND o.id=i.parent_id AND i.id=u.id AND ri.ruleColumn=\"DESTINATION\"">>},
 		{dest_ou_id_by_rule_id, <<"SELECT o.id FROM ADDomainOU o, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=o.id AND ri.ruleColumn=\"DESTINATION\"">>},
-		{dest_user_ad_g_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, ADDomainItem i, ADDomainOU o, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=o.id AND o.id=i.parent_id AND i.id=u.id AND ri.ruleColumn=\"DESTINATION\"">>},
+		{dest_user_ad_g_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, ADDomainItem i, ADDomainUser_ADDomainGroup ug, ADDomainGroup g, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=g.id AND g.id=ug.groups_id AND ug.users_id=u.id AND i.id=u.id AND ri.ruleColumn=\"DESTINATION\"">>},
 		{domain_item_parent_by_id, <<"SELECT i.parent_id FROM ADDomainItem AS i WHERE i.id=?">>},
 		{domain_root_by_id, <<"SELECT r.id, r.domain_id FROM ADDomainRoot AS r WHERE r.id=?">>},
 		{domain_names_by_id, <<"SELECT d.domainName, d.netbiosName FROM ADDomain AS d WHERE d.id=?">>},
