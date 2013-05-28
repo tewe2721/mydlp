@@ -36,6 +36,7 @@
 %% API
 -export([start_link/0,
 	is_distributed/0,
+	init_distribution/0,
 	find_authority/0,
 	bcast_cluster/1,
 	flush_cache/1,
@@ -55,7 +56,11 @@
 
 %%%%%%%%%%%%% API
 
-is_distributed() -> lists:member(?MODULE, registered()).
+is_distributed() ->
+	gen_server:call(?MODULE, is_distributed).
+
+init_distribution() ->
+	gen_server:cast(?MODULE, init_distribution).
 
 find_authority() ->
 	gen_server:call(?MODULE, find_authority, 15000).
@@ -67,6 +72,12 @@ flush_cache(ClusterNodes) ->
 	gen_server:cast(?MODULE, {cluster_flush_cache, ClusterNodes}).
 
 %%%%%%%%%%%%%% gen_server handles
+
+handle_call(is_distributed, _From, #state{} = State) ->
+	{reply, true, State};
+
+handle_call(is_distributed, _From, undefined = State) ->
+	{reply, false, State};
 
 handle_call(find_authority, _From, #state{priority=Priority, init_epoch=InitEpoch} = State) ->
 	Reply = find_an_authority(nodes(), Priority, InitEpoch),
@@ -80,8 +91,22 @@ handle_call({are_you_my_authority, PeerPriority, PeerInitEpoch},
 handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
 
-handle_call(_Msg, _From, State) ->
+handle_call(Msg, _From, State) ->
+	?ERROR_LOG("DISTRIBUTOR: Unexpected message: "?S, [Msg]),
 	{noreply, State}.
+
+handle_cast(init_distribution, _ExState) ->
+        State = case ?CFG(auto_distribution) of
+		true ->
+        		AllNodes = ?CFG(auto_distribution_nodes),
+			Priority = ?CFG(auto_distribution_priority),
+			net_adm:world_list(AllNodes),
+			InitEpoch = case file:read_file("/var/lib/mydlp/init_epoch") of
+				{ok, Bin} -> list_to_integer(binary_to_list(Bin));
+				_Else -> unknown end,
+			#state{priority=Priority, init_epoch=InitEpoch, nodes_in_conf=AllNodes};
+		_ -> undefined end,
+	{noreply, State};
 
 handle_cast({bcast_cluster, ClusterNodes}, #state{priority=Priority, init_epoch=InitEpoch} = State) ->
 	OtherClusterNodes = ClusterNodes -- [node()],
@@ -127,27 +152,16 @@ handle_info(_Info, State) ->
 %%%%%%%%%%%%%%%% Implicit functions
 
 start_link() ->
-        case ?CFG(auto_distribution) of
-		true ->
-        		AllNodes = ?CFG(auto_distribution_nodes),
-			Priority = ?CFG(auto_distribution_priority),
-
-			case gen_server:start_link({local, ?MODULE}, ?MODULE, [Priority, AllNodes], []) of
-				{ok, Pid} -> {ok, Pid};
-				{error, {already_started, Pid}} -> {ok, Pid} end;
-
-		_ -> ignore end.
+	case gen_server:start_link({local, ?MODULE}, ?MODULE, [], []) of
+		{ok, Pid} -> {ok, Pid};
+		{error, {already_started, Pid}} -> {ok, Pid} end.
 
 stop() ->
 	gen_server:call(?MODULE, stop).
 
-init([Priority, AllNodes]) ->
-	net_adm:world_list(AllNodes),
-	InitEpoch = case file:read_file("/var/lib/mydlp/init_epoch") of
-		{ok, Bin} -> list_to_integer(binary_to_list(Bin));
-		_Else -> unknown end,
-
-	{ok, #state{priority=Priority, init_epoch=InitEpoch, nodes_in_conf=AllNodes}}.
+init([]) ->
+	init_distribution(),
+	{ok, undefined}.
 
 terminate(_Reason, _State) ->
 	ok.

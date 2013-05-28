@@ -1846,7 +1846,9 @@ get_mnesia_nodes() -> mnesia:system_info(db_nodes).
 
 -ifdef(__MYDLP_NETWORK).
 
-is_mydlp_distributed() -> mydlp_distributor:is_distributed().
+is_mydlp_distributed() ->
+	mydlp_distributor:init_distribution(),
+	mydlp_distributor:is_distributed().
 
 -endif.
 
