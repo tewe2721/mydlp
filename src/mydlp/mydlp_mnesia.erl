@@ -139,6 +139,7 @@
 	add_dd_file_entry/1,
 	get_dd_file_entry/1,
 	get_rule_name_by_id/1,
+	get_channel_and_action_by_id/1,
 	get_rule_orig_id_by_id/1
 	]).
 
@@ -517,6 +518,8 @@ get_dd_file_entry(FilePath) -> aqc({get_dd_file_entry, FilePath}, nocache).
 
 get_rule_name_by_id(RuleId) -> aqc({get_rule_name_by_id, RuleId}, nocache).
 
+get_channel_and_action_by_id(RuleId) -> aqc({get_channel_and_action_by_id, RuleId}, nocache).
+
 get_rule_orig_id_by_id(RuleId) -> aqc({get_rule_orig_id_by_id, RuleId}, nocache).
 
 -endif.
@@ -706,6 +709,12 @@ handle_result({get_rule_name_by_id, RuleId}, {atomic, Result}) ->
 	case Result of
 		[] -> ?ERROR_LOG("Unexpected empty result in getting rule name by id: "?S"", [RuleId]);
 		[Name] -> Name
+	end;
+
+handle_result({get_channel_and_action_by_id, RuleId}, {atomic, Result}) ->
+	case Result of
+		[] -> ?ERROR_LOG("Unexpected empty result in getting rule name by id: "?S"", [RuleId]);
+		[AC] -> AC
 	end;
 
 handle_result({get_rule_orig_id_by_id, RuleId}, {atomic, Result}) ->
@@ -1372,6 +1381,13 @@ handle_query({remove_redundant_dd_file_entries, FilePath}) ->
 
 handle_query({get_rule_name_by_id, RuleId}) ->
 	Q = ?QLCQ([D#rule_details.hr_name ||
+		D <-  mnesia:table(rule_details),
+		D#rule_details.rule_orig_id == RuleId
+	]),
+	?QLCE(Q);
+
+handle_query({get_channel_and_action_by_id, RuleId}) ->
+	Q = ?QLCQ([{D#rule_details.channel, D#rule_details.action} ||
 		D <-  mnesia:table(rule_details),
 		D#rule_details.rule_orig_id == RuleId
 	]),

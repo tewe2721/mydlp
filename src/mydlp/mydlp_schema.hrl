@@ -70,7 +70,9 @@
 	id,
 	rule_id,
 	rule_orig_id,
-	hr_name
+	hr_name,
+	channel,
+	action
 }).
 
 -record(source_domain, {

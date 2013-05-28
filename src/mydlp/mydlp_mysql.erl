@@ -866,7 +866,7 @@ populate_rule(OrigId, Channel, UserMessage, Action, FilterId) ->
 	populate_notifications(ENT, RuleId, email),
 
 	{ok, HRName} = psq(rule_name_by_rule_id, [OrigId]),
-	populate_rule_details(RuleId, OrigId, HRName),
+	populate_rule_details(RuleId, OrigId, HRName, Channel, Action),
 
 	{ok, SDN} = psq(source_domain_by_rule_id, [OrigId]),
 	populate_source_domains(SDN, RuleId),
@@ -960,13 +960,13 @@ populate_notifications([[Notification]|Rows], RuleId, Type) ->
 	populate_notifications(Rows, RuleId, Type);
 populate_notifications([], _RuleId, _Type) -> ok.
 
-populate_rule_details(RuleId, OrigId, HRName) ->
+populate_rule_details(RuleId, OrigId, HRName, Channel, Action) ->
 	Id = mydlp_mnesia:get_unique_id(rule_details),
 	RD = case HRName of
-		[] -> #rule_details{id=Id, rule_id=RuleId, rule_orig_id=OrigId, hr_name=undefined};
-		[[Name]] -> #rule_details{id=Id, rule_id=RuleId, rule_orig_id=OrigId, hr_name=Name};
+		[] -> #rule_details{id=Id, rule_id=RuleId, rule_orig_id=OrigId, hr_name=undefined, channel=Channel, action=Action} ;
+		[[Name]] -> #rule_details{id=Id, rule_id=RuleId, rule_orig_id=OrigId, hr_name=Name, channel=Channel, action=Action};
 		R -> ?ERROR_LOG("Unexpected Query Result in rule detail generation. "?S"", [R]),
-			#rule_details{id=Id, rule_id=RuleId, rule_orig_id=OrigId, hr_name=undefined}
+			#rule_details{id=Id, rule_id=RuleId, rule_orig_id=OrigId, hr_name=undefined, channel=Channel, action=Action}
 	end,
 	mydlp_mnesia_write(RD).
 

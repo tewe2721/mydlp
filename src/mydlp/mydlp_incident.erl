@@ -199,30 +199,51 @@ notify_user([{other, _Target}|Notifications], RuleId, IsDetailed) ->
 	notify_user(Notifications, RuleId, IsDetailed);
 notify_user([], _, _) -> ok.
 
-get_rule_detail_field(RuleId) ->
-	Name = mydlp_mnesia:get_rule_name_by_id(RuleId),
-	case Name of
-		undefined -> integer_to_list(RuleId);
-		R -> binary_to_list(R) end.
+get_date_as_hr() -> get_date_as_hr(erlang:universaltime()).
 
-get_detalied_message(RuleId, {{I1, I2, I3, I4}, User, Time}) ->
-	IpS = integer_to_list(I1) ++ "." ++ integer_to_list(I2) ++ "." ++ integer_to_list(I3) ++ "." ++ integer_to_list(I4),
+get_date_as_hr(Time) ->
+	case Time of
+		{{Yr,Mt,Dy},{Hr,Mnt,Scnd}} -> TimeD = io_lib:format('~2..0b.~2..0b.~4..0b', [Mt, Dy, Yr]),
+						TimeT = io_lib:format('~2..0b:~2..0b:~2..0b', [Hr, Mnt, Scnd]),
+						TimeD ++ " " ++ TimeT;
+	_ -> "unknown" end.
+
+get_rule_detail_fields(RuleId) ->
+	Name = mydlp_mnesia:get_rule_name_by_id(RuleId),
+	NameS = case Name of
+			R when is_binary(R) -> binary_to_list(R);
+			_ -> integer_to_list(RuleId) end,
+	S = "Rule: " ++ NameS ++ "\n",
+	AC = mydlp_mnesia:get_channel_and_action_by_id(RuleId),
+	ACS = case AC of
+		{Channel, Action} when is_atom(Action) -> "Channel: " ++ atom_to_list(Channel) ++ "\n" ++
+					"Action:" ++ atom_to_list(Action);
+		_ -> "Channel: unknown\n Action: unknown" end,
+	S ++ ACS.
+
+get_detalied_message(RuleId, {Ip, User, Time}) ->
+	IpS = case Ip of
+		{I1, I2, I3, I4} -> integer_to_list(I1) ++ "." ++ integer_to_list(I2) ++ "." ++ integer_to_list(I3) ++ "." ++ integer_to_list(I4);
+		_ -> "unknown" end,
 	UserS = case User of
-			nil -> "none";
+			nil -> "unknown";
+			undefined -> "unknown";
+			unknown -> "unknown";
 			R when is_binary(R) -> binary_to_list(R);
 			RS -> RS end,
-	{{Yr,Mt,Dy},{Hr,Mnt,Scnd}} = Time,
-	TimeD = io_lib:format('~2..0b.~2..0b.~4..0b', [Mt, Dy, Yr]),
-	TimeT = io_lib:format('~2..0b:~2..0b:~2..0b', [Hr, Mnt, Scnd]),
-	Details = "Date: " ++ TimeD ++ " " ++ TimeT ++ "\n" ++ 
+
+	Details = "Date: " ++ get_date_as_hr(Time) ++ "\n" ++ 
 		"User: " ++ UserS ++ "\n" ++ 
 		"IP: " ++ IpS ++ "\n" ++
-		"Rule: " ++ get_rule_detail_field(RuleId) ++ "\n",
+		get_rule_detail_fields(RuleId),
+		
 	unicode:characters_to_binary(Details).
 
 get_backoff_message(RuleId) ->
 	Count = integer_to_list(mydlp_mnesia:get_number_of_incidents(RuleId)),
-	Details = "Rule:" ++ get_rule_detail_field(RuleId) ++ " causes " ++ Count ++ " incident",
+	Details = "Date: " ++ get_date_as_hr() ++ "\n" ++
+		get_rule_detail_fields(RuleId) ++ "\n" ++
+		"Detail: This rule causes more than "++ Count ++ " incident within 30 minutes",
 	unicode:characters_to_binary(Details).
 
 process_log_tuple(#log{channel=web, action=archive, rule_id=-1, file=Files} = Log) ->
