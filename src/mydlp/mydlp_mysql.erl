@@ -1131,7 +1131,7 @@ populate_rule_dest_users(RuleOrigId, RuleId) ->
 	populate_dest_ou(OUQ, RuleId),
 
 	{ok, UAGQ} = psq(dest_user_ad_g_by_rule_id, [RuleOrigId]),
-	populate_users_ad_u(UAGQ, RuleId),
+	populate_dest_users_ad_u(UAGQ, RuleId),
 
 	ok.
 
