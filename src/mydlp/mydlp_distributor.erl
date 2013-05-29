@@ -57,7 +57,9 @@
 %%%%%%%%%%%%% API
 
 is_distributed() ->
-	gen_server:call(?MODULE, is_distributed).
+	case lists:member(?MODULE, registered()) of
+		true ->	gen_server:call(?MODULE, is_distributed);
+		false -> false end.
 
 init_distribution() ->
 	gen_server:cast(?MODULE, init_distribution).
