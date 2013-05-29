@@ -211,26 +211,28 @@ get_date_as_hr(Time) ->
 get_rule_detail_fields(RuleId) ->
 	Name = mydlp_mnesia:get_rule_name_by_id(RuleId),
 	NameS = case Name of
-			R when is_binary(R) -> binary_to_list(R);
-			_ -> integer_to_list(RuleId) end,
+			R when is_binary(R) -> unicode:characters_to_list(R);
+			_ -> "id(" ++ integer_to_list(RuleId) ++ ")" end,
 	S = "Rule: " ++ NameS ++ "\n",
 	AC = mydlp_mnesia:get_channel_and_action_by_id(RuleId),
 	ACS = case AC of
-		{Channel, Action} when is_atom(Action) -> "Channel: " ++ atom_to_list(Channel) ++ "\n" ++
-					"Action:" ++ atom_to_list(Action);
-		_ -> "Channel: unknown\n Action: unknown" end,
+		{Channel, Action} when is_atom(Action) -> "Channel: " ++ mydlp_api:str_channel(Channel) ++ "\n" ++
+					"Action:" ++ atom_to_list(Action); %% TODO: nicers action translations.
+		_ -> "Channel: unknown\nAction: unknown" end,
 	S ++ ACS.
 
 get_detalied_message(RuleId, {Ip, User, Time}) ->
 	IpS = case Ip of
-		{I1, I2, I3, I4} -> integer_to_list(I1) ++ "." ++ integer_to_list(I2) ++ "." ++ integer_to_list(I3) ++ "." ++ integer_to_list(I4);
-		_ -> "unknown" end,
+		nil -> "unknown";
+		undefined -> "unknown";
+		unknown -> "unknown";
+		{I1, I2, I3, I4} -> integer_to_list(I1) ++ "." ++ integer_to_list(I2) ++ "." ++ integer_to_list(I3) ++ "." ++ integer_to_list(I4) end,
 	UserS = case User of
 			nil -> "unknown";
 			undefined -> "unknown";
 			unknown -> "unknown";
 			R when is_binary(R) -> binary_to_list(R);
-			RS -> RS end,
+			RS when is_list(RS) -> RS end,
 
 	Details = "Date: " ++ get_date_as_hr(Time) ++ "\n" ++ 
 		"User: " ++ UserS ++ "\n" ++ 
