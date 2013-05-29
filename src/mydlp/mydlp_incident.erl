@@ -173,8 +173,8 @@ notify_users_now(RuleId, IsDetailed) ->
 
 notify_user([{email, EmailAddress}|Notifications], RuleId, IsDetailed) ->
 	Replace = case IsDetailed of
-			{true, Details} -> get_detalied_message(RuleId, Details);
-			false -> get_backoff_message(RuleId)
+		{true, Details} -> get_detalied_message(RuleId, Details);
+		false -> get_backoff_message(RuleId)
 	end,
 	CFGBody = unicode:characters_to_binary(?CFG(email_notification_message)),
 	ReplacedMessage = re:replace(CFGBody, "%%DETAILS%%", Replace, [global, {return, binary}]),
