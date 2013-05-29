@@ -45,7 +45,6 @@
 	handle_cast/2,
 	handle_info/2,
 	terminate/2,
-	check_notification_queue/0,
 	notify_users_now/1,
 	code_change/3]).
 
@@ -133,15 +132,15 @@ code_change(_OldVsn, State, _Extra) ->
 %%%%%%%%%%%%%%%%% internal
 check_notification_queue() ->
 	NQI = mydlp_mnesia:get_early_notification_queue_items(),
-	lists:foreach(fun(R) -> notify_users_now(R), 
+	lists:foreach(fun(R) -> notify_users_now(R, false), 
 				update_notification_queue_item(R, true)		
 				end, NQI),
 	timer:send_after(1800000, check_notifications).
 
-regulate_notifications(RuleId) ->
+regulate_notifications(RuleId, Details) ->
 	NQI = mydlp_mnesia:get_notification_queue_items(RuleId),
 	case NQI of
-		[] ->	notify_users_now(RuleId),
+		[] ->	notify_users_now(RuleId, {true, Details}),
 		 	{_Me, S, _Mi} = erlang:now(),
 			N = #notification_queue{rule_id=RuleId, date=S, status=true},
 			mydlp_mnesia:write(N);
@@ -155,22 +154,31 @@ regulate_notifications(RuleId) ->
 update_notification_queue_item(RuleId, NewStatus) ->
 	Result = mydlp_mnesia:update_notification_queue_item(RuleId, NewStatus),
 	case Result of
-		notify -> notify_users_now(RuleId);
+		notify -> notify_users_now(RuleId, false);
 		_ -> ok
 	end.
 
-notify_users(RuleId) ->
+notify_users(RuleId, Ip, User, Time) ->
 	NI = mydlp_mnesia:get_notification_items(RuleId),
 	case NI of
 		[] -> ok;
-		_ -> regulate_notifications(RuleId)
+		_ -> regulate_notifications(RuleId, {Ip, User, Time})
 	end.
 
-notify_users_now(RuleId) ->
-	Notifications = mydlp_mnesia:get_notification_items(RuleId),
-	notify_user(Notifications).
+notify_users_now(RuleId) -> notify_users_now(RuleId, false).
 
-notify_user([{email, EmailAddress}|Notifications]) ->
+notify_users_now(RuleId, IsDetailed) ->
+	Notifications = mydlp_mnesia:get_notification_items(RuleId),
+	notify_user(Notifications, RuleId, IsDetailed).
+
+notify_user([{email, EmailAddress}|Notifications], RuleId, IsDetailed) ->
+	Replace = case IsDetailed of
+		{true, Details} -> get_detalied_message(RuleId, Details);
+		false -> get_backoff_message(RuleId)
+	end,
+	CFGBody = unicode:characters_to_binary(?CFG(email_notification_message)),
+	ReplacedMessage = re:replace(CFGBody, "%%DETAILS%%", Replace, [global, {return, binary}]),
+	
 	EmailBody = [	"From: ", ?CFG(email_notification_message_from),
 			"\n",
 			"To: ", EmailAddress,
@@ -183,13 +191,62 @@ notify_user([{email, EmailAddress}|Notifications]) ->
 			"Content-Transfer-Encoding: base64",
 			"\n",
 			"\n",
-			base64:encode(?CFG(email_notification_message)), 
+			base64:encode(ReplacedMessage),
 			"\n"],
 	mydlp_smtpc:mail("support@mydlp.com", binary_to_list(EmailAddress), EmailBody),
-	notify_user(Notifications);
-notify_user([{other, _Target}|Notifications]) -> 
-	notify_user(Notifications);
-notify_user([]) -> ok.
+	notify_user(Notifications, RuleId, IsDetailed);
+notify_user([{other, _Target}|Notifications], RuleId, IsDetailed) -> 
+	notify_user(Notifications, RuleId, IsDetailed);
+notify_user([], _, _) -> ok.
+
+get_date_as_hr() -> get_date_as_hr(erlang:universaltime()).
+
+get_date_as_hr(Time) ->
+	case Time of
+		{{Yr,Mt,Dy},{Hr,Mnt,Scnd}} -> TimeD = io_lib:format('~2..0b.~2..0b.~4..0b', [Mt, Dy, Yr]),
+						TimeT = io_lib:format('~2..0b:~2..0b:~2..0b', [Hr, Mnt, Scnd]),
+						TimeD ++ " " ++ TimeT;
+	_ -> "unknown" end.
+
+get_rule_detail_fields(RuleId) ->
+	Name = mydlp_mnesia:get_rule_name_by_id(RuleId),
+	NameS = case Name of
+			R when is_binary(R) -> unicode:characters_to_list(R);
+			_ -> "id(" ++ integer_to_list(RuleId) ++ ")" end,
+	S = "Rule: " ++ NameS ++ "\n",
+	AC = mydlp_mnesia:get_channel_and_action_by_id(RuleId),
+	ACS = case AC of
+		{Channel, Action} when is_atom(Action) -> "Channel: " ++ mydlp_api:str_channel(Channel) ++ "\n" ++
+					"Action:" ++ atom_to_list(Action); %% TODO: nicers action translations.
+		_ -> "Channel: unknown\nAction: unknown" end,
+	S ++ ACS.
+
+get_detalied_message(RuleId, {Ip, User, Time}) ->
+	IpS = case Ip of
+		nil -> "unknown";
+		undefined -> "unknown";
+		unknown -> "unknown";
+		{I1, I2, I3, I4} -> integer_to_list(I1) ++ "." ++ integer_to_list(I2) ++ "." ++ integer_to_list(I3) ++ "." ++ integer_to_list(I4) end,
+	UserS = case User of
+			nil -> "unknown";
+			undefined -> "unknown";
+			unknown -> "unknown";
+			R when is_binary(R) -> binary_to_list(R);
+			RS when is_list(RS) -> RS end,
+
+	Details = "Date: " ++ get_date_as_hr(Time) ++ "\n" ++ 
+		"User: " ++ UserS ++ "\n" ++ 
+		"IP: " ++ IpS ++ "\n" ++
+		get_rule_detail_fields(RuleId),
+		
+	unicode:characters_to_binary(Details).
+
+get_backoff_message(RuleId) ->
+	Count = integer_to_list(mydlp_mnesia:get_number_of_incidents(RuleId)),
+	Details = "Date: " ++ get_date_as_hr() ++ "\n" ++
+		get_rule_detail_fields(RuleId) ++ "\n" ++
+		"Detail: This rule causes more than "++ Count ++ " incident within 30 minutes",
+	unicode:characters_to_binary(Details).
 
 process_log_tuple(#log{channel=web, action=archive, rule_id=-1, file=Files} = Log) ->
 	Files1 = lists:filter(fun(F) -> 
@@ -204,7 +261,7 @@ process_log_tuple1(#log{file=[]}) -> ok;
 process_log_tuple1(#log{time=Time, channel=Channel, rule_id=RuleId, action=Action, ip=Ip, user=User, destination=To, file=Files, itype_id = ITypeId, misc=Misc, payload=Payload, group_id=GroupId, matching_details=MatchingDetails}) ->
 	IsLogData = mydlp_api:is_store_action(Action),
 	LogId = mydlp_mysql:push_log(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc, GroupId),
-	notify_users(RuleId),
+	notify_users(RuleId, Ip, User, Time),
 	process_log_files(LogId, IsLogData, Files),
 	process_matching_details(LogId, MatchingDetails),
 	case {Channel, Action} of

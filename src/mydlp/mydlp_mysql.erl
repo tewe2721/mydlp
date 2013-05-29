@@ -611,7 +611,7 @@ init([]) ->
 		{user_ad_u_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=u.id AND (ri.ruleColumn IS NULL OR ri.ruleColumn=\"SOURCE\")">>},
 		{user_ad_o_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, ADDomainItem i, ADDomainOU o, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=o.id AND o.id=i.parent_id AND i.id=u.id AND (ri.ruleColumn IS NULL OR ri.ruleColumn=\"SOURCE\")">>},
 		{ou_id_by_rule_id, <<"SELECT o.id FROM ADDomainOU o, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=o.id AND (ri.ruleColumn IS NULL OR ri.ruleColumn=\"SOURCE\")">>},
-		{user_ad_g_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, ADDomainItem i, ADDomainOU o, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=o.id AND o.id=i.parent_id AND i.id=u.id AND (ri.ruleColumn IS NULL OR ri.ruleColumn=\"SOURCE\")">>},
+		{user_ad_g_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, ADDomainItem i, ADDomainUser_ADDomainGroup ug, ADDomainGroup g, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=g.id AND g.id=ug.groups_id AND ug.users_id=u.id AND i.id=u.id AND (ri.ruleColumn IS NULL OR ri.ruleColumn=\"SOURCE\")">>},
 
 		{ou_ad_by_ou_id, <<"SELECT u.id FROM ADDomainOU u, ADDomainItem i, ADDomainOU o WHERE o.id=? AND o.id=i.parent_id AND i.id=u.id">>},
 		{user_ad_by_ou_id, <<"SELECT u.id FROM ADDomainUser u, ADDomainItem i, ADDomainOU o WHERE o.id=? AND o.id=i.parent_id AND i.id=u.id">>},
@@ -620,7 +620,7 @@ init([]) ->
 		{dest_user_ad_u_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=u.id AND ri.ruleColumn=\"DESTINATION\"">>},
 		{dest_user_ad_o_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, ADDomainItem i, ADDomainOU o, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=o.id AND o.id=i.parent_id AND i.id=u.id AND ri.ruleColumn=\"DESTINATION\"">>},
 		{dest_ou_id_by_rule_id, <<"SELECT o.id FROM ADDomainOU o, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=o.id AND ri.ruleColumn=\"DESTINATION\"">>},
-		{dest_user_ad_g_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, ADDomainItem i, ADDomainOU o, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=o.id AND o.id=i.parent_id AND i.id=u.id AND ri.ruleColumn=\"DESTINATION\"">>},
+		{dest_user_ad_g_by_rule_id, <<"SELECT u.id FROM ADDomainUser u, ADDomainItem i, ADDomainUser_ADDomainGroup ug, ADDomainGroup g, RuleUserAD AS ru, RuleItem AS ri WHERE ri.rule_id=? AND ru.id=ri.item_id AND ru.domainItem_id=g.id AND g.id=ug.groups_id AND ug.users_id=u.id AND i.id=u.id AND ri.ruleColumn=\"DESTINATION\"">>},
 		{domain_item_parent_by_id, <<"SELECT i.parent_id FROM ADDomainItem AS i WHERE i.id=?">>},
 		{domain_root_by_id, <<"SELECT r.id, r.domain_id FROM ADDomainRoot AS r WHERE r.id=?">>},
 		{domain_names_by_id, <<"SELECT d.domainName, d.netbiosName FROM ADDomain AS d WHERE d.id=?">>},
@@ -686,8 +686,8 @@ init([]) ->
 		{get_exclude_files, <<"SELECT e.excludeFileName FROM DocumentDatabaseRemoteStorage AS d, DocumentDatabaseExcludeFile AS e WHERE d.id=? AND d.id=e.documentDatabaseRemoteStorage_id">>},
 		{insert_file_entry, <<"INSERT INTO DocumentDatabaseFileEntry (id, filename, md5Hash, createdDate) VALUES (?, ?, ?, ?)">>},
 		{insert_document, <<"INSERT INTO Document (id) VALUES (NULL)">>},
-		{insert_dd_file_entry, <<"INSERT INTO DocumentDatabase_DocumentDatabaseFileEntry (fileEntries_id, DocumentDatabase_id) VALUES(?, ?)">>}
-
+		{insert_dd_file_entry, <<"INSERT INTO DocumentDatabase_DocumentDatabaseFileEntry (fileEntries_id, DocumentDatabase_id) VALUES(?, ?)">>},
+		{rule_name_by_rule_id, <<"SELECT name FROM Rule where id=?">>}
 	]],
 
 	{ok, #state{host=Host, port=Port, 
@@ -865,6 +865,9 @@ populate_rule(OrigId, Channel, UserMessage, Action, FilterId) ->
 	{ok, ENT} = psq(email_notification_by_rule_id, [OrigId, OrigId]),
 	populate_notifications(ENT, RuleId, email),
 
+	{ok, HRName} = psq(rule_name_by_rule_id, [OrigId]),
+	populate_rule_details(RuleId, OrigId, HRName, Channel, Action),
+
 	{ok, SDN} = psq(source_domain_by_rule_id, [OrigId]),
 	populate_source_domains(SDN, RuleId),
 
@@ -956,6 +959,16 @@ populate_notifications([[Notification]|Rows], RuleId, Type) ->
 	mydlp_mnesia_write(I),
 	populate_notifications(Rows, RuleId, Type);
 populate_notifications([], _RuleId, _Type) -> ok.
+
+populate_rule_details(RuleId, OrigId, HRName, Channel, Action) ->
+	Id = mydlp_mnesia:get_unique_id(rule_details),
+	RD = case HRName of
+		[] -> #rule_details{id=Id, rule_id=RuleId, rule_orig_id=OrigId, hr_name=undefined, channel=Channel, action=Action} ;
+		[[Name]] -> #rule_details{id=Id, rule_id=RuleId, rule_orig_id=OrigId, hr_name=Name, channel=Channel, action=Action};
+		R -> ?ERROR_LOG("Unexpected Query Result in rule detail generation. "?S"", [R]),
+			#rule_details{id=Id, rule_id=RuleId, rule_orig_id=OrigId, hr_name=undefined, channel=Channel, action=Action}
+	end,
+	mydlp_mnesia_write(RD).
 
 populate_source_domains([[SourceDomain]|Rows], RuleId) ->
 	Id = mydlp_mnesia:get_unique_id(source_domain),
@@ -1118,7 +1131,7 @@ populate_rule_dest_users(RuleOrigId, RuleId) ->
 	populate_dest_ou(OUQ, RuleId),
 
 	{ok, UAGQ} = psq(dest_user_ad_g_by_rule_id, [RuleOrigId]),
-	populate_users_ad_u(UAGQ, RuleId),
+	populate_dest_users_ad_u(UAGQ, RuleId),
 
 	ok.
 

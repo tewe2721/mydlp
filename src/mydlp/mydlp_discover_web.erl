@@ -556,9 +556,9 @@ get_fn(WebServerId, PagePath) ->
 
 discover_item({WebServerId, PagePath, RuleId} = Item, Data) ->
 	try 	RuleIndex = mydlp_mnesia:get_rule_id_by_orig_id(RuleId),
-		case get_discovery_status(RuleIndex) of
-                none -> ok;
-                {_, GroupId} -> discover_item1(Item, Data, RuleIndex, GroupId) end
+		case get_discovery_status(RuleId) of
+                	none -> ok;
+                	{_, GroupId} -> discover_item1(Item, Data, RuleIndex, GroupId) end
         catch Class:Error ->
 		?ERROR_LOG("DISCOVER WEB: Error occured: Class: ["?S"]. Error: ["?S"].~n"
 				"Stack trace: "?S"~nWebServerId: "?S" PagePath: ["?S"].~n",

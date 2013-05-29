@@ -93,6 +93,7 @@
 	get_notification_queue_items/1,
 	get_early_notification_queue_items/0,
 	update_notification_queue_item/2,
+	get_number_of_incidents/1,
 	get_remote_mc_module/2,
 	get_fid/1,
 	remove_site/1,
@@ -136,7 +137,10 @@
 	get_remote_document_databases/0,
 	get_remote_document_databases_by_id/1,
 	add_dd_file_entry/1,
-	get_dd_file_entry/1
+	get_dd_file_entry/1,
+	get_rule_name_by_id/1,
+	get_channel_and_action_by_id/1,
+	get_rule_orig_id_by_id/1
 	]).
 
 -endif.
@@ -205,6 +209,7 @@
 	dest,
 	notification, 
 	notification_queue,
+	rule_details,
 	remote_storage,
 	remote_storage_dd,
 	discovery_schedule,
@@ -301,6 +306,7 @@ get_record_fields_functional(Record) ->
 		dd_file_entry -> record_info(fields, dd_file_entry);
 		notification -> record_info(fields, notification);
 		notification_queue -> record_info(fields, notification_queue);
+		rule_details -> record_info(fields, rule_details);
 		source_domain -> record_info(fields, source_domain);
 		m_user -> record_info(fields, m_user);
 		m_endpoint_id -> record_info(fields, m_endpoint_id);
@@ -406,6 +412,8 @@ get_early_notification_queue_items() -> aqc(get_early_notification_queue_items, 
 
 update_notification_queue_item(RuleId, NewStatus) -> aqc({update_notification_queue_item, RuleId, NewStatus}, nocache). 
 
+get_number_of_incidents(RuleId) -> aqc({get_number_of_incidents, RuleId}, nocache). 
+
 get_remote_mc_module(FilterId, EndpointId) -> 
 	RuleIDs = get_remote_rule_ids(FilterId, EndpointId),
 	Mods = case get_mc_module(RuleIDs) of
@@ -507,6 +515,12 @@ add_dd_file_entry(#dd_file_entry{filepath=FilePath}=Record) ->
 	write(Record).
 
 get_dd_file_entry(FilePath) -> aqc({get_dd_file_entry, FilePath}, nocache).
+
+get_rule_name_by_id(RuleId) -> aqc({get_rule_name_by_id, RuleId}, nocache).
+
+get_channel_and_action_by_id(RuleId) -> aqc({get_channel_and_action_by_id, RuleId}, nocache).
+
+get_rule_orig_id_by_id(RuleId) -> aqc({get_rule_orig_id_by_id, RuleId}, nocache).
 
 -endif.
 
@@ -689,6 +703,31 @@ handle_result({get_dd_file_entry, _FilePath}, {atomic, Result}) ->
 		[] -> none;
 		[DDFileEntry] -> DDFileEntry;
 		R -> ?ERROR_LOG("Unexpected dd file entry result: ["?S"]", R)
+	end;
+
+handle_result({get_rule_name_by_id, RuleId}, {atomic, Result}) ->
+	case Result of
+		[] -> ?ERROR_LOG("Unexpected empty result in getting rule name by id: "?S"", [RuleId]);
+		[Name] -> Name
+	end;
+
+handle_result({get_channel_and_action_by_id, RuleId}, {atomic, Result}) ->
+	case Result of
+		[] -> ?ERROR_LOG("Unexpected empty result in getting rule name by id: "?S"", [RuleId]);
+		[AC] -> AC
+	end;
+
+handle_result({get_rule_orig_id_by_id, RuleId}, {atomic, Result}) ->
+	case Result of
+		[] -> ?ERROR_LOG("Unexpected empty result in getting rule original id by id: "?S"", [RuleId]);
+		[OrigRuleId] -> OrigRuleId
+	end;
+
+handle_result({get_number_of_incidents, RuleId}, {atomic, Result}) ->
+	case Result of 
+		[] -> ?ERROR_LOG("Unexpected empty result in getting number of incidents by id: "?S"", [RuleId]);
+		[{true, Threshold}] -> round(math:sqrt(Threshold));
+		[{Count, _}] -> Count 
 	end;
 
 handle_result(Query, Result) -> handle_result_common(Query, Result).
@@ -957,10 +996,10 @@ handle_query({get_notification_items, OrigRuleId}) ->
 	]),
 	?QLCE(Q);
 
-handle_query({get_notification_queue_items, OrigRuleId}) ->
+handle_query({get_notification_queue_items, RuleId}) ->
 	Q = ?QLCQ([N#notification_queue.status ||
 		N <- mnesia:table(notification_queue),
-		N#notification_queue.rule_id == OrigRuleId
+		N#notification_queue.rule_id == RuleId
 	]),
 	?QLCE(Q);
 
@@ -997,6 +1036,13 @@ handle_query({update_notification_queue_item, RuleId, Status}) ->
 				end,
 	mnesia:write(I#notification_queue{status=NewStatus, event_threshold=NewEventThreshold, is_shadow=false}),
 	Action;
+
+handle_query({get_number_of_incidents, RuleId}) ->
+	Q = ?QLCQ([{N#notification_queue.status, N#notification_queue.event_threshold} ||
+		N <- mnesia:table(notification_queue),
+		N#notification_queue.rule_id==RuleId
+	]),
+	?QLCE(Q);
 
 handle_query({get_remote_rule_tables, FilterId, EndpointId}) ->
 	{Addr, UserH, Hostname} = get_user_from_endpoint_id(EndpointId), 
@@ -1332,7 +1378,28 @@ handle_query({remove_redundant_dd_file_entries, FilePath}) ->
 		]),
 	Ids = ?QLCE(Q),
 	lists:foreach(fun(I) -> mnesia:delete({dd_file_entry, I}) end, Ids);
-	
+
+handle_query({get_rule_name_by_id, RuleId}) ->
+	Q = ?QLCQ([D#rule_details.hr_name ||
+		D <-  mnesia:table(rule_details),
+		D#rule_details.rule_orig_id == RuleId
+	]),
+	?QLCE(Q);
+
+handle_query({get_channel_and_action_by_id, RuleId}) ->
+	Q = ?QLCQ([{D#rule_details.channel, D#rule_details.action} ||
+		D <-  mnesia:table(rule_details),
+		D#rule_details.rule_orig_id == RuleId
+	]),
+	?QLCE(Q);
+
+handle_query({get_rule_orig_id_by_id, RuleId}) ->
+	Q = ?QLCQ([D#rule_details.rule_orig_id ||
+		D <-  mnesia:table(rule_details),
+		D#rule_details.rule_id == RuleId
+	]),
+	?QLCE(Q);
+
 handle_query({get_matchers, RuleIDs}) ->
 	ML = lists:map(fun(RId) ->
 		Q1 = ?QLCQ([F#ifeature.match_id ||
@@ -2439,6 +2506,12 @@ remove_rule(RI) ->
 		]),
 	EIs = ?QLCE(Q14),
 
+	Q15 = ?QLCQ([RD#rule_details.id ||
+		RD <- mnesia:table(rule_details),
+		RD#rule_details.rule_id == RI
+		]),
+	RDs = ?QLCE(Q15),
+
 	lists:foreach(fun(Id) -> mnesia:delete({ipr, Id}) end, IIs),
 	lists:foreach(fun(Id) -> mnesia:delete({m_user, Id}) end, UIs),
 	lists:foreach(fun(Id) -> mnesia:delete({dest, Id}) end, DIs),
@@ -2451,6 +2524,7 @@ remove_rule(RI) ->
 	lists:foreach(fun(Id) -> mnesia:delete({web_server, Id}) end, WSs),
 	lists:foreach(fun(Id) -> mnesia:delete({m_hostname, Id}) end, Hs),
 	lists:foreach(fun(Id) -> mnesia:delete({m_endpoint_id, Id}) end, EIs),
+	lists:foreach(fun(Id) -> mnesia:delete({rule_details, Id}) end, RDs),
 
 	remove_data_formats(DFIs),
 	remove_itypes(ITIs),
