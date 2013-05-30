@@ -342,18 +342,19 @@ call_remote_storage_discovery(RuleId, IsOnDemand) ->
 				true -> ok;
 				false -> break_discovery(RuleId, GroupId)
 			end;
-		{paused, GroupId} -> call_continue_discovery_on_remote(RuleId),
+		{paused, GroupId} -> 
 			case IsOnDemand of
 				true -> update_discovery_report(GroupId, ?REPORT_STATUS_DISC),
-					update_discovery_status(RuleId, ?ON_DEMAND_DISC, GroupId);
+					update_discovery_status(RuleId, ?ON_DEMAND_DISC, GroupId),
+					call_continue_discovery_on_remote(RuleId);
 				false -> break_discovery(RuleId, GroupId) % This case looks like impossible
 			end;
 		{user_paused, GroupId} ->
 			case IsOnDemand of
 				true -> % means that user paused discovery while ago and now starts again
 					update_discovery_report(GroupId, ?REPORT_STATUS_DISC),
-					call_continue_discovery_on_remote(RuleId),
-					update_discovery_status(RuleId, ?ON_DEMAND_DISC, GroupId);
+					update_discovery_status(RuleId, ?ON_DEMAND_DISC, GroupId),
+					call_continue_discovery_on_remote(RuleId);
 				false ->% means that user paused discovery while ago and now it is time to schedule
 					% New discovery with a new report id. Ensure that last discovery is stopped.
 					break_discovery(RuleId, GroupId)
@@ -524,17 +525,19 @@ call_continue_discovery_on_target(RuleId) ->
 call_continue_remote_storage_discovery(RuleId) ->
 	case get_discovery_status(RuleId) of
 		{paused, GroupId} -> create_timer(RuleId),
+					update_discovery_status(RuleId, ?DISC, GroupId),
+					update_discovery_report(GroupId, ?REPORT_STATUS_DISC),
 					mydlp_discover_fs:continue_paused_discovery(RuleId),
-					gen_server:cast(?WEB_DISCOVERY, {continue_discovering, RuleId}),
-					update_discovery_status(RuleId, ?DISC, GroupId);
+					gen_server:cast(?WEB_DISCOVERY, {continue_discovering, RuleId});
 		_ -> ok
 	end.
 
 call_continue_ep_discovery(RuleId) ->
 	case get_discovery_status(RuleId) of
 		{paused, GroupId} -> create_timer(RuleId),
-					set_command_to_endpoints(RuleId, ?CONTINUE_EP_COMMAND, [{groupId, GroupId}]),
-					update_discovery_status(RuleId, ?DISC, GroupId);
+					update_discovery_status(RuleId, ?DISC, GroupId),
+					update_discovery_report(GroupId, ?REPORT_STATUS_DISC),
+					set_command_to_endpoints(RuleId, ?CONTINUE_EP_COMMAND, [{groupId, GroupId}]);
 		_ -> ok
 	end.
 

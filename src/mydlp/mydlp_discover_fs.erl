@@ -251,14 +251,14 @@ handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, is_new=IsNew} = S
 										true -> ok end;
 								false -> ok end,
 							consume(),
-							{noreply, State#state{discover_queue=Q1, is_new=false}}
+							{noreply, State#state{discover_queue=Q1, is_new=false, discover_inprog=true}}
 						catch Class:Error ->
 							?ERROR_LOG("Discover Queue Consume: Error occured: "
 									"Class: ["?S"]. Error: ["?S"].~n"
 									"Stack trace: "?S"~n.FilePath: "?S"~nState: "?S"~n ",	
 									[Class, Error, erlang:get_stacktrace(), FilePath, State]),
 								consume(),
-								{noreply, State#state{discover_queue=Q1, is_new=false}} end
+								{noreply, State#state{discover_queue=Q1, is_new=false, discover_inprog=true}} end
 				end;
 			{empty, _} ->
 				case IsNew of
