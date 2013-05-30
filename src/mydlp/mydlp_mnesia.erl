@@ -1935,8 +1935,7 @@ start_distributed() ->
 	case start_mnesia_distributed(IsAlreadyDistributed) of
 		ok -> start_tables(true);
 		{error, _} -> start_tables(false) end,
-	MnesiaNodes = get_mnesia_nodes(),
-	mydlp_distributor:bcast_cluster(MnesiaNodes),
+	mydlp_distributor:bcast_cluster(),
 	ok.
 
 force_author(AuthorNode) -> 

@@ -38,7 +38,7 @@
 	is_distributed/0,
 	init_distribution/0,
 	find_authority/0,
-	bcast_cluster/1,
+	bcast_cluster/0,
 	flush_cache/1,
 	stop/0]).
 
@@ -67,8 +67,8 @@ init_distribution() ->
 find_authority() ->
 	gen_server:call(?MODULE, find_authority, 15000).
 
-bcast_cluster(ClusterNodes) ->
-	gen_server:cast(?MODULE, {bcast_cluster, ClusterNodes}).
+bcast_cluster() ->
+	gen_server:cast(?MODULE, bcast_cluster).
 
 flush_cache(ClusterNodes) ->
 	gen_server:cast(?MODULE, {cluster_flush_cache, ClusterNodes}).
@@ -110,7 +110,8 @@ handle_cast(init_distribution, _ExState) ->
 		_ -> undefined end,
 	{noreply, State};
 
-handle_cast({bcast_cluster, ClusterNodes}, #state{priority=Priority, init_epoch=InitEpoch} = State) ->
+handle_cast(bcast_cluster, #state{priority=Priority, init_epoch=InitEpoch} = State) ->
+	ClusterNodes = mydlp_mnesia:get_mnesia_nodes(),
 	OtherClusterNodes = ClusterNodes -- [node()],
 	OtherNodes = nodes() -- OtherClusterNodes,
 	case OtherNodes of 
@@ -119,7 +120,7 @@ handle_cast({bcast_cluster, ClusterNodes}, #state{priority=Priority, init_epoch=
 			none -> gen_server:abcast(OtherNodes, ?MODULE, 
 					{we_are_up, ClusterNodes, Priority, InitEpoch});
 			AuthorNode -> gen_server:abcast([AuthorNode], ?MODULE, 
-					{bcast_cluster, ClusterNodes}) end end,
+					bcast_cluster) end end,
 	{noreply, State};
 
 handle_cast({we_are_up, ClusterNodes, PeerPriority, PeerInitEpoch}, 
@@ -132,7 +133,7 @@ handle_cast({we_are_up, ClusterNodes, PeerPriority, PeerInitEpoch},
 			yes -> mydlp_mnesia:new_authority(select_random(ClusterNodes));
 			no -> case is_authority({Priority, InitEpoch}, 
 						{PeerPriority, PeerInitEpoch}) of 
-				yes -> bcast_cluster(MnesiaNodes);
+				yes -> bcast_cluster();
 				no -> ok end end end,
 	{noreply, State};
 
