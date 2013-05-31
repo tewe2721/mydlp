@@ -199,14 +199,17 @@ init([]) ->
 	{stop, normal, State}.
 
 
-'ICAP_HEADER'({data, "\r\n"}, #state{icap_headers=IcapHeaders} = State) ->
-        Others = IcapHeaders#icap_headers.other,
-        IcapHeaders1 = IcapHeaders#icap_headers{other=lists:reverse(Others)},
-        State1 = State#state{icap_headers=IcapHeaders1},
+'ICAP_HEADER'({data, "\r\n"}, #state{icap_headers=IcapHeaders0} = State) ->
+        Others = IcapHeaders0#icap_headers.other,
+        IcapHeaders = IcapHeaders0#icap_headers{other=lists:reverse(Others)},
+        State1 = State#state{icap_headers=IcapHeaders},
 
-	HH = State1#state.icap_headers,
-	E = HH#icap_headers.encapsulated,
-	encap_next(State1#state{icap_rencap=E});
+	{EndpointId, UserName, UserHash, Hostname} = case IcapHeaders#icap_headers.x_client_ip of
+		undefined -> {unknown, nil, unknown, unknown};
+		IP -> mydlp_mnesia:get_user_from_address(IP) end,
+	E = IcapHeaders#icap_headers.encapsulated,
+	encap_next(State1#state{endpoint_id=EndpointId, username=UserName, un_hash=UserHash, src_hostname=Hostname,
+				icap_rencap=E});
 
 'ICAP_HEADER'({data, IcapHeaderLine}, #state{icap_headers=IcapHeaders} = State) ->
 	{Key, Value} = case string:chr(IcapHeaderLine, $:) of
@@ -227,11 +230,7 @@ init([]) ->
 				other=[#http_header{key=Key, value=Value}|Others]}   %% misc other headers
         end,
 
-	{EndpointId, UserName, UserHash, Hostname} = case IcapHeaders1#icap_headers.x_client_ip of
-		undefined -> {unknown, nil, unknown, unknown};
-		IP -> mydlp_mnesia:get_user_from_address(IP) end,
-        {next_state, 'ICAP_HEADER', State#state{endpoint_id=EndpointId, username=UserName, un_hash=UserHash, src_hostname=Hostname,
-					icap_headers=IcapHeaders1}, ?CFG(fsm_timeout)};
+        {next_state, 'ICAP_HEADER', State#state{icap_headers=IcapHeaders1}, ?CFG(fsm_timeout)};
 
 'ICAP_HEADER'(timeout, State) ->
 	?DEBUG(?S" Client connection timeout - closing.\n", [self()]),
