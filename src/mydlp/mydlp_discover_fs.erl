@@ -69,6 +69,7 @@
 	paused_queue,
 	discover_inprog=false,
 	is_new=false,
+	improper=false,
 	timer
 }).
 
@@ -92,6 +93,7 @@
 -define(USER_PAUSED, user_paused).
 -define(SYSTEM_PAUSED, system_paused).
 -define(STOPPED, stopped).
+-define(DISCOVERY_IMPROPER, "Discovery finished improperly. See endpoint logs").
 
 -ifdef(__PLATFORM_WINDOWS).
 
@@ -205,7 +207,7 @@ handle_cast({ql, List}, State) ->
 	?ASYNC0(fun() ->
 		[ q(FilePath, RuleIndex, GroupId) || {RuleIndex, FilePath, GroupId} <- List ]
 	end),
-	{noreply, State};
+	{noreply, State#state{improper=false}};
 
 handle_cast({q, ParentId, FilePath, RuleIndex, _GroupId, IsPrior}, #state{discover_queue=Q, discover_inprog=false} = State) ->
 	?NOREPLYGUARD(fun() ->
@@ -215,7 +217,7 @@ handle_cast({q, ParentId, FilePath, RuleIndex, _GroupId, IsPrior}, #state{discov
 			false -> queue:in(Item, Q) end,
 		consume(),
 		set_discover_inprog(),
-		{noreply, State#state{discover_queue=Q1, discover_inprog=true}}
+		{noreply, State#state{discover_queue=Q1, discover_inprog=true, improper=false}}
 	end, State);
 
 handle_cast({q, ParentId, FilePath, RuleIndex, _GroupId, IsPrior}, #state{discover_queue=Q, discover_inprog=true} = State) ->
@@ -224,7 +226,7 @@ handle_cast({q, ParentId, FilePath, RuleIndex, _GroupId, IsPrior}, #state{discov
 		Q1 = case IsPrior of
 			true -> queue:in_r(Item, Q);
 			false -> queue:in(Item, Q) end,
-		{noreply,State#state{discover_queue=Q1}}
+		{noreply,State#state{discover_queue=Q1, improper=false}}
 	end, State);
 
 handle_cast({push_paused_to_proc_queue, _RuleId}, #state{discover_queue=Q, paused_queue=PQ} = State) ->
@@ -232,7 +234,7 @@ handle_cast({push_paused_to_proc_queue, _RuleId}, #state{discover_queue=Q, pause
 		{noreply, State#state{discover_queue=queue:join(Q, PQ), paused_queue=queue:new()}}
 	end, State);
 
-handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, is_new=IsNew} = State) ->
+handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, is_new=IsNew, improper=IsImproper} = State) ->
 	?NOREPLYGUARD(fun() ->
 		case queue:out(Q) of
 			{{value, {ParentId, FilePath, RuleIndex}=Item}, Q1} ->
@@ -240,10 +242,10 @@ handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, is_new=IsNew} = S
 					paused -> % rule is paused, push the item pause queue
 						PQ1 = queue:in(Item, PQ),
 						consume(),
-						{noreply, State#state{discover_queue=Q1, paused_queue=PQ1, is_new=false}};
+						{noreply, State#state{discover_queue=Q1, paused_queue=PQ1, is_new=false, improper=false}};
 					stopped -> % rule is stopped, drop item
 						consume(),
-						{noreply, State#state{discover_queue=Q1, paused_queue=PQ, is_new=false}};
+						{noreply, State#state{discover_queue=Q1, paused_queue=PQ, is_new=false, improper=false}};
 					_ ->
 						try	case has_discover_rule() of
 								true -> case is_exceptional(FilePath) of
@@ -251,19 +253,19 @@ handle_cast(consume, #state{discover_queue=Q, paused_queue=PQ, is_new=IsNew} = S
 										true -> ok end;
 								false -> ok end,
 							consume(),
-							{noreply, State#state{discover_queue=Q1, is_new=false, discover_inprog=true}}
+							{noreply, State#state{discover_queue=Q1, is_new=false, discover_inprog=true, improper=false}}
 						catch Class:Error ->
 							?ERROR_LOG("Discover Queue Consume: Error occured: "
 									"Class: ["?S"]. Error: ["?S"].~n"
 									"Stack trace: "?S"~n.FilePath: "?S"~nState: "?S"~n ",	
 									[Class, Error, erlang:get_stacktrace(), FilePath, State]),
 								consume(),
-								{noreply, State#state{discover_queue=Q1, is_new=false, discover_inprog=true}} end
+								{noreply, State#state{discover_queue=Q1, is_new=false, discover_inprog=true, improper=false}} end
 				end;
 			{empty, _} ->
 				case IsNew of
 					true -> ok;
-					false -> mark_finished_rules(PQ) end,
+					false -> mark_finished_rules(PQ, IsImproper) end,
 				unset_discover_inprog(),
 				{noreply, State#state{discover_inprog=false, is_new=false}}
 		end
@@ -324,7 +326,7 @@ handle_info({async_reply, Reply, From}, State) ->
 
 handle_info(startup, State) ->
 	consume(),
-	{noreply, State};
+	{noreply, State#state{improper=true}};
 
 handle_info(_Info, State) ->
 	{noreply, State}.
@@ -344,19 +346,22 @@ is_paused_or_stopped_by_rule_id(RuleId) ->
 		_ -> stopped
 	end.
 
-mark_finished_rules(PausedQ) ->
+mark_finished_rules(PausedQ, IsImproper) ->
 	DiscStatus = mydlp_mnesia:get_all_discovery_status(),
-	lists:foreach(fun({RuleId, _Status, GroupId}) -> mark_finished_each_rule(RuleId, GroupId, PausedQ) end, DiscStatus).
+	lists:foreach(fun({RuleId, _Status, GroupId}) -> mark_finished_each_rule(RuleId, GroupId, PausedQ, IsImproper) end, DiscStatus).
 
-mark_finished_each_rule(RuleId, GroupId, Q) ->
+mark_finished_each_rule(RuleId, GroupId, Q, IsImproper) ->
 	case queue:out(Q) of
 	 	{{value, {_ParentId, _FilePath, RuleIndex}}, Q1} -> 
 			case RuleIndex of
 				RuleId -> push_opr_log(RuleId, GroupId, ?DISCOVERY_PAUSED);
 					%mydlp_mnesiai:update_discovery_status(RuleId, ?PAUSED, GroupId);
-				_ -> mark_finished_each_rule(RuleId, GroupId, Q1)
+				_ -> mark_finished_each_rule(RuleId, GroupId, Q1, IsImproper)
 			end;
 		{empty, _Q2} ->
+			case IsImproper of
+				true -> push_opr_log(RuleId, GroupId, ?DISCOVERY_IMPROPER);
+				false -> ok end,
 			push_opr_log(RuleId, GroupId, ?DISCOVERY_FINISHED),
 			mark_as_finished(RuleId) 
 	end.
