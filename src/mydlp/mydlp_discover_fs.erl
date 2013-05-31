@@ -322,6 +322,10 @@ handle_info({async_reply, Reply, From}, State) ->
 	?SAFEREPLY(From, Reply),
 	{noreply, State};
 
+handle_info(startup, State) ->
+	consume(),
+	{noreply, State};
+
 handle_info(_Info, State) ->
 	{noreply, State}.
 
@@ -412,6 +416,7 @@ stop() ->
 
 init([]) -> 
 	reset_discover_cache(),
+	startup(),
 	{ok, #state{discover_queue=queue:new(), paused_queue=queue:new()}}.
 
 terminate(_Reason, _State) ->
@@ -573,6 +578,9 @@ discover1(ParentId, FilePath, RuleIndex) ->
 
 -ifdef(__MYDLP_ENDPOINT).
 
+startup() ->
+	timer:send_after(30000, startup).
+
 set_discover_inprog() ->
 	mydlp_container:set_ep_meta("discover_inprog", "yes"),
 	mydlp_sync:sync_now().
@@ -585,6 +593,8 @@ unset_discover_inprog() ->
 -endif.
 
 -ifdef(__MYDLP_NETWORK).
+
+startup() -> ok.
 
 set_discover_inprog() -> ok.
 
