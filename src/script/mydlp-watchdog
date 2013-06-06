@@ -237,10 +237,10 @@ function flushMQ() {
 }
 
 function cleanupMnesiaIfFatalExists() {
-	if [ -r "$ERRORLOG" -a -n "$(tail -100|grep -e '\*\* ERROR \*\* (core dumped to file:'|grep -e 'Mnesia')" ]; then
+	if [ -r "$ERRORLOG" -a -n "$(tail -100 $ERRORLOG|grep -e '\*\* ERROR \*\* (core dumped to file:'|grep -e 'Mnesia')" ]; then
 		echo "Cleaning up MyDLP Runtime database. Policy will be recompiled after restart."
 		rm -f /var/lib/mydlp/mnesia/*
-	elif [ -r "$ERRORLOG" -a -n "$(tail -100|grep -e '\*\* FATAL \*\*'|grep -e 'Mnesia')" ]; then
+	elif [ -r "$ERRORLOG" -a -n "$(tail -100 $ERRORLOG|grep -e '\*\* FATAL \*\*'|grep -e 'Mnesia')" ]; then
 		echo "Cleaning up MyDLP Runtime database. Policy will be recompiled after restart."
 		rm -f /var/lib/mydlp/mnesia/*
 	fi
