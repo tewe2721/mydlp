@@ -1202,13 +1202,14 @@ get_usernames(OrigId) ->
 		lists:map(fun(D) ->
 			UU = unicode:characters_to_list(U),
 			UD = unicode:characters_to_list(D),
-			concat_username(UU,UD)
+			UN = concat_username(UU,UD),
+			UN
 		end, Domains)
 	end, Users),
 	lists:flatten(L).
 
-concat_username(<<>>, _D) -> []; % lists:flatten will drop this.
-concat_username(U, <<>>) -> {U};
+concat_username([], _D) -> []; % lists:flatten will drop this.
+concat_username(U, []) -> {U};
 concat_username(U, D) -> {U ++ "@" ++ D}.
 
 get_domains(OrigId) ->
