@@ -93,8 +93,8 @@ handle_call({are_you_my_authority, PeerPriority, PeerInitEpoch},
 handle_call(stop, _From, State) ->
 	{stop, normalStop, State};
 
-handle_call(Msg, _From, State) ->
-	?ERROR_LOG("DISTRIBUTOR: Unexpected message: "?S, [Msg]),
+handle_call(Msg, From, State) ->
+	?ERROR_LOG("DISTRIBUTOR: Unexpected message: "?S" From: "?S" State:"?S"", [Msg, From, State]),
 	{noreply, State}.
 
 handle_cast(init_distribution, _ExState) ->
@@ -139,11 +139,11 @@ handle_cast({we_are_up, ClusterNodes, PeerPriority, PeerInitEpoch},
 
 handle_cast({cluster_flush_cache, ClusterNodes}, State) ->
 	OtherClusterNodes = ClusterNodes -- [node()],
-	gen_server:abcast(OtherClusterNodes, ?MODULE, mnesia_flush_cache),
+	gen_server:abcast(OtherClusterNodes, ?MODULE, {mnesia_reload, node() }),
 	{noreply, State};
 
-handle_cast(mnesia_flush_cache, State) ->
-	mydlp_mnesia:flush_cache(),
+handle_cast({mnesia_reload, Node}, State) ->
+	mydlp_mnesia:reload(Node),
 	{noreply, State};
 
 handle_cast(_Msg, State) ->

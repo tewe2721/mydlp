@@ -64,7 +64,6 @@
 	truncate_nondata/0,
 	write/1,
 	delete/1,
-	flush_cache/0,
 	post_start/1,
 	post_start/0,
 	update_discovery_status/3,
@@ -77,6 +76,7 @@
 
 %API network
 -export([
+	reload/1,
 	new_authority/1,
 	get_mnesia_nodes/0,
 	get_rule_table/2,
@@ -126,6 +126,7 @@
 	get_availabilty_by_rule_id/1,
 	register_schedule/2,
 	get_waiting_schedule_by_rule_id/1,
+	remove_waiting_schedules_by_rule_id/1,
 	get_rule_id_by_orig_id/1,
 	get_orig_id_by_rule_id/1,
 	get_rule_channel/1,
@@ -487,6 +488,8 @@ register_schedule(RuleId, GroupId) -> aqc({register_schedule, RuleId, GroupId}, 
 
 get_waiting_schedule_by_rule_id(RuleId) -> aqc({get_waiting_schedule_by_rule_id, RuleId}, nocache).
 
+remove_waiting_schedules_by_rule_id(RuleId) -> aqc({remove_waiting_schedules_by_rule_id, RuleId}, nocache).
+
 get_rule_id_by_orig_id(OrigRuleId) -> aqc({get_rule_id_by_orig_id, OrigRuleId}, nocache).
 
 get_orig_id_by_rule_id(RuleId) -> aqc({get_orig_id_by_rule_id, RuleId}, nocache).
@@ -589,7 +592,7 @@ truncate_nondata() -> gen_server:call(?MODULE, truncate_nondata, 15000).
 
 mnesia_dir_cleanup() -> gen_server:cast(?MODULE, mnesia_dir_cleanup).
 
-flush_cache() -> cache_clean0().
+reload(Node) -> gen_server:call(?MODULE, {reload, Node}, 30000).
 
 update_discovery_status(RuleId, Status, GroupId) -> aqc({update_discovery_status, RuleId, Status, GroupId}, nocache).
 
@@ -1296,6 +1299,16 @@ handle_query({get_waiting_schedule_by_rule_id, RuleId}) ->
 			WS#waiting_schedules.group_id
 	end;
 
+handle_query({remove_waiting_schedules_by_rule_id, RuleId}) ->
+	Q = ?QLCQ([W ||
+		W <- mnesia:table(waiting_schedules),
+		W#waiting_schedules.rule_id == RuleId
+	]),
+	case ?QLCE(Q) of
+		[] -> ok;
+		[WS] -> mnesia:dirty_delete({waiting_schedules, WS#waiting_schedules.id})
+	end;
+
 handle_query({get_rule_id_by_orig_id, OrigRuleId}) ->
 	Q = ?QLCQ([D#rule.id ||
 		D <- mnesia:table(rule),
@@ -1791,6 +1804,11 @@ handle_call({new_authority, AuthorNode}, _From, State) ->
 	case lists:member(AuthorNode, MnesiaNodes) of
 		false -> force_author(AuthorNode);
 		true -> ok end,
+	{reply, ok, State};
+
+handle_call({reload, Node}, _From, State) ->
+	cache_clean0(),
+	lists:foreach(fun(T) -> mnesia:move_table_copy(T, Node, node()) end, all_tab_names() ++ [unique_ids]),
 	{reply, ok, State};
 
 handle_call(ping, _From, State) ->

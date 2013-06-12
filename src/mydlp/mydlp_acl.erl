@@ -78,7 +78,9 @@ get_remote_rule_tables(EndpointId) -> acl_call({get_remote_rule_tables, Endpoint
 
 q(AclQ, Files) -> acl_call({q, AclQ}, Files).
 
-qr(RuleId, Files) when is_integer(RuleId) -> acl_call({qr, RuleId}, Files).
+qr(RuleId, Files) when is_integer(RuleId) -> acl_call({qr, RuleId}, Files);
+
+qr(none, _) -> ?ERROR_LOG("Rule not found. Discovery Rule may removed.", []).
 
 -endif.
 

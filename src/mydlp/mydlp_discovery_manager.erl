@@ -44,7 +44,8 @@
 	stop_discovery/1,
 	pause_discovery/1,
 	start_at_exact_hour/0,
-	start_discovery_scheduling/0
+	start_discovery_scheduling/0,
+	stop_report_before_remove_rule/1
 	]).
 
 %% gen_server callbacks
@@ -109,6 +110,8 @@ pause_discovery_on_demand(RuleOrigId) ->
 
 get_group_id(RuleId) -> gen_server:call(?MODULE, {get_group_id, RuleId}).
 
+stop_report_before_remove_rule(RuleId) -> gen_server:cast(?MODULE, {stop_report_before_remove_rule, RuleId}).
+
 %%%%%%%%%%%%%% gen_server handles
 
 handle_call(stop, _From, State) ->
@@ -148,7 +151,7 @@ handle_cast({pause_on_demand, RuleId}, State) ->
 	{noreply, State};
 
 handle_cast({stop_on_demand, RuleId}, State) ->
-	catch call_stop_discovery_on_target(RuleId, true),
+	catch call_stop_discovery_on_target(RuleId, true, false),
 	{noreply, State};
 
 handle_cast({manage_schedules, Schedules}, State) ->
@@ -160,7 +163,7 @@ handle_cast({start_discovery, RuleId}, State) ->
 	{noreply, State};
 
 handle_cast({stop_discovery, RuleId}, State) ->
-	catch call_stop_discovery_on_target(RuleId, false),
+	catch call_stop_discovery_on_target(RuleId, false, false),
 	{noreply, State};
 
 handle_cast({pause_discovery, RuleId}, State) ->
@@ -169,6 +172,10 @@ handle_cast({pause_discovery, RuleId}, State) ->
 
 handle_cast({continue_discovery, RuleId}, State) ->
 	catch call_continue_discovery_on_target(RuleId),
+	{noreply, State};
+
+handle_cast({stop_report_before_remove_rule, RuleId}, State) ->
+	catch call_stop_discovery_on_target(RuleId, false, true),
 	{noreply, State};
 
 handle_cast({cancel_timer, RuleId}, #state{timer_dict=TimerDict}=State) ->
@@ -480,14 +487,14 @@ call_pause_ep_discovery(RuleId, IsOnDemand) ->
 		_ -> ok
 	end.
 	
-call_stop_discovery_on_target(RuleId, IsOnDemand) ->
+call_stop_discovery_on_target(RuleId, IsOnDemand, IsRuleRemoved) ->
 	case mydlp_mnesia:get_rule_channel_by_orig_id(RuleId) of
-		remote_discovery -> call_stop_remote_storage_discovery(RuleId, IsOnDemand);
-		discovery -> call_stop_ep_discovery(RuleId, IsOnDemand);
+		remote_discovery -> call_stop_remote_storage_discovery(RuleId, IsOnDemand, IsRuleRemoved);
+		discovery -> call_stop_ep_discovery(RuleId, IsOnDemand, IsRuleRemoved);
 		C -> ?ERROR_LOG("Unknown Rule Type: "?S"", [C])
 	end. 
 
-call_stop_remote_storage_discovery(RuleId, _IsOnDemand) ->
+call_stop_remote_storage_discovery(RuleId, _IsOnDemand, IsRuleRemoved) ->
 	case get_discovery_status(RuleId) of
 		none -> ok;
 		stop -> ok;
@@ -496,13 +503,17 @@ call_stop_remote_storage_discovery(RuleId, _IsOnDemand) ->
 			mydlp_mnesia:del_web_entries_by_rule_id(RuleId),
 			update_report_as_finished(GroupId),
 			cancel_timer(RuleId),
-			case mydlp_mnesia:get_waiting_schedule_by_rule_id(RuleId) of
-				none ->	remove_discovery_status(RuleId),
-					mydlp_discover_rfs:release_mount_by_rule_id(RuleId);
-				GId -> call_start_discovery_by_rule_id(RuleId, GId, false) end
+			case IsRuleRemoved of
+				true -> mydlp_mnesia:remove_waiting_schedules_by_rule_id(RuleId);
+				false ->
+					case mydlp_mnesia:get_waiting_schedule_by_rule_id(RuleId) of
+						none ->	remove_discovery_status(RuleId),
+							mydlp_discover_rfs:release_mount_by_rule_id(RuleId);
+						GId -> call_start_discovery_by_rule_id(RuleId, GId, false) end
+			end
 	end.
 
-call_stop_ep_discovery(RuleId, _IsOnDemand) ->
+call_stop_ep_discovery(RuleId, _IsOnDemand, IsRuleRemoved) ->
 	case get_discovery_status(RuleId) of
 		none -> ok;
 		stop -> ok;
@@ -510,9 +521,13 @@ call_stop_ep_discovery(RuleId, _IsOnDemand) ->
 			update_report_as_finished(GroupId),
 			cancel_timer(RuleId),
 			set_command_to_endpoints(RuleId, ?STOP_EP_COMMAND, [{groupId, GroupId}]),
-			case mydlp_mnesia:get_waiting_schedule_by_rule_id(RuleId) of
-				none ->	remove_discovery_status(RuleId);
-				GId -> call_start_discovery_on_ep(RuleId, GId, false) end
+			case IsRuleRemoved of
+				true -> mydlp_mnesia:remove_waiting_schedules_by_rule_id(RuleId);
+				false ->
+					case mydlp_mnesia:get_waiting_schedule_by_rule_id(RuleId) of
+						none ->	remove_discovery_status(RuleId);
+						GId -> call_start_discovery_on_ep(RuleId, GId, false) end
+			end
 	end.
 	
 call_continue_discovery_on_target(RuleId) ->

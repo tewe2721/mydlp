@@ -56,6 +56,7 @@
 	startDiscoveryOnDemand/1,
 	stopDiscoveryOnDemand/1,
 	pauseDiscoveryOnDemand/1,
+	stopReportBeforeRemoveRule/1,
 	getRemoteStorageDir/1,
 	startFingerprinting/1,
 	stopFingerprinting/1,
@@ -224,6 +225,8 @@ startDiscoveryOnDemand(RuleId) -> mydlp_discovery_manager:start_on_demand_discov
 stopDiscoveryOnDemand(RuleId) -> mydlp_discovery_manager:stop_discovery_on_demand(RuleId).
 
 pauseDiscoveryOnDemand(RuleId) -> mydlp_discovery_manager:pause_discovery_on_demand(RuleId).
+
+stopReportBeforeRemoveRule(RuleId) -> mydlp_discovery_manager:stop_report_before_remove_rule(RuleId).
 
 getRemoteStorageDir(RSId) ->  mydlp_document_trainer:get_remote_storage_dir(RSId).
 
