@@ -351,6 +351,7 @@ mydlp_config_src() ->
 	ConfPath = get_mydlp_conf_path(),
 	{ok, Device} = file:open(ConfPath, [read]),
 	ConfSrc = mydlp_config_parse(Device),
+	file:close(Device),
 	ConfSrc2 = mydlp_config_prestart_default(),
 	?CONFIG_HEAD ++ ConfSrc ++ ConfSrc2.
 

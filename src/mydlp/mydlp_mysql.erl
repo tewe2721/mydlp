@@ -592,10 +592,10 @@ init([]) ->
 		{endpoint_id_by_rule_id, <<"SELECT e.endpointId FROM Endpoint AS e, EndpointItem AS ei, RuleItem AS ri WHERE ri.rule_id=? AND ei.id=ri.item_id AND ei.endpoint_id=e.id">>},
 		{directory_by_rule_id, <<"SELECT d.destinationString FROM FileSystemDirectory AS d, RuleItem AS ri WHERE ri.rule_id=? AND d.id=ri.item_id">>},
 		{source_domain_by_rule_id, <<"SELECT d.destinationString FROM Domain AS d, RuleItem AS ri WHERE ri.rule_id=? AND d.id=ri.item_id AND ri.ruleColumn=\"SOURCE\"">>},
-		{remote_sshfs, <<"SELECT r.address, r.port, r.path, r.username, r.password FROM RemoteStorageSSHFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
-		{remote_ftpfs, <<"SELECT r.address, r.path, r.username, r.password FROM RemoteStorageFTPFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
-		{remote_windows, <<"SELECT r.uncPath, r.username, r.password FROM RemoteStorageWindowsShare r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
-		{remote_nfs, <<"SELECT r.address, r.path FROM RemoteStorageNFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
+		{remote_sshfs, <<"SELECT r.id, r.address, r.port, r.path, r.username, r.password FROM RemoteStorageSSHFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
+		{remote_ftpfs, <<"SELECT r.id, r.address, r.path, r.username, r.password FROM RemoteStorageFTPFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
+		{remote_windows, <<"SELECT r.id, r.uncPath, r.username, r.password FROM RemoteStorageWindowsShare r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
+		{remote_nfs, <<"SELECT r.id, r.address, r.path FROM RemoteStorageNFS r, RuleItem AS ri WHERE ri.rule_id=? AND r.id=ri.item_id">>},
 		{remote_sshfs_dir, <<"SELECT r.address, r.password, r.path, r.port, r.username FROM RemoteStorageSSHFS r WHERE r.id=?">>},
 		{remote_ftpfs_dir, <<"SELECT r.address, r.password, r.path, r.username FROM RemoteStorageFTPFS r WHERE r.id=?">>},
 		{remote_windows_dir, <<"SELECT r.uncPath, r.password, r.username FROM RemoteStorageWindowsShare r WHERE r.id=?">>},
@@ -996,30 +996,30 @@ populate_remote_storages(RuleOrigId, RuleId) ->
 
 	ok.
 
-populate_remote_sshfs([[Address, Port, Path, Username, Password]|Rows], RuleId) ->
+populate_remote_sshfs([[RId, Address, Port, Path, Username, Password]|Rows], RuleId) ->
 	Id = mydlp_mnesia:get_unique_id(remote_storage),
-	I = #remote_storage{id=Id, rule_id=RuleId, type=sshfs, details={Address, Port, Path, Username, Password}},
+	I = #remote_storage{id=Id, orig_id=RId, rule_id=RuleId, type=sshfs, details={Address, Port, Path, Username, Password}},
 	mydlp_mnesia_write(I),
 	populate_remote_sshfs(Rows, RuleId);
 populate_remote_sshfs([], _RuleId) -> ok.
 
-populate_remote_ftpfs([[Address, Path, Username, Password]|Rows], RuleId) ->
+populate_remote_ftpfs([[RId, Address, Path, Username, Password]|Rows], RuleId) ->
 	Id = mydlp_mnesia:get_unique_id(remote_storage),
-	I = #remote_storage{id=Id, rule_id=RuleId, type=ftpfs, details={Address, Path, Username, Password}},
+	I = #remote_storage{id=Id, orig_id=RId, rule_id=RuleId, type=ftpfs, details={Address, Path, Username, Password}},
 	mydlp_mnesia_write(I),
 	populate_remote_ftpfs(Rows, RuleId);
 populate_remote_ftpfs([], _RuleId) -> ok.
 
-populate_remote_windows([[UNCPath, Username, Password]|Rows], RuleId) ->
+populate_remote_windows([[RId, UNCPath, Username, Password]|Rows], RuleId) ->
 	Id = mydlp_mnesia:get_unique_id(remote_storage),
-	I = #remote_storage{id=Id, rule_id=RuleId, type=windows, details={UNCPath, Username, Password}},
+	I = #remote_storage{id=Id, orig_id=RId, rule_id=RuleId, type=windows, details={UNCPath, Username, Password}},
 	mydlp_mnesia_write(I),
 	populate_remote_windows(Rows, RuleId);
 populate_remote_windows([], _RuleId) -> ok.
 
-populate_remote_nfs([[Address, Path]|Rows], RuleId) ->
+populate_remote_nfs([[RId, Address, Path]|Rows], RuleId) ->
 	Id = mydlp_mnesia:get_unique_id(remote_storage),
-	I = #remote_storage{id=Id, rule_id=RuleId, type=nfs, details={Address, Path}},
+	I = #remote_storage{id=Id, orig_id=RId, rule_id=RuleId, type=nfs, details={Address, Path}},
 	mydlp_mnesia_write(I),
 	populate_remote_nfs(Rows, RuleId);
 populate_remote_nfs([], _RuleId) -> ok.

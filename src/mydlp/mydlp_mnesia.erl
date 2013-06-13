@@ -1244,12 +1244,12 @@ handle_query(get_remote_storages) ->
 handle_query({get_remote_storage_by_id, Id}) ->
 	Q = ?QLCQ([{R#remote_storage.type, R#remote_storage.details} ||
 		R <- mnesia:table(remote_storage),
-		R#remote_storage.id == Id
+		R#remote_storage.orig_id == Id
 		]),
 	?QLCE(Q);
 
 handle_query({get_remote_storages_by_rule_id, RuleId}) ->
-	Q = ?QLCQ([{R#remote_storage.id, R#remote_storage.rule_id, R#remote_storage.type, R#remote_storage.details} ||
+	Q = ?QLCQ([{R#remote_storage.orig_id, R#remote_storage.rule_id, R#remote_storage.type, R#remote_storage.details} ||
 		R <- mnesia:table(remote_storage),
 		R#remote_storage.rule_id == RuleId
 		]),
@@ -1566,12 +1566,20 @@ handle_query({get_endpoint_commands, EndpointId}) ->
 handle_query(remove_old_endpoint_command) ->
 	{MegaSecs, Secs, _MicroSecs} = erlang:now(),
         AgeLimit = 1000000*MegaSecs + Secs - 9000,
-	Q = ?QLCQ([E#endpoint_command.id ||
+	Q = ?QLCQ([{E#endpoint_command.id, E#endpoint_command.args} ||
 		E <- mnesia:table(endpoint_command),
 		E#endpoint_command.date < AgeLimit
 		]),
 	ECIs = ?QLCE(Q),
-	lists:foreach(fun(Id) -> mnesia:dirty_delete({endpoint_command, Id}) end, ECIs);
+	lists:foreach(fun({Id, Args}) -> 
+			case Args of
+				[{ruleId, RuleId}, {groupId, GroupId}] -> 
+					Time = erlang:universaltime(),
+					OprLog = #opr_log{time=Time, rule_id=RuleId, group_id=GroupId, channel=discovery, message_key="ep_finished"},
+					?DISCOVERY_OPR_LOG(OprLog);
+				_ -> ok
+			end,
+			mnesia:dirty_delete({endpoint_command, Id}) end, ECIs);
 
 handle_query({remove_endpoint_command, EndpointId, CommandList, Args}) ->
         lists:map(fun(Command) -> Items = mnesia:match_object(#endpoint_command{id='_', endpoint_id=EndpointId, command=Command, date='_', args=Args}),
@@ -1806,9 +1814,16 @@ handle_call({new_authority, AuthorNode}, _From, State) ->
 		true -> ok end,
 	{reply, ok, State};
 
-handle_call({reload, Node}, _From, State) ->
-	cache_clean0(),
-	lists:foreach(fun(T) -> mnesia:move_table_copy(T, Node, node()) end, all_tab_names() ++ [unique_ids]),
+handle_call({reload, _Node}, _From, State) ->
+	lists:foreach(fun(T) -> 
+		mnesia:del_table_copy(T, node()),
+		mnesia:add_table_copy(T, node(), get_copy_media(T))
+	end, all_tab_names() ++ [unique_ids]),
+	?ASYNC0(fun()-> 
+		post_start(),
+	        mydlp_tc:load(),
+		cache_clean0(),
+	ok end),
 	{reply, ok, State};
 
 handle_call(ping, _From, State) ->
@@ -1932,7 +1947,7 @@ get_mnesia_nodes() -> mnesia:system_info(db_nodes).
 -ifdef(__MYDLP_NETWORK).
 
 is_mydlp_distributed() ->
-	mydlp_distributor:init_distribution(),
+	%mydlp_distributor:init_distribution(),
 	mydlp_distributor:is_distributed().
 
 -endif.
@@ -2053,7 +2068,8 @@ start_table(IsDistributionInit, RecordAtom) when is_atom(RecordAtom) ->
 start_table(IsDistributionInit, {RecordAtom, TableType}) ->
 	start_table(IsDistributionInit, {RecordAtom, TableType, fun() -> ok end});
 
-start_table(false = _IsDistributionInit, Table) -> init_table(Table);
+start_table(false = _IsDistributionInit, Table) -> 
+	init_table(Table);
 
 start_table(true = _IsDistributionInit, {RecordAtom, _, _}) -> 
 	LocalTables = mnesia:system_info(local_tables),
