@@ -172,6 +172,7 @@ acl_exec3(SpawnOpts, Req, AllRules, Files, ExNewFiles, CleanFiles) ->
 		_Else3 -> mc_text(PFiles3, none) end,
 
 	FFiles = PFiles4,
+	
 
 	CTX = ctx_cache(),
 	AclR = case apply_rules(CTX, SpawnOpts, AllRules, FFiles) of

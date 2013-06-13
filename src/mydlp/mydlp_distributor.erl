@@ -58,7 +58,7 @@
 
 is_distributed() ->
 	case lists:member(?MODULE, registered()) of
-		true ->	gen_server:call(?MODULE, is_distributed);
+		true ->	gen_server:call(?MODULE, is_distributed, 15000);
 		false -> false end.
 
 init_distribution() ->
@@ -82,6 +82,11 @@ handle_call(is_distributed, _From, undefined = State) ->
 	{reply, false, State};
 
 handle_call(find_authority, _From, #state{priority=Priority, init_epoch=InitEpoch} = State) ->
+	NodesCurrL = length(nodes()) + 1,
+	NodeConfL = length(?CFG(auto_distribution_nodes)),
+	case ( NodesCurrL == NodeConfL ) of
+		false -> net_adm:world_list(?CFG(auto_distribution_nodes), verbose);
+		true -> ok end,
 	Reply = find_an_authority(nodes(), Priority, InitEpoch),
 	{reply, Reply, State};
 
@@ -102,7 +107,7 @@ handle_cast(init_distribution, _ExState) ->
 		true ->
         		AllNodes = ?CFG(auto_distribution_nodes),
 			Priority = ?CFG(auto_distribution_priority),
-			net_adm:world_list(AllNodes),
+			net_adm:world_list(AllNodes, verbose),
 			InitEpoch = case file:read_file("/var/lib/mydlp/init_epoch") of
 				{ok, Bin} -> list_to_integer(binary_to_list(Bin));
 				_Else -> unknown end,

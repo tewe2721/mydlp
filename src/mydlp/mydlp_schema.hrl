@@ -83,6 +83,7 @@
 
 -record(remote_storage, {
 	id,
+	orig_id,
 	rule_id,
 	type,
 	details
