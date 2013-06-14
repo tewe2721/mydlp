@@ -2490,7 +2490,16 @@ heads_to_file_int1(Str, QS, CT) ->
 		1 -> "noname";
 		L -> string:substr(Str, 1, L - 1) end.
 
-heads_to_file(Headers) -> heads_to_file(Headers, #file{meta=[{mime_headers, Headers}]}).
+heads_to_file(Headers) -> 
+	File = heads_to_file(Headers, #file{meta=[{mime_headers, Headers}]}),
+	File1 = heads_to_file_populate_inline(File),
+	File1.
+
+heads_to_file_populate_inline(#file{name=undefined, filename=undefined, given_type="text/plain"} = File) -> 
+	File#file{name="Inline text message"};
+heads_to_file_populate_inline(#file{name=undefined, filename=undefined, given_type="text/html"} = File) -> 
+	File#file{name="Inline HTML message"};
+heads_to_file_populate_inline(#file{} = File) -> File.
 
 heads_to_file([{'content-disposition', "inline"}|Rest], #file{filename=undefined, name=undefined} = File) ->
 	case lists:keysearch('content-type',1,Rest) of
@@ -2506,12 +2515,12 @@ heads_to_file([{'content-disposition', CD}|Rest], #file{filename=undefined} = Fi
 heads_to_file([{'content-type', "text/html"}|Rest], #file{filename=undefined, name=undefined} = File) ->
 	case lists:keysearch('content-disposition',1,Rest) of
 		{value,{'content-disposition',"inline"}} -> heads_to_file(Rest, File#file{name="Inline HTML message", given_type="text/html"});
-		_Else -> heads_to_file(Rest, File)
+		_Else -> heads_to_file(Rest, File#file{given_type="text/html"})
 	end;
 heads_to_file([{'content-type', "text/plain"}|Rest], #file{filename=undefined, name=undefined} = File) ->
 	case lists:keysearch('content-disposition',1,Rest) of
 		{value,{'content-disposition',"inline"}} -> heads_to_file(Rest, File#file{name="Inline text message", given_type="text/plain"});
-		_Else -> heads_to_file(Rest, File)
+		_Else -> heads_to_file(Rest, File#file{given_type="text/plain"})
 	end;
 heads_to_file([{'content-type', CT}|Rest], #file{filename=undefined} = F) ->
 	GT = case string:chr(CT, $;) of
@@ -3346,7 +3355,15 @@ ensure_unicode(Bin, BinSize, LeftI, RightI, Limit) ->
 	case unicode:characters_to_list(Phrase) of
 		R when is_list(R) -> Phrase;
 		_ -> ensure_unicode(Bin, BinSize, LeftI, RightI + 1, Limit) end.
-	
+
+
+has_data(#file{dataref={cacheref, _Ref}}) -> true;
+has_data(#file{filename=undefined, dataref={memory, Bin}}) -> size(Bin) > 0;
+has_data(#file{filename=undefined, data=Data}) when is_binary(Data)-> size(Data) > 0;
+has_data(#file{}) -> true;
+has_data(Else) -> throw({error, unexpected_obj, Else}).
+
+drop_nodata(Files) -> lists:filter(fun(F) -> has_data(F) end, Files).
 
 -include_lib("eunit/include/eunit.hrl").
 

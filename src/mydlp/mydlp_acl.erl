@@ -159,7 +159,7 @@ acl_exec3(SpawnOpts, Req, AllRules, Files, ExNewFiles, CleanFiles) ->
 	{PFiles1, NewFiles} = mydlp_api:analyze(Files1),
 
 
-	PFiles2 = drop_nodata(PFiles1),
+	PFiles2 = mydlp_api:drop_nodata(PFiles1),
 	PFiles3 = case Req of
 		#mining_req{normal_text = true} -> pl_text(PFiles2, normalized);
 		#mining_req{raw_text = true} -> pl_text(PFiles2, raw_text);
@@ -650,14 +650,6 @@ mc_text_f(#file{normal_text=undefined}, _Opts) -> [];
 mc_text_f(#file{normal_text=NormalText}, all) -> mydlp_mc:mc_search(NormalText);
 mc_text_f(#file{normal_text=NormalText}, kw) -> mydlp_mc:mc_search(kw, NormalText);
 mc_text_f(#file{normal_text=NormalText}, pd) -> mydlp_mc:mc_search(pd, NormalText).
-
-has_data(#file{dataref={cacheref, _Ref}}) -> true;
-has_data(#file{filename=undefined, dataref={memory, Bin}}) -> size(Bin) > 0;
-has_data(#file{filename=undefined, data=Data}) when is_binary(Data)-> size(Data) > 0;
-has_data(#file{}) -> true;
-has_data(Else) -> throw({error, unexpected_obj, Else}).
-
-drop_nodata(Files) -> lists:filter(fun(F) -> has_data(F) end, Files).
 
 %%%%%%%%%%%%%%%%%%%%% CTX Cache Start
 

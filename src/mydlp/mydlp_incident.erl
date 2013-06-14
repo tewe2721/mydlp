@@ -283,22 +283,31 @@ get_meta(#file{} = File) ->
 	Filename = mydlp_api:file_to_str(File),
 	{Filename, MimeType, Size, Hash}.
 
-process_log_files(LogId, false = IsLogData, [File|Files]) ->
+process_log_files(LogId, IsLogData, Files) ->
+	Files1 = mydlp_api:drop_nodata(Files),
+	Files2 = lists:sort(fun(FA, FB) -> 
+		FNA = mydlp_api:file_to_str(FA),
+		FNB = mydlp_api:file_to_str(FB),
+		( not (FNA > FNB) )
+	end, Files1),
+	process_log_files1(LogId, IsLogData, Files2).
+
+process_log_files1(LogId, false = IsLogData, [File|Files]) ->
 	{Filename, MimeType, Size, Hash} = get_meta(File),
 	mydlp_api:clean_files(File),
 
 	mydlp_mysql:insert_log_blueprint(LogId, Filename, MimeType, Size, Hash),
-	process_log_files(LogId, IsLogData, Files);
-process_log_files(LogId, true = IsLogData, [File|Files]) ->
+	process_log_files1(LogId, IsLogData, Files);
+process_log_files1(LogId, true = IsLogData, [File|Files]) ->
 	File1 = case ( File#file.size < ?CFG(maximum_object_size) ) of 
 		true -> mydlp_api:load_files(File);
 		false -> ?ERROR_LOG("Unexpected big item. File: "?S, [File]),
 			File#file{data=undefined} end,
 
 	case File1#file.data of
-		undefined -> process_log_files(LogId, false, [File1]);
-		<<>> -> process_log_files(LogId, false, [File1]);
-		D when is_binary(D), size(D) == 0 -> process_log_files(LogId, false, [File1]);
+		undefined -> process_log_files1(LogId, false, [File1]);
+		<<>> -> process_log_files1(LogId, false, [File1]);
+		D when is_binary(D), size(D) == 0 -> process_log_files1(LogId, false, [File1]);
 		_Else -> 
 			{Filename, MimeType, Size, Hash} = get_meta(File1),
 			{ok, Path} = mydlp_api:quarantine(File1),
@@ -306,8 +315,8 @@ process_log_files(LogId, true = IsLogData, [File|Files]) ->
 			mydlp_mysql:insert_log_data(LogId, Filename, MimeType, Size, Hash, Path)
 	end,
 
-	process_log_files(LogId, IsLogData, Files);
-process_log_files(_LogId, _IsLogData, []) -> ok.
+	process_log_files1(LogId, IsLogData, Files);
+process_log_files1(_LogId, _IsLogData, []) -> ok.
 
 process_matching_details(LogId, MatchingDetails) ->
 	mydlp_mysql:insert_log_detail(LogId, MatchingDetails).

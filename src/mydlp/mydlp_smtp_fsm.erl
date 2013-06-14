@@ -136,6 +136,7 @@ init([]) ->
 	{stop, normal, State}.
 
 'PARSE_DATA'({data, Line}, #smtpd_fsm{buff = Buff} = State) ->
+	?ERROR_LOG("D: "?S, [Line]),
 	NewBuff = <<Buff/binary, Line/binary>>,
 	NextState = State#smtpd_fsm{buff = NewBuff},
 	case Line of
@@ -167,10 +168,15 @@ init([]) ->
 	DestinationUserHashes = get_dest_user_hashes(MessageR),
 	Destinations = lists:usort(lists:append(DestinationDomains, DestinationUserHashes)),
 	HasBCC = has_bcc(MessageR),
-	pre_query(State, Files),
+
+	OrigFilesCopy = mydlp_api:reconstruct_crs(Files),
+	State1 = State#smtpd_fsm{files=OrigFilesCopy},
+
+	pre_query(State1, Files),
+
 	AclQ = #aclq{channel=mail, src_domain = SrcDomainName, src_user_h=UserH, destinations=Destinations, has_hidden_destinations=HasBCC},
 	AclRet = mydlp_acl:q(AclQ, Files),
-	process_aclret(AclRet, State).
+	process_aclret(AclRet, State1).
 
 process_aclret(AclRet, #smtpd_fsm{files=Files} = State) ->
 	case case AclRet of
@@ -414,14 +420,18 @@ log_req(#smtpd_fsm{message_record=MessageR}, Action, {{rule, RuleId}, {file, Fil
 	log_req(#smtpd_fsm{message_record=MessageR}, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Message}, {matching_details, MatchingDetails}}).
 
 
-log_req(#smtpd_fsm{message_record=MessageR}, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}, {matching_details, MatchingDetails}}) ->
+log_req(#smtpd_fsm{message_record=MessageR, files=OrigFiles}, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}, {matching_details, MatchingDetails}}) ->
 	Src = get_from(MessageR),
 	Dest = {MessageR#message.rcpt_to, get_dest_addresses(MessageR)},
 	Time = erlang:universaltime(),
 	Payload = case Action of
 		quarantine -> MessageR;
 		_Else -> none end,
-        ?ACL_LOG_P(#log{time=Time, channel=mail, rule_id=RuleId, action=Action, ip=nil, user=Src, destination=Dest, itype_id=IType, file=File, misc=Misc, payload=Payload, matching_details=MatchingDetails}).
+	FilesToLog = case Action of
+		quarantine -> 	mydlp_api:clean_files(File), OrigFiles;
+		archive -> 	mydlp_api:clean_files(File), OrigFiles;
+		_ ->		mydlp_api:clean_files(OrigFiles), File end,
+        ?ACL_LOG_P(#log{time=Time, channel=mail, rule_id=RuleId, action=Action, ip=nil, user=Src, destination=Dest, itype_id=IType, file=FilesToLog, misc=Misc, payload=Payload, matching_details=MatchingDetails}).
 
 get_dest_domains(#message{rcpt_to=RcptTo, to=ToH, cc=CCH, bcc=BCCH})->
 	RcptToA = lists:map(fun(S) -> mime_util:dec_addr(S) end, RcptTo),
