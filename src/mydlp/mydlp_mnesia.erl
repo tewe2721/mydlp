@@ -1565,18 +1565,22 @@ handle_query({get_endpoint_commands, EndpointId}) ->
 
 handle_query(remove_old_endpoint_command) ->
 	{MegaSecs, Secs, _MicroSecs} = erlang:now(),
-        AgeLimit = 1000000*MegaSecs + Secs - 9000,
-	Q = ?QLCQ([{E#endpoint_command.id, E#endpoint_command.args} ||
+	SyncInterval = ?CFG(sync_interval)/1000, %Conversion from miliseconds to seconds.
+        AgeLimit = 1000000*MegaSecs + Secs - SyncInterval*10,
+	Q = ?QLCQ([{E#endpoint_command.id, E#endpoint_command.args, E#endpoint_command.endpoint_id} ||
 		E <- mnesia:table(endpoint_command),
 		E#endpoint_command.date < AgeLimit
 		]),
 	ECIs = ?QLCE(Q),
-	lists:foreach(fun({Id, Args}) -> 
+	lists:foreach(fun({Id, Args, EndpointId}) -> 
 			case Args of
 				[{ruleId, RuleId}, {groupId, GroupId}] -> 
 					Time = erlang:universaltime(),
-					OprLog = #opr_log{time=Time, rule_id=RuleId, group_id=GroupId, channel=discovery, message_key="ep_finished"},
-					?DISCOVERY_OPR_LOG(OprLog);
+					OprLog0 = #opr_log{time=Time, channel=discovery, rule_id=RuleId, message_key="Command could not be sent. Finish message triggered.", group_id=GroupId},
+					?DISCOVERY_OPR_LOG(OprLog0),
+					EndpointIdS = binary_to_list(EndpointId),
+					OprLog = #opr_log{time=Time, rule_id=RuleId, group_id=GroupId, channel=discovery, message_key="ep_finished", endpoint_id=EndpointIdS},
+					?DISCOVERY_OPR_LOG_EP(OprLog);
 				_ -> ok
 			end,
 			mnesia:dirty_delete({endpoint_command, Id}) end, ECIs);

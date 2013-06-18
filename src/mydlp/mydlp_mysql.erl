@@ -335,6 +335,13 @@ handle_cast({push_opr_log, Context, {opr_log, #opr_log{time=Time, channel=Channe
 		end, 45000),
 	{noreply, State};
 
+handle_cast({push_opr_log, Context, {opr_log_with_ep, #opr_log{time=Time, channel=Channel, rule_id=RuleId, message_key=MessageKey, group_id=GroupId, endpoint_id=EndpointId}}}, State) ->
+	?ASYNC(fun() ->
+			{Time1, _ChannelS, RuleId1, MessageKey1, GroupId1, Visible, Severity} = pre_push_opr_log(Time, Channel, RuleId, MessageKey, GroupId),
+			lpsq(insert_opr_log_ep_disc, [Time1, Context, RuleId1, GroupId1, MessageKey1, Visible, Severity, EndpointId], 42000)
+		end, 45000),
+	{noreply, State};
+
 handle_cast({push_opr_log, Context, {ep_opr_log, #opr_log{time=Time, channel=Channel, rule_id=RuleId, message_key=MessageKey, group_id=GroupId, endpoint_id=EndpointId}}}, State) ->
 	?ASYNC(fun() ->
 			{Time1, _ChannelS, RuleId1, MessageKey1, GroupId1, Visible, Severity} = pre_push_opr_log(Time, Channel, RuleId, MessageKey, GroupId),

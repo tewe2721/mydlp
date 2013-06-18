@@ -122,6 +122,10 @@
 	?LOGGER_NOTIFY_0({operational, discovery}, OprLog, [])
 	).
 
+-define(DISCOVERY_OPR_LOG_EP(OprLog),
+	?LOGGER_NOTIFY_0({operational, discovery_ep}, OprLog, [])
+	).
+
 -endif.
 
 -ifdef(__MYDLP_ENDPOINT).

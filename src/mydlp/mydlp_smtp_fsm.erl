@@ -136,7 +136,6 @@ init([]) ->
 	{stop, normal, State}.
 
 'PARSE_DATA'({data, Line}, #smtpd_fsm{buff = Buff} = State) ->
-	?ERROR_LOG("D: "?S, [Line]),
 	NewBuff = <<Buff/binary, Line/binary>>,
 	NextState = State#smtpd_fsm{buff = NewBuff},
 	case Line of

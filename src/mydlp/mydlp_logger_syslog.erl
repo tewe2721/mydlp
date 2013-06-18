@@ -131,10 +131,12 @@ handle_event({EventLevel, _, {_FromPid, Fmt, Data}}, State) ->
 	try	%Message = io_lib:format (Fmt, Data),
 		Message = case EventLevel of 
 			{operational, discovery} -> Fmt;
+			{operational, discovery_ep} -> Fmt;
 			_ -> io_lib:format(Fmt, Data)
 			end,
 		case EventLevel of
 			{operational, discovery} -> ?_OPR_LOG_HANDLE(discovery, {opr_log, Message});
+			{operational, discovery_ep} -> ?_OPR_LOG_HANDLE(discovery, {opr_log_with_ep, Message});
 			{operational, general} -> ?_OPR_LOG_HANDLE(general, {key, Message});
 			error -> syslog_err(State, Message);
 			warning_msg -> syslog_syswarn(State, Message);
