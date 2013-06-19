@@ -183,8 +183,8 @@ acl_exec3(SpawnOpts, Req, AllRules, Files, ExNewFiles, CleanFiles) ->
 
 	case AclR of
 		return -> mydlp_api:clean_files(FFiles);
-		{_, {{rule, _}, {file, #file{dataref=DRef}}, {itype, _}, {misc, _}, {matching_details, _}}} ->
-			mydlp_api:clean_files_excluding(FFiles, DRef) end,
+		{_, {{rule, _}, {file, TargetFiles}, {itype, _}, {misc, _}, {matching_details, _}}} ->
+			mydlp_api:clean_files_excluding(FFiles, TargetFiles) end,
 
 	AclR.
 
@@ -308,53 +308,75 @@ get_spawn_opts(_Else) -> [].
 
 apply_rules(_CTX, _SpawnOpts, [], _Files) -> return;
 apply_rules(_CTX, _SpawnOpts, _Rules, []) -> return;
-apply_rules(CTX, SpawnOpts, [{Id, Action, ITypes} = RS|Rules], Files) ->
+apply_rules(CTX, SpawnOpts, Rules, Files) ->
+	Result = mydlp_api:pmap(fun(R) -> execute_itypes_pr(CTX, SpawnOpts, R, Files) end, Rules, 1200000, SpawnOpts),
+	generate_aclret(Result, Rules).
+
+generate_aclret(Result, Rules) -> generate_aclret(Result, Rules, return, -1, -1, "", [], []).
+
+generate_aclret([_|RestOfResults], [_|RestOfRules], error, CurRuleId, CurITypeId, CurMisc, Files, MatchingDetails) ->
+	generate_aclret(RestOfResults, RestOfRules, error, CurRuleId, CurITypeId, CurMisc, Files, MatchingDetails);
+generate_aclret([{RuleId, IResults}|RestOfResults], [{RuleId, Action, _ITypes}|RestOfRules], CurAction, CurRuleId, CurITypeId, CurMisc, Files, MatchingDetails) ->
+	NonNegResults = lists:filter(fun(IR) -> ( not ( IR == neg ) ) end, IResults),
+	case NonNegResults of
+		[] -> 	generate_aclret(RestOfResults, RestOfRules, CurAction, CurRuleId, CurITypeId, CurMisc, Files, MatchingDetails);
+		_ -> 	{CurAction1, CurRuleId1, CurITypeId1, CurMisc1, Files1, MatchingDetails1} =
+				generate_aclret_pr(NonNegResults, RuleId, Action, CurAction, CurRuleId, CurITypeId, CurMisc, Files, MatchingDetails),
+			generate_aclret(RestOfResults, RestOfRules, CurAction1, CurRuleId1, CurITypeId1, CurMisc1, Files1, MatchingDetails1)
+			end;
+generate_aclret([], [], return, _CurRuleId, _CurITypeId, _CurMisc, _Files, _MatchingDetails) -> return;
+generate_aclret([], [], error, CurRuleId, CurITypeId, CurMisc, Files, _MatchingDetails) ->
+	case ?CFG(error_action) of
+		pass -> return;
+		EAction -> {EAction, {{rule, CurRuleId}, {file, Files}, {itype, CurITypeId}, {misc, CurMisc}}} end;
+generate_aclret([], [], CurAction, CurRuleId, CurITypeId, CurMisc, Files, MatchingDetails) ->
+	{CurAction, {{rule, CurRuleId}, {file, Files}, {itype, CurITypeId}, {misc, CurMisc}, {matching_details, MatchingDetails}}}.
+
+generate_aclret_pr([_|NonNegResults], RuleId, Action, error, CurRuleId, CurITypeId, CurMisc, CurFiles, CurMatchingDetails) ->
+	generate_aclret_pr(NonNegResults, RuleId, Action, error, CurRuleId, CurITypeId, CurMisc, CurFiles, CurMatchingDetails);
+generate_aclret_pr([{pos, {file, File}, {itype, ITypeOrigId}, {misc, Misc}, {matching_details, MatchingDetails}}|NonNegResults], 
+			RuleId, Action, _CurAction, -1, -1, "", CurFiles, CurMatchingDetails) ->
+	generate_aclret_pr(NonNegResults, RuleId, Action, Action, RuleId, ITypeOrigId, Misc, CurFiles ++ [File], CurMatchingDetails ++ MatchingDetails);
+generate_aclret_pr([{pos, {file, File}, {itype, _ITypeOrigId}, {misc, _Misc}, {matching_details, MatchingDetails}}|NonNegResults], 
+			RuleId, Action, CurAction, CurRuleId, CurITypeId, CurMisc, CurFiles, CurMatchingDetails) ->
+	generate_aclret_pr(NonNegResults, RuleId, Action, CurAction, CurRuleId, CurITypeId, CurMisc, CurFiles ++ [File], CurMatchingDetails ++ MatchingDetails);
+generate_aclret_pr([{error, {file, File}, {itype, ITypeOrigId}, {misc, Misc}}|NonNegResults], 
+			RuleId, Action, _CurAction, _CurRuleId, _CurITypeId, _CurMisc, _CurFiles, _CurMatchingDetails) ->
+	generate_aclret_pr(NonNegResults, RuleId, Action, error, RuleId, ITypeOrigId, Misc, [File], []);
+generate_aclret_pr([error|NonNegResults], RuleId, Action, _CurAction, _CurRuleId, _CurITypeId, _CurMisc, _CurFiles, _CurMatchingDetails) ->
+	generate_aclret_pr(NonNegResults, RuleId, Action, error, RuleId, -1, "internal_error", [], []);
+generate_aclret_pr([], _RuleId, _Action, CurAction, CurRuleId, CurITypeId, CurMisc, CurFiles, CurMatchingDetails) ->
+	{CurAction, CurRuleId, CurITypeId, CurMisc, lists:flatten(CurFiles), lists:flatten(CurMatchingDetails)}.
+
+
+execute_itypes_pr(CTX, SpawnOpts, {Id, _Action, ITypes} = RS, Files) ->
 	Result = try execute_itypes(CTX, SpawnOpts, ITypes, Files)
 		catch Class:Error -> 
 			?ERROR_LOG("Internal error. Class: "?S", Error: "?S".~nRS: "?S"~nStacktrace: "?S, 
 				[Class, Error, RS, erlang:get_stacktrace()]),
-		{error, {file, Files}, {itype, -1}, {misc, "internal_error"}} end,
-	case Result of
-		neg -> apply_rules(CTX, SpawnOpts, Rules, Files);
-		{pos, {file, File}, {itype, ITypeOrigId}, {misc, Misc}, {matching_details, MatchingDetails}} -> 
-			{Action, {{rule, Id}, {file, File}, {itype, ITypeOrigId}, {misc, Misc}, {matching_details, MatchingDetails}}};
-		{error, {file, File}, {itype, ITypeOrigId}, {misc, Misc}} -> 
-			case ?CFG(error_action) of
-				pass -> apply_rules(CTX, SpawnOpts, Rules, Files);
-				EAction -> {EAction, {{rule, Id}, {file, File}, 
-						{itype, ITypeOrigId}, {misc, Misc}}} 
-			end
-	end.
-
+		error end,
+	{Id, lists:flatten(Result)}.
 
 execute_itypes(_CTX, _SpawnOpts, [], _Files) -> neg;
 execute_itypes(_CTX, _SpawnOpts, _ITypes, []) -> neg;
 execute_itypes(CTX, SpawnOpts, ITypes, Files) ->
-	PAnyRet = mydlp_api:pany(fun(F) -> execute_itypes_pf(CTX, SpawnOpts, ITypes, F) end, Files, 900000, SpawnOpts),
-	case PAnyRet of
-		false -> neg;
-		{ok, _File, Ret} -> Ret end.
-
+	mydlp_api:pmap(fun(F) -> execute_itypes_pf(CTX, SpawnOpts, ITypes, F) end, Files, 900000, SpawnOpts).
 
 execute_itypes_pf(CTX, SpawnOpts, ITypes, File) -> 
         File1 = case File#file.mime_type of 
                 undefined -> 	MT = mydlp_tc:get_mime(File#file.filename, File#file.data),
 				File#file{mime_type=MT};
                 _Else ->	File end,
-
-	PAnyRet = mydlp_api:pany(fun(T) -> execute_itype_pf(CTX, SpawnOpts, T, File1) end, ITypes, 850000, SpawnOpts),
+	mydlp_api:pmap(fun(T) -> execute_itype_pf(CTX, SpawnOpts, T, File1) end, ITypes, 850000, SpawnOpts).
 	
-	case PAnyRet of
-		false -> neg;
-		{ok, _IType, Ret} -> Ret end.
-
 execute_itype_pf(CTX, SpawnOpts, {ITypeOrigId, all, Distance, IFeatures}, File) ->
 	execute_itype_pf1(CTX, SpawnOpts, ITypeOrigId, Distance, IFeatures, File);
 execute_itype_pf(CTX, SpawnOpts, {ITypeOrigId, DataFormats, Distance, IFeatures},
 		#file{mime_type=MT} = File) ->
-        case mydlp_mnesia:is_mime_of_dfid(MT, DataFormats) of
+        Result = case mydlp_mnesia:is_mime_of_dfid(MT, DataFormats) of
                 false -> neg;
-		true -> execute_itype_pf1(CTX, SpawnOpts, ITypeOrigId, Distance, IFeatures, File) end.
+		true -> execute_itype_pf1(CTX, SpawnOpts, ITypeOrigId, Distance, IFeatures, File) end,
+	{ITypeOrigId, Result}.
 
 execute_itype_pf1(CTX, SpawnOpts, ITypeOrigId, Distance, IFeatures, File) ->
 	case execute_ifeatures(CTX, SpawnOpts, Distance, IFeatures, File) of

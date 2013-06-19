@@ -1701,12 +1701,17 @@ clean_file(#file{} = File) ->
 	File#file{dataref=undefined}.
 
 clean_files_excluding(#file{} = File, DRef) -> [Ret] = clean_files_excluding([File], DRef), Ret;
-clean_files_excluding(Files, DRef) when is_list(Files) -> clean_files_excluding(Files, DRef, []).
+clean_files_excluding(Files, TargetFiles) when is_list(Files) -> clean_files_excluding1(Files, TargetFiles).
 
-clean_files_excluding([#file{dataref=DRef} = File|Rest], DRef, Acc) -> clean_files_excluding(Rest, DRef, [File|Acc]);
-clean_files_excluding([File|Rest], DRef, Acc) -> 
-	File1 = clean_file(File),
-	clean_files_excluding(Rest, DRef, [File1|Acc]);
+clean_files_excluding1(Files, TargetFiles) ->
+	TargetDRefs = [ D || #file{dataref=D} <- TargetFiles ],
+	clean_files_excluding(Files, TargetDRefs, []).
+
+clean_files_excluding([#file{dataref=D} = File|Rest], TargetDRefs, Acc) -> 
+	File1 = case lists:member(D, TargetDRefs) of
+		false ->  clean_file(File);
+		true -> File end,
+	clean_files_excluding(Rest, TargetDRefs, [File1|Acc]);
 clean_files_excluding([], _DRef, Acc) -> lists:reverse(Acc).
 
 
