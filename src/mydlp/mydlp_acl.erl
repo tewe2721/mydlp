@@ -158,7 +158,6 @@ acl_exec3(SpawnOpts, Req, AllRules, Files, ExNewFiles, CleanFiles) ->
 
 	{PFiles1, NewFiles} = mydlp_api:analyze(Files1),
 
-
 	PFiles2 = mydlp_api:drop_nodata(PFiles1),
 	PFiles3 = case Req of
 		#mining_req{normal_text = true} -> pl_text(PFiles2, normalized);
@@ -325,10 +324,10 @@ generate_aclret([{RuleId, IResults}|RestOfResults], [{RuleId, Action, _ITypes}|R
 			generate_aclret(RestOfResults, RestOfRules, CurAction1, CurRuleId1, CurITypeId1, CurMisc1, Files1, MatchingDetails1)
 			end;
 generate_aclret([], [], return, _CurRuleId, _CurITypeId, _CurMisc, _Files, _MatchingDetails) -> return;
-generate_aclret([], [], error, CurRuleId, CurITypeId, CurMisc, Files, _MatchingDetails) ->
+generate_aclret([], [], error, CurRuleId, CurITypeId, CurMisc, Files, MatchingDetails) ->
 	case ?CFG(error_action) of
 		pass -> return;
-		EAction -> {EAction, {{rule, CurRuleId}, {file, Files}, {itype, CurITypeId}, {misc, CurMisc}}} end;
+		EAction -> {EAction, {{rule, CurRuleId}, {file, Files}, {itype, CurITypeId}, {misc, CurMisc}, {matching_details, MatchingDetails}}} end;
 generate_aclret([], [], CurAction, CurRuleId, CurITypeId, CurMisc, Files, MatchingDetails) ->
 	{CurAction, {{rule, CurRuleId}, {file, Files}, {itype, CurITypeId}, {misc, CurMisc}, {matching_details, MatchingDetails}}}.
 
@@ -354,7 +353,7 @@ execute_itypes_pr(CTX, SpawnOpts, {Id, _Action, ITypes} = RS, Files) ->
 		catch Class:Error -> 
 			?ERROR_LOG("Internal error. Class: "?S", Error: "?S".~nRS: "?S"~nStacktrace: "?S, 
 				[Class, Error, RS, erlang:get_stacktrace()]),
-		error end,
+		[error] end,
 	{Id, lists:flatten(Result)}.
 
 execute_itypes(_CTX, _SpawnOpts, [], _Files) -> neg;
