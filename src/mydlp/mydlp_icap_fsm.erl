@@ -804,7 +804,7 @@ df_to_files(#state{icap_mod_mode=reqmod, files=Files,
 	
 	OFiles = case Files of
 		[] -> 	FN = case cd_to_fn1(CDisposition) of
-				none -> "post-data";
+				none -> "HTTP Post Payload";
 				CDFN -> CDFN end,
 			DFile = ?BF_C(#file{name=FN}, ReqData), [DFile];
 		_ -> Files end,
@@ -821,7 +821,7 @@ df_to_files(#state{icap_mod_mode=respmod,
 		CDFN -> CDFN end,
 
 	RFile = case FN of
-		none -> ?BF_C(#file{name= "resp-data"}, ResData);
+		none -> ?BF_C(#file{name= "HTTP Response Paylaod"}, ResData);
 		FN -> FN1 = case string:len(FN) > ?MAX_FILENAME_LENGTH of
 				true -> string:substr(FN, 1, ?MAX_FILENAME_LENGTH);
 				false -> FN end,

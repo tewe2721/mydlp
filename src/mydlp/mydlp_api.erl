@@ -1628,12 +1628,12 @@ files_to_str([], Returns) ->
 
 file_to_str(File) -> normalize_fn(file_to_str1(File)).
 
-file_to_str1(#file{name=undefined, filename=undefined}) -> "data";
+file_to_str1(#file{name=undefined, filename=undefined}) -> "Noname Data";
 file_to_str1(#file{name=Name, filename=undefined}) -> Name;
 file_to_str1(#file{name=undefined, filename=Filename}) -> Filename;
-file_to_str1(#file{name="extracted file", filename=Filename}) -> "extracted file: " ++ Filename;
+file_to_str1(#file{name="extracted file", filename=Filename}) -> "[Extracted] " ++ Filename;
 file_to_str1(#file{filename=Filename}) -> Filename;
-file_to_str1(_File) -> "data".
+file_to_str1(_File) -> "Noname Data".
 
 %%--------------------------------------------------------------------
 %% @doc Returns whether given term has text
@@ -2258,7 +2258,7 @@ uri_to_hr_file(Uri) ->
 	RData = uri_to_hr_str(Uri),
 	case RData of
 		[] -> none;
-		_Else -> ?BF_C(#file{name="uri-data"}, RData) end.
+		_Else -> ?BF_C(#file{name="HTTP URI Paramaters"}, RData) end.
 	
 
 %%-------------------------------------------------------------------------
@@ -2855,11 +2855,25 @@ get_random_bytes(Size) when is_integer(Size) -> crypto:rand_bytes(Size).
 %%-------------------------------------------------------------------------
 
 cd_to_fn(ContentDisposition) ->
-	ExtFN = case string:str(ContentDisposition, "filename=") of
-		0 -> none; 
-		I ->	FNVal = string:strip(string:substr(ContentDisposition, I + 9)),
-			FNVal1 = string:strip(FNVal, right, $;),
-			case FNVal1 of
+	ExtFN = case read_inline_header("filename", ContentDisposition) of
+		none -> case read_inline_header("name", ContentDisposition) of
+			none -> none;
+			NameVal -> case ContentDisposition of
+				"form-data" ++ _ -> "[Form Input] " ++ NameVal;
+				_ -> NameVal end end;
+		Val -> Val end,
+
+	case ExtFN of
+		none -> none;
+		_Else -> multipart_decode_fn(ExtFN) end.
+
+read_inline_header(HeaderKey, StringValue) ->
+	KeyStr = HeaderKey ++ "=",
+	case string:str(StringValue, KeyStr) of
+		0 -> 	none; 
+		I ->	Val = string:strip(string:substr(StringValue, length(KeyStr) + I )),
+			Val1 = string:strip(Val, right, $;),
+			case Val1 of
 				"\\\"" ++ Str -> 
 					Len = string:len(Str),
 					case string:substr(Str, Len - 1) of
@@ -2870,10 +2884,7 @@ cd_to_fn(ContentDisposition) ->
 					Len = string:len(Str),
 					"\"" = string:substr(Str, Len),
 					string:substr(Str, 1, Len - 1);
-				Str -> Str end end,
-	case ExtFN of
-		none -> none;
-		_Else -> multipart_decode_fn(ExtFN) end.
+				Str -> Str end end.
 
 %%-------------------------------------------------------------------------
 %% @doc Select chuck from files
