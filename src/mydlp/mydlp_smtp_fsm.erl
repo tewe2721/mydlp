@@ -427,6 +427,7 @@ log_req(#smtpd_fsm{message_record=MessageR, files=OrigFiles}, Action, {{rule, Ru
 		quarantine -> MessageR;
 		_Else -> none end,
 	FilesToLog = case Action of
+		pass ->	mydlp_api:clean_files(OrigFiles), File;
 		_ ->	mydlp_api:clean_files(File), OrigFiles end,
 %		quarantine -> 	mydlp_api:clean_files(File), OrigFiles;
 %		archive -> 	mydlp_api:clean_files(File), OrigFiles;
