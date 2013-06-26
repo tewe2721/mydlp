@@ -427,9 +427,10 @@ log_req(#smtpd_fsm{message_record=MessageR, files=OrigFiles}, Action, {{rule, Ru
 		quarantine -> MessageR;
 		_Else -> none end,
 	FilesToLog = case Action of
-		quarantine -> 	mydlp_api:clean_files(File), OrigFiles;
-		archive -> 	mydlp_api:clean_files(File), OrigFiles;
-		_ ->		mydlp_api:clean_files(OrigFiles), File end,
+		_ ->	mydlp_api:clean_files(File), OrigFiles end,
+%		quarantine -> 	mydlp_api:clean_files(File), OrigFiles;
+%		archive -> 	mydlp_api:clean_files(File), OrigFiles;
+%		_ ->		mydlp_api:clean_files(OrigFiles), File end,
         ?ACL_LOG_P(#log{time=Time, channel=mail, rule_id=RuleId, action=Action, ip=nil, user=Src, destination=Dest, itype_id=IType, file=FilesToLog, misc=Misc, payload=Payload, matching_details=MatchingDetails}).
 
 get_dest_domains(#message{rcpt_to=RcptTo, to=ToH, cc=CCH, bcc=BCCH})->
