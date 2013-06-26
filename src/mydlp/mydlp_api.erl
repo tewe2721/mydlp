@@ -2967,7 +2967,7 @@ empty_aclr(Files, Misc) -> empty_aclr(-1, Files, Misc).
 %% @end
 %%-------------------------------------------------------------------------
 
-empty_aclr(RuleId, Files, Misc) -> {{rule, RuleId}, {file, Files}, {itype, -1}, {misc, Misc}, {matching_details, []}}.
+empty_aclr(RuleId, Files, Misc) -> {{rule, RuleId}, {file, Files}, {itype, -1}, {misc, Misc}}.
 
 
 %%-------------------------------------------------------------------------

@@ -258,12 +258,12 @@ process_log_tuple(#log{channel=mail, destination={_RcptTo, CompleteRcpts}} = Log
 process_log_tuple(Log) -> process_log_tuple1(Log).
 
 process_log_tuple1(#log{file=[]}) -> ok;
-process_log_tuple1(#log{time=Time, channel=Channel, rule_id=RuleId, action=Action, ip=Ip, user=User, destination=To, file=Files, itype_id = ITypeId, misc=Misc, payload=Payload, group_id=GroupId, matching_details=MatchingDetails}) ->
+process_log_tuple1(#log{time=Time, channel=Channel, rule_id=RuleId, action=Action, ip=Ip, user=User, destination=To, file=Files, itype_id = ITypeId, misc=Misc, payload=Payload, group_id=GroupId}) ->
 	IsLogData = mydlp_api:is_store_action(Action),
 	LogId = mydlp_mysql:push_log(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc, GroupId),
 	notify_users(RuleId, Ip, User, Time),
 	process_log_files(LogId, IsLogData, Files),
-	process_matching_details(LogId, MatchingDetails),
+	%process_matching_details(LogId, MatchingDetails),
 	case {Channel, Action} of
 		{mail, quarantine} -> 	process_payload(LogId, Payload),
 					mydlp_mysql:insert_log_requeue(LogId);
@@ -296,7 +296,8 @@ process_log_files1(LogId, false = IsLogData, [File|Files]) ->
 	{Filename, MimeType, Size, Hash} = get_meta(File),
 	mydlp_api:clean_files(File),
 
-	mydlp_mysql:insert_log_blueprint(LogId, Filename, MimeType, Size, Hash),
+	MatchingDetails = File#file.matching_detail,
+	mydlp_mysql:insert_log_blueprint(LogId, Filename, MimeType, Size, Hash, MatchingDetails),
 	process_log_files1(LogId, IsLogData, Files);
 process_log_files1(LogId, true = IsLogData, [File|Files]) ->
 	File1 = case ( File#file.size < ?CFG(maximum_object_size) ) of 
@@ -312,14 +313,15 @@ process_log_files1(LogId, true = IsLogData, [File|Files]) ->
 			{Filename, MimeType, Size, Hash} = get_meta(File1),
 			{ok, Path} = mydlp_api:quarantine(File1),
 			mydlp_api:clean_files(File1),
-			mydlp_mysql:insert_log_data(LogId, Filename, MimeType, Size, Hash, Path)
+			MatchingDetails = File1#file.matching_detail,
+			mydlp_mysql:insert_log_data(LogId, Filename, MimeType, Size, Hash, Path, MatchingDetails)
 	end,
 
 	process_log_files1(LogId, IsLogData, Files);
 process_log_files1(_LogId, _IsLogData, []) -> ok.
 
-process_matching_details(LogId, MatchingDetails) ->
-	mydlp_mysql:insert_log_detail(LogId, MatchingDetails).
+%process_matching_details(LogId, MatchingDetails) ->
+%	mydlp_mysql:insert_log_detail(LogId, MatchingDetails).
 
 -endif.
 

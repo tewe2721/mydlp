@@ -47,8 +47,8 @@
 	requeued/1,
 	is_multisite/0,
 	get_denied_page/0,
-	insert_log_blueprint/5,
-	insert_log_data/6,
+	insert_log_blueprint/6,
+	insert_log_data/7,
 	insert_log_detail/2,
 	insert_log_requeue/1,
 	delete_log_requeue/1,
@@ -126,11 +126,11 @@ insert_log_requeue(LogId) ->
 delete_log_requeue(LogId) -> 
 	gen_server:cast(?MODULE, {delete_log_requeue, LogId}).
 
-insert_log_blueprint(LogId, Filename, MimeType, Size, Hash) -> 
-	gen_server:cast(?MODULE, {insert_log_blueprint, LogId, Filename, MimeType, Size, Hash}).
+insert_log_blueprint(LogId, Filename, MimeType, Size, Hash, MatchingDetails) -> 
+	gen_server:cast(?MODULE, {insert_log_blueprint, LogId, Filename, MimeType, Size, Hash, MatchingDetails}).
 
-insert_log_data(LogId, Filename, MimeType, Size, Hash, Path) -> 
-	gen_server:cast(?MODULE, {insert_log_data, LogId, Filename, MimeType, Size, Hash, Path}).
+insert_log_data(LogId, Filename, MimeType, Size, Hash, Path, MatchingDetails) -> 
+	gen_server:cast(?MODULE, {insert_log_data, LogId, Filename, MimeType, Size, Hash, Path, MatchingDetails}).
 
 insert_log_detail(LogId, MatchingDetails) ->
 	gen_server:cast(?MODULE, {insert_log_detail, LogId, MatchingDetails}).
@@ -404,7 +404,7 @@ handle_cast({delete_log_requeue, LogId}, State) ->
 	end, 30000),
 	{noreply, State};
 
-handle_cast({insert_log_data, LogId, Filename0, MimeType, Size, Hash, Path}, State) ->
+handle_cast({insert_log_data, LogId, Filename0, MimeType, Size, Hash, Path, MatchingDetails}, State) ->
 	% Probably will create problems in multisite use.
 	?ASYNC(fun() ->
 		{Filename} = pre_insert_log(Filename0),
@@ -417,7 +417,17 @@ handle_cast({insert_log_data, LogId, Filename0, MimeType, Size, Hash, Path}, Sta
 						last_insert_id_t();
 				{ok, [[Id]|_]} -> Id end
 			end, 60000),
-		lpsq(insert_incident_file_data, [LogId, Filename, DataId], 30000)
+		{atomic, FileId} = ltransaction(fun() ->
+			psqt(insert_incident_file_data, [LogId, Filename, DataId]),
+			last_insert_id_t()
+			end, 60000),
+		
+		lists:foreach(fun(#matching_detail{pattern=Pattern, matcher_func=MatcherFunc}) -> 
+				PatternB = case Pattern of
+						P when is_binary(P) -> P;
+						P when is_list(P) ->  unicode:characters_to_binary(P) end,
+				lpsq(insert_log_detail, [FileId, PatternB, MatcherFunc], 30000) 
+				end, MatchingDetails) 
 	end, 100000),
 	{noreply, State};
 
@@ -434,7 +444,7 @@ handle_cast({insert_log_detail, LogId, MatchingDetails}, State) ->
 		end, 60000),
         {noreply, State};
 
-handle_cast({insert_log_blueprint, LogId, Filename0, MimeType, Size, Hash}, State) ->
+handle_cast({insert_log_blueprint, LogId, Filename0, MimeType, Size, Hash, MatchingDetails}, State) ->
 	% Probably will create problems in multisite use.
 	?ASYNC(fun() ->
 		{Filename} = pre_insert_log(Filename0),
@@ -447,7 +457,16 @@ handle_cast({insert_log_blueprint, LogId, Filename0, MimeType, Size, Hash}, Stat
 						last_insert_id_t();
 				{ok, [[Id]|_]} -> Id end
 			end, 60000),
-		lpsq(insert_incident_file_bp, [LogId, Filename, BlueprintId], 30000)
+		{atomic, FileId} = ltransaction(fun() ->
+			psqt(insert_incident_file_bp, [LogId, Filename, BlueprintId]),
+			last_insert_id_t()
+			end, 60000),
+		lists:foreach(fun(#matching_detail{pattern=Pattern, matcher_func=MatcherFunc}) -> 
+				PatternB = case Pattern of
+						P when is_binary(P) -> P;
+						P when is_list(P) ->  unicode:characters_to_binary(P) end,
+				lpsq(insert_log_detail, [FileId, PatternB, MatcherFunc], 30000) 
+				end, MatchingDetails) 
 	end, 100000),
 	{noreply, State};
 
@@ -658,7 +677,7 @@ init([]) ->
 		{insert_incident, <<"INSERT INTO IncidentLog (id, date, channel, ruleId, sourceIp, sourceUser, destination, informationTypeId, action, matcherMessage, groupId, visible) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)">>},
 		{insert_incident_file_data, <<"INSERT INTO IncidentLogFile (id, incidentLog_id, filename, content_id) VALUES (NULL, ?, ?, ?)">>},
 		{insert_incident_file_bp, <<"INSERT INTO IncidentLogFile (id, incidentLog_id, filename, blueprint_id) VALUES (NULL, ?, ?, ?)">>},
-		{insert_log_detail, <<"INSERT INTO MatchingDetail (id, incidentLog_id, matchingData, matcherFunc) VALUES (NULL, ?, ?, ?)">>},
+		{insert_log_detail, <<"INSERT INTO MatchingDetail (id, incidentLogFile_id, matchingData, matcherFunc) VALUES (NULL, ?, ?, ?)">>},
 %		{insert_archive, <<"INSERT INTO log_archive (id, customer_id, rule_id, protocol, src_ip, src_user, destination, log_archive_file_id) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)">>},
 %		{new_archive_file_entry, <<"INSERT INTO log_archive_file (id) VALUES (NULL)">>},
 %		{update_archive_file, <<"UPDATE log_archive_file SET filename=?, log_archive_data_id=? WHERE id = ?">>},

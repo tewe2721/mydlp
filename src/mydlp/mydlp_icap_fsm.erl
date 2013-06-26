@@ -541,7 +541,7 @@ acl_ret(QRet, DFFiles, State) ->
 
 'REPLY_OK'(State) -> reply(ok, State).
 
-'BLOCK_REQ'(block, State, {{rule, OrigRuleId}, _, _, _, _}) -> reply({block, OrigRuleId}, State).
+'BLOCK_REQ'(block, State, {{rule, OrigRuleId}, _, _, _}) -> reply({block, OrigRuleId}, State).
 
 send_continue(#state{socket=Socket} = State) ->
 	Reply = [?ICAP_RESP_LINE_100,
@@ -846,9 +846,9 @@ uri_to_fn(Uri) ->
 log_req(#state{icap_headers=#icap_headers{x_client_ip=Addr},
 		http_request=#http_request{path=Uri},
 		username=UserName}, Action,
-		{{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}, {matching_details, MatchingDetails}}) ->
+		{{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
 	Time = erlang:universaltime(),
-	?ACL_LOG(#log{time=Time, channel=web, rule_id=RuleId, action=Action, ip=Addr, user=UserName, destination=Uri, itype_id=IType, file=File, misc=Misc, matching_details=MatchingDetails}).
+	?ACL_LOG(#log{time=Time, channel=web, rule_id=RuleId, action=Action, ip=Addr, user=UserName, destination=Uri, itype_id=IType, file=File, misc=Misc}).
 
 get_path(("/" ++ _Str) = Uri) -> Uri;
 get_path("icap://" ++ Str) ->

@@ -182,7 +182,7 @@ acl_exec3(SpawnOpts, Req, AllRules, Files, ExNewFiles, CleanFiles) ->
 
 	case AclR of
 		return -> mydlp_api:clean_files(FFiles);
-		{_, {{rule, _}, {file, TargetFiles}, {itype, _}, {misc, _}, {matching_details, _}}} ->
+		{_, {{rule, _}, {file, TargetFiles}, {itype, _}, {misc, _}}} ->
 			mydlp_api:clean_files_excluding(FFiles, TargetFiles) end,
 
 	AclR.
@@ -311,41 +311,41 @@ apply_rules(CTX, SpawnOpts, Rules, Files) ->
 	Result = mydlp_api:pmap(fun(R) -> execute_itypes_pr(CTX, SpawnOpts, R, Files) end, Rules, 1200000, SpawnOpts),
 	generate_aclret(Result, Rules).
 
-generate_aclret(Result, Rules) -> generate_aclret(Result, Rules, return, -1, -1, "", [], []).
+generate_aclret(Result, Rules) -> generate_aclret(Result, Rules, return, -1, -1, "", []).
 
-generate_aclret([_|RestOfResults], [_|RestOfRules], error, CurRuleId, CurITypeId, CurMisc, Files, MatchingDetails) ->
-	generate_aclret(RestOfResults, RestOfRules, error, CurRuleId, CurITypeId, CurMisc, Files, MatchingDetails);
-generate_aclret([{RuleId, IResults}|RestOfResults], [{RuleId, Action, _ITypes}|RestOfRules], CurAction, CurRuleId, CurITypeId, CurMisc, Files, MatchingDetails) ->
+generate_aclret([_|RestOfResults], [_|RestOfRules], error, CurRuleId, CurITypeId, CurMisc, Files) ->
+	generate_aclret(RestOfResults, RestOfRules, error, CurRuleId, CurITypeId, CurMisc, Files);
+generate_aclret([{RuleId, IResults}|RestOfResults], [{RuleId, Action, _ITypes}|RestOfRules], CurAction, CurRuleId, CurITypeId, CurMisc, Files) ->
 	NonNegResults = lists:filter(fun(IR) -> ( not ( IR == neg ) ) end, IResults),
 	case NonNegResults of
-		[] -> 	generate_aclret(RestOfResults, RestOfRules, CurAction, CurRuleId, CurITypeId, CurMisc, Files, MatchingDetails);
-		_ -> 	{CurAction1, CurRuleId1, CurITypeId1, CurMisc1, Files1, MatchingDetails1} =
-				generate_aclret_pr(NonNegResults, RuleId, Action, CurAction, CurRuleId, CurITypeId, CurMisc, Files, MatchingDetails),
-			generate_aclret(RestOfResults, RestOfRules, CurAction1, CurRuleId1, CurITypeId1, CurMisc1, Files1, MatchingDetails1)
+		[] -> 	generate_aclret(RestOfResults, RestOfRules, CurAction, CurRuleId, CurITypeId, CurMisc, Files);
+		_ -> 	{CurAction1, CurRuleId1, CurITypeId1, CurMisc1, Files1} =
+				generate_aclret_pr(NonNegResults, RuleId, Action, CurAction, CurRuleId, CurITypeId, CurMisc, Files),
+			generate_aclret(RestOfResults, RestOfRules, CurAction1, CurRuleId1, CurITypeId1, CurMisc1, Files1)
 			end;
-generate_aclret([], [], return, _CurRuleId, _CurITypeId, _CurMisc, _Files, _MatchingDetails) -> return;
-generate_aclret([], [], error, CurRuleId, CurITypeId, CurMisc, Files, MatchingDetails) ->
+generate_aclret([], [], return, _CurRuleId, _CurITypeId, _CurMisc, _Files) -> return;
+generate_aclret([], [], error, CurRuleId, CurITypeId, CurMisc, Files) ->
 	case ?CFG(error_action) of
 		pass -> return;
-		EAction -> {EAction, {{rule, CurRuleId}, {file, Files}, {itype, CurITypeId}, {misc, CurMisc}, {matching_details, MatchingDetails}}} end;
-generate_aclret([], [], CurAction, CurRuleId, CurITypeId, CurMisc, Files, MatchingDetails) ->
-	{CurAction, {{rule, CurRuleId}, {file, Files}, {itype, CurITypeId}, {misc, CurMisc}, {matching_details, MatchingDetails}}}.
+		EAction -> {EAction, {{rule, CurRuleId}, {file, Files}, {itype, CurITypeId}, {misc, CurMisc}}} end;
+generate_aclret([], [], CurAction, CurRuleId, CurITypeId, CurMisc, Files) ->
+	{CurAction, {{rule, CurRuleId}, {file, Files}, {itype, CurITypeId}, {misc, CurMisc}}}.
 
-generate_aclret_pr([_|NonNegResults], RuleId, Action, error, CurRuleId, CurITypeId, CurMisc, CurFiles, CurMatchingDetails) ->
-	generate_aclret_pr(NonNegResults, RuleId, Action, error, CurRuleId, CurITypeId, CurMisc, CurFiles, CurMatchingDetails);
-generate_aclret_pr([{pos, {file, File}, {itype, ITypeOrigId}, {misc, Misc}, {matching_details, MatchingDetails}}|NonNegResults], 
-			RuleId, Action, _CurAction, -1, -1, "", CurFiles, CurMatchingDetails) ->
-	generate_aclret_pr(NonNegResults, RuleId, Action, Action, RuleId, ITypeOrigId, Misc, CurFiles ++ [File], CurMatchingDetails ++ MatchingDetails);
-generate_aclret_pr([{pos, {file, File}, {itype, _ITypeOrigId}, {misc, _Misc}, {matching_details, MatchingDetails}}|NonNegResults], 
-			RuleId, Action, CurAction, CurRuleId, CurITypeId, CurMisc, CurFiles, CurMatchingDetails) ->
-	generate_aclret_pr(NonNegResults, RuleId, Action, CurAction, CurRuleId, CurITypeId, CurMisc, CurFiles ++ [File], CurMatchingDetails ++ MatchingDetails);
+generate_aclret_pr([_|NonNegResults], RuleId, Action, error, CurRuleId, CurITypeId, CurMisc, CurFiles) ->
+	generate_aclret_pr(NonNegResults, RuleId, Action, error, CurRuleId, CurITypeId, CurMisc, CurFiles);
+generate_aclret_pr([{pos, {file, File}, {itype, ITypeOrigId}, {misc, Misc}}|NonNegResults], 
+			RuleId, Action, _CurAction, -1, -1, "", CurFiles) ->
+	generate_aclret_pr(NonNegResults, RuleId, Action, Action, RuleId, ITypeOrigId, Misc, CurFiles ++ [File]);
+generate_aclret_pr([{pos, {file, File}, {itype, _ITypeOrigId}, {misc, _Misc}}|NonNegResults], 
+			RuleId, Action, CurAction, CurRuleId, CurITypeId, CurMisc, CurFiles) ->
+	generate_aclret_pr(NonNegResults, RuleId, Action, CurAction, CurRuleId, CurITypeId, CurMisc, CurFiles ++ [File]);
 generate_aclret_pr([{error, {file, File}, {itype, ITypeOrigId}, {misc, Misc}}|NonNegResults], 
-			RuleId, Action, _CurAction, _CurRuleId, _CurITypeId, _CurMisc, _CurFiles, _CurMatchingDetails) ->
-	generate_aclret_pr(NonNegResults, RuleId, Action, error, RuleId, ITypeOrigId, Misc, [File], []);
-generate_aclret_pr([error|NonNegResults], RuleId, Action, _CurAction, _CurRuleId, _CurITypeId, _CurMisc, _CurFiles, _CurMatchingDetails) ->
-	generate_aclret_pr(NonNegResults, RuleId, Action, error, RuleId, -1, "internal_error", [], []);
-generate_aclret_pr([], _RuleId, _Action, CurAction, CurRuleId, CurITypeId, CurMisc, CurFiles, CurMatchingDetails) ->
-	{CurAction, CurRuleId, CurITypeId, CurMisc, lists:flatten(CurFiles), lists:flatten(CurMatchingDetails)}.
+			RuleId, Action, _CurAction, _CurRuleId, _CurITypeId, _CurMisc, _CurFiles) ->
+	generate_aclret_pr(NonNegResults, RuleId, Action, error, RuleId, ITypeOrigId, Misc, [File]);
+generate_aclret_pr([error|NonNegResults], RuleId, Action, _CurAction, _CurRuleId, _CurITypeId, _CurMisc, _CurFiles) ->
+	generate_aclret_pr(NonNegResults, RuleId, Action, error, RuleId, -1, "internal_error", []);
+generate_aclret_pr([], _RuleId, _Action, CurAction, CurRuleId, CurITypeId, CurMisc, CurFiles) ->
+	{CurAction, CurRuleId, CurITypeId, CurMisc, lists:flatten(CurFiles)}.
 
 
 execute_itypes_pr(CTX, SpawnOpts, {Id, _Action, ITypes} = RS, Files) ->
@@ -380,7 +380,9 @@ execute_itype_pf(CTX, SpawnOpts, {ITypeOrigId, DataFormats, Distance, IFeatures}
 execute_itype_pf1(CTX, SpawnOpts, ITypeOrigId, Distance, IFeatures, File) ->
 	case execute_ifeatures(CTX, SpawnOpts, Distance, IFeatures, File) of
 		neg -> neg;
-		{pos, MatchingDetails} -> {pos, {file, File}, {itype, ITypeOrigId}, {misc, ""}, {matching_details, MatchingDetails}};
+		{pos, MatchingDetails} ->
+				File1 = File#file{matching_detail=MatchingDetails},
+				{pos, {file, File1}, {itype, ITypeOrigId}, {misc, ""}};
 		{error, {file, File}, {misc, Misc}} ->
 				{error, {file, File}, {itype, ITypeOrigId}, {misc, Misc}};
 		E -> E end.
