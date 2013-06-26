@@ -347,7 +347,6 @@ generate_aclret_pr([error|NonNegResults], RuleId, Action, _CurAction, _CurRuleId
 generate_aclret_pr([], _RuleId, _Action, CurAction, CurRuleId, CurITypeId, CurMisc, CurFiles, CurMatchingDetails) ->
 	{CurAction, CurRuleId, CurITypeId, CurMisc, lists:flatten(CurFiles), lists:flatten(CurMatchingDetails)}.
 
-
 execute_itypes_pr(CTX, SpawnOpts, {Id, _Action, ITypes} = RS, Files) ->
 	Result = try execute_itypes(CTX, SpawnOpts, ITypes, Files)
 		catch Class:Error -> 
@@ -372,10 +371,9 @@ execute_itype_pf(CTX, SpawnOpts, {ITypeOrigId, all, Distance, IFeatures}, File) 
 	execute_itype_pf1(CTX, SpawnOpts, ITypeOrigId, Distance, IFeatures, File);
 execute_itype_pf(CTX, SpawnOpts, {ITypeOrigId, DataFormats, Distance, IFeatures},
 		#file{mime_type=MT} = File) ->
-        Result = case mydlp_mnesia:is_mime_of_dfid(MT, DataFormats) of
+        case mydlp_mnesia:is_mime_of_dfid(MT, DataFormats) of
                 false -> neg;
-		true -> execute_itype_pf1(CTX, SpawnOpts, ITypeOrigId, Distance, IFeatures, File) end,
-	{ITypeOrigId, Result}.
+		true -> execute_itype_pf1(CTX, SpawnOpts, ITypeOrigId, Distance, IFeatures, File) end.
 
 execute_itype_pf1(CTX, SpawnOpts, ITypeOrigId, Distance, IFeatures, File) ->
 	case execute_ifeatures(CTX, SpawnOpts, Distance, IFeatures, File) of
