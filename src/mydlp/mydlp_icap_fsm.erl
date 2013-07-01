@@ -500,6 +500,11 @@ drop_preview_bin(DataB)->
 		endpoint_id=EndpointId, un_hash=UserHash, src_hostname=Hostname } = State) ->
 	DFFiles = df_to_files(State),
 
+	OrigFilesCopy = mydlp_api:reconstruct_crs(DFFiles),
+	OrigFilesCopy1 = lists:map(fun(File) -> mydlp_api:sizefy(File) end, OrigFilesCopy),
+        OrigFilesCopy2 = mydlp_api:hashify_files(OrigFilesCopy1),
+	State1 = State#state{files=OrigFilesCopy2},
+
 	DestHost1 = case DestHost of
 		undefined -> get_host(Method, Uri);
 		DH -> mydlp_api:drop_host_port(DH) end,
@@ -507,14 +512,14 @@ drop_preview_bin(DataB)->
 
 	AclQ = #aclq{channel=web, endpoint_id=EndpointId, src_addr=CAddr, src_user_h=UserHash, destinations=DestList, src_hostname=Hostname},
 	QRet = mydlp_acl:q(AclQ, DFFiles),
-	acl_ret(QRet, DFFiles, State).
+	acl_ret(QRet, DFFiles, State1).
 
 respmod_query(_State, Files) ->
 	case ?CFG(web_archive) of
 		true ->	{archive, mydlp_api:empty_aclr(Files, web_archive)}; % We don't create redundant data refs because fsm will not query acl.
 		false -> pass end.
 
-acl_ret(QRet, DFFiles, State) -> 
+acl_ret(QRet, DFFiles, State) ->
 	case case QRet of
 		pass -> pass; 
 		log -> {log, mydlp_api:empty_aclr(DFFiles)};
@@ -845,10 +850,15 @@ uri_to_fn(Uri) ->
 
 log_req(#state{icap_headers=#icap_headers{x_client_ip=Addr},
 		http_request=#http_request{path=Uri},
-		username=UserName}, Action,
+		username=UserName, files=OrigFilesCopy}, Action,
 		{{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}}) ->
+	
+	File1 = lists:map(fun(F) -> mydlp_api:sizefy(F) end, File),
+        File2 = mydlp_api:hashify_files(File1),
+	MergedFiles = mydlp_api:merge_files(OrigFilesCopy, File2), 
+
 	Time = erlang:universaltime(),
-	?ACL_LOG(#log{time=Time, channel=web, rule_id=RuleId, action=Action, ip=Addr, user=UserName, destination=Uri, itype_id=IType, file=File, misc=Misc}).
+	?ACL_LOG(#log{time=Time, channel=web, rule_id=RuleId, action=Action, ip=Addr, user=UserName, destination=Uri, itype_id=IType, file=MergedFiles, misc=Misc}).
 
 get_path(("/" ++ _Str) = Uri) -> Uri;
 get_path("icap://" ++ Str) ->

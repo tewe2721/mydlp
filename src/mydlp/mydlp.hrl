@@ -56,7 +56,7 @@
 		text,
 		normal_text,
 		mc_table,
-		matching_detail=unknown
+		matching_detail=[]
         }).
 
 -record(matching_detail, {

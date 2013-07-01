@@ -169,7 +169,11 @@ init([]) ->
 	HasBCC = has_bcc(MessageR),
 
 	OrigFilesCopy = mydlp_api:reconstruct_crs(Files),
-	State1 = State#smtpd_fsm{files=OrigFilesCopy},
+
+	OrigFilesCopy1 = lists:map(fun(File) -> mydlp_api:sizefy(File) end, OrigFilesCopy),
+	OrigFilesCopy2 = mydlp_api:hashify_files(OrigFilesCopy1),
+
+	State1 = State#smtpd_fsm{files=OrigFilesCopy2},
 
 	pre_query(State1, Files),
 
@@ -266,7 +270,7 @@ pre_query(State, Files) ->
 		false -> ok end.
 
 % refined this
-'BLOCK_REQ'(block, #smtpd_fsm{spool_ref=Ref, message_record=MessageR} = State, {{rule, OrigRuleId}, _, _, _, _}) ->
+'BLOCK_REQ'(block, #smtpd_fsm{spool_ref=Ref, message_record=MessageR} = State, {{rule, OrigRuleId}, _, _, _}) ->
 	MailFrom = MessageR#message.mail_from,
 	RepMessage = #message{mail_from=MailFrom, 
 			rcpt_to=MailFrom,
@@ -423,12 +427,18 @@ log_req(#smtpd_fsm{message_record=MessageR, files=OrigFiles}, Action, {{rule, Ru
 	Src = get_from(MessageR),
 	Dest = {MessageR#message.rcpt_to, get_dest_addresses(MessageR)},
 	Time = erlang:universaltime(),
+
+	File1 = lists:map(fun(F) -> mydlp_api:sizefy(F) end, File),
+	File2 = mydlp_api:hashify_files(File1),
+
+	MergedFiles = mydlp_api:merge_files(OrigFiles, File2),
+
 	Payload = case Action of
 		quarantine -> MessageR;
 		_Else -> none end,
 	FilesToLog = case Action of
-		quarantine -> 	mydlp_api:clean_files(File), OrigFiles;
-		archive -> 	mydlp_api:clean_files(File), OrigFiles;
+		quarantine -> 	mydlp_api:clean_files(File), MergedFiles;
+		archive -> 	mydlp_api:clean_files(File), MergedFiles;
 		_ ->		mydlp_api:clean_files(OrigFiles), File end,
         ?ACL_LOG_P(#log{time=Time, channel=mail, rule_id=RuleId, action=Action, ip=nil, user=Src, destination=Dest, itype_id=IType, file=FilesToLog, misc=Misc, payload=Payload}).
 
