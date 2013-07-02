@@ -78,8 +78,7 @@
                 file=undefined,
                 misc=undefined,
                 payload=undefined,
-		group_id=undefined,
-		matching_details=undefined
+		group_id=undefined
         }).
 
 -record(opr_log, {

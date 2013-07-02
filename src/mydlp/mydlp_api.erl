@@ -1716,6 +1716,28 @@ clean_files_excluding([], _DRef, Acc) -> lists:reverse(Acc).
 
 
 %%--------------------------------------------------------------------
+%% @doc Merges two file list according to their size and hash.
+%% @end
+%%----------------------------------------------------------------------
+merge_files(Files, []) -> lists:flatten(Files);
+merge_files(Files1, [File|Rest])->
+	FileR = replace_if_orig_exists(Files1, File),
+	merge_files(FileR, Rest).	
+
+replace_if_orig_exists(Files, File) -> replace_if_orig_exists(Files, File, []).
+replace_if_orig_exists([], File, Acc) -> 
+	Acc1 = [File|Acc],
+	lists:reverse(Acc1);
+replace_if_orig_exists([F|Rest], File, Acc) ->
+	case F#file.size == File#file.size of
+		true ->
+			case F#file.md5_hash == File#file.md5_hash of
+				true -> Acc1 = [File|Rest],
+					[lists:reverse(Acc)|Acc1];
+				false -> replace_if_orig_exists(Rest, File, [F|Acc]) end;
+		false -> replace_if_orig_exists(Rest, File, [F|Acc]) end.
+
+%%--------------------------------------------------------------------
 %% @doc Remove cache references.
 %% @end
 %%----------------------------------------------------------------------
@@ -2967,7 +2989,7 @@ empty_aclr(Files, Misc) -> empty_aclr(-1, Files, Misc).
 %% @end
 %%-------------------------------------------------------------------------
 
-empty_aclr(RuleId, Files, Misc) -> {{rule, RuleId}, {file, Files}, {itype, -1}, {misc, Misc}, {matching_details, []}}.
+empty_aclr(RuleId, Files, Misc) -> {{rule, RuleId}, {file, Files}, {itype, -1}, {misc, Misc}}.
 
 
 %%-------------------------------------------------------------------------

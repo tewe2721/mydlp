@@ -55,7 +55,8 @@
 		dataref,
 		text,
 		normal_text,
-		mc_table
+		mc_table,
+		matching_detail=[]
         }).
 
 -record(matching_detail, {
