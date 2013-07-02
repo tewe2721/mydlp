@@ -410,14 +410,19 @@ get_dest_addresses(MessageR) ->
 	% RCPTTO - TO - CC + BCC
 	% Equality mydlp_api:hash_un
 	ToS = [A#addr.username ++ "@" ++ A#addr.domainname || A <- MessageR#message.to],
+	CcS = [A#addr.username ++ "@" ++ A#addr.domainname || A <- MessageR#message.cc],
 
 	RcptD = dict:from_list([{mydlp_api:hash_un(V), V} || V <- MessageR#message.rcpt_to]),
-	lists:foldl(fun(I, Dict) -> dict:erase(mydlp_api:hash_un(A), Dict) end, RcptD, ToS),
+	RcptD1 = lists:foldl(fun(I, Dict) -> dict:erase(mydlp_api:hash_un(I), Dict) end, RcptD, ToS),
+	RcptD2 = lists:foldl(fun(I, Dict) -> dict:erase(mydlp_api:hash_un(I), Dict) end, RcptD1, CcS),
+
+	BccD = lists:foldl(fun(I, Dict) -> dict:store(mydlp_api:hash_un(I), I, Dict) end, RcptD2, MessageR#message.bcc),
+	BccS = [V || {_H, V} <- dict:to_list(BccD)],
 
 	DestList = ["rcpt to: <" ++ R ++ ">"|| R <- MessageR#message.rcpt_to] ++ 
 		["to: <" ++ A ++ ">"|| A <- ToS] ++
-		["cc: <" ++ A#addr.username ++ "@" ++ A#addr.domainname ++ ">"|| A <- MessageR#message.cc] ++
-		["bcc: <" ++ A#addr.username ++ "@" ++ A#addr.domainname ++ ">"|| A <- MessageR#message.bcc],
+		["cc: <" ++ A ++ ">"|| A <- CcS] ++
+		["bcc: <" ++ A#addr.username ++ "@" ++ A#addr.domainname ++ ">"|| A <- BccS],
 	string:join(DestList, ", ").
 
 log_req(#smtpd_fsm{message_record=MessageR}, Action, {{rule, RuleId}, {file, File}, {itype, IType}, {misc, Misc}, {matching_details, MatchingDetails}}, none) ->
