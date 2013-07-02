@@ -407,8 +407,15 @@ get_from_domainname(MessageR) ->
 			
 
 get_dest_addresses(MessageR) ->
-	DestList = ["rcpt to: <" ++ MessageR#message.rcpt_to ++ ">"] ++ 
-		["to: <" ++ A#addr.username ++ "@" ++ A#addr.domainname ++ ">"|| A <- MessageR#message.to] ++
+	% RCPTTO - TO - CC + BCC
+	% Equality mydlp_api:hash_un
+	ToS = [A#addr.username ++ "@" ++ A#addr.domainname || A <- MessageR#message.to],
+
+	RcptD = dict:from_list([{mydlp_api:hash_un(V), V} || V <- MessageR#message.rcpt_to]),
+	lists:foldl(fun(I, Dict) -> dict:erase(mydlp_api:hash_un(A), Dict) end, RcptD, ToS),
+
+	DestList = ["rcpt to: <" ++ R ++ ">"|| R <- MessageR#message.rcpt_to] ++ 
+		["to: <" ++ A ++ ">"|| A <- ToS] ++
 		["cc: <" ++ A#addr.username ++ "@" ++ A#addr.domainname ++ ">"|| A <- MessageR#message.cc] ++
 		["bcc: <" ++ A#addr.username ++ "@" ++ A#addr.domainname ++ ">"|| A <- MessageR#message.bcc],
 	string:join(DestList, ", ").
