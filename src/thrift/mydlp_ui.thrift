@@ -52,7 +52,7 @@ service Mydlp_ui {
 
 	LicenseObject getLicense()
 
-	string apiQuery(1: string Ipaddress, 2: string Filename, 3: binary Data)
+	string apiQuery(1: string Ipaddress, 2: string Filename, 3: string User, 4: binary Data)
 
 	oneway void startDiscoveryOnDemand(1: i32 RuleId)
 

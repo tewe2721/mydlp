@@ -52,7 +52,7 @@
 	registerUserAddress/4,
 	saveLicenseKey/1,
 	getLicense/0,
-	apiQuery/3,
+	apiQuery/4,
 	startDiscoveryOnDemand/1,
 	stopDiscoveryOnDemand/1,
 	pauseDiscoveryOnDemand/1,
@@ -98,12 +98,13 @@ getRuletable(EndpointId, Revisionid) ->
 	RevisionIdI = mydlp_api:binary_to_integer(Revisionid),
 	mydlp_api:generate_client_policy(EndpointId, RevisionIdI).
 
-apiQuery(Ipaddress, Filename, Data) ->
+apiQuery(Ipaddress, Filename, User, Data) ->
 	{ok, Itemid} = mydlp_container:new(), 
 	ClientIpS = binary_to_list(Ipaddress),
 	try	ok = mydlp_container:setprop(Itemid, "channel", "api"),
 		ok = mydlp_container:setprop(Itemid, "filename_unicode", Filename),
 		ok = mydlp_container:setprop(Itemid, "ip_address", ClientIpS),
+		ok = mydlp_container:setprop(Itemid, "api_user", User),
 		ok = mydlp_container:push(Itemid, Data),
 		ok = mydlp_container:eof(Itemid),
 		{ok, QueryRet} = mydlp_container:aclq(Itemid),
