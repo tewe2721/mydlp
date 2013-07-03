@@ -104,9 +104,14 @@ init([]) ->
 %	{ok,DNSBL} = erlmail_antispam:dnsbl(IP),
 %	NewState = State#smtpd_fsm{socket=Socket, addr=IP, options = DNSBL, relay = smtpd_queue:checkip(IP)},
 	NewState = State#smtpd_fsm{socket=Socket, addr=IP, relay = true},
-	?SMTP_LOG(connect, IP),
-	NextState = smtpd_cmd:command({greeting,IP},NewState),
-	{next_state, 'WAIT_FOR_CMD', NextState, ?CFG(fsm_timeout)};
+	case mydlp_mysql:get_progress() of
+		done ->	?SMTP_LOG(connect, IP),
+			NextState = smtpd_cmd:command({greeting,IP},NewState),
+			{next_state, 'WAIT_FOR_CMD', NextState, ?CFG(fsm_timeout)};
+		_ ->	?SMTP_LOG(not_ready, IP),
+			NextState = smtpd_cmd:command(not_ready,NewState),
+			{stop, normal, NextState} end;
+			
 'WAIT_FOR_SOCKET'(Other, State) ->
 	?DEBUG("SMTP State: 'WAIT_FOR_SOCKET'. Unexpected message: "?S, [Other]),
 	%% Allow to receive async messages
@@ -491,6 +496,11 @@ has_bcc_1(#message{rcpt_to=RcptTo, to=ToHeader, cc=CCHeader} = MessageR) ->
 create_smtp_msg(connect, {Ip1,Ip2,Ip3,Ip4}) ->
 	{
 		"Connected to ~w.~w.~w.~w .",
+		[Ip1,Ip2,Ip3,Ip4]
+	};
+create_smtp_msg(not_ready, {Ip1,Ip2,Ip3,Ip4}) ->
+	{
+		"Policy compile is on progress. Temporarily rejecting mail from ~w.~w.~w.~w .",
 		[Ip1,Ip2,Ip3,Ip4]
 	};
 create_smtp_msg(received, MessageR) ->
