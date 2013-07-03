@@ -220,11 +220,16 @@ handle_call({aclq, ObjId, Timeout}, From, #state{object_tree=OT} = State) ->
 						DFFiles = [File],
 						Channel = get_channel(Obj),
 						{QRet, Obj1} = case Channel of
-							api ->	IpAddress = get_ip_address(Obj),
-								{EndpointId, UserName, UserHash, Hostname} = mydlp_mnesia:get_user_from_address(IpAddress),
-								AclQ = #aclq{endpoint_id=EndpointId, channel=Channel, 
-									src_addr=IpAddress, src_user_h=UserHash, src_hostname=Hostname},
-								{mydlp_acl:q(AclQ, DFFiles), set_api_user(Obj, UserName)};
+							api ->	
+								IpAddress = get_ip_address(Obj),
+								case get_api_user(Obj) of
+									<<"api-nouser">> ->
+										{EndpointId, UserName, UserHash, Hostname} = mydlp_mnesia:get_user_from_address(IpAddress),
+										AclQ = #aclq{endpoint_id=EndpointId, channel=Channel, 
+											src_addr=IpAddress, src_user_h=UserHash, src_hostname=Hostname},
+										{mydlp_acl:q(AclQ, DFFiles), set_api_user(Obj, UserName)};
+									Username -> AclQ = #aclq{channel=Channel, src_addr=IpAddress, src_user_h=mydlp_api:hash_un(Username)},
+										{mydlp_acl:q(AclQ, DFFiles), Obj} end;
 							discovery -> 
 								RuleIndex = get_discovery_rule_index(Obj),
 								{mydlp_acl:qe(Channel, DFFiles, RuleIndex), Obj};

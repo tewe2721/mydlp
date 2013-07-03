@@ -965,13 +965,13 @@ filter_rule_ids_by_dest(RuleIds, AclQ) -> %TODO: domain names stored as binary. 
 	
 	RuleHD = case AclQ#aclq.has_hidden_destinations of
 		true -> case AclQ#aclq.channel of
-			mail -> Q2 = ?QLCQ([R ||
+			mail -> Q3 = ?QLCQ([R ||
 					D <- mnesia:table(dest),
 					R <- RuleIds,
 					D#dest.rule_id == R,
 					D#dest.destination == has_bcc
 				]),
-				?QLCE(Q2);
+				?QLCE(Q3);
 			_Else -> [] end;
 		false -> [] end,
 
