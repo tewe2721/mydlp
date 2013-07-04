@@ -3807,7 +3807,24 @@ cmd_bool(Command, Args, Envs, Stdin) when is_list(Args), is_list(Envs) ->
 		{retcode, _Else} -> false;
 		Else -> Else end.
 
+cmd_cast(Command) -> cmd_cast(Command, []).
 
+cmd_cast(Command, Args) -> cmd_cast(Command, Args, []). 
+
+cmd_cast(Command, Args, Envs) -> cmd_cast(Command, Args, Envs, none). % Last variable for Stdin
+
+% envs should be like [{"key","value"}] and Stdin shold be "Stdin\n" format
+cmd_cast(Command, Args, Envs, Stdin) when is_list(Args), is_list(Envs) ->
+	 Port = open_port({spawn_executable, Command},
+                       [{args, Args},
+                       {env, Envs},
+                       use_stdio,
+                       exit_status,
+                       stderr_to_stdout]),
+	case Stdin of 
+		none -> ok;
+		S -> port_command(Port, S) 
+	end.
 -endif.
 
 -endif.

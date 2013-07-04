@@ -94,6 +94,8 @@
 -define(RFS_FINISHED, "rfs_finished").
 -define(WEB_FINISHED, "web_finished").
 
+-define(MAIL_FLUSH_COMMAND, "/usr/sbin/postqueue").
+
 %%%%%%%%%%%%% MyDLP Thrift RPC API
 
 push_log(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc, GroupId) ->
@@ -493,7 +495,8 @@ handle_cast({compile_customer, FilterId}, State) ->
 			mydlp_mnesia:remove_site(FilterId),
 			populate_site(FilterId),
 			ok
-		after	set_progress(done)
+		after	set_progress(done),
+			mydlp_api:cmd_cast(?MAIL_FLUSH_COMMAND, ["-f"]) %used for flushing mail queue
 		end
 	end, 900000),
 	{noreply, State};
