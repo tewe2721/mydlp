@@ -1721,7 +1721,7 @@ clean_files_excluding([], _DRef, Acc) -> lists:reverse(Acc).
 %%----------------------------------------------------------------------
 merge_files(Files, []) -> lists:flatten(Files);
 merge_files(Files1, [File|Rest])->
-	FileR = replace_if_orig_exists(Files1, File),
+	FileR = replace_if_orig_exists(lists:flatten(Files1), File),
 	merge_files(FileR, Rest).	
 
 replace_if_orig_exists(Files, File) -> replace_if_orig_exists(Files, File, []).
