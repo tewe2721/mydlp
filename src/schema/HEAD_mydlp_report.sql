@@ -1,1 +1,1 @@
-dumps/2.2.6-1___mydlp_report.sql
+dumps/2.0.10-1___mydlp_report.sql
