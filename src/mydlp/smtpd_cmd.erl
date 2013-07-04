@@ -51,6 +51,9 @@ command(Line,State) when is_binary(Line) -> command(parse(Line),State);
 command({greeting,_},State) ->
 	send(State,220,"MyDLP http://www.mydlp.com (NO UCE)"),
 	State;
+command(not_ready, State) ->
+	send(State,421),
+	State;
 
 command({helo = _Command,Domain},State) when is_list(Domain), length(Domain) > 0 -> 
 	send(State,250),
