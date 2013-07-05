@@ -1729,13 +1729,45 @@ replace_if_orig_exists([], File, Acc) ->
 	Acc1 = [File|Acc],
 	lists:reverse(Acc1);
 replace_if_orig_exists([F|Rest], File, Acc) ->
-	case F#file.size == File#file.size of
-		true ->
-			case F#file.md5_hash == File#file.md5_hash of
-				true -> Acc1 = [File|Rest],
-					[lists:reverse(Acc)|Acc1];
-				false -> replace_if_orig_exists(Rest, File, [F|Acc]) end;
-		false -> replace_if_orig_exists(Rest, File, [F|Acc]) end.
+	case is_two_file_same(F, File) of
+		true -> Acc1 = [File|Rest],
+			[lists:reverse(Acc)|Acc1];
+		false -> replace_if_orig_exists(Rest, File, [F|Acc]) 
+	end.
+
+%%--------------------------------------------------------------------
+%% @doc Merges matching detail of two same file
+%% @end
+%%----------------------------------------------------------------------
+merge_md_of_same_file(Files, File) -> 
+	Files1 = hashify_files(Files),
+	Files2 = lists:map(fun(F) -> sizefy(F) end, Files1),
+
+	File1 = hashify(File),
+	File2 = sizefy(File1),
+
+	merge_md_of_same_file(Files2, File2, []).
+
+merge_md_of_same_file([], File, Acc) -> lists:flatten([File|lists:reverse(Acc)]);
+merge_md_of_same_file([F|Rest], File, Acc) ->
+	case is_two_file_same(F, File) of
+		true -> MDAcc = [F#file.matching_detail ++ File#file.matching_detail],
+			File1 = F#file{matching_detail = lists:flatten(MDAcc)},
+			Acc1 = [File1|Rest],
+			lists:flatten([lists:reverse(Acc)|Acc1]);
+		false -> merge_md_of_same_file(Rest, File, Acc)
+	end.
+
+%%--------------------------------------------------------------------
+%% @doc Control whether two file is same or not
+%% @end
+%%----------------------------------------------------------------------
+
+is_two_file_same(File1, File2) ->
+	case File1#file.size == File2#file.size of
+		true -> File1#file.md5_hash == File2#file.md5_hash;
+		false -> false 
+	end.
 
 %%--------------------------------------------------------------------
 %% @doc Remove cache references.

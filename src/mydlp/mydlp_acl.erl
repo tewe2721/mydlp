@@ -335,10 +335,10 @@ generate_aclret_pr([_|NonNegResults], RuleId, Action, error, CurRuleId, CurIType
 	generate_aclret_pr(NonNegResults, RuleId, Action, error, CurRuleId, CurITypeId, CurMisc, CurFiles);
 generate_aclret_pr([{pos, {file, File}, {itype, ITypeOrigId}, {misc, Misc}}|NonNegResults], 
 			RuleId, Action, _CurAction, -1, -1, "", CurFiles) ->
-	generate_aclret_pr(NonNegResults, RuleId, Action, Action, RuleId, ITypeOrigId, Misc, CurFiles ++ [File]);
+	generate_aclret_pr(NonNegResults, RuleId, Action, Action, RuleId, ITypeOrigId, Misc, mydlp_api:merge_md_of_same_file(CurFiles, File));
 generate_aclret_pr([{pos, {file, File}, {itype, _ITypeOrigId}, {misc, _Misc}}|NonNegResults], 
 			RuleId, Action, CurAction, CurRuleId, CurITypeId, CurMisc, CurFiles) ->
-	generate_aclret_pr(NonNegResults, RuleId, Action, CurAction, CurRuleId, CurITypeId, CurMisc, CurFiles ++ [File]);
+	generate_aclret_pr(NonNegResults, RuleId, Action, CurAction, CurRuleId, CurITypeId, CurMisc, mydlp_api:merge_md_of_same_file(CurFiles, File));
 generate_aclret_pr([{error, {file, File}, {itype, ITypeOrigId}, {misc, Misc}}|NonNegResults], 
 			RuleId, Action, _CurAction, _CurRuleId, _CurITypeId, _CurMisc, _CurFiles) ->
 	generate_aclret_pr(NonNegResults, RuleId, Action, error, RuleId, ITypeOrigId, Misc, [File]);

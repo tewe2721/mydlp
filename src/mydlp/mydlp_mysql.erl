@@ -409,7 +409,7 @@ handle_cast({delete_log_requeue, LogId}, State) ->
 handle_cast({insert_log_data, LogId, Filename0, MimeType, Size, Hash, Path, MatchingDetails}, State) ->
 	% Probably will create problems in multisite use.
 	?ASYNC(fun() ->
-		{Filename} = pre_insert_log(Filename0),
+		{Filename, MatchingDetails1} = pre_insert_log(Filename0, MatchingDetails),
 		{atomic, DataId} = ltransaction(fun() ->
 			Query = case Hash of
 				undefined -> {ok, [] };
@@ -429,7 +429,7 @@ handle_cast({insert_log_data, LogId, Filename0, MimeType, Size, Hash, Path, Matc
 						P when is_binary(P) -> P;
 						P when is_list(P) ->  unicode:characters_to_binary(P) end,
 				lpsq(insert_log_detail, [FileId, PatternB, MatcherFunc], 30000) 
-				end, MatchingDetails) 
+				end, MatchingDetails1) 
 	end, 100000),
 	{noreply, State};
 
@@ -449,7 +449,7 @@ handle_cast({insert_log_detail, LogId, MatchingDetails}, State) ->
 handle_cast({insert_log_blueprint, LogId, Filename0, MimeType, Size, Hash, MatchingDetails}, State) ->
 	% Probably will create problems in multisite use.
 	?ASYNC(fun() ->
-		{Filename} = pre_insert_log(Filename0),
+		{Filename, MatchingDetails1} = pre_insert_log(Filename0, MatchingDetails),
 		{atomic, BlueprintId} = ltransaction(fun() ->
 			Query = case Hash of
 				undefined -> {ok, [] };
@@ -468,7 +468,7 @@ handle_cast({insert_log_blueprint, LogId, Filename0, MimeType, Size, Hash, Match
 						P when is_binary(P) -> P;
 						P when is_list(P) ->  unicode:characters_to_binary(P) end,
 				lpsq(insert_log_detail, [FileId, PatternB, MatcherFunc], 30000) 
-				end, MatchingDetails) 
+				end, MatchingDetails1) 
 	end, 100000),
 	{noreply, State};
 
@@ -1865,6 +1865,10 @@ pre_insert_log(Filename) ->
 		F when is_binary(F) -> F end,
 
 	{Filename1}.
+
+pre_insert_log(Filename, MatchingDetails) ->
+	{Filename1} = pre_insert_log(Filename),
+	{Filename1, lists:usort(MatchingDetails)}. % for multiple matching of same pattern caused by different rules.
 
 is_ep_discovery_finished(GroupId, Endpoint, Status) ->
 	case lpsq(get_opr_with_group_id_and_ep, [GroupId, Endpoint, Status], 5000) of
