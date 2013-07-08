@@ -1768,7 +1768,9 @@ is_two_file_same(File1, File2) ->
 	.
 
 
-drop_duplicate_files(Files) -> drop_duplicate_files(Files, []).
+drop_duplicate_files(Files) -> 
+	Files1 = drop_nodata(Files),
+	drop_duplicate_files(Files1, []).
 
 drop_duplicate_files([], Acc) -> lists:reverse(Acc);
 drop_duplicate_files([File|Rest], Acc) ->
