@@ -485,7 +485,8 @@ drop_preview_bin(DataB)->
 			"application/x-www-form-urlencoded" ++ _Tail -> parse_urlencoded(State);
 			_Else -> [] end,
 
-	'REQ_OK'(State#state{files=Files}).
+	Files1 = mydlp_api:drop_duplicate_files(Files),
+	'REQ_OK'(State#state{files=Files1}).
 
 % {Action, {{rule, Id}, {file, File}, {matcher, Func}, {misc, Misc}, {matching_details, MatchingDetails}}}
 'REQ_OK'(#state{icap_request=#icap_request{method=options} } = State) -> 'REPLY_OK'(State);

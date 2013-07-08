@@ -162,7 +162,8 @@ init([]) ->
 
 'READ_FILES'(#smtpd_fsm{message_mime=MIME} = State) ->
 	Files = mydlp_api:mime_to_files(MIME),
-	'REQ_OK'(State#smtpd_fsm{files=Files}).
+	Files1 = mydlp_api:drop_duplicate_files(Files),
+	'REQ_OK'(State#smtpd_fsm{files=Files1}).
 
 % {Action, {{rule, Id}, {file, File}, {matcher, Func}, {misc, Misc}, {matching_details, MatchingDetails}}}
 'REQ_OK'(#smtpd_fsm{files=Files, message_record=(#message{mail_from=MailFrom} = MessageR)} = State) ->

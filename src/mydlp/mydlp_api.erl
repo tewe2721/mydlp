@@ -209,13 +209,12 @@ to_lowerchar(C) ->
 %% @doc Extracts Text from File records
 %% @end
 %%----------------------------------------------------------------------
-get_text(#file{filename=Filename} = File) ->
+get_text(#file{} = File) ->
 	case get_text1(File) of
 		{ok, ContentText} -> 
-			FNBin = case Filename of
-				undefined -> <<>>;
-				_ -> 	FNL = filename_to_list(Filename), 
-					Extension = filename:extension(FNL),
+			FNBin = case file_to_str(File) of
+				"Noname Data" -> <<>>;
+				FNL -> 	Extension = filename:extension(FNL),
 					RootName = filename:rootname(FNL),
 					RNBin = filename_to_bin(RootName),
 					EBin = case Extension of
@@ -1635,6 +1634,7 @@ file_to_str1(#file{name="extracted file", filename=Filename}) -> "[Extracted] " 
 file_to_str1(#file{filename=Filename}) -> Filename;
 file_to_str1(_File) -> "Noname Data".
 
+
 %%--------------------------------------------------------------------
 %% @doc Returns whether given term has text
 %% @end
@@ -1751,23 +1751,31 @@ merge_md_of_same_file(Files, File) ->
 merge_md_of_same_file([], File, Acc) -> lists:flatten([File|lists:reverse(Acc)]);
 merge_md_of_same_file([F|Rest], File, Acc) ->
 	case is_two_file_same(F, File) of
-		true -> MDAcc = [F#file.matching_detail ++ File#file.matching_detail],
+		true -> MDAcc = F#file.matching_detail ++ File#file.matching_detail,
 			File1 = F#file{matching_detail = lists:flatten(MDAcc)},
 			Acc1 = [File1|Rest],
 			lists:flatten([lists:reverse(Acc)|Acc1]);
-		false -> merge_md_of_same_file(Rest, File, Acc)
+		false -> merge_md_of_same_file(Rest, File, [F|Acc])
 	end.
 
 %%--------------------------------------------------------------------
 %% @doc Control whether two file is same or not
 %% @end
 %%----------------------------------------------------------------------
-
 is_two_file_same(File1, File2) ->
-	case File1#file.size == File2#file.size of
-		true -> File1#file.md5_hash == File2#file.md5_hash;
-		false -> false 
-	end.
+	(File1#file.size == File2#file.size) andalso (File1#file.md5_hash == File2#file.md5_hash) andalso 
+	(File1#file.filename == File2#file.filename) andalso (File1#file.name == File2#file.name)
+	.
+
+
+drop_duplicate_files(Files) -> drop_duplicate_files(Files, []).
+
+drop_duplicate_files([], Acc) -> lists:reverse(Acc);
+drop_duplicate_files([File|Rest], Acc) ->
+	case lists:any(fun(F) -> is_two_file_same(F, File) end, Acc) of
+		true -> mydlp_api:clean_file(File),
+			drop_duplicate_files(Rest, Acc);
+		false-> drop_duplicate_files(Rest, [File|Acc]) end.
 
 %%--------------------------------------------------------------------
 %% @doc Remove cache references.
