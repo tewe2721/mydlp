@@ -227,7 +227,10 @@ handle_call({aclq, ObjId, Timeout}, From, #state{object_tree=OT} = State) ->
 										{EndpointId, UserName, UserHash, Hostname} = mydlp_mnesia:get_user_from_address(IpAddress),
 										AclQ = #aclq{endpoint_id=EndpointId, channel=Channel, 
 											src_addr=IpAddress, src_user_h=UserHash, src_hostname=Hostname},
-										{mydlp_acl:q(AclQ, DFFiles), set_api_user(Obj, UserName)};
+										Obj2 = case UserName of
+											nil -> del_api_user(Obj);
+											U -> set_api_user(Obj, U) end,
+										{mydlp_acl:q(AclQ, DFFiles), Obj2};
 									Username -> AclQ = #aclq{channel=Channel, src_addr=IpAddress, src_user_h=mydlp_api:hash_un(Username)},
 										{mydlp_acl:q(AclQ, DFFiles), Obj} end;
 							discovery -> 
@@ -718,7 +721,14 @@ set_api_user(#object{prop_dict=PD} = Obj, UserName) ->
 get_api_user(#object{prop_dict=PD}) ->
 	case dict:find("api_user", PD) of
 		{ok, User} -> User;
-		error -> nil  end.
+		error ->
+			case dict:find("ip_address", PD) of
+				{ok, IP} -> IP;
+				error -> nil  end end.
+
+del_api_user(#object{prop_dict=PD}=Obj) ->
+	PD1 = dict:erase("api_user", PD),
+	Obj#object{prop_dict=PD1}.
 
 predict_size(#object{filepath=undefined, data=undefined}) -> error;
 predict_size(#object{filepath=undefined, data=Data}) -> size(Data);
