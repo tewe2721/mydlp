@@ -141,7 +141,10 @@
 	get_dd_file_entry/1,
 	get_rule_name_by_id/1,
 	get_channel_and_action_by_id/1,
-	get_rule_orig_id_by_id/1
+	get_rule_orig_id_by_id/1,
+	add_email_address_to_license/1,
+	add_ep_key_to_license/1,
+	add_remote_storage_to_license/1
 	]).
 
 -endif.
@@ -241,7 +244,10 @@
 	user_message,
 	{web_entry, ordered_set,
 		fun() -> mnesia:add_table_index(web_entry, parent_id) end},
-	web_server
+	web_server,
+	license_email,
+	license_endpoint,
+	license_remote_storage
 ]).
 
 -endif.
@@ -323,6 +329,9 @@ get_record_fields_functional(Record) ->
 		web_server -> record_info(fields,web_server);
 		web_entry -> record_info(fields,web_entry);
 		user_message -> record_info(fields, user_message);
+		license_email -> record_info(fields, license_email);
+		license_endpoint -> record_info(fields, license_endpoint);
+		license_remote_storage -> record_info(fields, license_remote_storage);
 		_Else -> throw({error, not_found})
 	end.
 
@@ -524,6 +533,12 @@ get_rule_name_by_id(RuleId) -> aqc({get_rule_name_by_id, RuleId}, nocache).
 get_channel_and_action_by_id(RuleId) -> aqc({get_channel_and_action_by_id, RuleId}, nocache).
 
 get_rule_orig_id_by_id(RuleId) -> aqc({get_rule_orig_id_by_id, RuleId}, nocache).
+
+add_email_address_to_license(EmailAddress) -> aqc({add_email_address_to_license, EmailAddress}, nocache).
+
+add_ep_key_to_license(EpKey) -> aqc({add_ep_key_to_license, EpKey}, nocache).
+
+add_remote_storage_to_license(RemoteStorage) -> aqc({add_remote_storage_to_license, RemoteStorage}, nocache).
 
 -endif.
 
@@ -1595,6 +1610,18 @@ handle_query({del_web_entries_by_rule_id, _RuleId}) ->
 		F <- mnesia:table(web_entry)
 		]),
 	?QLCE(Q);
+
+handle_query({add_email_address_to_license, EmailAddress}) ->
+	AddressN = mydlp_nlp:to_lower_str(EmailAddress),
+	Q = ?QLCQ([L ||
+		L <- mnesia:table(license_email),
+		L#license_email.mail_address == AddressN
+		]),
+	case ?QLCE(Q) of
+		[] -> Time = calendar:universal_time(),
+			LE = #license_email{mail_address=AddressN, register_time=Time},
+			mnesia:dirty_write(LE);
+		_ -> ok end;
 
 handle_query(Query) -> handle_query_common(Query).
 

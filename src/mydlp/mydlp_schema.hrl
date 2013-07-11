@@ -221,6 +221,21 @@
 	last_modified
 }).
 
+-record(license_email, {
+                mail_address,
+		register_time
+        }).
+
+-record(license_endpoint, {
+                ep_key,
+		register_time
+        }).
+
+-record(license_remote_storage, {
+                rs_key,
+		register_time
+        }).
+
 -endif.
 
 
