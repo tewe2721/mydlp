@@ -1,4 +1,4 @@
-%%%---------------------------------------------------------------------------------------
+%clq%%---------------------------------------------------------------------------------------
 %%% @author    Stuart Jackson <sjackson@simpleenigma.com> [http://erlsoft.org]
 %%% @copyright 2006 - 2007 Simple Enigma, Inc. All Rights Reserved.
 %%% @doc       SMTP Server FSM for ErlMail
@@ -167,6 +167,8 @@ init([]) ->
 
 % {Action, {{rule, Id}, {file, File}, {matcher, Func}, {misc, Misc}, {matching_details, MatchingDetails}}}
 'REQ_OK'(#smtpd_fsm{files=Files, message_record=(#message{mail_from=MailFrom} = MessageR)} = State) ->
+	mydlp_mnesia:add_email_address_to_license(MailFrom),
+
 	SrcDomainName = get_from_domainname(MessageR),
 	UserH = mydlp_api:hash_un(MailFrom),
 	DestinationDomains = get_dest_domains(MessageR),

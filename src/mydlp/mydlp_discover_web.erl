@@ -342,6 +342,18 @@ is_paused_or_stopped_by_rule_id(RuleId) ->
 		_ -> none
 	end.
 
+add_web_server_to_license(RuleId) ->
+	case mydlp_mnesia:get_rule_id_by_orig_id(RuleId) of
+                none -> ok;
+                RId ->
+                        case mydlp_mnesia:get_web_servers_by_rule_id(RId) of
+                                [] -> ok;
+                                WSs -> 
+				lists:map(fun(W) -> 
+					mydlp_mnesia:add_remote_storage_to_license(lists:flatten(W#web_server.proto++W#web_server.address++W#web_server.start_path)) end, WSs)
+        end end.
+
+
 control_rule_status(RuleId, GroupId, Q) ->
 	case queue:out(Q) of
 		{{value, {_, _, _, RuleIndex, _}}, Q1} ->
@@ -350,6 +362,7 @@ control_rule_status(RuleId, GroupId, Q) ->
 				_ -> control_rule_status(RuleId, GroupId, Q1)
 			end;
 		{empty, _Q2} ->
+			add_web_server_to_license(RuleId),
 			push_opr_log(RuleId, GroupId, ?DISCOVERY_FINISHED)
 	end.
 push_opr_log(RuleId, GroupId, Message) ->

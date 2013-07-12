@@ -211,6 +211,7 @@ registerUserAddress(EndpointId, Ipaddress, Userh, Data) ->
 	UserHI = mydlp_api:binary_to_integer(Userh),
 	ClientIpS = binary_to_list(Ipaddress),
 	ClientIp = mydlp_api:str_to_ip(ClientIpS),
+	mydlp_mnesia:add_ep_key_to_license(EndpointId),
 	mydlp_mnesia:save_user_address(EndpointId, ClientIp, UserHI, Username, Hostname),
 	MetaDict.
 

@@ -363,6 +363,7 @@ mark_finished_each_rule(RuleId, GroupId, Q, IsImproper) ->
 				true -> push_opr_log(RuleId, GroupId, ?DISCOVERY_IMPROPER);
 				false -> ok end,
 			push_opr_log(RuleId, GroupId, ?DISCOVERY_FINISHED),
+			add_remote_storage_to_license(RuleId),
 			mark_as_finished(RuleId) 
 	end.
 
@@ -377,6 +378,17 @@ push_opr_log(RuleId, GroupId, Message) ->
 	?DISCOVERY_OPR_LOG(OprLog).
 
 mark_as_finished(_RuleId) -> ok.
+
+add_remote_storage_to_license(RuleId) ->
+	case mydlp_mnesia:get_rule_id_by_orig_id(RuleId) of
+		none -> ok;
+		RId ->
+			case mydlp_mnesia:get_remote_storages_by_rule_id(RId) of
+				[] -> ok;
+				RSs -> lists:map(fun({_, _, Type, RSInfo}) -> 
+						{C, A, _, _} = mydlp_discover_rfs:generate_connection_string(Type, RSInfo),
+						mydlp_mnesia:add_remote_storage_to_license(lists:flatten(C++A)) end, RSs)
+	end end.
 
 get_all_discovery_directory() -> throw({error, should_not_call_this}).
 
@@ -405,6 +417,8 @@ push_opr_log(RuleId, GroupId, Message) ->
 	?DISCOVERY_OPR_LOG(OprLog).
 
 mark_as_finished(RuleId) -> mydlp_mnesia:remove_discovery_status(RuleId).
+
+add_remote_storage_to_license(RuleId) -> ok.
 
 -endif.
 
