@@ -26,7 +26,8 @@ struct LicenseObject {
   3: i64 administrative_users,
   4: i64 expiration_date,
   5: bool is_trial,
-  6: bool is_valid
+  6: bool is_valid,
+  7: i64 number_of_allocated_seats
 }
 
 
