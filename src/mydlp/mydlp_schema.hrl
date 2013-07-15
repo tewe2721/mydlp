@@ -233,6 +233,7 @@
 
 -record(license_remote_storage, {
                 rs_key,
+		size,
 		register_time
         }).
 

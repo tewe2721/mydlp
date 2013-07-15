@@ -37,6 +37,8 @@
 -define(MIME_TEXT, <<"text/plain">>).
 -define(MIME_OCTET_STREAM, <<"application/octet-stream">>).
 
+-define(MOUNT_PATH, "/var/lib/mydlp/mounts").
+
 %%%%%%%
 
 %% end of import

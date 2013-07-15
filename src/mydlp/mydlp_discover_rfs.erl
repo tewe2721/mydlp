@@ -60,7 +60,6 @@
 	mount_dict
 }).
 
--define(MOUNT_PATH, "/var/lib/mydlp/mounts").
 -define(SSH_COMMAND, "/usr/bin/sshfs").
 -define(FTP_COMMAND, "/usr/bin/curlftpfs").
 -define(SMB_COMMAND, "/usr/bin/smbmount").

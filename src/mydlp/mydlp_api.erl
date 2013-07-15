@@ -3809,6 +3809,31 @@ cmd(Command, Args, Envs, Stdin) when is_list(Args), is_list(Envs) ->
 		{error, _} = Error -> ?ERROR_LOG("Error calling "?S", Args: "?S"~nOutput: "?S, [Command, Args, Error]),
 			Error end.
 
+cmd_ret(Command) -> cmd_ret(Command, []).
+
+cmd_ret(Command, Args) -> cmd_ret(Command, Args, []). 
+
+cmd_ret(Command, Args, Envs) -> cmd_ret(Command, Args, Envs, none). % Last variable for Stdin
+
+% envs should be like [{"key","value"}] and Stdin shold be "Stdin\n" format
+cmd_ret(Command, Args, Envs, Stdin) when is_list(Args), is_list(Envs) ->
+       Port = open_port({spawn_executable, Command},
+                       [{args, Args},
+                       {env, Envs},
+                       use_stdio,
+                       exit_status,
+                       stderr_to_stdout]),
+
+	case Stdin of 
+		none -> ok;
+		S -> port_command(Port, S) 
+	end,
+
+	case get_port_resp(Port, []) of
+		{ok, Data} -> {ok, Data};
+		{error, _} = Error -> ?ERROR_LOG("Error calling "?S", Args: "?S"~nOutput: "?S, [Command, Args, Error]),
+			Error end.
+
 cmd_retcode(Command) -> cmd_retcode(Command, []).
 
 cmd_retcode(Command, Args) -> cmd_retcode(Command, Args, []). 

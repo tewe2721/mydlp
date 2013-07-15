@@ -42,6 +42,7 @@
 	continue_paused_discovery/1,
 	is_discovery_finished/1,
 	update_rule_status/2,
+	calculate_remote_storage_size/1,
 	stop/0]).
 
 -ifdef(__MYDLP_ENDPOINT).
@@ -385,12 +386,29 @@ add_remote_storage_to_license(RuleId) ->
 		RId ->
 			case mydlp_mnesia:get_remote_storages_by_rule_id(RId) of
 				[] -> ok;
-				RSs -> lists:map(fun({_, _, Type, RSInfo}) -> 
-						{C, A, _, _} = mydlp_discover_rfs:generate_connection_string(Type, RSInfo),
-						mydlp_mnesia:add_remote_storage_to_license(lists:flatten(C++A)) end, RSs)
+				RSs -> lists:map(fun({RSId, _, Type, RSInfo}) -> 
+						{C, A, _, _} = mydlp_discover_rfs:generate_connection_string(Type, RSInfo),	
+						CS = lists:flatten(C++A),
+						case mydlp_mnesia:is_remote_storage_already_added(CS) of
+							true -> ok;
+							false -> 
+								Size = calculate_remote_storage_size(RSId),
+								mydlp_mnesia:add_remote_storage_to_license(Size, lists:flatten(C++A)) end end, RSs)
 	end end.
 
+calculate_remote_storage_size(RSId) ->
+	MountPath =  filename:join(?MOUNT_PATH, integer_to_list(RSId)),
+	case filelib:is_dir(MountPath) of
+		false -> 0;
+		true -> case mydlp_api:cmd_ret("/usr/bin/du", [MountPath, "-s"]) of
+				{ok, Ret} ->
+					SizeL = binary_to_list(Ret),
+					[Size|_Rest] = string:tokens(SizeL, " \t"),
+					list_to_integer(Size);
+				_Error -> 0 end end.
+
 get_all_discovery_directory() -> throw({error, should_not_call_this}).
+
 
 -endif.
 

@@ -144,7 +144,8 @@
 	get_rule_orig_id_by_id/1,
 	add_email_address_to_license/1,
 	add_ep_key_to_license/1,
-	add_remote_storage_to_license/1
+	add_remote_storage_to_license/2,
+	is_remote_storage_already_added/1
 	]).
 
 -endif.
@@ -538,7 +539,9 @@ add_email_address_to_license(EmailAddress) -> aqc({add_email_address_to_license,
 
 add_ep_key_to_license(EpKey) -> aqc({add_ep_key_to_license, EpKey}, nocache).
 
-add_remote_storage_to_license(RemoteStorage) -> aqc({add_remote_storage_to_license, RemoteStorage}, nocache).
+add_remote_storage_to_license(Size, RemoteStorage) -> aqc({add_remote_storage_to_license, Size, RemoteStorage}, nocache).
+
+is_remote_storage_already_added(RemoteStorage) -> aqc({is_remote_storage_already_added, RemoteStorage}, nocache).
 
 -endif.
 
@@ -746,6 +749,12 @@ handle_result({get_number_of_incidents, RuleId}, {atomic, Result}) ->
 		[] -> ?ERROR_LOG("Unexpected empty result in getting number of incidents by id: "?S"", [RuleId]);
 		[{true, Threshold}] -> round(math:sqrt(Threshold));
 		[{Count, _}] -> Count 
+	end;
+
+handle_result({is_remote_storage_already_added, _RemoteStorage}, {atomic, Result}) ->
+	case Result of
+		[] -> false;
+		_ -> true
 	end;
 
 handle_result(Query, Result) -> handle_result_common(Query, Result).
@@ -1634,18 +1643,19 @@ handle_query({add_ep_key_to_license, EpKey}) ->
 			mnesia:dirty_write(LE);
 		_ -> ok end;
 
-handle_query({add_remote_storage_to_license, RemoteStorage}) ->
+handle_query({add_remote_storage_to_license, Size, RemoteStorage}) ->
 	RSN = mydlp_nlp:to_lower_str(RemoteStorage),
+	Time = calendar:universal_time(),
+	LE = #license_remote_storage{rs_key=RSN, size=Size, register_time=Time},
+	mnesia:dirty_write(LE);
+
+handle_query({is_remote_storage_already_added, RemoteStorage}) ->
 	Q = ?QLCQ([L ||
 		L <- mnesia:table(license_remote_storage),
-		L#license_remote_storage.rs_key == RSN
+		L#license_remote_storage.rs_key == RemoteStorage
 		]),
-	case ?QLCE(Q) of
-		[] -> Time = calendar:universal_time(),
-			LE = #license_remote_storage{rs_key=RSN, register_time=Time},
-			mnesia:dirty_write(LE);
-		_ -> ok end;
-
+	?QLCE(Q);
+	
 handle_query(Query) -> handle_query_common(Query).
 
 -endif.
