@@ -145,7 +145,10 @@
 	add_email_address_to_license/1,
 	add_ep_key_to_license/1,
 	add_remote_storage_to_license/2,
-	is_remote_storage_already_added/1
+	is_remote_storage_already_added/1,
+	get_count_of_ep_users/0,
+	get_count_of_mail_users/0,
+	get_allocation_of_rs/0
 	]).
 
 -endif.
@@ -543,6 +546,12 @@ add_remote_storage_to_license(Size, RemoteStorage) -> aqc({add_remote_storage_to
 
 is_remote_storage_already_added(RemoteStorage) -> aqc({is_remote_storage_already_added, RemoteStorage}, nocache).
 
+get_count_of_ep_users() -> aqc(get_count_of_ep_users, nocache).
+
+get_count_of_mail_users() -> aqc(get_count_of_mail_users, nocache).
+
+get_allocation_of_rs() -> aqc(get_allocation_of_rs, nocache).
+
 -endif.
 
 -ifdef(__MYDLP_ENDPOINT).
@@ -756,6 +765,15 @@ handle_result({is_remote_storage_already_added, _RemoteStorage}, {atomic, Result
 		[] -> false;
 		_ -> true
 	end;
+
+handle_result(get_count_of_ep_users, {atomic, Result}) ->
+	length(Result);
+
+handle_result(get_count_of_mail_users, {atomic, Result}) ->
+	length(Result);
+
+handle_result(get_allocation_of_rs, {atomic, Result}) ->
+	lists:foldl(fun(Size, Total) -> (round(Size/1024)*3) + Total end, 0, Result);
 
 handle_result(Query, Result) -> handle_result_common(Query, Result).
 
@@ -1655,7 +1673,25 @@ handle_query({is_remote_storage_already_added, RemoteStorage}) ->
 		L#license_remote_storage.rs_key == RemoteStorage
 		]),
 	?QLCE(Q);
-	
+
+handle_query(get_count_of_ep_users) ->
+	Q = ?QLCQ([L ||
+		L <- mnesia:table(license_endpoint)
+		]),
+	?QLCE(Q);
+
+handle_query(get_count_of_mail_users) ->
+	Q = ?QLCQ([L ||
+		L <- mnesia:table(license_email)
+		]),
+	?QLCE(Q);
+
+handle_query(get_allocation_of_rs) ->
+	Q = ?QLCQ([L#license_remote_storage.size ||
+		L <- mnesia:table(license_remote_storage)
+		]),
+	?QLCE(Q);
+
 handle_query(Query) -> handle_query_common(Query).
 
 -endif.
