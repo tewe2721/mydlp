@@ -42,7 +42,6 @@
 	continue_paused_discovery/1,
 	is_discovery_finished/1,
 	update_rule_status/2,
-	calculate_remote_storage_size/1,
 	stop/0]).
 
 -ifdef(__MYDLP_ENDPOINT).
@@ -436,7 +435,7 @@ push_opr_log(RuleId, GroupId, Message) ->
 
 mark_as_finished(RuleId) -> mydlp_mnesia:remove_discovery_status(RuleId).
 
-add_remote_storage_to_license(RuleId) -> ok.
+add_remote_storage_to_license(_RuleId) -> ok.
 
 -endif.
 
