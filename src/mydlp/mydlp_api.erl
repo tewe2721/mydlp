@@ -3207,6 +3207,7 @@ str_to_ip(IpStr) ->
 -ifdef(__MYDLP_NETWORK).
 
 -define(UPTODATEBIN, <<"up-to-date">>).
+-define(NOAVAILABLESEAT, <<"no-available-seat">>).
 
 %%-------------------------------------------------------------------------
 %% @doc Returns ruletable for given ip address if necessary
@@ -3235,6 +3236,7 @@ generate_client_policy(EndpointId, RevisionId) ->
 
 use_client_policy(<<>>) -> ?ERROR_LOG("USE_CLIENT_POLICY: Management server returned empty response.", []), ok;
 use_client_policy(<<"up-to-date">>) -> ok;
+use_client_policy(<<"no-available-seat">>) -> ok;
 use_client_policy(CDBBin) ->
 	try	CDBObj = erlang:binary_to_term(CDBBin), % TODO: binary_to_term/2 with safe option
 		apply_cdbobj(CDBObj)
