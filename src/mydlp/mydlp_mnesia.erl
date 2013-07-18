@@ -1661,7 +1661,7 @@ handle_query({add_ep_key_to_license, EpKey}) ->
 			LE = #license_endpoint{ep_key=EpKey, register_time=Time},
 			mnesia:dirty_write(LE),
 			Time;
-		LE1 -> LE1#license_endpoint.register_time end;
+		LE1 -> erlang:display({license, LE1}), LE1#license_endpoint.register_time end;
 
 handle_query({add_remote_storage_to_license, Size, RemoteStorage}) ->
 	RSN = mydlp_nlp:to_lower_str(RemoteStorage),
