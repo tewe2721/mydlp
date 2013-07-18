@@ -1647,8 +1647,9 @@ handle_query({add_email_address_to_license, EmailAddress}) ->
 	case ?QLCE(Q) of
 		[] -> Time = calendar:universal_time(),
 			LE = #license_email{mail_address=AddressN, register_time=Time},
-			mnesia:dirty_write(LE);
-		_ -> ok end;
+			mnesia:dirty_write(LE),
+			Time;
+		LE1 -> LE1#license_email.register_time end;
 
 handle_query({add_ep_key_to_license, EpKey}) ->
 	Q = ?QLCQ([L ||
@@ -1658,14 +1659,16 @@ handle_query({add_ep_key_to_license, EpKey}) ->
 	case ?QLCE(Q) of
 		[] -> Time = calendar:universal_time(),
 			LE = #license_endpoint{ep_key=EpKey, register_time=Time},
-			mnesia:dirty_write(LE);
-		_ -> ok end;
+			mnesia:dirty_write(LE),
+			Time;
+		LE1 -> LE1#license_endpoint.register_time end;
 
 handle_query({add_remote_storage_to_license, Size, RemoteStorage}) ->
 	RSN = mydlp_nlp:to_lower_str(RemoteStorage),
 	Time = calendar:universal_time(),
 	LE = #license_remote_storage{rs_key=RSN, size=Size, register_time=Time},
-	mnesia:dirty_write(LE);
+	mnesia:dirty_write(LE),
+	Time;
 
 handle_query({is_remote_storage_already_added, RemoteStorage}) ->
 	Q = ?QLCQ([L ||

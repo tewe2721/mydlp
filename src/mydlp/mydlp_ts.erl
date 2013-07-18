@@ -211,8 +211,8 @@ registerUserAddress(EndpointId, Ipaddress, Userh, Data) ->
 	UserHI = mydlp_api:binary_to_integer(Userh),
 	ClientIpS = binary_to_list(Ipaddress),
 	ClientIp = mydlp_api:str_to_ip(ClientIpS),
-	mydlp_mnesia:add_ep_key_to_license(EndpointId),
-	MetaDict1 = case mydlp_license:is_acceptable() of
+	BornTime = mydlp_mnesia:add_ep_key_to_license(EndpointId),
+	MetaDict1 = case mydlp_license:is_acceptable(BornTime) of
 			true -> mydlp_mnesia:save_user_address(EndpointId, ClientIp, UserHI, Username, Hostname),
 				dict:store("is_acceptable", "yes", MetaDict);
 			false -> dict:store("is_acceptable", "no", MetaDict) end,

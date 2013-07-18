@@ -350,7 +350,7 @@ add_web_server_to_license(RuleId) ->
                                 [] -> ok;
                                 WSs -> 
 				lists:map(fun(W) -> 
-					mydlp_mnesia:add_remote_storage_to_license(lists:flatten(W#web_server.proto++W#web_server.address++W#web_server.start_path)) end, WSs)
+					mydlp_mnesia:add_remote_storage_to_license(0, lists:flatten(W#web_server.proto++W#web_server.address++W#web_server.start_path)) end, WSs)
         end end.
 
 
