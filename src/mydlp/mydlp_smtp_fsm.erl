@@ -167,9 +167,15 @@ init([]) ->
 
 % {Action, {{rule, Id}, {file, File}, {matcher, Func}, {misc, Misc}, {matching_details, MatchingDetails}}}
 'REQ_OK'(#smtpd_fsm{files=Files, message_record=(#message{mail_from=MailFrom} = MessageR)} = State) ->
-	mydlp_mnesia:add_email_address_to_license(MailFrom),
+	IsRegistered = mydlp_mnesia:add_email_address_to_license(MailFrom),
 
-	case mydlp_license:is_acceptable() of
+	S = case IsRegistered of 
+		true -> true;
+		false -> case mydlp_license:is_acceptable() of
+			true -> mydlp_mnesia:set_email_as_registered(MailFrom), true;
+			false -> false end end,
+
+	case S of
 		false -> process_aclret(pass, State);
 		true -> 
 

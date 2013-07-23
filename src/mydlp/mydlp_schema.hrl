@@ -223,18 +223,21 @@
 
 -record(license_email, {
                 mail_address,
-		register_time
+		last_access_time,
+		is_registered
         }).
 
 -record(license_endpoint, {
                 ep_key,
-		register_time
+		last_access_time,
+		is_registered
         }).
 
 -record(license_remote_storage, {
                 rs_key,
 		size,
-		register_time
+		last_access_time,
+		is_registered
         }).
 
 -endif.

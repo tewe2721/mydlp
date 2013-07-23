@@ -66,6 +66,8 @@
 -define(DISCOVERY_FINISHED, "web_finished").
 -define(DISCOVERY_PAUSED, "web_paused").
 
+-define(FIX_SIZE, 1024).%It should be 1024*1024*1024
+
 
 q(WebServerId, PagePath, RuleId) -> q(WebServerId, none, PagePath, RuleId).
 
@@ -235,10 +237,9 @@ handle_cast({start_by_rule_id, OrigRuleId, GroupId}, #state{timer_dict=TimerDict
 	case WebServers of
 		[] -> push_opr_log(OrigRuleId, GroupId, ?DISCOVERY_FINISHED),
 			{noreply, State};
-		_ -> 
-			{ok, Timer} = timer:send_after(60000, {is_finished, OrigRuleId}),
-			TimerDict1 = dict:store(OrigRuleId, Timer, TimerDict),
-			lists:map(fun(W) -> q(W#web_server.id, W#web_server.start_path, OrigRuleId) end, WebServers),
+		_ ->
+			erlang:display({serves, WebServers}),
+			TimerDict1 = start_discovery_on_each_web_server(WebServers, TimerDict, OrigRuleId, GroupId, false),
 			{noreply, State#state{timer_dict=TimerDict1}}
 	end;
 
@@ -326,6 +327,30 @@ code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 
 %%%%%%%%%%%%%%%%% internal
+start_discovery_on_each_web_server([], TimerDict, RuleId, GroupId, IsAnyStart) ->
+	case IsAnyStart of 
+		true -> {ok, Timer} = timer:send_after(60000, {is_finished, RuleId}),
+			dict:store(RuleId, Timer, TimerDict);
+		false ->push_opr_log(RuleId, GroupId, ?DISCOVERY_FINISHED), 
+			TimerDict end;
+start_discovery_on_each_web_server([WebServer|Rest], TimerDict, RuleId, GroupId, _IsAnyStart) ->
+	IsAnyStart1 = case is_ws_acceptable(WebServer) of
+			true -> q(WebServer#web_server.id, WebServer#web_server.start_path, RuleId), true;
+			false -> false end,
+	start_discovery_on_each_web_server(Rest, TimerDict, RuleId, GroupId, IsAnyStart1).
+
+get_connection_string(W) ->
+	lists:flatten(W#web_server.proto++W#web_server.address++W#web_server.start_path).
+
+is_ws_acceptable(WebServer) ->
+	CS = get_connection_string(WebServer),
+	Res = mydlp_mnesia:add_remote_storage_to_license(?FIX_SIZE, CS),
+	erlang:display({res, Res}),
+        case Res of
+                false -> case mydlp_license:is_acceptable() of
+				true -> mydlp_mnesia:set_remote_storage_register_status(CS, true), true;
+				false -> false end;
+                _ -> true end.
 
 get_discovery_status(RuleId) ->
         case catch mydlp_mnesia:get_discovery_status(RuleId) of
@@ -342,16 +367,16 @@ is_paused_or_stopped_by_rule_id(RuleId) ->
 		_ -> none
 	end.
 
-add_web_server_to_license(RuleId) ->
-	case mydlp_mnesia:get_rule_id_by_orig_id(RuleId) of
-                none -> ok;
-                RId ->
-                        case mydlp_mnesia:get_web_servers_by_rule_id(RId) of
-                                [] -> ok;
-                                WSs -> 
-				lists:map(fun(W) -> 
-					mydlp_mnesia:add_remote_storage_to_license(0, lists:flatten(W#web_server.proto++W#web_server.address++W#web_server.start_path)) end, WSs)
-        end end.
+%add_web_server_to_license(RuleId) ->
+%	case mydlp_mnesia:get_rule_id_by_orig_id(RuleId) of
+%                none -> ok;
+%                RId ->
+%                        case mydlp_mnesia:get_web_servers_by_rule_id(RId) of
+%                                [] -> ok;
+%                                WSs -> 
+%				lists:map(fun(W) -> 
+%					mydlp_mnesia:add_remote_storage_to_license(0, lists:flatten(W#web_server.proto++W#web_server.address++W#web_server.start_path)) end, WSs)
+%        end end.
 
 
 control_rule_status(RuleId, GroupId, Q) ->
@@ -362,7 +387,6 @@ control_rule_status(RuleId, GroupId, Q) ->
 				_ -> control_rule_status(RuleId, GroupId, Q1)
 			end;
 		{empty, _Q2} ->
-			add_web_server_to_license(RuleId),
 			push_opr_log(RuleId, GroupId, ?DISCOVERY_FINISHED)
 	end.
 push_opr_log(RuleId, GroupId, Message) ->

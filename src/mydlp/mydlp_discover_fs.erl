@@ -205,7 +205,10 @@ handle_cast({update_rule_status, RuleId, Status}, State) ->
 
 handle_cast({ql, List}, State) ->
 	?ASYNC0(fun() ->
-		[ q(FilePath, RuleIndex, GroupId) || {RuleIndex, FilePath, GroupId} <- List ]
+		lists:map(fun({RuleIndex, FilePath, GroupId}) -> 
+				case is_rs_acceptable(FilePath) of 
+					true -> q(FilePath, RuleIndex, GroupId);
+					false -> mark_finished_rules(queue:new(), false) end end, List)
 	end),
 	{noreply, State#state{improper=false}};
 
@@ -388,26 +391,33 @@ add_remote_storage_to_license(RuleId) ->
 				RSs -> lists:map(fun({RSId, _, Type, RSInfo}) -> 
 						{C, A, _, _} = mydlp_discover_rfs:generate_connection_string(Type, RSInfo),	
 						CS = lists:flatten(C++A),
-						case mydlp_mnesia:is_remote_storage_already_added(CS) of
-							true -> ok;
-							false -> 
-								Size = calculate_remote_storage_size(RSId),
-								mydlp_mnesia:add_remote_storage_to_license(Size, lists:flatten(C++A)) end end, RSs)
+						Size = calculate_remote_storage_size(RSId),
+						mydlp_mnesia:set_remote_storage_size(CS, Size),
+						Status =  mydlp_license:is_acceptable(),
+						mydlp_mnesia:set_remote_storage_register_status(CS, Status) end, RSs)
 	end end.
 
 calculate_remote_storage_size(RSId) ->
 	MountPath =  filename:join(?MOUNT_PATH, integer_to_list(RSId)),
 	case filelib:is_dir(MountPath) of
 		false -> 0;
-		true -> case mydlp_api:cmd_ret("/usr/bin/du", [MountPath, "-s"]) of
+		true -> case mydlp_api:cmd_ret("/bin/df", [MountPath, "-B", "1024"]) of
 				{ok, Ret} ->
-					SizeL = binary_to_list(Ret),
-					[Size|_Rest] = string:tokens(SizeL, " \t"),
-					list_to_integer(Size);
+					ResultS = binary_to_list(Ret),
+					ResultL = string:tokens(ResultS, " \t"),
+					list_to_integer(lists:nth(8, ResultL));
 				_Error -> 0 end end.
 
 get_all_discovery_directory() -> throw({error, should_not_call_this}).
 
+is_rs_acceptable(FilePath) ->
+	RSId = lists:last(string:tokens(FilePath, "/")),
+	{Type, RSInfo} = mydlp_mnesia:get_remote_storage_by_id(list_to_integer(RSId)),
+	{C, A, _, _} = mydlp_discover_rfs:generate_connection_string(Type, RSInfo),
+	case mydlp_mnesia:add_remote_storage_to_license(0, lists:flatten(C++A)) of
+%		[ q(FilePath, RuleIndex, GroupId) || {RuleIndex, FilePath, GroupId} <- List ]
+		false -> mydlp_license:is_acceptable();
+		_ -> true end.
 
 -endif.
 
@@ -436,6 +446,8 @@ push_opr_log(RuleId, GroupId, Message) ->
 mark_as_finished(RuleId) -> mydlp_mnesia:remove_discovery_status(RuleId).
 
 add_remote_storage_to_license(_RuleId) -> ok.
+
+is_rs_acceptable(_RuleIndex, _FilePath) -> true.
 
 -endif.
 

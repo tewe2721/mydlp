@@ -145,10 +145,14 @@
 	add_email_address_to_license/1,
 	add_ep_key_to_license/1,
 	add_remote_storage_to_license/2,
-	is_remote_storage_already_added/1,
+	set_email_as_registered/1,
+	set_ep_as_registered/1,
+	set_remote_storage_register_status/2,
+	set_remote_storage_size/2,
 	get_count_of_ep_users/0,
 	get_count_of_mail_users/0,
-	get_allocation_of_rs/0
+	get_allocation_of_rs/0,
+	remove_old_license_seats/0
 	]).
 
 -endif.
@@ -544,13 +548,21 @@ add_ep_key_to_license(EpKey) -> aqc({add_ep_key_to_license, EpKey}, nocache).
 
 add_remote_storage_to_license(Size, RemoteStorage) -> aqc({add_remote_storage_to_license, Size, RemoteStorage}, nocache).
 
-is_remote_storage_already_added(RemoteStorage) -> aqc({is_remote_storage_already_added, RemoteStorage}, nocache).
+set_email_as_registered(EmailAddress) -> aqc({set_email_as_registered, EmailAddress}, nocache).
+
+set_ep_as_registered(EpKey) -> aqc({set_ep_as_registered, EpKey}, nocache).
+
+set_remote_storage_register_status(RemoteStorage, Status) -> aqc({set_remote_storage_register_status, RemoteStorage, Status}, nocache).
+
+set_remote_storage_size(RemoteStorage, Size) -> aqc({set_remote_storage_size, RemoteStorage, Size}, nocache).
 
 get_count_of_ep_users() -> aqc(get_count_of_ep_users, nocache).
 
 get_count_of_mail_users() -> aqc(get_count_of_mail_users, nocache).
 
 get_allocation_of_rs() -> aqc(get_allocation_of_rs, nocache).
+
+remove_old_license_seats() -> aqc(remove_old_license_seats, nocache).
 
 -endif.
 
@@ -758,12 +770,6 @@ handle_result({get_number_of_incidents, RuleId}, {atomic, Result}) ->
 		[] -> ?ERROR_LOG("Unexpected empty result in getting number of incidents by id: "?S"", [RuleId]);
 		[{true, Threshold}] -> round(math:sqrt(Threshold));
 		[{Count, _}] -> Count 
-	end;
-
-handle_result({is_remote_storage_already_added, _RemoteStorage}, {atomic, Result}) ->
-	case Result of
-		[] -> false;
-		_ -> true
 	end;
 
 handle_result(get_count_of_ep_users, {atomic, Result}) ->
@@ -1297,13 +1303,6 @@ handle_query({get_remote_storages_by_rule_id, RuleId}) ->
 		]),
 	?QLCE(Q);
 
-%handle_query({get_remote_storages_id_by_rule_id, RuleId}) ->
-%	Q = ?QLCQ([R#remote_storage.id ||
-%		R <- mnesia:table(remote_storage),
-%		R#remote_storage.rule_id ==  RuleId
-%		]),
-%	?QLCE(Q);
-
 handle_query({get_rule_id_by_web_server_id, Id}) ->
 	Q = ?QLCQ([R#web_server.rule_id ||
 		R <- mnesia:table(web_server),
@@ -1644,38 +1643,91 @@ handle_query({add_email_address_to_license, EmailAddress}) ->
 		L <- mnesia:table(license_email),
 		L#license_email.mail_address == AddressN
 		]),
+	Time = calendar:datetime_to_gregorian_seconds(calendar:universal_time()),
 	case ?QLCE(Q) of
-		[] -> Time = calendar:universal_time(),
-			LE = #license_email{mail_address=AddressN, register_time=Time},
+		[] ->	LE = #license_email{mail_address=AddressN, last_access_time=Time, is_registered=false},
 			mnesia:dirty_write(LE),
-			Time;
-		LE1 -> LE1#license_email.register_time end;
+			false;
+		[LE1] -> LE2 = LE1#license_email{last_access_time=Time},
+			mnesia:dirty_write(LE2),
+			LE2#license_email.is_registered end;
 
 handle_query({add_ep_key_to_license, EpKey}) ->
 	Q = ?QLCQ([L ||
 		L <- mnesia:table(license_endpoint),
 		L#license_endpoint.ep_key == EpKey
 		]),
+	Time = calendar:datetime_to_gregorian_seconds(calendar:universal_time()),
 	case ?QLCE(Q) of
-		[] -> Time = calendar:universal_time(),
-			LE = #license_endpoint{ep_key=EpKey, register_time=Time},
+		[] -> 	LE = #license_endpoint{ep_key=EpKey, last_access_time=Time, is_registered=false},
 			mnesia:dirty_write(LE),
-			Time;
-		LE1 -> erlang:display({license, LE1}), LE1#license_endpoint.register_time end;
+			false;
+		[LE1] -> LE2 = LE1#license_endpoint{last_access_time=Time},
+			mnesia:dirty_write(LE2),
+			LE2#license_endpoint.is_registered end;
 
 handle_query({add_remote_storage_to_license, Size, RemoteStorage}) ->
 	RSN = mydlp_nlp:to_lower_str(RemoteStorage),
-	Time = calendar:universal_time(),
-	LE = #license_remote_storage{rs_key=RSN, size=Size, register_time=Time},
-	mnesia:dirty_write(LE),
-	Time;
-
-handle_query({is_remote_storage_already_added, RemoteStorage}) ->
 	Q = ?QLCQ([L ||
 		L <- mnesia:table(license_remote_storage),
-		L#license_remote_storage.rs_key == RemoteStorage
+		L#license_remote_storage.rs_key == RSN
 		]),
-	?QLCE(Q);
+	IsRegistered = case Size of % it used for web servers. They now have fix storage.
+			0 -> unknown;
+			_ -> false end,
+	Time = calendar:datetime_to_gregorian_seconds(calendar:universal_time()),
+	case ?QLCE(Q) of
+		[] ->	LE = #license_remote_storage{rs_key=RSN, size=Size, last_access_time=Time, is_registered=IsRegistered},
+			mnesia:dirty_write(LE),
+			IsRegistered;
+		[LE1] -> LE2 = LE1#license_remote_storage{last_access_time=Time},
+			mnesia:dirty_write(LE2),
+			LE2#license_remote_storage.last_access_time end;
+
+handle_query({set_email_as_registered, EmailAddress}) ->
+	AddressN = mydlp_nlp:to_lower_str(EmailAddress),
+	Q = ?QLCQ([L ||
+		L <- mnesia:table(license_email),
+		L#license_email.mail_address == AddressN
+		]),
+	case ?QLCE(Q) of
+		[LE] -> LE1 = LE#license_email{is_registered=true},
+			mnesia:dirty_write(LE1);
+		[] -> ok end;
+
+handle_query({set_ep_as_registered, EpKey}) ->
+	Q = ?QLCQ([L ||
+		L <- mnesia:table(license_endpoint),
+		L#license_endpoint.ep_key == EpKey
+		]),
+	case ?QLCE(Q) of
+		[LE] -> LE1 = LE#license_endpoint{is_registered=true},
+			mnesia:dirty_write(LE1);
+		[] -> ok end;
+
+handle_query({set_remote_storage_register_status, RemoteStorage, Status}) ->
+	RSN = mydlp_nlp:to_lower_str(RemoteStorage),
+	Q = ?QLCQ([L ||
+		L <- mnesia:table(license_remote_storage),
+		L#license_remote_storage.rs_key == RSN
+		]),
+	case ?QLCE(Q) of
+		[LE] -> case LE#license_remote_storage.is_registered of
+				true -> ok;
+				_ -> LE1 = LE#license_remote_storage{is_registered=Status},
+					mnesia:dirty_write(LE1) end;
+		[] -> ok end;
+
+handle_query({set_remote_storage_size, RemoteStorage, Size}) ->
+	RSN = mydlp_nlp:to_lower_str(RemoteStorage),
+	Q = ?QLCQ([L ||
+		L <- mnesia:table(license_remote_storage),
+		L#license_remote_storage.rs_key == RSN
+		]),
+	case ?QLCE(Q) of
+		[LE] -> LE1 = LE#license_remote_storage{size=Size},
+			mnesia:dirty_write(LE1);
+		[] -> ok end;
 
 handle_query(get_count_of_ep_users) ->
 	Q = ?QLCQ([L ||
@@ -1694,6 +1746,31 @@ handle_query(get_allocation_of_rs) ->
 		L <- mnesia:table(license_remote_storage)
 		]),
 	?QLCE(Q);
+
+handle_query(remove_old_license_seats) ->
+	BeforeOneMonth = calendar:datetime_to_gregorian_seconds(calendar:universal_time()) - (60*60*24*30),
+	Q1 = ?QLCQ([M#license_email.mail_address ||	
+		M <- mnesia:table(license_email),
+		M#license_email.last_access_time =< BeforeOneMonth
+		]),
+	MUs = ?QLCE(Q1),
+
+	Q2 = ?QLCQ([E#license_endpoint.ep_key ||	
+		E <- mnesia:table(license_endpoint),
+		E#license_endpoint.last_access_time =< BeforeOneMonth
+		]),
+	EPs = ?QLCE(Q2),
+
+	Q3 = ?QLCQ([R#license_remote_storage.rs_key ||	
+		R <- mnesia:table(license_remote_storage),
+		R#license_remote_storage.last_access_time =< BeforeOneMonth
+		]),
+	RSs = ?QLCE(Q3),
+	
+	lists:foreach(fun(M) -> mnesia:delete({license_email, M}) end, MUs),
+	lists:foreach(fun(E) -> mnesia:delete({license_endpoint, E}) end, EPs),
+	lists:foreach(fun(R) -> mnesia:delete({license_remote_storage, R}) end, RSs);
+
 
 handle_query(Query) -> handle_query_common(Query).
 
