@@ -493,8 +493,11 @@ handle_cast({compile_customer, FilterId}, State) ->
 	?ASYNC(fun() ->
 		try	set_progress(compile),
 			mydlp_mnesia:remove_site(FilterId),
-			populate_site(FilterId),
-			ok
+			case mydlp_license:is_expired() of
+				true -> ok;
+				false -> 
+					populate_site(FilterId),
+					ok end
 		after	set_progress(done),
 			mydlp_api:cmd_cast(?MAIL_FLUSH_COMMAND, ["-f"]) %used for flushing mail queue
 		end
