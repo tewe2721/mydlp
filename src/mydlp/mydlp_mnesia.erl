@@ -2519,11 +2519,11 @@ remove_rule(RI) ->
 		]),
 	DESs = ?QLCE(Q10),
 
-	Q11 = ?QLCQ([WS#waiting_schedules.id ||	
-		WS <- mnesia:table(waiting_schedules),
-		WS#waiting_schedules.rule_id == RI
-		]),
-	WSCs = ?QLCE(Q11),
+	%Q11 = ?QLCQ([WS#waiting_schedules.id ||	
+	%	WS <- mnesia:table(waiting_schedules),
+	%	WS#waiting_schedules.rule_id == RI
+	%	]),
+	%WSCs = ?QLCE(Q11),
 
 	Q12 = ?QLCQ([RS#web_server.id ||	
 		RS <- mnesia:table(web_server),
@@ -2557,7 +2557,7 @@ remove_rule(RI) ->
 	lists:foreach(fun(Id) -> mnesia:delete({remote_storage, Id}) end, RSs),
 	lists:foreach(fun(Id) -> mnesia:delete({discovery_schedule, Id}) end, DSs),
 	lists:foreach(fun(Id) -> mnesia:delete({discovery_targets, Id}) end, DESs),
-	lists:foreach(fun(Id) -> mnesia:delete({waiting_schedules, Id}) end, WSCs),
+	%lists:foreach(fun(Id) -> mnesia:delete({waiting_schedules, Id}) end, WSCs),
 	lists:foreach(fun(Id) -> mnesia:delete({web_server, Id}) end, WSs),
 	lists:foreach(fun(Id) -> mnesia:delete({m_hostname, Id}) end, Hs),
 	lists:foreach(fun(Id) -> mnesia:delete({m_endpoint_id, Id}) end, EIs),
