@@ -206,6 +206,7 @@ handle_cast({update_rule_status, RuleId, Status}, State) ->
 handle_cast({ql, List}, State) ->
 	?ASYNC0(fun() ->
 		lists:map(fun({RuleIndex, FilePath, GroupId}) -> 
+				erlang:display({accep, is_rs_acceptable(FilePath)}),
 				case is_rs_acceptable(FilePath) of 
 					true -> q(FilePath, RuleIndex, GroupId);
 					false -> mark_finished_rules(queue:new(), false) end end, List)
@@ -405,8 +406,15 @@ calculate_remote_storage_size(RSId) ->
 				{ok, Ret} ->
 					ResultS = binary_to_list(Ret),
 					ResultL = string:tokens(ResultS, " \t"),
-					list_to_integer(lists:nth(8, ResultL));
+					get_size_from_splitted_list(ResultL, 8);
 				_Error -> 0 end end.
+
+get_size_from_splitted_list(List, Index) ->
+	try 
+		list_to_integer(lists:nth(Index, List))
+	catch _Class:_Error ->
+		get_size_from_splitted_list(List, Index+1)
+	end.
 
 get_all_discovery_directory() -> throw({error, should_not_call_this}).
 

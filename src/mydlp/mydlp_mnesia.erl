@@ -1684,7 +1684,7 @@ handle_query({add_remote_storage_to_license, Size, RemoteStorage}) ->
 			IsRegistered;
 		[LE1] -> LE2 = LE1#license_remote_storage{last_access_time=Time},
 			mnesia:dirty_write(LE2),
-			LE2#license_remote_storage.last_access_time end;
+			LE2#license_remote_storage.is_registered end;
 
 handle_query({set_email_as_registered, EmailAddress}) ->
 	AddressN = mydlp_nlp:to_lower_str(EmailAddress),
