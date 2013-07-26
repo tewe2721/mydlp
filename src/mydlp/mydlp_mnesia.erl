@@ -779,7 +779,9 @@ handle_result(get_count_of_mail_users, {atomic, Result}) ->
 	length(Result);
 
 handle_result(get_allocation_of_rs, {atomic, Result}) ->
-	lists:foldl(fun(Size, Total) -> (round(Size/1024)*3) + Total end, 0, Result);
+	lists:foldl(fun(Size, Total) -> A = case (round(Size/(1024*1024*1024))*3)  of
+						0 -> 3;
+						E -> E end, A + Total end, 0, Result);
 
 handle_result(Query, Result) -> handle_result_common(Query, Result).
 

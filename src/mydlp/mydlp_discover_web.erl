@@ -66,7 +66,7 @@
 -define(DISCOVERY_FINISHED, "web_finished").
 -define(DISCOVERY_PAUSED, "web_paused").
 
--define(FIX_SIZE, 1024).%It should be 1024*1024*1024
+-define(FIX_SIZE, 1024*1024*1024).%It should be 1024*1024*1024
 
 
 q(WebServerId, PagePath, RuleId) -> q(WebServerId, none, PagePath, RuleId).
@@ -238,7 +238,6 @@ handle_cast({start_by_rule_id, OrigRuleId, GroupId}, #state{timer_dict=TimerDict
 		[] -> push_opr_log(OrigRuleId, GroupId, ?DISCOVERY_FINISHED),
 			{noreply, State};
 		_ ->
-			erlang:display({serves, WebServers}),
 			TimerDict1 = start_discovery_on_each_web_server(WebServers, TimerDict, OrigRuleId, GroupId, false),
 			{noreply, State#state{timer_dict=TimerDict1}}
 	end;
@@ -345,7 +344,6 @@ get_connection_string(W) ->
 is_ws_acceptable(WebServer) ->
 	CS = get_connection_string(WebServer),
 	Res = mydlp_mnesia:add_remote_storage_to_license(?FIX_SIZE, CS),
-	erlang:display({res, Res}),
         case Res of
                 false -> case mydlp_license:is_acceptable() of
 				true -> mydlp_mnesia:set_remote_storage_register_status(CS, true), true;
