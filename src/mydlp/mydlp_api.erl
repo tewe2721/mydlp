@@ -1719,20 +1719,22 @@ clean_files_excluding([], _DRef, Acc) -> lists:reverse(Acc).
 %% @doc Merges two file list according to their size and hash.
 %% @end
 %%----------------------------------------------------------------------
-merge_files(Files, []) -> lists:flatten(Files);
-merge_files(Files1, [File|Rest])->
-	FileR = replace_if_orig_exists(lists:flatten(Files1), File),
-	merge_files(FileR, Rest).	
+merge_files(Files1, Files2) -> merge_files(Files1, Files2, []).
 
-replace_if_orig_exists(Files, File) -> replace_if_orig_exists(Files, File, []).
-replace_if_orig_exists([], File, Acc) -> 
+merge_files(Files, [], Trash) -> {lists:flatten(Files), lists:flatten(Trash)};
+merge_files(Files1, [File|Rest], Trash)->
+	{FileR, Trash1} = replace_if_orig_exists(lists:flatten(Files1), File, Trash),
+	merge_files(FileR, Rest, Trash1).	
+
+replace_if_orig_exists(Files, File, Trash) -> replace_if_orig_exists(Files, File, Trash, []).
+replace_if_orig_exists([], File, Trash, Acc) -> 
 	Acc1 = [File|Acc],
-	lists:reverse(Acc1);
-replace_if_orig_exists([F|Rest], File, Acc) ->
+	{lists:reverse(Acc1), Trash};
+replace_if_orig_exists([F|Rest], File, Trash, Acc) ->
 	case is_two_file_same(F, File) of
 		true -> Acc1 = [File|Rest],
-			[lists:reverse(Acc)|Acc1];
-		false -> replace_if_orig_exists(Rest, File, [F|Acc]) 
+			{[lists:reverse(Acc)|Acc1], [F|Trash]};
+		false -> replace_if_orig_exists(Rest, File, Trash, [F|Acc]) 
 	end.
 
 %%--------------------------------------------------------------------

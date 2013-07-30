@@ -450,14 +450,15 @@ log_req(#smtpd_fsm{message_record=MessageR, files=OrigFiles}, Action, {{rule, Ru
 	File1 = lists:map(fun(F) -> mydlp_api:sizefy(F) end, File),
 	File2 = mydlp_api:hashify_files(File1),
 
-	MergedFiles = mydlp_api:merge_files(OrigFiles, File2),
+	{MergedFiles, TrashedFiles} = mydlp_api:merge_files(OrigFiles, File2),
 
 	Payload = case Action of
 		quarantine -> MessageR;
 		_Else -> none end,
 	FilesToLog = case Action of
-		pass -> mydlp_api:clean_files(MergedFiles), File;
-		_ -> mydlp_api:clean_files(File), MergedFiles end,
+		pass -> ?ERROR_LOG("Unexpected action on mail channel", []),
+			mydlp_api:clean_files(MergedFiles), File;
+		_ -> mydlp_api:clean_files(TrashedFiles), MergedFiles end,
 %		quarantine -> 	mydlp_api:clean_files(File), MergedFiles;
 %		archive -> 	mydlp_api:clean_files(File), MergedFiles;
 %		_ ->		mydlp_api:clean_files(OrigFiles), File end,

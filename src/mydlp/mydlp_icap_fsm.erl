@@ -856,7 +856,8 @@ log_req(#state{icap_headers=#icap_headers{x_client_ip=Addr},
 	
 	File1 = lists:map(fun(F) -> mydlp_api:sizefy(F) end, File),
         File2 = mydlp_api:hashify_files(File1),
-	MergedFiles = mydlp_api:merge_files(OrigFilesCopy, File2), 
+	{MergedFiles, Trash} = mydlp_api:merge_files(OrigFilesCopy, File2), 
+	mydlp_api:clean_files(Trash),
 
 	Time = erlang:universaltime(),
 	?ACL_LOG(#log{time=Time, channel=web, rule_id=RuleId, action=Action, ip=Addr, user=UserName, destination=Uri, itype_id=IType, file=MergedFiles, misc=Misc}).
