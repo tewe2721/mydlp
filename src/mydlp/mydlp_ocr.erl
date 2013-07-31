@@ -53,13 +53,31 @@
 	waiting_queue
 }).
 
-ocr(FileRef) -> gen_server:cast(?MODULE, {ocr, FileRef}).
+-define(TIMEOUT, 600000).
+-define(CONVERT_COMMAND, "convert").
+-define(CONVERT_ARGS, ["-units", "PixelsPerInch", "-density", "320", "-quality", "100", "-resize"]).
+-define(TESSERACT_ARGS, ["-lang=eng+tur+chi_sim+chi_tra"]).
+
+%% API
+ocr(FileRef) -> gen_server:call(?MODULE, {ocr, FileRef}, ?TIMEOUT).
+
+%% Gen_server callbacks
+
+handle_call({ocr, FileRef}, _From, State) ->
+	Worker = self(),
+	SpawnOpts = get_spawn_opts(),
+	mydlp_api:mspawn(fun(_FileRef) ->
+				%Port = open_port({spawn_executable, ?CONVERT}, 
+				%		[{args, lists:append(?CONVERT_ARGS, ["/home/ozgen/Untitled.png", "/home/ozgen/Untitled2.png"])}, use_stdio, exit_status, stderr_to_stdout]),
+				Resp = mydlp_api:cmd(?CONVERT_COMMAND, lists:append(?CONVERT_ARGS, ["/home/ozgen/Untitled.png", "/home/ozgen/Untitled2.png"])),
+				erlang:display({resp, Resp}),
+				Resp
+	end, ?TIMEOUT+10),
+	{noreply, State};
 
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
-handle_cast({ocr, FileRef}, State) ->
-	{noreply, State};
 
 handle_cast(_Msg, State) ->
 	{noreply, State}.
@@ -88,4 +106,6 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 
-%%%%%%%%%%%%%%%%% internal
+%%%%%%%%%%%%%%%%% initernal
+
+get_spawn_opts() -> [{priority, lowi}].
