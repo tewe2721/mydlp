@@ -449,7 +449,7 @@ log_req(#smtpd_fsm{message_record=MessageR, files=OrigFiles}, Action, {{rule, Ru
 
 	File1 = lists:map(fun(F) -> mydlp_api:sizefy(F) end, File),
 	File2 = mydlp_api:hashify_files(File1),
-
+	
 	{MergedFiles, TrashedFiles} = mydlp_api:merge_files(OrigFiles, File2),
 
 	Payload = case Action of

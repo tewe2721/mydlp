@@ -142,17 +142,22 @@ acl_exec2(SpawnOpts, {Req, {_Id, DefaultAction}, Rules}, Files) ->
 acl_exec3(_SpawnOpts, _Req, [], _Files) -> return;
 acl_exec3(_SpawnOpts, _Req, _AllRules, []) -> return;
 acl_exec3(SpawnOpts, Req, AllRules, Files) ->
-	acl_exec3(SpawnOpts, Req, AllRules, Files, [], false).
+	acl_exec3(SpawnOpts, Req, AllRules, Files, [], false, []).
 
-acl_exec3(_SpawnOpts, _Req, _AllRules, [], [], _CleanFiles) -> return;
+acl_exec3(_SpawnOpts, _Req, _AllRules, [], [], _CleanFiles, []) -> return;
 
-acl_exec3(SpawnOpts, Req, AllRules, [], ExNewFiles, false) ->
-	acl_exec3(SpawnOpts, Req, AllRules, [], ExNewFiles, true);
+acl_exec3(_SpawnOpts, _Req, _AllRules, [], [], _CleanFiles, [Head|Rest]) -> 
+	{A, {Rule, {file, TargetFiles}, IType, Misc}} = Head,
+	OtherFiles = lists:foldl(fun({_, {_, {file, Files}, _, _}}, Acc) -> lists:append(Acc, Files) end, TargetFiles, Rest),
+	{A, {Rule, {file, OtherFiles}, IType, Misc}};	
 
-acl_exec3(SpawnOpts, Req, AllRules, [], ExNewFiles, CleanFiles) ->
-	acl_exec3(SpawnOpts, Req, AllRules, ExNewFiles, [], CleanFiles);
+acl_exec3(SpawnOpts, Req, AllRules, [], ExNewFiles, false, Res) ->
+	acl_exec3(SpawnOpts, Req, AllRules, [], ExNewFiles, true, Res);
+
+acl_exec3(SpawnOpts, Req, AllRules, [], ExNewFiles, CleanFiles, Res) ->
+	acl_exec3(SpawnOpts, Req, AllRules, ExNewFiles, [], CleanFiles, Res);
 	
-acl_exec3(SpawnOpts, Req, AllRules, Files, ExNewFiles, CleanFiles) ->
+acl_exec3(SpawnOpts, Req, AllRules, Files, ExNewFiles, CleanFiles, Res) ->
 	{InChunk, RestOfFiles} = mydlp_api:get_chunk(Files),
 	Files1 = mydlp_api:load_files(InChunk),
 
@@ -174,18 +179,24 @@ acl_exec3(SpawnOpts, Req, AllRules, Files, ExNewFiles, CleanFiles) ->
 	
 
 	CTX = ctx_cache(),
-	AclR = case apply_rules(CTX, SpawnOpts, AllRules, FFiles) of
-		return -> acl_exec3(SpawnOpts, Req, AllRules, RestOfFiles,
-				lists:append(ExNewFiles, NewFiles), CleanFiles);
-		Else -> Else end,
-	ctx_cache_stop(CTX),
-
-	case AclR of
-		return -> mydlp_api:clean_files(FFiles);
+	AclR = apply_rules(CTX, SpawnOpts, AllRules, FFiles),
+	%AclR = case apply_rules(CTX, SpawnOpts, AllRules, FFiles) of
+	%	return -> acl_exec3(SpawnOpts, Req, AllRules, RestOfFiles,
+	%			lists:append(ExNewFiles, NewFiles), CleanFiles, Res);
+	%	Else -> Else end,
+	%ctx_cache_stop(CTX),
+	
+	Res1 = case AclR of
+		return -> mydlp_api:clean_files(FFiles),
+			Res;
 		{_, {{rule, _}, {file, TargetFiles}, {itype, _}, {misc, _}}} ->
-			mydlp_api:clean_files_excluding(FFiles, TargetFiles) end,
+			mydlp_api:clean_files_excluding(FFiles, TargetFiles),
+			lists:append(Res, [AclR]) end, 
+	
+	AclRT = acl_exec3(SpawnOpts, Req, AllRules, RestOfFiles, lists:append(ExNewFiles, NewFiles), CleanFiles, Res1),
 
-	AclR.
+	ctx_cache_stop(CTX),
+	AclRT.
 
 -ifdef(__MYDLP_NETWORK).
 
