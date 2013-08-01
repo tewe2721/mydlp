@@ -559,7 +559,7 @@ is_valid_cpf1(CpfStr) ->
 
 is_valid_cc_edate(EdateStr) ->
 	Clean = remove_chars(EdateStr, ?WS),
-	[I1,I2,_I3,I4,I5] = 
+	[I1,I2,I4,I5] = 
 		lists:map(fun(I) -> I - $0 end, Clean),
 	Mm = I1*10 + I2,
 	case (Mm =< 12) and (Mm > 0) of
