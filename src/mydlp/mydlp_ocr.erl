@@ -1,5 +1,5 @@
 %%%
-%%%    Copyright (C) 2010 Ozgen Muzac <ozgen@mydlp.com>
+%%%    Copyright (C) 2013 Ozgen Muzac <ozgen@mydlp.com>
 %%%
 %%%--------------------------------------------------------------------------
 %%%    This file is part of MyDLP.
@@ -54,7 +54,7 @@
 }).
 
 -define(TIMEOUT, 600000).
--define(CONVERT_COMMAND, "convert").
+-define(CONVERT_COMMAND, "/usr/bin/convert").
 -define(CONVERT_ARGS, ["-units", "PixelsPerInch", "-density", "320", "-quality", "100", "-resize"]).
 -define(TESSERACT_ARGS, ["-lang=eng+tur+chi_sim+chi_tra"]).
 
@@ -63,15 +63,17 @@ ocr(FileRef) -> gen_server:call(?MODULE, {ocr, FileRef}, ?TIMEOUT).
 
 %% Gen_server callbacks
 
-handle_call({ocr, FileRef}, _From, State) ->
+handle_call({ocr, FileRef}, From, State) ->
 	Worker = self(),
 	SpawnOpts = get_spawn_opts(),
-	mydlp_api:mspawn(fun(_FileRef) ->
+	mydlp_api:mspawn(fun() ->
 				%Port = open_port({spawn_executable, ?CONVERT}, 
 				%		[{args, lists:append(?CONVERT_ARGS, ["/home/ozgen/Untitled.png", "/home/ozgen/Untitled2.png"])}, use_stdio, exit_status, stderr_to_stdout]),
-				Resp = mydlp_api:cmd(?CONVERT_COMMAND, lists:append(?CONVERT_ARGS, ["/home/ozgen/Untitled.png", "/home/ozgen/Untitled2.png"])),
+				
+				{ok, B} = file:read_file("/home/ozgen/Untitled.png"),
+				Resp = mydlp_api:cmd(?CONVERT_COMMAND, lists:append(?CONVERT_ARGS, ["400%", B, "/home/ozgen/Untitled2.png"])),
 				erlang:display({resp, Resp}),
-				Resp
+				Worker ! {async_convert_reply, Resp, From}
 	end, ?TIMEOUT+10),
 	{noreply, State};
 
@@ -81,6 +83,10 @@ handle_call(_Msg, _From, State) ->
 
 handle_cast(_Msg, State) ->
 	{noreply, State}.
+
+handle_info({async_convert_reply, Resp, From}, State) ->
+	?SAFEREPLY(From, Resp),
+	{noreply, State};
 
 handle_info(_Info, State) ->
 	{noreply, State}.
