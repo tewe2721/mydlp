@@ -3869,6 +3869,28 @@ cmd_cast(Command, Args, Envs, Stdin) when is_list(Args), is_list(Envs) ->
 		none -> ok;
 		S -> port_command(Port, S) 
 	end.
+
+cmd_get_port(Command) -> cmd_get_port(Command, []).
+
+cmd_get_port(Command, Args) -> cmd_get_port(Command, Args, []). 
+
+cmd_get_port(Command, Args, Envs) -> cmd_get_port(Command, Args, Envs, none). % Last variable for Stdin
+
+% envs should be like [{"key","value"}] and Stdin shold be "Stdin\n" format
+cmd_get_port(Command, Args, Envs, Stdin) when is_list(Args), is_list(Envs) ->
+       Port = open_port({spawn_executable, Command},
+                       [{args, Args},
+                       {env, Envs},
+                       use_stdio,
+                       exit_status,
+                       stderr_to_stdout]),
+
+	case Stdin of 
+		none -> ok;
+		S -> port_command(Port, S) 
+	end,
+	Port.
+
 -endif.
 
 -endif.
