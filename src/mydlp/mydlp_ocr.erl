@@ -36,6 +36,7 @@
 %% API
 -export([start_link/0,
 	ocr/1,
+	test_file/0,
 	stop/0
 	]).
 
@@ -62,6 +63,7 @@
 -define(TESSERACT_COMMAND, "/usr/bin/tesseract").
 -define(TESSERACT_ARGS, ["-lang=eng+tur+chi_sim+chi_tra"]).
 -define(MAX_NUMBER_OF_THREAD, 2).
+-define(MAX_WAITING_QUEUE_SIZE, 2).
 
 
 %% API
@@ -74,18 +76,27 @@ ocr(FileRef) ->
 		"error"
 	end.
 
+%This function is used for test. Not included in product
+test_file() ->
+	File = #file{filename="Untitled.png"},
+	File1 = ?BF_C(File, {regularfile, "/home/ozgen/Untitled.png"}),
+	ocr(File1).
+
 %% Gen_server callbacks
 
 handle_call({ocr, FileRef}, From, #state{waiting_queue=Q, number_of_active_job=N}=State) ->
 	Worker = self(),
 	SpawnOpts = get_spawn_opts(),
 	case N >= ?MAX_NUMBER_OF_THREAD of
-		true -> Q1 = queue:in({FileRef, From}, Q),
+		true -> Q1 = case queue:len(Q) >= ?MAX_WAITING_QUEUE_SIZE of 
+				false -> queue:in({FileRef, From}, Q);
+				true -> Q end,
 			{noreply, State#state{waiting_queue=Q1}};
 		false ->
 	mydlp_api:mspawn(fun() ->
-				Percentage = calculate_resizing(FileRef),
-				Port = mydlp_api:cmd_get_port(?CONVERT_COMMAND, lists:append(?CONVERT_ARGS, [Percentage, "/home/ozgen/Untitled.png", "/home/ozgen/Untitled2.png"])),
+				{regularfile, FilePath} = FileRef#file.dataref,
+				Percentage = calculate_resizing(FilePath),
+				Port = mydlp_api:cmd_get_port(?CONVERT_COMMAND, lists:append(?CONVERT_ARGS, [Percentage, FilePath, "/home/ozgen/Untitled2.png"])),
 				{ok, TRef} = timer:send_after(?TIMEOUT, {port_timeout, Port}),
 				%image enhancement
 				Resp = case mydlp_api:get_port_resp(Port, []) of
@@ -150,12 +161,11 @@ code_change(_OldVsn, State, _Extra) ->
 
 %%%%%%%%%%%%%%%%% initernal
 
-calculate_resizing(File) ->
-	Port = mydlp_api:cmd_get_port(?IDENTIFY_COMMAND, lists:append(?IDENTIFY_ARGS, ["/home/ozgen/Untitled.png"])),
+calculate_resizing(FilePath) ->
+	Port = mydlp_api:cmd_get_port(?IDENTIFY_COMMAND, lists:append(?IDENTIFY_ARGS, [FilePath])),
 	Resize = case mydlp_api:get_port_resp(Port, []) of
 		{ok, Data} -> DataS = binary_to_list(Data),
 				Splitted = string:tokens(DataS, " \t\n"),
-				erlang:display(Splitted),
 				CDPI = list_to_float(lists:nth(1, Splitted)),
 				round((320/CDPI)*100);
 		Error -> ?ERROR_LOG("Error occured when gettin image information. Error: ["?S"]", [Error]), 100 end,
