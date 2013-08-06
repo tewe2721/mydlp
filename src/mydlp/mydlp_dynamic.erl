@@ -265,7 +265,10 @@ load_src(Src) ->
 	{email_notification_message_subject, string, "Notifications from MyDLP"},
 	{email_notification_message, string, "Hello,\r\nThis is an auto-generated message. This message aims to inform you about some incidents that have been recently occurred and logged in your MyDLP system.\r\nYou are recieving this message because you have subscribed to be notified for incidents related to a rule in MyDLP.\r\nFor details, please log on to MyDLP Management Console and go to Logs screen.\r\nIf you do not want to recieve these emails, please contact to your system administrator."},
 	{discover_web_interval, integer, "7200000"},
-	{discover_web_on_startup, boolean, "false"}
+	{discover_web_on_startup, boolean, "false"},
+	{ocr_number_of_threads, integer, "1"},
+	{ocr_max_processing_age, integer, "180000"},
+	{ocr_waiting_queue_size, integer, "100"}
 ]).
 
 -endif.
