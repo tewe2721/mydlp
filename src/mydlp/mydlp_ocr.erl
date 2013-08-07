@@ -64,6 +64,8 @@
 -define(TESSERACT_ARGS, ["-lang=eng+tur+chi_sim+chi_tra"]).
 -define(MAX_NUMBER_OF_THREAD, 2).
 -define(MAX_WAITING_QUEUE_SIZE, 2).
+-define(OCR_WORKDIR, "/var/lib/mydlp/ocr").
+-define(TRY_COUNT, 5).
 
 
 %% API
@@ -76,6 +78,8 @@ ocr(FileRef) ->
 		"error"
 	end.
 
+consume_waiting_process() -> gen_server:cast(?MODULE, consume_queue).
+
 %This function is used for test. Not included in product
 test_file() ->
 	File = #file{filename="Untitled.png"},
@@ -87,67 +91,67 @@ test_file() ->
 handle_call({ocr, FileRef}, From, #state{waiting_queue=Q, number_of_active_job=N}=State) ->
 	Worker = self(),
 	SpawnOpts = get_spawn_opts(),
-	case N >= ?CFG(ocr_number_of_threads) of
-		true -> Q1 = case queue:len(Q) >= ?CFG(ocr_waiting_queue_size) of 
-				false -> queue:in({FileRef, From}, Q);
-				true -> Q end,
-			{noreply, State#state{waiting_queue=Q1}};
-		false ->
-	mydlp_api:mspawn(fun() ->
-				{regularfile, FilePath} = FileRef#file.dataref,
-				Percentage = calculate_resizing(FilePath),
-				Port = mydlp_api:cmd_get_port(?CONVERT_COMMAND, lists:append(?CONVERT_ARGS, [Percentage, FilePath, "/home/ozgen/Untitled2.png"])),
-				{ok, TRef} = timer:send_after(?TIMEOUT, {port_timeout, Port, From}),
-				%image enhancement
-				Resp = case mydlp_api:get_port_resp(Port, []) of
-					{ok, _} -> timer:cancel(TRef), ok;
-					Error -> ?ERROR_LOG("Error calling image enhancement. Error: ["?S"]", [Error]), 
-								port_close(Port), none end,
-				Resp1 = case Resp of
-					ok -> 
-						Port1 = mydlp_api:cmd_get_port(?TESSERACT_COMMAND, lists:append(["/home/ozgen/Untitled2.png", "/home/ozgen/testtest"], ?TESSERACT_ARGS)),
-						{ok, TRef1} = timer:send_after(?TIMEOUT, {port_timeout, Port, From}),
-						case mydlp_api:get_port_resp(Port1, []) of
-							{ok, _} -> timer:cancel(TRef1), ok;
-							Error1 -> ?ERROR_LOG("Error in ocr operation. Error: ["?S"]", [Error1]), 
-								port_close(Port), none end;	
-					_ -> none end, 
-				Worker ! {async_convert_reply, Resp1, From}
-	end, ?TIMEOUT, SpawnOpts),
-	{noreply, State#state{number_of_active_job=N+1}} end;
+	FileKey = get_cache_key(FileRef),
+	case cache_lookup(FileKey) of
+		{hit, I} -> I, {reply, I, State};
+		 _ -> 
+		case N >= ?CFG(ocr_number_of_threads) of
+			true -> Q1 = case queue:len(Q) >= ?CFG(ocr_waiting_queue_size) of 
+					false -> queue:in({FileRef, From}, Q);
+					true -> Q end,
+				{noreply, State#state{waiting_queue=Q1}};
+			false ->
+				mydlp_api:mspawn(fun() ->
+						Resp = extract_text(FileRef, From),
+						Worker ! {async_convert_reply, {Resp, FileRef}, From}
+						end, ?TIMEOUT, SpawnOpts),
+				{noreply, State#state{number_of_active_job=N+1}} end end;
 
 handle_call(_Msg, _From, State) ->
 	{noreply, State}.
 
+handle_cast(consume_queue, #state{waiting_queue=Q, number_of_active_job=N}=State) ->
+	Worker = self(),
+	SpawnOpts = get_spawn_opts(),
+	erlang:display(consume_queue),
+	case N >= ?CFG(ocr_number_of_threads) of
+		true -> {noreply, State};
+		false ->
+		case queue:out(Q) of
+			{{value, {FileRef, From}}, Q1} -> 
+				mydlp_api:mspawn(fun() ->
+					Resp = extract_text(FileRef, From),
+					Worker ! {async_convert_reply, {Resp, FileRef}, From} end, ?TIMEOUT, SpawnOpts),
+					{noreply, State#state{number_of_active_job=N+1, waiting_queue=Q1}};
+			_ -> {noreply, State} end end;
 
 handle_cast(_Msg, State) ->
 	{noreply, State}.
 
-handle_info({port_timeout, Port, _From}, #state{number_of_active_job=N, waiting_queue=Q}=State) ->
+handle_info({port_timeout, Port, From}, #state{number_of_active_job=N}=State) ->
 	port_close(Port),
+	?SAFEREPLY(From, error),	
 	%send_new_request
-	Q2 = case queue:out(Q) of
-		{{value, Item}, Q1} -> ocr(Item), Q1;
-		_ -> Q end,
-	{noreply, State#state{number_of_active_job=N-1, waiting_queue=Q2}};
+	consume_waiting_process(),
+	{noreply, State#state{number_of_active_job=N-1}};
 
-handle_info({async_convert_reply, Resp, From}, State) ->
-	?SAFEREPLY(From, Resp),
-	test_file(),
-	erlang:display(geldi),
+handle_info(cleanup_now, State) ->
+	cache_cleanup_handle(),
+	call_timer(),
 	{noreply, State};
 
-handle_info(test, State) ->
-	erlang:display(test),
-	test_file(),
-	timer:send_after(1000, test),
-	{noreply, State};
+handle_info({async_convert_reply, {Resp, FileRef}, From}, #state{number_of_active_job=N}=State) ->
+	FileKey = get_cache_key(FileRef),
+	Resp1 = lists:append(Resp, ".txt"),
+	?SAFEREPLY(From, Resp1),
+	cache_insert(FileKey, Resp1),
+	consume_waiting_process(),
+	{noreply, State#state{number_of_active_job=N-1}};
 
 handle_info(_Info, State) ->
 	{noreply, State}.
 
 %%%%%%%%%%%%%%%% Implicit functions
-
 
 start_link() ->
 	case gen_server:start_link({local, ?MODULE}, ?MODULE, [], []) of
@@ -159,7 +163,8 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
-%	timer:send_after(1000, test),
+	cache_start(),
+	filelib:ensure_dir(?OCR_WORKDIR),
 	{ok, #state{number_of_active_job=0, waiting_queue=queue:new()}}.
 
 terminate(_Reason, _State) ->
@@ -169,6 +174,89 @@ code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 
 %%%%%%%%%%%%%%%%% initernal
+get_cache_key(FileRef) ->
+%	lists:flatten(FileRef#file.dataref++FileRef#file.md5_hash)
+	{regularfile, Path} = FileRef#file.dataref,
+	Path.
+
+cache_lookup(Query) ->
+        case ets:lookup(ocr_cache, Query) of
+                [] -> miss;
+                [I|_] -> {hit, I} end.
+
+cache_insert(Query, Return) ->
+        ets:insert(ocr_cache, {Query, Return}),
+        ok.
+
+cache_clean() ->
+        ets:delete_all_objects(ocr_cache),
+	clean_workdir().
+
+cache_cleanup_handle() ->
+        MaxSize = ?CFG(ocr_cache_maximum_size),
+        case ets:info(ocr_cache, memory) of
+                I when I > MaxSize -> cache_clean();
+                _Else -> ok end.
+
+call_timer() -> call_timer(?CFG(ocr_cache_cleanup_interval)).
+call_timer(Time) -> timer:send_after(Time, cleanup_now).
+
+cache_start() ->
+        case ets:info(ocr_cache) of
+                undefined -> ets:new(ocr_cache, [
+                                        public,
+                                        named_table,
+                                        {write_concurrency, true}
+                                ]);
+                _Else -> ok end.
+
+clean_workdir() ->
+        case file:list_dir(?OCR_WORKDIR) of
+                {ok, FileList} -> remove_file(FileList);
+                {error, E} -> ?ERROR_LOG("OCR: Error Occured listing files. Path: ["?S"]~n. Error: ["?S"]~n", [?OCR_WORKDIR, E])
+        end.
+
+remove_file([File|Rest]) ->
+        FilePath = filename:join(?OCR_WORKDIR, File),
+        remove(FilePath, ?TRY_COUNT),
+        remove_file(Rest);
+remove_file([]) -> ok.
+
+remove(FilePath, TryCount) ->
+	case file:delete(FilePath) of
+		ok -> ok;
+		_ -> 
+		case TryCount of
+                	1 -> ?ERROR_LOG("OCR: Error Occured when deleting file. FilePath: ["?S"]", [FilePath]) ;
+			_ -> timer:sleep(1000),
+				remove(FilePath, TryCount-1)
+                end
+        end.
+
+
+extract_text(FileRef, From) ->
+	{regularfile, FilePath} = FileRef#file.dataref,
+	Percentage = calculate_resizing(FilePath),
+	EnhancedImage = get_unique_filename(),
+	Port = mydlp_api:cmd_get_port(?CONVERT_COMMAND, lists:append(?CONVERT_ARGS, [Percentage, FilePath, EnhancedImage])),
+	{ok, TRef} = timer:send_after(?TIMEOUT, {port_timeout, Port, From}),
+	%image enhancement
+	Resp = case mydlp_api:get_port_resp(Port, []) of
+		{ok, _} -> timer:cancel(TRef), ok;
+		Error -> ?ERROR_LOG("Error calling image enhancement. Error: ["?S"]", [Error]), 
+			port_close(Port), none end,
+	case Resp of
+		ok ->
+			TextFile = get_unique_filename(), 
+			Port1 = mydlp_api:cmd_get_port(?TESSERACT_COMMAND, lists:append([EnhancedImage, TextFile], ?TESSERACT_ARGS)),
+			{ok, TRef1} = timer:send_after(?TIMEOUT, {port_timeout, Port, From}),
+			case mydlp_api:get_port_resp(Port1, []) of
+				{ok, _} -> timer:cancel(TRef1), 
+					file:delete(EnhancedImage),
+					TextFile;
+				Error1 -> ?ERROR_LOG("Error in ocr operation. Error: ["?S"]", [Error1]), 
+					port_close(Port), none end;	
+		_ -> none end.
 
 calculate_resizing(FilePath) ->
 	Port = mydlp_api:cmd_get_port(?IDENTIFY_COMMAND, lists:append(?IDENTIFY_ARGS, [FilePath])),
@@ -181,3 +269,9 @@ calculate_resizing(FilePath) ->
 	lists:flatten(integer_to_list(Resize)++"%").
 
 get_spawn_opts() -> [{priority, low}].
+
+get_unique_filename() -> 
+	{A, B, C} = now(),
+	Filename = lists:flatten(io_lib:format("~p.~p.~p", [A, B, C])),
+	filename:join(?OCR_WORKDIR, Filename).
+

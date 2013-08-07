@@ -268,7 +268,9 @@ load_src(Src) ->
 	{discover_web_on_startup, boolean, "false"},
 	{ocr_number_of_threads, integer, "1"},
 	{ocr_max_processing_age, integer, "180000"},
-	{ocr_waiting_queue_size, integer, "100"}
+	{ocr_waiting_queue_size, integer, "100"},
+	{ocr_cache_cleanup_interval, integer, "3600000"},
+	{ocr_cache_maximum_size, integer, "300"}
 ]).
 
 -endif.
