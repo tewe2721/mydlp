@@ -113,7 +113,6 @@ handle_call(_Msg, _From, State) ->
 handle_cast(consume_queue, #state{waiting_queue=Q, number_of_active_job=N}=State) ->
 	Worker = self(),
 	SpawnOpts = get_spawn_opts(),
-	erlang:display(consume_queue),
 	case N >= ?CFG(ocr_number_of_threads) of
 		true -> {noreply, State};
 		false ->
@@ -142,9 +141,8 @@ handle_info(cleanup_now, State) ->
 
 handle_info({async_convert_reply, {Resp, FileRef}, From}, #state{number_of_active_job=N}=State) ->
 	FileKey = get_cache_key(FileRef),
-	Resp1 = lists:append(Resp, ".txt"),
-	?SAFEREPLY(From, Resp1),
-	cache_insert(FileKey, Resp1),
+	?SAFEREPLY(From, Resp),
+	cache_insert(FileKey, Resp),
 	consume_waiting_process(),
 	{noreply, State#state{number_of_active_job=N-1}};
 
@@ -176,8 +174,8 @@ code_change(_OldVsn, State, _Extra) ->
 %%%%%%%%%%%%%%%%% initernal
 get_cache_key(FileRef) ->
 %	lists:flatten(FileRef#file.dataref++FileRef#file.md5_hash)
-	{regularfile, Path} = FileRef#file.dataref,
-	Path.
+	FileRef#file.dataref.
+	%Path.
 
 cache_lookup(Query) ->
         case ets:lookup(ocr_cache, Query) of
@@ -235,16 +233,24 @@ remove(FilePath, TryCount) ->
 
 
 extract_text(FileRef, From) ->
-	{regularfile, FilePath} = FileRef#file.dataref,
-	Percentage = calculate_resizing(FilePath),
+	%{regularfile, FilePath} = FileRef#file.dataref,
+	Percentage = calculate_resizing(FileRef),
 	EnhancedImage = get_unique_filename(),
-	Port = mydlp_api:cmd_get_port(?CONVERT_COMMAND, lists:append(?CONVERT_ARGS, [Percentage, FilePath, EnhancedImage])),
+	BinaryData = FileRef#file.data,
+	ConvertingImage = <<BinaryData/binary,"\n">>,
+	Port = mydlp_api:cmd_get_port(?CONVERT_COMMAND, lists:append(?CONVERT_ARGS, [Percentage, "-", EnhancedImage]), [], ConvertingImage),
 	{ok, TRef} = timer:send_after(?TIMEOUT, {port_timeout, Port, From}),
 	%image enhancement
-	Resp = case mydlp_api:get_port_resp(Port, []) of
-		{ok, _} -> timer:cancel(TRef), ok;
-		Error -> ?ERROR_LOG("Error calling image enhancement. Error: ["?S"]", [Error]), 
-			port_close(Port), none end,
+	timer:sleep(5000),%work around
+	port_close(Port),
+	timer:sleep(5000),
+	Resp = case filelib:is_regular(EnhancedImage) of
+		true -> timer:cancel(TRef), ok;
+		false -> error end,
+	%Resp = case mydlp_api:get_port_resp(Port, []) of
+%		{ok, _} -> timer:cancel(TRef), ok;
+%		Error -> ?ERROR_LOG("Error calling image enhancement. Error: ["?S"]", [Error]), 
+%			port_close(Port), none end,
 	case Resp of
 		ok ->
 			TextFile = get_unique_filename(), 
@@ -253,17 +259,24 @@ extract_text(FileRef, From) ->
 			case mydlp_api:get_port_resp(Port1, []) of
 				{ok, _} -> timer:cancel(TRef1), 
 					file:delete(EnhancedImage),
-					TextFile;
+					TextFile,
+					F = lists:append(TextFile, ".txt"),
+					{ok, Data} = file:read_file(F),
+					File1 = ?BF_C(#file{}, Data),
+					mydlp_api:load_file(File1);
 				Error1 -> ?ERROR_LOG("Error in ocr operation. Error: ["?S"]", [Error1]), 
-					port_close(Port), none end;	
-		_ -> none end.
+					port_close(Port), "error" end;	
+		_ -> "error" end.
 
-calculate_resizing(FilePath) ->
-	Port = mydlp_api:cmd_get_port(?IDENTIFY_COMMAND, lists:append(?IDENTIFY_ARGS, [FilePath])),
+calculate_resizing(FileRef) ->
+%	BinaryData = FileRef#file.data, TODO: Do This!
+	Port = mydlp_api:cmd_get_port(?IDENTIFY_COMMAND, lists:append(?IDENTIFY_ARGS, ["/home/ozgen/Capture.JPG"])),
 	Resize = case mydlp_api:get_port_resp(Port, []) of
 		{ok, Data} -> DataS = binary_to_list(Data),
-				Splitted = string:tokens(DataS, " \t\n"),
-				CDPI = list_to_float(lists:nth(1, Splitted)),
+				CDPIL = lists:nth(1, string:tokens(DataS, " \t\n")),
+				CDPI = case string:chr(CDPIL, $.) of
+					0 -> list_to_integer(CDPIL);
+					_ -> list_to_float(CDPIL) end,
 				round((320/CDPI)*100);
 		Error -> ?ERROR_LOG("Error occured when gettin image information. Error: ["?S"]", [Error]), 100 end,
 	lists:flatten(integer_to_list(Resize)++"%").
