@@ -3887,7 +3887,7 @@ cmd_get_port(Command, Args, Envs, Stdin) when is_list(Args), is_list(Envs) ->
 
 	case Stdin of 
 		none -> ok;
-		S -> port_command(Port, S) 
+		S -> port_command(Port, S)
 	end,
 	Port.
 
