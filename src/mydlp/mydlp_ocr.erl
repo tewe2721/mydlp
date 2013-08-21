@@ -96,10 +96,11 @@ handle_call({ocr, FileRef}, From, #state{waiting_queue=Q, number_of_active_job=N
 		{hit, {_, TextFile}} -> {reply, TextFile, State};
 		 _ -> 
 		case N >= ?CFG(ocr_number_of_threads) of
-			true -> Q1 = case queue:len(Q) >= ?CFG(ocr_waiting_queue_size) of 
-					false -> queue:in({FileRef, From}, Q);
-					true -> Q end,
-				{noreply, State#state{waiting_queue=Q1}};
+			true -> case queue:len(Q) >= ?CFG(ocr_waiting_queue_size) of 
+					false -> Q1 = queue:in({FileRef, From}, Q),
+						{noreply, State#state{waiting_queue=Q1}};
+					true -> ?ERROR_LOG("Maximum waiting queue size for ocr is exceed!", []),
+						{reply, "error", State} end;
 			false ->
 				mydlp_api:mspawn(fun() ->
 						Resp = extract_text(FileRef, From),
