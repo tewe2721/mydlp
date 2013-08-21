@@ -234,38 +234,31 @@ remove(FilePath, TryCount) ->
 
 extract_text(FileRef, From) ->
 	%{regularfile, FilePath} = FileRef#file.dataref,
-	TempImageFile = get_unique_filename(),
+	{ok, TempImageFile} = mydlp_workdir:tempfile(),
 	file:write_file(TempImageFile, FileRef#file.data),
 	Percentage = calculate_resizing(TempImageFile),
-	EnhancedImage = get_unique_filename(),
+	{ok, EnhancedImage} = mydlp_workdir:tempfile(),
 %	BinaryData = FileRef#file.data,
 %	ConvertingImage = <<BinaryData/binary,"\n">>,
 	Port = mydlp_api:cmd_get_port(?CONVERT_COMMAND, lists:append(?CONVERT_ARGS, [Percentage, TempImageFile, EnhancedImage])),
 %	Port = mydlp_api:cmd_get_port(?CONVERT_COMMAND, lists:append(?CONVERT_ARGS, [Percentage, "-", EnhancedImage]), [], ConvertingImage),
 	{ok, TRef} = timer:send_after(?TIMEOUT, {port_timeout, Port, From}),
-	%image enhancement
-%	timer:sleep(5000),%work around
-%	port_close(Port),
-%	timer:sleep(5000),
-%	Resp = case filelib:is_regular(EnhancedImage) of
-%		true -> timer:cancel(TRef), ok;
-%		false -> error end,
+
 	Resp = case mydlp_api:get_port_resp(Port, []) of
 		{ok, _} -> timer:cancel(TRef), ok;
 		Error -> ?ERROR_LOG("Error calling image enhancement. Error: ["?S"]", [Error]), 
 			port_close(Port), none end,
+	file:delete(TempImageFile),
 	case Resp of
 		ok ->
-			TextFile = get_unique_filename(), 
+			{ok, TextFile} = mydlp_workdir:tempfile(), 
 			Port1 = mydlp_api:cmd_get_port(?TESSERACT_COMMAND, lists:append([EnhancedImage, TextFile], ?TESSERACT_ARGS)),
 			{ok, TRef1} = timer:send_after(?TIMEOUT, {port_timeout, Port, From}),
 			case mydlp_api:get_port_resp(Port1, []) of
 				{ok, _} -> timer:cancel(TRef1), 
 					file:delete(EnhancedImage),
-					TextFile,
 					F = lists:append(TextFile, ".txt"),
-					{ok, Data} = file:read_file(F),
-					File1 = ?BF_C(#file{}, Data),
+					File1 = ?BF_C(#file{}, {tmpfile, F}),
 					mydlp_api:load_file(File1);
 				Error1 -> ?ERROR_LOG("Error in ocr operation. Error: ["?S"]", [Error1]), 
 					port_close(Port), "error" end;	
@@ -286,9 +279,4 @@ calculate_resizing(TempImageFile) ->
 	lists:flatten(integer_to_list(Resize)++"%").
 
 get_spawn_opts() -> [{priority, low}].
-
-get_unique_filename() -> 
-	{A, B, C} = now(),
-	Filename = lists:flatten(io_lib:format("~p.~p.~p", [A, B, C])),
-	filename:join(?OCR_WORKDIR, Filename).
 
