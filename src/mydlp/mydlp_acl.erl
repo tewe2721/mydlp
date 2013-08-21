@@ -391,9 +391,7 @@ execute_itype_pf_image_filtering(CTX, SpawnOpts, {ITypeOrigId, Distance, IFeatur
 	case Res of
 		{pos, {file, FileR}, Itype, Misc} -> 
 			case is_image_file(File) and IsOcrActive of
-				true -> MatchingDetails = FileR#file.matching_detail,
-					mydlp_api:clean_files(FileR),
-					{pos, {file, File#file{matching_detail=MatchingDetails}}, Itype, Misc};
+				true -> {pos, {file, File#file{matching_detail=FileR#file.matching_detail}}, Itype, Misc};
 				false -> Res end;
 		_ -> Res end.
 

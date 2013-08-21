@@ -93,7 +93,7 @@ handle_call({ocr, FileRef}, From, #state{waiting_queue=Q, number_of_active_job=N
 	SpawnOpts = get_spawn_opts(),
 	FileKey = get_cache_key(FileRef),
 	case cache_lookup(FileKey) of
-		{hit, I} -> {reply, I, State};
+		{hit, {_, TextFile}} -> {reply, TextFile, State};
 		 _ -> 
 		case N >= ?CFG(ocr_number_of_threads) of
 			true -> Q1 = case queue:len(Q) >= ?CFG(ocr_waiting_queue_size) of 
@@ -172,10 +172,7 @@ code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 
 %%%%%%%%%%%%%%%%% initernal
-get_cache_key(FileRef) ->
-%	lists:flatten(FileRef#file.dataref++FileRef#file.md5_hash)
-	FileRef#file.dataref.
-	%Path.
+get_cache_key(FileRef) -> FileRef#file.md5_hash.
 
 cache_lookup(Query) ->
         case ets:lookup(ocr_cache, Query) of
@@ -251,7 +248,7 @@ extract_text(FileRef, From) ->
 	file:delete(TempImageFile),
 	case Resp of
 		ok ->
-			{ok, TextFile} = mydlp_workdir:tempfile(), 
+			TextFile = get_unique_filename(), 
 			Port1 = mydlp_api:cmd_get_port(?TESSERACT_COMMAND, lists:append([EnhancedImage, TextFile], ?TESSERACT_ARGS)),
 			{ok, TRef1} = timer:send_after(?TIMEOUT, {port_timeout, Port, From}),
 			case mydlp_api:get_port_resp(Port1, []) of
@@ -266,7 +263,6 @@ extract_text(FileRef, From) ->
 
 calculate_resizing(TempImageFile) ->
 	Port = mydlp_api:cmd_get_port(?IDENTIFY_COMMAND, lists:append(?IDENTIFY_ARGS, [TempImageFile])),
-	erlang:display("port get"),
 	Resize = case mydlp_api:get_port_resp(Port, []) of
 		{ok, Data} -> DataS = binary_to_list(Data),
 				CDPIL = lists:nth(1, string:tokens(DataS, " \t\n")),
@@ -275,8 +271,11 @@ calculate_resizing(TempImageFile) ->
 					_ -> list_to_float(CDPIL) end,
 				round((320/CDPI)*100);
 		Error -> ?ERROR_LOG("Error occured when gettin image information. Error: ["?S"]", [Error]), 100 end,
-	erlang:display({resize, Resize}),
 	lists:flatten(integer_to_list(Resize)++"%").
 
 get_spawn_opts() -> [{priority, low}].
 
+get_unique_filename() ->
+	{A, B, C} = now(),
+	Filename = lists:flatten(io_lib:format("~p.~p.~p", [A, B, C])),
+	filename:absname(Filename, ?OCR_WORKDIR).
