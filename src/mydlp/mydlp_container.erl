@@ -479,6 +479,7 @@ set_general_meta() ->
 	?ASYNC0(fun() -> 
 		LoggedOnUser = mydlp_api:get_logged_on_user(),
 		LoggedOnDomain = mydlp_api:get_logged_on_domain(),
+		set_ep_meta("logged_on_domain", LoggedOnDomain),
 		set_ep_meta("user", LoggedOnUser ++ "@" ++ LoggedOnDomain),
 		set_ep_meta("hostname", LoggedOnDomain),
 		ok
