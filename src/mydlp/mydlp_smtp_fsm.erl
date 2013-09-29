@@ -105,12 +105,13 @@ init([]) ->
 %	NewState = State#smtpd_fsm{socket=Socket, addr=IP, options = DNSBL, relay = smtpd_queue:checkip(IP)},
 	NewState = State#smtpd_fsm{socket=Socket, addr=IP, relay = true},
 	case mydlp_mysql:get_progress() of
-		done ->	?SMTP_LOG(connect, IP),
-			NextState = smtpd_cmd:command({greeting,IP},NewState),
-			{next_state, 'WAIT_FOR_CMD', NextState, ?CFG(fsm_timeout)};
-		_ ->	?SMTP_LOG(not_ready, IP),
+		compile ->
+			?SMTP_LOG(not_ready, IP),
 			NextState = smtpd_cmd:command(not_ready,NewState),
-			{stop, normal, NextState} end;
+			{stop, normal, NextState};
+		_ ->	?SMTP_LOG(connect, IP),
+			NextState = smtpd_cmd:command({greeting,IP},NewState),
+			{next_state, 'WAIT_FOR_CMD', NextState, ?CFG(fsm_timeout)} end;
 			
 'WAIT_FOR_SOCKET'(Other, State) ->
 	?DEBUG("SMTP State: 'WAIT_FOR_SOCKET'. Unexpected message: "?S, [Other]),

@@ -495,13 +495,16 @@ handle_cast({compile_customer, FilterId}, State) ->
 			mydlp_mnesia:remove_site(FilterId),
 			populate_site(FilterId),
 			ok
-		after	set_progress(done),
-			mydlp_api:cmd_cast(?MAIL_FLUSH_COMMAND, ["-f"]) %used for flushing mail queue
+		after	set_progress(done)
 		end
 	end, 900000),
 	{noreply, State};
 
 handle_cast({set_progress, Progress}, State) ->
+	case Progress of
+		post_compile -> mail_flush();
+		done -> mail_flush();
+		_Else -> ok end,
 	{noreply, State#state{compile_progress=Progress}};
 
 handle_cast({insert_dd_file_entry, FileEntryId, DDId}, State) ->
@@ -1332,12 +1335,11 @@ populate_ifeatures([], _RuleId) -> ok.
 %whitefile([Match|Matches], Returns) -> whitefile(Matches, [Match|Returns]);
 %whitefile([], Returns) -> lists:reverse(Returns).
 
-new_match(Func) -> new_match(Func, []).
+new_match(NewId, Func) -> new_match(NewId, Func, []).
 
-new_match(Func, FuncParams) ->
-	case find_match_id(Func, FuncParams) of
-		none -> NewId = mydlp_mnesia:get_unique_id(match),
-			M = #match{id=NewId, func=Func, func_params=FuncParams},
+new_match(NewId, Func, FuncParams) ->
+	case find_match_id(NewId, Func, FuncParams) of
+		none -> M = #match{id=NewId, func=Func, func_params=FuncParams},
 			mydlp_mnesia_write(M),
 			NewId;
 		Id ->	Id end.
@@ -1386,145 +1388,145 @@ is_scrambled_by_mid(MId) ->
 
 populate_match([[OrigId, FuncName]]) -> populate_match(OrigId, FuncName).
 
-populate_match(_Id, <<"encrypted_archive">>) ->
+populate_match(Id, <<"encrypted_archive">>) ->
 	Func = e_archive_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"encrypted_file">>) ->
+populate_match(Id, <<"encrypted_file">>) ->
 	Func = e_file_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"trid">>) ->
+populate_match(Id, <<"trid">>) ->
 	Func = trid_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"ssn">>) ->
+populate_match(Id, <<"ssn">>) ->
 	Func = ssn_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"iban">>) ->
+populate_match(Id, <<"iban">>) ->
 	Func = iban_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"aba">>) ->
+populate_match(Id, <<"aba">>) ->
 	Func = aba_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"cc">>) ->
+populate_match(Id, <<"cc">>) ->
 	Func = cc_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"cc_track1">>) ->
+populate_match(Id, <<"cc_track1">>) ->
 	Func = cc_track1_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"cc_track2">>) ->
+populate_match(Id, <<"cc_track2">>) ->
 	Func = cc_track2_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"cc_track3">>) ->
+populate_match(Id, <<"cc_track3">>) ->
 	Func = cc_track3_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"ten_digit">>) ->
+populate_match(Id, <<"ten_digit">>) ->
 	Func = ten_digit_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"nine_digit">>) ->
+populate_match(Id, <<"nine_digit">>) ->
 	Func = nine_digit_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"fe_digit">>) ->
+populate_match(Id, <<"fe_digit">>) ->
 	Func = fe_digit_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"ip">>) ->
+populate_match(Id, <<"ip">>) ->
 	Func = ip_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"mac">>) ->
+populate_match(Id, <<"mac">>) ->
 	Func = mac_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"icd10">>) ->
+populate_match(Id, <<"icd10">>) ->
 	Func = icd10_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"canada_sin">>) ->
+populate_match(Id, <<"canada_sin">>) ->
 	Func = canada_sin_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"france_insee">>) ->
+populate_match(Id, <<"france_insee">>) ->
 	Func = france_insee_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"uk_nino">>) ->
+populate_match(Id, <<"uk_nino">>) ->
 	Func = uk_nino_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"italy_fc">>) ->
+populate_match(Id, <<"italy_fc">>) ->
 	Func = italy_fc_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"spain_dni">>) ->
+populate_match(Id, <<"spain_dni">>) ->
 	Func = spain_dni_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"dna">>) ->
+populate_match(Id, <<"dna">>) ->
 	Func = dna_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"said">>) ->
+populate_match(Id, <<"said">>) ->
 	Func = said_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"taiwan_nid">>) ->
+populate_match(Id, <<"taiwan_nid">>) ->
 	Func = taiwan_nid_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"pan">>) ->
+populate_match(Id, <<"pan">>) ->
 	Func = pan_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"tan">>) ->
+populate_match(Id, <<"tan">>) ->
 	Func = tan_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"cpf">>) ->
+populate_match(Id, <<"cpf">>) ->
 	Func = cpf_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"china_icn">>) ->
+populate_match(Id, <<"china_icn">>) ->
 	Func = china_icn_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"chinese_name">>) ->
+populate_match(Id, <<"chinese_name">>) ->
 	Func = chinese_name_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"cc_edate">>) ->
+populate_match(Id, <<"cc_edate">>) ->
 	Func = cc_edate_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"gdate">>) ->
+populate_match(Id, <<"gdate">>) ->
 	Func = gdate_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"birthdate">>) ->
+populate_match(Id, <<"birthdate">>) ->
 	Func = birthdate_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"scode">>) ->
+populate_match(Id, <<"scode">>) ->
 	Func = scode_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"scode_ada">>) ->
+populate_match(Id, <<"scode_ada">>) ->
 	Func = scode_ada_match,
-	new_match(Func);
+	new_match(Id, Func);
 
-populate_match(_Id, <<"all">>) ->
+populate_match(Id, <<"all">>) ->
 	Func = all,
-	new_match(Func);
+	new_match(Id, Func);
 
 populate_match(Id, <<"keyword">>) ->
 	Func = keyword_match,
@@ -1535,7 +1537,7 @@ populate_match(Id, <<"keyword">>) ->
 	IsScrambled = is_scrambled_by_mid(Id),
 	write_keyword(IsWholeWord, IsScrambled, KeywordGroupId, KeywordS),
 	FuncParams=[{group_id, KeywordGroupId}],
-	new_match(Func, FuncParams);
+	new_match(Id, Func, FuncParams);
 
 populate_match(Id, <<"keyword_group">>) ->
 	Func = keyword_match,
@@ -1554,7 +1556,7 @@ populate_match(Id, <<"keyword_group">>) ->
 			end, REREQ),
 			[{group_id, KeywordGroupId}];
 		[[BundledFileName]] -> [{file, BundledFileName, IsWholeWord}] end,
-	new_match(Func, FuncParams);
+	new_match(Id, Func, FuncParams);
 
 populate_match(Id, <<"regex">>) ->
 	Func = regex_match,
@@ -1563,7 +1565,7 @@ populate_match(Id, <<"regex">>) ->
 	RegexGroupId = mydlp_mnesia:get_unique_id(regex_group_id),
 	write_regex(RegexGroupId, RegexS),
 	FuncParams=[RegexGroupId],
-	new_match(Func, FuncParams);
+	new_match(Id, Func, FuncParams);
 
 populate_match(Id, <<"document_hash">>) ->
 	Func = md5_match,
@@ -1573,7 +1575,7 @@ populate_match(Id, <<"document_hash">>) ->
 	Filehashes = lists:append(FHQ),
 	populate_filehashes(Filehashes, DDId),
 	FuncParams=[DDId],
-	new_match(Func, FuncParams);
+	new_match(Id, Func, FuncParams);
 
 populate_match(Id, <<"document_pdm">>) ->
 	Func = pdm_match,
@@ -1584,7 +1586,7 @@ populate_match(Id, <<"document_pdm">>) ->
 	Fingerprints = lists:flatten([FFQ,RFQ]),
 	populate_filefingerprints(Fingerprints, DDId),
 	FuncParams=[DDId],
-	new_match(Func, FuncParams);
+	new_match(Id, Func, FuncParams);
 
 populate_match(Id, Matcher) -> throw({error, {unsupported_match, Id, Matcher} }).
 
@@ -1791,13 +1793,13 @@ has_mydlp_compile_item(Tag, Id) ->
 	S = get(mydlp_compile_item),
 	gb_sets:is_member({Tag, Id}, S).
 	
-find_match_id(Func, FuncParam) ->
+find_match_id(Id, Func, FuncParam) ->
 	MWM = get(mydlp_mnesia_write_match),
-	find_match_id(MWM, Func, FuncParam).
+	find_match_id(MWM, Id, Func, FuncParam).
 
-find_match_id([#match{id=Id, func=Func, func_params=FuncParam}|_Rest], Func, FuncParam) -> Id;
-find_match_id([_M|Rest], Func, FuncParams) -> find_match_id(Rest, Func, FuncParams);
-find_match_id([], _Func, _FuncParams) -> none.
+find_match_id([#match{id=Id, func=Func, func_params=FuncParam}|_Rest], Id, Func, FuncParam) -> Id;
+find_match_id([_M|Rest], Id, Func, FuncParams) -> find_match_id(Rest, Id, Func, FuncParams);
+find_match_id([], _Id, _Func, _FuncParams) -> none.
 
 pre_push_log(RuleId, Ip, User, Destination, Action, Channel, Misc, GroupId) -> 
 %	{FilterId, RuleId1} = case RuleId of
@@ -1875,6 +1877,12 @@ is_ep_discovery_finished(GroupId, Endpoint, Status) ->
 		{ok, [[_]]} -> true;
 		_ -> false
 	end.
+
+mail_flush() ->
+	?ASYNC0(fun() ->
+		mydlp_api:cmd_cast(?MAIL_FLUSH_COMMAND, ["-f"]) %used for flushing mail queue
+	end).
+
 
 -endif.
 
