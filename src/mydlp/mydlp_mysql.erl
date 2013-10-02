@@ -96,6 +96,8 @@
 
 -define(MAIL_FLUSH_COMMAND, "/usr/sbin/postqueue").
 
+-define(COMPILE_TIMEOUT, 6000000). %% 100 minutes
+
 %%%%%%%%%%%%% MyDLP Thrift RPC API
 
 push_log(Time, Channel, RuleId, Action, Ip, User, To, ITypeId, Misc, GroupId) ->
@@ -491,13 +493,15 @@ handle_cast({requeued, LogId}, State) ->
 
 handle_cast({compile_customer, FilterId}, State) ->
 	?ASYNC(fun() ->
+		{ok, TRef} = timer:send_after(?COMPILE_TIMEOUT - 100, compile_timeout),
 		try	set_progress(compile),
 			mydlp_mnesia:remove_site(FilterId),
 			populate_site(FilterId),
 			ok
-		after	set_progress(done)
+		after	timer:cancel(TRef),
+			set_progress(done)
 		end
-	end, 900000),
+	end, ?COMPILE_TIMEOUT),
 	{noreply, State};
 
 handle_cast({set_progress, Progress}, State) ->
@@ -518,6 +522,11 @@ handle_cast(_Msg, State) ->
 
 handle_info({async_reply, Reply, From}, State) ->
 	?SAFEREPLY(From, Reply),
+	{noreply, State};
+
+handle_info(compile_timeout, State) ->
+	?ERROR_LOG("Policy compilation had been timed out !!! Please contact MyDLP Support !", []),
+	set_progress(done),
 	{noreply, State};
 
 handle_info({'DOWN', _, _, MPid , _}, #state{master_pid=MPid} = State) ->
