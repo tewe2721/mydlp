@@ -495,8 +495,12 @@ handle_cast({compile_customer, FilterId}, State) ->
 	?ASYNC(fun() ->
 		{ok, TRef} = timer:send_after(?COMPILE_TIMEOUT - 100, compile_timeout),
 		try	set_progress(compile),
+			?ERROR_LOG("Started policy compilation.", []),
+			?ERROR_LOG("Removing old master policy.", []),
 			mydlp_mnesia:remove_site(FilterId),
+			?ERROR_LOG("Generating new master policy.", []),
 			populate_site(FilterId),
+			?ERROR_LOG("Policy generation has been completed successfully.", []),
 			ok
 		after	timer:cancel(TRef),
 			set_progress(done)
@@ -827,8 +831,10 @@ populate_site(FilterId) ->
 
 	{ok, UDQ} = psq(usb_devices),
 	populate_usb_devices(UDQ, FilterId),
+	?ERROR_LOG("Generated master policy, writing to runtime database.", []),
 	mydlp_mnesia:write(get_mydlp_mnesia_write()),
 	erase_mydlp_mnesia_write(),
+	?ERROR_LOG("Finalized master policy generation.", []),
 
 	set_progress(post_compile),
 
@@ -837,10 +843,13 @@ populate_site(FilterId) ->
 	mydlp_tc:load(),
 
 	init_mydlp_mnesia_write(),
+	?ERROR_LOG("Generating FSMs for new policy.", []),
 	populate_mc_modules(),
+	?ERROR_LOG("FSMs are generated for new policy.", []),
 	mydlp_mnesia:write(get_mydlp_mnesia_write()),
 	erase_mydlp_mnesia_write(),
 
+	?ERROR_LOG("Loading FSMs for new policy.", []),
 	mydlp_mnesia:post_start(mc),
 
 	set_progress(done),
