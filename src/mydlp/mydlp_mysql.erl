@@ -849,7 +849,7 @@ populate_site(FilterId) ->
 	mydlp_mnesia:write(get_mydlp_mnesia_write()),
 	erase_mydlp_mnesia_write(),
 
-	?ERROR_LOG("Loading FSMs for new policy.", []),
+	?ERROR_LOG("Loading new FSMs.", []),
 	mydlp_mnesia:post_start(mc),
 
 	set_progress(done),
