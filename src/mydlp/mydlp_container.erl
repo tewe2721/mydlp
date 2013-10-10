@@ -613,7 +613,7 @@ get_remote_user(#object{filepath=FP, prop_dict=PD}) ->
 	{ok, WSId} -> WS = mydlp_mnesia:get_web_server(WSId),
 			WS#web_server.proto ++ "://" ++ WS#web_server.address;
 	_Else ->
-		case filename:split(FP) of %originally should be "/var/lib/mydlp/mounts"
+		case filename:split(FP) of
 			["/", "var", "lib", "mydlp", "mounts", Id|_Rest] -> construct_source(list_to_integer(Id));
 			_ -> ?ERROR_LOG("Unknown remote discovery file", []), none
 		end
@@ -704,7 +704,7 @@ get_remote_destination_file_path(#object{filepath=FP, prop_dict=PD}) ->
 	case dict:find("page_path", PD) of
 		{ok, PP} -> PP;
 		_Else ->
-			case filename:split(FP) of %originally should be "/var/lib/mydlp/mounts"
+			case filename:split(FP) of
 				["/", "var", "lib", "mydlp", "mounts", _Id|Rest] -> filename:join(Rest);
 				_ -> ?ERROR_LOG("Unknown remote discovery file", []), undefined
 			end

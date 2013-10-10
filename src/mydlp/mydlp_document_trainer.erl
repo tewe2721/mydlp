@@ -61,7 +61,7 @@
 	in_prog=false
 }).
 
--define(MOUNT_PATH, "/var/lib/mydlp/ddmounts").
+-define(MOUNT_PATH_DD, "/var/lib/mydlp/ddmounts").
 -define(SSH_COMMAND, "/usr/bin/sshfs").
 -define(FTP_COMMAND, "/usr/bin/curlftpfs").
 -define(SMB_COMMAND, "/usr/bin/smbmount").
@@ -180,7 +180,7 @@ stop() ->
 	gen_server:call(?MODULE, stop).
 
 init([]) ->
-        filelib:ensure_dir(?MOUNT_PATH),
+        filelib:ensure_dir(?MOUNT_PATH_DD),
 	reset_discover_cache(),
 	release_mounts(),
 	timer:send_after(6000, startup),
@@ -313,8 +313,8 @@ handle_each_mount({windows, [UNCPath, Password, Username]}, Id) ->
 
 get_mount_path(Id) ->
 	case is_integer(Id) of
-		true -> filename:join(?MOUNT_PATH, integer_to_list(Id));
-		false -> filename:join(?MOUNT_PATH, Id) end.
+		true -> filename:join(?MOUNT_PATH_DD, integer_to_list(Id));
+		false -> filename:join(?MOUNT_PATH_DD, Id) end.
 
 generate_fingerprints_file(#fs_entry{file_id=FP}, DDId) ->
 	try
@@ -498,13 +498,13 @@ handle_start_fingerprinting(DDId) ->
 	end.
 
 release_mounts() -> 
-	case file:list_dir(?MOUNT_PATH) of
+	case file:list_dir(?MOUNT_PATH_DD) of
 		{ok, FileList} -> release_mount(FileList);
-		{error, E} -> ?ERROR_LOG("Document Discovery: Error Occured listing mount directory. MountPath: ["?S"]~n. Error: ["?S"]~n", [?MOUNT_PATH, E])
+		{error, E} -> ?ERROR_LOG("Document Discovery: Error Occured listing mount directory. MountPath: ["?S"]~n. Error: ["?S"]~n", [?MOUNT_PATH_DD, E])
 	end.
 
 release_mount([File|Rest]) ->
-	FilePath = filename:join(?MOUNT_PATH, File),
+	FilePath = filename:join(?MOUNT_PATH_DD, File),
 	umount_path(FilePath, ?TRY_COUNT),
 	release_mount(Rest);
 release_mount([]) -> ok.

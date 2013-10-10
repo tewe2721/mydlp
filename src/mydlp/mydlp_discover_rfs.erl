@@ -43,6 +43,7 @@
 	finished/0,
 	release_mount_by_rule_id/1,
 	start_discovery/2,
+	generate_connection_string/2,
 	stop/0]).
 
 %% gen_server callbacks
@@ -59,7 +60,6 @@
 	mount_dict
 }).
 
--define(MOUNT_PATH, "/var/lib/mydlp/mounts").
 -define(SSH_COMMAND, "/usr/bin/sshfs").
 -define(FTP_COMMAND, "/usr/bin/curlftpfs").
 -define(SMB_COMMAND, "/usr/bin/smbmount").
@@ -241,19 +241,16 @@ create_and_mount_path(MountPath, Command, Args, Envs, Stdin, RuleId, GroupId) ->
 	end, 
 	mount_path(MountPath, Command, Args, Envs, Stdin, RuleId, GroupId, ?TRY_COUNT).
 
-discover_each_mount([{Id, RuleId, sshfs, {Address, Port, Path, Username, Password}}|RemoteStorages], Dict, GroupId) ->
+generate_connection_string(sshfs, {Address, Port, Path, Username, Password}) ->
 	PortS = integer_to_list(Port),
 	Stdin = binary_to_list(Password) ++ "\n",
 	UsernameS = binary_to_list(Username),
 	PathS = binary_to_list(Path),
 	AddressS = binary_to_list(Address),
 	ConnectionString = UsernameS ++ "@" ++ AddressS ++ ":" ++ PathS, 
-	MountPath = filename:join(?MOUNT_PATH, integer_to_list(Id)),
-	Args = ["-p", PortS, ConnectionString, MountPath, "-o", "password_stdin", "-o", "UserKnownHostsFile=/dev/null", "-o", "StrictHostKeyChecking=no"],
-	MountTuple = create_and_mount_path(MountPath, ?SSH_COMMAND, Args, [], Stdin, RuleId, GroupId),
-	Dict1 = add_mount_path_to_dict(MountTuple, Dict, GroupId),
-	discover_each_mount(RemoteStorages, Dict1, GroupId);
-discover_each_mount([{Id, RuleId, ftpfs, {Address, Path, Username, Password}}|RemoteStorages], Dict, GroupId) ->
+	Args = ["-p", PortS, ConnectionString, "-o", "password_stdin", "-o", "UserKnownHostsFile=/dev/null", "-o", "StrictHostKeyChecking=no"],
+	{?SSH_COMMAND, Args, [], Stdin};
+generate_connection_string(ftpfs, {Address, Path, Username, Password}) ->
 	PasswordS = binary_to_list(Password),
 	UsernameS = binary_to_list(Username),
 	PathS = binary_to_list(Path),
@@ -263,34 +260,34 @@ discover_each_mount([{Id, RuleId, ftpfs, {Address, Path, Username, Password}}|Re
 			_ -> UsernameS ++ ":" ++ PasswordS
 		end,
 	AddressPath = UandP ++ "@" ++ AddressS ++ "/" ++ PathS,
-	MountPath = filename:join(?MOUNT_PATH, integer_to_list(Id)),
-	Args = ["-o", "ro,utf8", AddressPath, MountPath],
-	MountTuple = create_and_mount_path(MountPath, ?FTP_COMMAND, Args, [], none, RuleId, GroupId),
-	Dict1 = add_mount_path_to_dict(MountTuple, Dict, GroupId),
-	discover_each_mount(RemoteStorages, Dict1, GroupId);
-discover_each_mount([{Id, RuleId, nfs, {Address, Path}}|RemoteStorages], Dict, GroupId) ->
+	Args = ["-o", "ro,utf8", AddressPath],	
+	{?FTP_COMMAND, Args, [], none};
+generate_connection_string(nfs, {Address, Path}) ->
 	PathS = binary_to_list(Path),
 	AddressS = binary_to_list(Address),
 	AddressPath = AddressS ++ ":" ++ PathS,
-	MountPath = filename:join(?MOUNT_PATH, integer_to_list(Id)),
-	Args = ["-o", "ro,soft,intr,rsize=8192,wsize=8192", AddressPath, MountPath],
-	MountTuple = create_and_mount_path(MountPath, ?MOUNT_COMMAND, Args, [], none, RuleId, GroupId),
-	Dict1 = add_mount_path_to_dict(MountTuple, Dict, GroupId),
-	discover_each_mount(RemoteStorages, Dict1, GroupId);
-discover_each_mount([{Id, RuleId, windows, {UNCPath, Username, Password}}|RemoteStorages], Dict, GroupId) ->
+	Args = ["-o", "ro,soft,intr,rsize=8192,wsize=8192", AddressPath],
+	{?MOUNT_COMMAND, Args, [], none};
+generate_connection_string(windows, {UNCPath, Username, Password}) ->
 	PasswordS = binary_to_list(Password),
 	UsernameS = binary_to_list(Username),
 	WindowsSharePath = binary_to_list(UNCPath),
+	Args = ["-o","ro", WindowsSharePath],
+	{Envs, Stdin} = case UsernameS of
+				[] -> {[], "\n"};
+				_ ->
+					case PasswordS of
+						[] -> {[{"USER", UsernameS}], "\n"};
+						_ -> {[{"USER", UsernameS}, {"PASSWD", PasswordS}], none}
+					end
+	end,
+	{?SMB_COMMAND, Args, Envs, Stdin}.
+
+discover_each_mount([{Id, RuleId, Type, RSInfo}|RemoteStorages], Dict, GroupId) ->
+	{Command, Args, Envs, Stdin} = generate_connection_string(Type,RSInfo),
 	MountPath = filename:join(?MOUNT_PATH, integer_to_list(Id)),
-	Args = ["-o","ro", WindowsSharePath, MountPath],
-	MountTuple = case UsernameS of
-			[] -> create_and_mount_path(MountPath, ?SMB_COMMAND, Args, [], "\n", RuleId, GroupId);
-			_ ->
-				case PasswordS of
-					[] -> create_and_mount_path(MountPath, ?SMB_COMMAND, Args, [{"USER", UsernameS}], "\n", RuleId, GroupId);
-					_ -> create_and_mount_path(MountPath, ?SMB_COMMAND, Args, [{"USER", UsernameS}, {"PASSWD", PasswordS}], none, RuleId, GroupId)
-				end
-		end,
+	Args1 = lists:append(Args, [MountPath]),
+	MountTuple = create_and_mount_path(MountPath, Command, Args1, Envs, Stdin, RuleId, GroupId),
 	Dict1 = add_mount_path_to_dict(MountTuple, Dict, GroupId),
 	discover_each_mount(RemoteStorages, Dict1, GroupId);
 discover_each_mount([], Dict, _GroupId) -> Dict.

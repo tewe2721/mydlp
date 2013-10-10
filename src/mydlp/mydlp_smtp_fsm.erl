@@ -1,4 +1,4 @@
-%%%---------------------------------------------------------------------------------------
+%clq%%---------------------------------------------------------------------------------------
 %%% @author    Stuart Jackson <sjackson@simpleenigma.com> [http://erlsoft.org]
 %%% @copyright 2006 - 2007 Simple Enigma, Inc. All Rights Reserved.
 %%% @doc       SMTP Server FSM for ErlMail
@@ -168,6 +168,18 @@ init([]) ->
 
 % {Action, {{rule, Id}, {file, File}, {matcher, Func}, {misc, Misc}, {matching_details, MatchingDetails}}}
 'REQ_OK'(#smtpd_fsm{files=Files, message_record=(#message{mail_from=MailFrom} = MessageR)} = State) ->
+	IsRegistered = mydlp_mnesia:add_email_address_to_license(MailFrom),
+
+	S = case IsRegistered of 
+		true -> true;
+		false -> case mydlp_license:is_acceptable() of
+			true -> mydlp_mnesia:set_email_as_registered(MailFrom), true;
+			false -> false end end,
+
+	case S of
+		false -> process_aclret(pass, State);
+		true -> 
+
 	SrcDomainName = get_from_domainname(MessageR),
 	UserH = mydlp_api:hash_un(MailFrom),
 	DestinationDomains = get_dest_domains(MessageR),
@@ -186,7 +198,7 @@ init([]) ->
 
 	AclQ = #aclq{channel=mail, src_domain = SrcDomainName, src_user_h=UserH, destinations=Destinations, has_hidden_destinations=HasBCC},
 	AclRet = mydlp_acl:q(AclQ, Files),
-	process_aclret(AclRet, State1).
+	process_aclret(AclRet, State1) end.
 
 process_aclret(AclRet, #smtpd_fsm{files=Files} = State) ->
 	case case AclRet of

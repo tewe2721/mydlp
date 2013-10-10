@@ -3209,6 +3209,7 @@ str_to_ip(IpStr) ->
 -ifdef(__MYDLP_NETWORK).
 
 -define(UPTODATEBIN, <<"up-to-date">>).
+-define(NOAVAILABLESEAT, <<"no-available-seat">>).
 
 %%-------------------------------------------------------------------------
 %% @doc Returns ruletable for given ip address if necessary
@@ -3237,6 +3238,7 @@ generate_client_policy(EndpointId, RevisionId) ->
 
 use_client_policy(<<>>) -> ?ERROR_LOG("USE_CLIENT_POLICY: Management server returned empty response.", []), ok;
 use_client_policy(<<"up-to-date">>) -> ok;
+use_client_policy(<<"no-available-seat">>) -> ok;
 use_client_policy(CDBBin) ->
 	try	CDBObj = erlang:binary_to_term(CDBBin), % TODO: binary_to_term/2 with safe option
 		apply_cdbobj(CDBObj)
@@ -3808,6 +3810,31 @@ cmd(Command, Args, Envs, Stdin) when is_list(Args), is_list(Envs) ->
 
 	case get_port_resp(Port, []) of
 		{ok, _Data} -> ok;
+		{error, _} = Error -> ?ERROR_LOG("Error calling "?S", Args: "?S"~nOutput: "?S, [Command, Args, Error]),
+			Error end.
+
+cmd_ret(Command) -> cmd_ret(Command, []).
+
+cmd_ret(Command, Args) -> cmd_ret(Command, Args, []). 
+
+cmd_ret(Command, Args, Envs) -> cmd_ret(Command, Args, Envs, none). % Last variable for Stdin
+
+% envs should be like [{"key","value"}] and Stdin shold be "Stdin\n" format
+cmd_ret(Command, Args, Envs, Stdin) when is_list(Args), is_list(Envs) ->
+       Port = open_port({spawn_executable, Command},
+                       [{args, Args},
+                       {env, Envs},
+                       use_stdio,
+                       exit_status,
+                       stderr_to_stdout]),
+
+	case Stdin of 
+		none -> ok;
+		S -> port_command(Port, S) 
+	end,
+
+	case get_port_resp(Port, []) of
+		{ok, Data} -> {ok, Data};
 		{error, _} = Error -> ?ERROR_LOG("Error calling "?S", Args: "?S"~nOutput: "?S, [Command, Args, Error]),
 			Error end.
 

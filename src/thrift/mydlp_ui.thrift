@@ -27,7 +27,9 @@ struct LicenseObject {
   4: i64 expiration_date,
   5: bool is_trial,
   6: bool is_valid,
-  7: string logo_key
+  7: i64 number_of_allocated_seats,
+  8: string user_email
+  9: string logo_key
 }
 
 

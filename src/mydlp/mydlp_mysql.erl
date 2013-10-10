@@ -498,10 +498,14 @@ handle_cast({compile_customer, FilterId}, State) ->
 			?ERROR_LOG("Started policy compilation.", []),
 			?ERROR_LOG("Removing old master policy.", []),
 			mydlp_mnesia:remove_site(FilterId),
-			?ERROR_LOG("Generating new master policy.", []),
-			populate_site(FilterId),
-			?ERROR_LOG("Policy generation has been completed successfully.", []),
-			ok
+			case mydlp_license:is_expired() of
+				true -> ?ERROR_LOG("!!! License expired !!! Not generating policy !!!", []),
+					ok;
+				false -> 
+					?ERROR_LOG("Generating new master policy.", []),
+					populate_site(FilterId),
+					?ERROR_LOG("Policy generation has been completed successfully.", []),
+					ok end
 		after	timer:cancel(TRef),
 			set_progress(done)
 		end
