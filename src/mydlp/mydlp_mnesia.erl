@@ -564,6 +564,8 @@ get_allocation_of_rs() -> aqc(get_allocation_of_rs, nocache).
 
 remove_old_license_seats() -> aqc(remove_old_license_seats, nocache).
 
+reload(Node) -> gen_server:call(?MODULE, {reload, Node}, 30000).
+
 -endif.
 
 -ifdef(__MYDLP_ENDPOINT).
@@ -630,8 +632,6 @@ truncate_all() -> gen_server:call(?MODULE, truncate_all, 15000).
 truncate_nondata() -> gen_server:call(?MODULE, truncate_nondata, 15000).
 
 mnesia_dir_cleanup() -> gen_server:cast(?MODULE, mnesia_dir_cleanup).
-
-reload(Node) -> gen_server:call(?MODULE, {reload, Node}, 30000).
 
 update_discovery_status(RuleId, Status, GroupId) -> aqc({update_discovery_status, RuleId, Status, GroupId}, nocache).
 

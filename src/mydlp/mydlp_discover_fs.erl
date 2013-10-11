@@ -206,7 +206,6 @@ handle_cast({update_rule_status, RuleId, Status}, State) ->
 handle_cast({ql, List}, State) ->
 	?ASYNC0(fun() ->
 		lists:map(fun({RuleIndex, FilePath, GroupId}) -> 
-				erlang:display({accep, is_rs_acceptable(FilePath)}),
 				case is_rs_acceptable(FilePath) of 
 					true -> q(FilePath, RuleIndex, GroupId);
 					false -> mark_finished_rules(queue:new(), false) end end, List)
@@ -430,6 +429,8 @@ is_rs_acceptable(FilePath) ->
 -endif.
 
 -ifdef(__MYDLP_ENDPOINT).
+
+is_rs_acceptable(_FilePath) -> true.
 
 -ifdef(__PLATFORM_WINDOWS).
 	get_all_discovery_directory() -> <<"C:/">>.
