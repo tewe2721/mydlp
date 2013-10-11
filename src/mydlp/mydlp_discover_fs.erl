@@ -456,8 +456,6 @@ mark_as_finished(RuleId) -> mydlp_mnesia:remove_discovery_status(RuleId).
 
 add_remote_storage_to_license(_RuleId) -> ok.
 
-is_rs_acceptable(_RuleIndex, _FilePath) -> true.
-
 -endif.
 
 consume() -> gen_server:cast(?MODULE, consume).
