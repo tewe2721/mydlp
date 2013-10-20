@@ -499,7 +499,9 @@ handle_cast({compile_customer, FilterId}, State) ->
 			?ERROR_LOG("Removing old master policy.", []),
 			mydlp_mnesia:remove_site(FilterId),
 			case mydlp_license:is_expired() of
-				true -> ?ERROR_LOG("!!! License expired !!! Not generating policy !!!", []),
+				true -> ?ERROR_LOG("!!! License expired !!! CANNOT generate policy !!!", []),
+					populate_site(FilterId, false),
+					?ERROR_LOG("!!! License expired !!!! Policy generation has been FAILED !!!", []),
 					ok;
 				false -> 
 					?ERROR_LOG("Generating new master policy.", []),
@@ -815,13 +817,18 @@ psqt(PreparedKey, Params) ->
 %		_ -> ?ERROR_LOG("Unknown Endpoint Alias: ["?S"]", [Alias]), get_identities(Rows, Acc) end;
 %get_identities([], Acc) -> Acc.
 
-populate_site(FilterId) ->
+populate_site(FilterId) -> populate_site(FilterId, true).
+
+populate_site(FilterId, HasLic) ->
 	set_progress(compile),
 	%TODO: remove notification queue and sent waiting notifications
 	init_mydlp_mnesia_write(),
 	%TODO: refine this
 	%{ok, FQ} = psq(filters_by_cid, [FilterId]),
-	populate_filters([[FilterId, <<"pass">> ]], FilterId),
+	case HasLic of
+		true -> populate_filters([[FilterId, <<"pass">> ]], FilterId),
+			ok;
+		_ -> ok end,
 
 	% This will create problems in multi-site
 	{ok, CQ} = psq(configs),
@@ -833,8 +840,12 @@ populate_site(FilterId) ->
 	%{ok, SQ} = psq(customer_by_id, [FilterId]),
 	%populate_site_desc(SQ),
 
-	{ok, UDQ} = psq(usb_devices),
-	populate_usb_devices(UDQ, FilterId),
+	case HasLic of
+		true ->	{ok, UDQ} = psq(usb_devices),
+			populate_usb_devices(UDQ, FilterId),
+			ok;
+		_ -> ok end,
+
 	?ERROR_LOG("Generated master policy, writing to runtime database.", []),
 	mydlp_mnesia:write(get_mydlp_mnesia_write()),
 	erase_mydlp_mnesia_write(),
