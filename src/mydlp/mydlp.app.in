@@ -88,7 +88,8 @@
           {mydlp_discovery_manager, start_link,[]},
           {mydlp_discover_web, start_link,[]},
           {mydlp_document_trainer, start_link,[]},
-          {mydlp_item_receive, start_link,[]}
+          {mydlp_item_receive, start_link,[]},
+          {mydlp_ocr, start_link,[]}
          ]},
     {protocols, [
 	  {icap, {acceptor, {1344, plain, icap} },

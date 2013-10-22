@@ -126,60 +126,44 @@ acl_call1(Query, Files, Timeout) -> gen_server:call(?MODULE, {acl, Query, Files,
 
 -ifdef(__MYDLP_NETWORK).
 
-acl_exec(_SpawnOpts, none, []) -> pass;
-acl_exec(_SpawnOpts, _RuleTables, []) -> pass;
-acl_exec(SpawnOpts, RuleTables, Files) ->
-	acl_exec2(SpawnOpts, RuleTables, Files).
+acl_exec(_SpawnOpts, none, [], _) -> pass;
+acl_exec(_SpawnOpts, _RuleTables, [], _) -> pass;
+acl_exec(SpawnOpts, RuleTables, Files, IsOcrActive) ->
+	acl_exec2(SpawnOpts, RuleTables, Files, IsOcrActive).
 
 -endif.
 
-acl_exec2(_SpawnOpts, none, _Files) -> pass;
-acl_exec2(SpawnOpts, {Req, {_Id, DefaultAction}, Rules}, Files) ->
-	case { DefaultAction, acl_exec3(SpawnOpts, Req, Rules, Files) } of
+acl_exec2(_SpawnOpts, none, _Files, _) -> pass;
+acl_exec2(SpawnOpts, {Req, {_Id, DefaultAction}, Rules}, Files, IsOcrActive) ->
+	case { DefaultAction, acl_exec3(SpawnOpts, Req, Rules, Files, IsOcrActive) } of
 		{DefaultAction, return} -> DefaultAction;
 		{_DefaultAction, Action} -> Action end.
 
-acl_exec3(_SpawnOpts, _Req, [], _Files) -> return;
-acl_exec3(_SpawnOpts, _Req, _AllRules, []) -> return;
-acl_exec3(SpawnOpts, Req, AllRules, Files) ->
-	acl_exec3(SpawnOpts, Req, AllRules, Files, [], false, []).
+acl_exec3(_SpawnOpts, _Req, [], _Files, _) -> return;
+acl_exec3(_SpawnOpts, _Req, _AllRules, [], _) -> return;
+acl_exec3(SpawnOpts, Req, AllRules, Files, IsOcrActive) ->
+	acl_exec3(SpawnOpts, Req, AllRules, Files, [], false, [], IsOcrActive).
 
-acl_exec3(_SpawnOpts, _Req, _AllRules, [], [], _CleanFiles, []) -> return;
+acl_exec3(_SpawnOpts, _Req, _AllRules, [], [], _CleanFiles, [], _) -> return;
 
-acl_exec3(_SpawnOpts, _Req, _AllRules, [], [], _CleanFiles, [Head|Rest]) -> 
+acl_exec3(_SpawnOpts, _Req, _AllRules, [], [], _CleanFiles, [Head|Rest], _) -> 
 	{A, {Rule, {file, TargetFiles}, IType, Misc}} = Head,
 	OtherFiles = lists:foldl(fun({_, {_, {file, Files}, _, _}}, Acc) -> lists:append(Acc, Files) end, TargetFiles, Rest),
 	{A, {Rule, {file, OtherFiles}, IType, Misc}};	
 
-acl_exec3(SpawnOpts, Req, AllRules, [], ExNewFiles, false, Res) ->
-	acl_exec3(SpawnOpts, Req, AllRules, [], ExNewFiles, true, Res);
+acl_exec3(SpawnOpts, Req, AllRules, [], ExNewFiles, false, Res, IsOcrActive) ->
+	acl_exec3(SpawnOpts, Req, AllRules, [], ExNewFiles, true, Res, IsOcrActive);
 
-acl_exec3(SpawnOpts, Req, AllRules, [], ExNewFiles, CleanFiles, Res) ->
-	acl_exec3(SpawnOpts, Req, AllRules, ExNewFiles, [], CleanFiles, Res);
+acl_exec3(SpawnOpts, Req, AllRules, [], ExNewFiles, CleanFiles, Res, IsOcrActive) ->
+	acl_exec3(SpawnOpts, Req, AllRules, ExNewFiles, [], CleanFiles, Res, IsOcrActive);
 	
-acl_exec3(SpawnOpts, Req, AllRules, Files, ExNewFiles, CleanFiles, Res) ->
+acl_exec3(SpawnOpts, Req, AllRules, Files, ExNewFiles, CleanFiles, Res, IsOcrActive) ->
 	{InChunk, RestOfFiles} = mydlp_api:get_chunk(Files),
-	Files1 = mydlp_api:load_files(InChunk),
-
-	{PFiles1, NewFiles} = mydlp_api:analyze(Files1),
-
-	PFiles2 = mydlp_api:drop_nodata(PFiles1),
-	PFiles3 = case Req of
-		#mining_req{normal_text = true} -> pl_text(PFiles2, normalized);
-		#mining_req{raw_text = true} -> pl_text(PFiles2, raw_text);
-		_Else2 -> PFiles2 end,
-
-	PFiles4 = case Req of 
-		#mining_req{mc_pd = true, mc_kw = true} -> mc_text(PFiles3, all);
-		#mining_req{mc_pd = true} -> mc_text(PFiles3, pd);
-		#mining_req{mc_kw = true} -> mc_text(PFiles3, kw);
-		_Else3 -> mc_text(PFiles3, none) end,
-
-	FFiles = PFiles4,
 	
+	{FFiles, NewFiles} = prepare_query_files(InChunk, Req),
 
 	CTX = ctx_cache(),
-	AclR = apply_rules(CTX, SpawnOpts, AllRules, FFiles),
+	AclR = apply_rules(CTX, SpawnOpts, AllRules, FFiles, IsOcrActive, Req),
 	%AclR = case apply_rules(CTX, SpawnOpts, AllRules, FFiles) of
 	%	return -> acl_exec3(SpawnOpts, Req, AllRules, RestOfFiles,
 	%			lists:append(ExNewFiles, NewFiles), CleanFiles, Res);
@@ -193,17 +177,36 @@ acl_exec3(SpawnOpts, Req, AllRules, Files, ExNewFiles, CleanFiles, Res) ->
 			mydlp_api:clean_files_excluding(FFiles, TargetFiles),
 			lists:append(Res, [AclR]) end, 
 	
-	AclRT = acl_exec3(SpawnOpts, Req, AllRules, RestOfFiles, lists:append(ExNewFiles, NewFiles), CleanFiles, Res1),
+	AclRT = acl_exec3(SpawnOpts, Req, AllRules, RestOfFiles, lists:append(ExNewFiles, NewFiles), CleanFiles, Res1, IsOcrActive),
 
 	ctx_cache_stop(CTX),
 	AclRT.
+
+prepare_query_files(Files, Req) ->
+	Files1 = mydlp_api:load_files(Files),
+
+	{PFiles1, NewFiles} = mydlp_api:analyze(Files1),
+	
+	PFiles2 = mydlp_api:drop_nodata(PFiles1),
+	PFiles3 = case Req of
+		#mining_req{normal_text = true} -> pl_text(PFiles2, normalized);
+		#mining_req{raw_text = true} -> pl_text(PFiles2, raw_text);
+		_Else2 -> PFiles2 end,
+
+	PFiles4 = case Req of 
+		#mining_req{mc_pd = true, mc_kw = true} -> mc_text(PFiles3, all);
+		#mining_req{mc_pd = true} -> mc_text(PFiles3, pd);
+		#mining_req{mc_kw = true} -> mc_text(PFiles3, kw);
+		_Else3 -> mc_text(PFiles3, none) end,
+	{PFiles4, NewFiles}.
 
 -ifdef(__MYDLP_NETWORK).
 
 handle_acl({q, #aclq{} = AclQ}, Files, SpawnOpts, _State) ->
 	CustomerId = mydlp_mnesia:get_dfid(),
 	Rules = mydlp_mnesia:get_rules(CustomerId, AclQ),
-	acl_exec(SpawnOpts, Rules, Files);
+	IsOCRActive = is_ocr_active(AclQ),
+	acl_exec(SpawnOpts, Rules, Files, IsOCRActive);
 
 handle_acl({get_remote_rule_tables, EndpointId}, _Files, _SpawnOpts, _State) ->
 	CustomerId = mydlp_mnesia:get_dfid(),
@@ -213,7 +216,7 @@ handle_acl({get_remote_rule_tables, EndpointId}, _Files, _SpawnOpts, _State) ->
 handle_acl({qr, RuleId}, Files, SpawnOpts, _State) when is_integer(RuleId) ->
 	CustomerId = mydlp_mnesia:get_dfid(),
 	Rules = mydlp_mnesia:get_rule_table(CustomerId, [RuleId]),
-	acl_exec(SpawnOpts, Rules, Files);
+	acl_exec(SpawnOpts, Rules, Files, false); %last argument for ocr
 
 handle_acl(Q, _Files, _SpawnOpts, _State) -> throw({error, {undefined_query, Q}}).
 
@@ -231,11 +234,11 @@ handle_acl({qe, _Channel}, [#file{mime_type= <<"mydlp-internal/usb-device;id=", 
 
 handle_acl({qe, Channel}, Files, SpawnOpts, _State) ->
 	Rules = mydlp_mnesia:get_rule_table(Channel),
-	acl_exec2(SpawnOpts, Rules, Files);
+	acl_exec2(SpawnOpts, Rules, Files, false);
 
 handle_acl({qe, Channel, RuleIndex}, Files, SpawnOpts, _State) ->
 	Rules = mydlp_mnesia:get_rule_table(Channel, RuleIndex),
-	acl_exec2(SpawnOpts, Rules, Files);
+	acl_exec2(SpawnOpts, Rules, Files, false);
 
 handle_acl(Q, _Files, _SpawnOpts, _State) -> throw({error, {undefined_query, Q}}).
 
@@ -316,10 +319,10 @@ get_spawn_opts(#aclq{channel=remote_discovery}) -> [{priority, low}, {fullsweep_
 get_spawn_opts(_Else) -> [].
 
 
-apply_rules(_CTX, _SpawnOpts, [], _Files) -> return;
-apply_rules(_CTX, _SpawnOpts, _Rules, []) -> return;
-apply_rules(CTX, SpawnOpts, Rules, Files) ->
-	Result = mydlp_api:pmap(fun(R) -> execute_itypes_pr(CTX, SpawnOpts, R, Files) end, Rules, 1200000, SpawnOpts),
+apply_rules(_CTX, _SpawnOpts, [], _Files, _, _) -> return;
+apply_rules(_CTX, _SpawnOpts, _Rules, [], _, _) -> return;
+apply_rules(CTX, SpawnOpts, Rules, Files, IsOcrActive, Req) ->
+	Result = mydlp_api:pmap(fun(R) -> execute_itypes_pr(CTX, SpawnOpts, R, Files, IsOcrActive, Req) end, Rules, 1200000, SpawnOpts),
 	generate_aclret(Result, Rules).
 
 generate_aclret(Result, Rules) -> generate_aclret(Result, Rules, return, -1, -1, "", []).
@@ -358,35 +361,52 @@ generate_aclret_pr([error|NonNegResults], RuleId, Action, _CurAction, _CurRuleId
 generate_aclret_pr([], _RuleId, _Action, CurAction, CurRuleId, CurITypeId, CurMisc, CurFiles) ->
 	{CurAction, CurRuleId, CurITypeId, CurMisc, lists:flatten(CurFiles)}.
 
-execute_itypes_pr(CTX, SpawnOpts, {Id, _Action, ITypes} = RS, Files) ->
-	Result = try execute_itypes(CTX, SpawnOpts, ITypes, Files)
+execute_itypes_pr(CTX, SpawnOpts, {Id, _Action, ITypes} = RS, Files, IsOcrActive, Req) ->
+	Result = try execute_itypes(CTX, SpawnOpts, ITypes, Files, IsOcrActive, Req)
 		catch Class:Error -> 
 			?ERROR_LOG("Internal error. Class: "?S", Error: "?S".~nRS: "?S"~nStacktrace: "?S, 
 				[Class, Error, RS, erlang:get_stacktrace()]),
 		[error] end,
 	{Id, lists:flatten(Result)}.
 
-execute_itypes(_CTX, _SpawnOpts, [], _Files) -> neg;
-execute_itypes(_CTX, _SpawnOpts, _ITypes, []) -> neg;
-execute_itypes(CTX, SpawnOpts, ITypes, Files) ->
-	mydlp_api:pmap(fun(F) -> execute_itypes_pf(CTX, SpawnOpts, ITypes, F) end, Files, 900000, SpawnOpts).
+execute_itypes(_CTX, _SpawnOpts, [], _Files, _, _) -> neg;
+execute_itypes(_CTX, _SpawnOpts, _ITypes, [], _, _) -> neg;
+execute_itypes(CTX, SpawnOpts, ITypes, Files, IsOcrActive, Req) ->
+	mydlp_api:pmap(fun(F) -> execute_itypes_pf(CTX, SpawnOpts, ITypes, F, IsOcrActive, Req) end, Files, 900000, SpawnOpts).
 
-execute_itypes_pf(CTX, SpawnOpts, ITypes, File) -> 
+execute_itypes_pf(CTX, SpawnOpts, ITypes, File, IsOcrActive, Req) -> 
         File1 = case File#file.mime_type of 
                 undefined -> 	MT = mydlp_tc:get_mime(File#file.filename, File#file.data),
 				File#file{mime_type=MT};
                 _Else ->	File end,
-	mydlp_api:pmap(fun(T) -> execute_itype_pf(CTX, SpawnOpts, T, File1) end, ITypes, 850000, SpawnOpts).
+	mydlp_api:pmap(fun(T) -> execute_itype_pf(CTX, SpawnOpts, T, File1, IsOcrActive, Req) end, ITypes, 850000, SpawnOpts).
 	
-execute_itype_pf(CTX, SpawnOpts, {ITypeOrigId, all, Distance, IFeatures}, File) ->
-	execute_itype_pf1(CTX, SpawnOpts, ITypeOrigId, Distance, IFeatures, File);
+execute_itype_pf(CTX, SpawnOpts, {ITypeOrigId, all, Distance, IFeatures}, File, IsOcrActive, Req) ->
+	execute_itype_pf_image_filtering(CTX, SpawnOpts, {ITypeOrigId, Distance, IFeatures}, File, IsOcrActive, Req);
 execute_itype_pf(CTX, SpawnOpts, {ITypeOrigId, DataFormats, Distance, IFeatures},
-		#file{mime_type=MT} = File) ->
+		#file{mime_type=MT} = File, IsOcrActive, Req) ->
         case mydlp_mnesia:is_mime_of_dfid(MT, DataFormats) of
                 false -> neg;
-		true -> execute_itype_pf1(CTX, SpawnOpts, ITypeOrigId, Distance, IFeatures, File) end.
+		true -> execute_itype_pf_image_filtering(CTX, SpawnOpts, {ITypeOrigId, Distance, IFeatures}, File, IsOcrActive, Req) end.
+
+execute_itype_pf_image_filtering(CTX, SpawnOpts, {ITypeOrigId, Distance, IFeatures}, File, IsOcrActive, Req) ->
+	File1 = case is_image_file(File) and IsOcrActive of
+				true -> case mydlp_ocr:ocr(File) of
+						"error" -> File;
+						FT ->
+							{[FT1], _} = prepare_query_files([FT], Req),
+							FT1 end;
+				false -> File end, 
+	Res = execute_itype_pf1(CTX, SpawnOpts, ITypeOrigId, Distance, IFeatures, File1),
+	case Res of
+		{pos, {file, FileR}, Itype, Misc} -> 
+			case is_image_file(File) and IsOcrActive of
+				true -> {pos, {file, File#file{matching_detail=FileR#file.matching_detail}}, Itype, Misc};
+				false -> Res end;
+		_ -> Res end.
 
 execute_itype_pf1(CTX, SpawnOpts, ITypeOrigId, Distance, IFeatures, File) ->
+	%here_for_ocr
 	case execute_ifeatures(CTX, SpawnOpts, Distance, IFeatures, File) of
 		neg -> neg;
 		{pos, MatchingDetails} ->
@@ -787,5 +807,29 @@ ctx_query(CTX, Message, Timeout) ->
         after Timeout ->
                 exit({timeout, ctx_query})
         end.
+
+-ifdef(__MYDLP_ENDPOINT).
+is_image_file(_File) -> false.
+-endif.
+
+-ifdef(__MYDLP_NETWORK).
+is_ocr_active(#aclq{channel=mail}) -> ?CFG(ocr_active);
+is_ocr_active(#aclq{channel=web}) -> ?CFG(ocr_active);
+is_ocr_active(_) -> false. 
+
+is_image_file(#file{mime_type= <<"image/png">>}) -> true;
+is_image_file(#file{mime_type= <<"image/x-icon">>}) -> true;
+is_image_file(#file{mime_type= <<"image/gif">>}) -> true;
+is_image_file(#file{mime_type= <<"image/bmp">>}) -> true;
+is_image_file(#file{mime_type= <<"image/x-xcf">>}) -> true;
+is_image_file(#file{mime_type= <<"image/x-ms-bmp">>}) -> true;
+is_image_file(#file{mime_type= <<"image/vnd.wap.wbmp">>}) -> true;
+is_image_file(#file{mime_type= <<"image/vnd.adobe.photoshop">>}) -> true;
+is_image_file(#file{mime_type= <<"image/tiff">>}) -> true;
+is_image_file(#file{mime_type= <<"image/jpeg">>}) -> true;
+is_image_file(#file{mime_type= <<"image/svg+xml">>}) -> true;
+is_image_file(_File) -> false.
+
+-endif.
 
 %%%%%%%%%%%%%%%%%%% CTX Cache end
