@@ -379,8 +379,12 @@ is_bypassable(#smtpd_fsm{}) -> true.
 deliver_raw(#smtpd_fsm{mail=From, rcpt=Rcpt, message_bin=MessageS, spool_ref=undefined}) -> 
 	mydlp_smtpc:mail(From, Rcpt, MessageS);
 deliver_raw(#smtpd_fsm{mail=From, rcpt=Rcpt, message_bin=MessageS, spool_ref=Ref}) -> 
-	mydlp_spool:delete(Ref),
-	mydlp_spool:release(Ref),
+    try 
+	    mydlp_spool:delete(Ref),
+    	mydlp_spool:release(Ref)
+    catch
+        Class:Error -> ?ERROR_LOG("Error occured on FSM ("?S") in spool call. Class: ["?S"]. Error: ["?S"]. ~nStack trace: "?S"~n",
+                [?MODULE, Class, Error, erlang:get_stacktrace()]) end,
 	mydlp_smtpc:mail(From, Rcpt, MessageS).
 
 %%-------------------------------------------------------------------------
